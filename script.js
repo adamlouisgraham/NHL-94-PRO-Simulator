@@ -11,12 +11,12 @@
     const archMods = {
     // --- FORWARDS (Balanced for higher goal/assist totals) ---
     "SUPERSTAR":      { shotRate: 1.40, penaltyRate: 0.70,  assistRate: 1.40 }, // Increased assistRate to reflect their well-rounded dominance
-    "SNIPER":         { shotRate: 1.75, penaltyRate: 0.85,  assistRate: 0.83 }, // Higher shotRate, lower assistRate to specialize them
-    "PLAYMAKER":      { shotRate: 0.88, penaltyRate: 0.80,  assistRate: 1.70 }, // Lower shotRate, significantly higher assistRate
-    "SPEEDSTER":      { shotRate: 1.15, penaltyRate: 0.80,  assistRate: 1.15 },
-    "DANGLER":        { shotRate: 1.10, penaltyRate: 0.80,  assistRate: 1.30 },
+    "SNIPER":         { shotRate: 1.50, penaltyRate: 0.85,  assistRate: 0.90 }, // Higher shotRate, lower assistRate to specialize them
+    "PLAYMAKER":      { shotRate: 0.89, penaltyRate: 0.80,  assistRate: 1.65 }, // Lower shotRate, significantly higher assistRate
+    "SPEEDSTER":      { shotRate: 1.19, penaltyRate: 0.80,  assistRate: 1.15 },
+    "DANGLER":        { shotRate: 1.14, penaltyRate: 0.80,  assistRate: 1.30 },
     "POWER FORWARD":  { shotRate: 1.20, penaltyRate: 1.20,  assistRate: 0.97 },
-    "TWO-WAY STAR F": { shotRate: 1.09, penaltyRate: 0.95,  assistRate: 1.15 },
+    "TWO-WAY STAR F": { shotRate: 1.12, penaltyRate: 0.95,  assistRate: 1.15 },
     "TWO-WAY FWD":    { shotRate: 0.95, penaltyRate: 0.95,  assistRate: 1.05 },
     "GRINDER":        { shotRate: 0.98, penaltyRate: 1.30,  assistRate: 0.90 },
     "ENFORCER F":     { shotRate: 0.50, penaltyRate: 1.60,  assistRate: 0.50 },
@@ -26,11 +26,11 @@
     "DEFENSIVE FWD":  { shotRate: 0.75, penaltyRate: 1.00,  assistRate: 0.95 },
 
     // --- DEFENSEMEN ---
-    "FRANCHISE D":    { shotRate: 1.23, penaltyRate: 0.80,  assistRate: 1.35 },
+    "FRANCHISE D":    { shotRate: 1.20, penaltyRate: 0.80,  assistRate: 1.35 },
     "QUARTERBACK":    { shotRate: 0.99, penaltyRate: 0.85,  assistRate: 1.60 }, // Maximize playmaking from the blueline
-    "BOOMER":         { shotRate: 1.45, penaltyRate: 1.00,  assistRate: 0.92 },
+    "BOOMER":         { shotRate: 1.35, penaltyRate: 1.00,  assistRate: 0.92 },
     "SHUTDOWN":       { shotRate: 0.80, penaltyRate: 1.00,  assistRate: 0.95 },
-    "TWO-WAY STAR":   { shotRate: 1.00, penaltyRate: 0.90,  assistRate: 1.15 },
+    "TWO-WAY STAR":   { shotRate: 1.09, penaltyRate: 0.90,  assistRate: 1.15 },
     "TWO-WAY D":      { shotRate: 0.97, penaltyRate: 1.00,  assistRate: 1.05 },
     "PRO OFFENSIVE D":{ shotRate: 1.05, penaltyRate: 0.70,  assistRate: 1.15 },
     "PRO DEFENSIVE D":{ shotRate: 0.80, penaltyRate: 0.70,  assistRate: 0.95 },
@@ -119,11 +119,19 @@ function buildStatusBadges(pName) {
 }
 
 function getWeightValue(grade) {
+    // A+ = lightest (~179-185 lbs), F+/F- = heaviest (~235-249 lbs)
     const weightMap = {
-        'A+': () => roll(185,194 ), 'A': () => roll(195,204 ), 'B': () => roll(205,214 ),
-        'C': () => roll(215,224 ),  'D': () => roll(225,234 ), 'F': () => roll(235,244 ), 'F-': () => roll(245,254 )
+        'A+': () => roll(179,185), 'A':  () => roll(186,194),
+        'B':  () => roll(195,204), 'C':  () => roll(205,214),
+        'D':  () => roll(215,224), 'F':  () => roll(225,234),
+        'F+': () => roll(235,249), 'F-': () => roll(235,249)
     };
-    return weightMap[grade] || 205; // Fallback to neutral 205lbs
+    return weightMap[grade] ? weightMap[grade]() : 210;
+}
+// Deterministic midpoint lbs for display (card, tooltip, etc.)
+function getWeightLbs(grade) {
+    const lbs = {'A+':182,'A':190,'B':200,'C':210,'D':220,'F':230,'F+':242,'F-':242};
+    return lbs[grade] || 210;
 }
 
 function getWeightModifier(weightGrade, arch) {
@@ -2159,7 +2167,7 @@ function getPlayerWeightedStats(pName) {
             else if (off >= 75 && def >= 80 && check >= 75 && pass >= 75 && pwr >= 75) tag = "TWO-WAY STAR F";
             else if (off >= 75 && agl >= 75 && spd >= 80) tag = "SPEEDSTER"; 
             else if (off >= 75 && agl >= 80 && stkHnd >= 80) tag = "DANGLER";
-            else if (off >= 70 && check >= 70 && pwr >= 70 && aggr >= 65 && rough >= 65 && wgt >= 215) tag = "POWER FORWARD"; 
+            else if (off >= 75 && check >= 65 && pwr >= 70 && aggr >= 65 && rough >= 65 && wgt >= 215) tag = "POWER FORWARD"; 
             else if (def >= 70 && off >= 70 && check >= 70 && aggr >= 70 && rough >= 60) tag = "GRINDER";
             else if (rough >= 80 && aggr >= 80) tag = "ENFORCER F";
             else if (off >= 70) tag = "PRO OFFENSIVE FWD";
@@ -7485,17 +7493,21 @@ function pcBuildStats(pName, tab) {
             ['+/-',pm(src.pm||0)],['PIM',f(src.pim)],['SOG',f(src.s)],['GWG',f(src.gwg)]],[2,3]);
     }
     // ATTR tab
+    const wLbs = getWeightLbs(p.attr.weight || 'C');
+    const wtRow = `<div style="text-align:center;color:#555;font-size:6px;margin-top:4px;letter-spacing:1px;">WEIGHT <span style="color:#aaa;font-size:8px;margin-left:4px;">${wLbs} LBS</span> <span style="color:#444;font-size:6px;">(${p.attr.weight||'C'})</span></div>`;
     if (isG) {
         return tbl([['GLV-L',p.attr.gloveL||'--'],['GLV-R',p.attr.gloveR||'--'],
             ['STK-L',p.attr.stickL||'--'],['STK-R',p.attr.stickR||'--'],
             ['AGIL',p.attr.agil||'--'],['SPD',p.attr.speed||'--'],
-            ['DEF',p.attr.def||'--'],['CTRL',p.attr.stkHnd||'--']],[]);
+            ['DEF',p.attr.def||'--'],['CTRL',p.attr.stkHnd||'--'],
+            ['ENDUR',p.attr.endur||'--'],['PLAY',p.attr.play||'--']],[]) + wtRow;
     }
     return tbl([['OFF',p.attr.off||'--'],['DEF',p.attr.def||'--'],
         ['SPD',p.attr.speed||'--'],['AGIL',p.attr.agil||'--'],
-        ['SHT PWR',p.attr.shotPwr||'--'],['SHT ACC',p.attr.shotAcc||'--'],
+        ['S.PWR',p.attr.shotPwr||'--'],['S.ACC',p.attr.shotAcc||'--'],
         ['PASS',p.attr.pass||'--'],['STK',p.attr.stkHnd||'--'],
-        ['CHECK',p.attr.check||'--'],['ROUGH',p.attr.rough||'--']],[]);
+        ['CHK',p.attr.check||'--'],['ROUGH',p.attr.rough||'--'],
+        ['ENDUR',p.attr.endur||'--'],['PLAY',p.attr.play||'--']],[]) + wtRow;
 }
 
 function pcBuildHonors(pName) {

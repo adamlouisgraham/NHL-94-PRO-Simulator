@@ -856,7 +856,6 @@ button:active:not(:disabled) {
     background: rgba(0,255,255,0.12);
     border-color: rgba(0,255,255,0.18);
     transform: translateY(-1px);
-    transition: transform 0.1s, background 0.1s;
 }
 
 .save-state-info {
@@ -886,6 +885,7 @@ button:active:not(:disabled) {
     border-radius: 4px;
     background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.08);
+    transition: transform 0.1s, background 0.1s, border-color 0.1s;
 }
 
 .save-slot-history-item span:first-child {
