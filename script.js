@@ -1319,12 +1319,14 @@ function importRosterFromCSV(csvText) {
             };
         }
 
+        const wGrade = getCell(row, weightIdx) || 'C'; // e.g. 'A+', 'B', 'F+'
+        playerAttributes.weight = wGrade; // store grade for display & modifiers
         const player = {
             teamCode: getCell(row, teamCodeIdx),
             name: fullName,
             pos: playerPosition,
             overall: parseIntCell(row, overallIdx, 30),
-            weight: parseIntCell(row, weightIdx, 180),
+            weight: getWeightLbs(wGrade), // numeric lbs for fatigue/collision math
             attr: playerAttributes,
             career: {
                 gp: parseIntCell(row, careerGpIdx, 0),
@@ -7505,8 +7507,8 @@ function pcBuildStats(pName, tab) {
             ['+/-',pm(src.pm||0)],['PIM',f(src.pim)],['SOG',f(src.s)],['GWG',f(src.gwg)]],[2,3]);
     }
     // ATTR tab
-    const wLbs = p.weight || getWeightLbs(p.attr.weight || 'C');
-    const wGrade = lbsToWeightGrade(wLbs);
+    const wGrade = p.attr.weight || lbsToWeightGrade(p.weight) || 'C';
+    const wLbs = p.weight || getWeightLbs(wGrade);
     const wtRow = `<div style="text-align:center;color:#555;font-size:6px;margin-top:4px;letter-spacing:1px;">WEIGHT <span style="color:#aaa;font-size:8px;margin-left:4px;">${wLbs} LBS</span> <span style="color:#444;font-size:6px;">(${wGrade})</span></div>`;
     if (isG) {
         return tbl([['GLV-L',p.attr.gloveL||'--'],['GLV-R',p.attr.gloveR||'--'],
