@@ -120,11 +120,12 @@ function buildStatusBadges(pName) {
 
 function getWeightValue(grade) {
     // A+ = lightest (~179-185 lbs), F+/F- = heaviest (~235-249 lbs)
+    const r = (lo,hi) => Math.floor(Math.random()*(hi-lo+1))+lo;
     const weightMap = {
-        'A+': () => roll(179,185), 'A':  () => roll(186,194),
-        'B':  () => roll(195,204), 'C':  () => roll(205,214),
-        'D':  () => roll(215,224), 'F':  () => roll(225,234),
-        'F+': () => roll(235,249), 'F-': () => roll(235,249)
+        'A+': ()=>r(179,185), 'A': ()=>r(186,194),
+        'B':  ()=>r(195,204), 'C': ()=>r(205,214),
+        'D':  ()=>r(215,224), 'F': ()=>r(225,234),
+        'F+': ()=>r(235,249), 'F-':()=>r(235,249)
     };
     return weightMap[grade] ? weightMap[grade]() : 210;
 }
