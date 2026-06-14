@@ -6619,25 +6619,391 @@ function showBracket() {
     }
 }
 
+// ─── PRO SET CARD SYSTEM ──────────────────────────────────────────────────────
+
+const PC_WALES = ['BOS','BUF','HFD','MTL','QUE','NJD','NYI','NYR','PIT','WSH','PHI','FLA','TBL','OTT'];
+
+const PC_COLORS = {
+    ANA:['#B09860','#EF3340'], BOS:['#000000','#FCB514'], BUF:['#003087','#FCB514'],
+    CGY:['#CE1126','#F1BE48'], CHI:['#CF0A2C','#FF6720'], DAL:['#006847','#8F8F8C'],
+    DET:['#CE1126','#FFFFFF'], EDM:['#FC4C02','#002D62'], FLA:['#041E42','#C8102E'],
+    HFD:['#006F51','#7AC5D8'], LAK:['#111111','#A2AAAD'], MIN:['#004F30','#C6002B'],
+    MTL:['#AF1E2D','#192168'], NJD:['#CE1126','#003DA5'], NYI:['#003087','#FC4C02'],
+    NYR:['#0038A8','#CE1126'], OTT:['#B79257','#C52032'], PHI:['#F74902','#000000'],
+    PIT:['#000000','#FCB514'], QUE:['#002D62','#5197D5'], SJS:['#006D75','#EA7200'],
+    STL:['#002F87','#FCB514'], TBL:['#002868','#FFFFFF'], TOR:['#003E7E','#FFFFFF'],
+    VAN:['#008852','#001F5B'], WSH:['#041E42','#C8102E'], WIN:['#003E7E','#7B3F6E'],
+};
+
+const PC_LOGOS = {
+    ANA:'Team Logos/Ducks.png',     BOS:'Team Logos/Bruins.png',    BUF:'Team Logos/sabres.png',
+    CGY:'Team Logos/Flames.png',    CHI:'Team Logos/blackhawks.png',DAL:'Team Logos/North_Stars.png',
+    DET:'Team Logos/Red_Wings.png', EDM:'Team Logos/Oilers.png',    FLA:'Team Logos/Panthers.png',
+    HFD:'Team Logos/whalers.png',   LAK:'Team Logos/kings.png',     MIN:'Team Logos/North_Stars.png',
+    MTL:'Team Logos/Canadiens.png', NJD:'Team Logos/Devils.png',    NYI:'Team Logos/islanders.png',
+    NYR:'Team Logos/Rangers.png',   OTT:'Team Logos/Senators.png',  PHI:'Team Logos/Flyers.png',
+    PIT:'Team Logos/Penguins.png',  QUE:'Team Logos/Nordiques.png', SJS:'Team Logos/sharks.png',
+    STL:'Team Logos/blues.png',     TBL:'Team Logos/tampa.png',     TOR:'Team Logos/maple_leafs.png',
+    VAN:'Team Logos/canucks.png',   WSH:'Team Logos/capitals.png',  WIN:'Team Logos/jets.png',
+};
+
+function _pcShade(hex, amt) {
+    let r=parseInt(hex.slice(1,3),16)||0, g=parseInt(hex.slice(3,5),16)||0, b=parseInt(hex.slice(5,7),16)||0;
+    r=Math.max(0,Math.min(255,r+amt)); g=Math.max(0,Math.min(255,g+amt)); b=Math.max(0,Math.min(255,b+amt));
+    return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+
+function _pcR(ctx, sc, x, y, w, h, col) { // plain fill
+    ctx.fillStyle = col;
+    ctx.fillRect(x*sc, y*sc, w*sc, h*sc);
+}
+
+function _pcB(ctx, sc, x, y, w, h, col) { // bordered fill (outline technique)
+    ctx.fillStyle = '#000';
+    ctx.fillRect(x*sc, y*sc, w*sc, h*sc);
+    ctx.fillStyle = col;
+    ctx.fillRect(x*sc+1, y*sc+1, w*sc-2, h*sc-2);
+}
+
+function pcDrawSprite(ctx, type, pri, sec) {
+    const sc = 4;
+    const skin = '#F4C07A';
+    const helmet = '#2a2a2a';
+    const visor  = '#88CCEE';
+    const boot   = '#111111';
+    const blade  = '#AAAAAA';
+    const glv    = '#1a1a1a';
+    const priHi  = _pcShade(pri, 50);
+    const priLo  = _pcShade(pri, -50);
+
+    // canvas background
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+    if (type === 'forward') {
+        // helmet
+        _pcB(ctx,sc, 5,0, 6,2, helmet);
+        // visor strip
+        _pcR(ctx,sc, 6,0, 4,1, visor);
+        // face
+        _pcB(ctx,sc, 6,2, 4,3, skin);
+        // cage bars (horizontal)
+        ctx.fillStyle='#000'; ctx.fillRect(6*sc,3*sc,4*sc,1); ctx.fillRect(6*sc,4*sc+2,4*sc,1);
+        // cage bars (vertical)
+        for(let i=0;i<3;i++){ ctx.fillRect((6+i+1.2)*sc,3*sc,1,2*sc); }
+        // neck
+        _pcR(ctx,sc, 7,5, 2,1, skin);
+        // jersey body
+        _pcB(ctx,sc, 4,6, 8,9, pri);
+        _pcR(ctx,sc, 5,7, 2,4, priHi);
+        _pcR(ctx,sc, 10,7,2,4, priLo);
+        // chest stripe
+        _pcR(ctx,sc, 4,10, 8,1, sec);
+        // number block
+        _pcR(ctx,sc, 6,12, 4,2, sec);
+        // left arm
+        _pcB(ctx,sc, 2,6, 3,6, pri);
+        // right arm
+        _pcB(ctx,sc,11,6, 3,6, pri);
+        // gloves
+        _pcB(ctx,sc, 1,11, 3,2, glv);
+        _pcB(ctx,sc,12,11, 3,2, glv);
+        // pants
+        _pcB(ctx,sc, 4,15, 8,4, priLo);
+        // socks
+        _pcR(ctx,sc, 4,19, 4,1, sec);
+        _pcR(ctx,sc, 8,19, 4,1, sec);
+        // shin guards
+        _pcB(ctx,sc, 4,20, 4,3, helmet);
+        _pcB(ctx,sc, 8,20, 4,3, helmet);
+        // boots
+        _pcB(ctx,sc, 3,23, 5,2, boot);
+        _pcB(ctx,sc, 8,23, 5,2, boot);
+        // blades
+        ctx.fillStyle=blade; ctx.fillRect(3*sc,25*sc,5*sc,2); ctx.fillRect(8*sc,25*sc,5*sc,2);
+        // DIAGONAL STICK
+        ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.moveTo(13*sc+2,13*sc); ctx.lineTo(4*sc,24*sc); ctx.stroke();
+        ctx.strokeStyle='#555'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(4*sc,24*sc); ctx.lineTo(1*sc,24*sc+2); ctx.stroke();
+
+    } else if (type === 'defense') {
+        // helmet (slightly wider stance)
+        _pcB(ctx,sc, 5,0, 6,2, helmet);
+        _pcR(ctx,sc, 6,0, 4,1, visor);
+        _pcB(ctx,sc, 6,2, 4,3, skin);
+        ctx.fillStyle='#000'; ctx.fillRect(6*sc,3*sc,4*sc,1); ctx.fillRect(6*sc,4*sc+2,4*sc,1);
+        for(let i=0;i<3;i++){ ctx.fillRect((6+i+1.2)*sc,3*sc,1,2*sc); }
+        _pcR(ctx,sc, 7,5, 2,1, skin);
+        // wider jersey
+        _pcB(ctx,sc, 3,6,10,9, pri);
+        _pcR(ctx,sc, 4,7, 3,4, priHi);
+        _pcR(ctx,sc,10,7, 3,4, priLo);
+        _pcR(ctx,sc, 3,10,10,1, sec);
+        _pcR(ctx,sc, 6,12, 4,2, sec);
+        // wide arms
+        _pcB(ctx,sc, 1,6, 3,6, pri);
+        _pcB(ctx,sc,12,6, 3,6, pri);
+        _pcB(ctx,sc, 0,11, 3,2, glv);
+        _pcB(ctx,sc,13,11, 3,2, glv);
+        // pants
+        _pcB(ctx,sc, 3,15,10,4, priLo);
+        _pcR(ctx,sc, 3,19, 5,1, sec);
+        _pcR(ctx,sc, 8,19, 5,1, sec);
+        _pcB(ctx,sc, 3,20, 5,3, helmet);
+        _pcB(ctx,sc, 8,20, 5,3, helmet);
+        _pcB(ctx,sc, 2,23, 6,2, boot);
+        _pcB(ctx,sc, 8,23, 6,2, boot);
+        ctx.fillStyle=blade; ctx.fillRect(2*sc,25*sc,6*sc,2); ctx.fillRect(8*sc,25*sc,6*sc,2);
+        // HORIZONTAL DEFENSIVE STICK
+        ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.moveTo(0,15*sc); ctx.lineTo(16*sc,15*sc); ctx.stroke();
+        ctx.strokeStyle='#555'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(0,15*sc); ctx.lineTo(3*sc,17*sc); ctx.stroke();
+
+    } else { // GOALIE
+        const padCol  = pri;
+        const padHi   = _pcShade(pri, 45);
+        const maskCol = '#E8E8E8';
+        const blocker = '#8B4513';
+        const catcher = '#222222';
+
+        // mask (full face cage)
+        _pcB(ctx,sc, 4,0, 8,3, maskCol);
+        // mask team-color stripe
+        _pcR(ctx,sc, 4,0, 8,0.5, pri);
+        // cage bars on mask
+        ctx.fillStyle='#555';
+        ctx.fillRect(4*sc,1*sc,8*sc,1); ctx.fillRect(4*sc,2*sc-1,8*sc,1);
+        for(let i=0;i<5;i++){ ctx.fillRect((4.8+i*1.3)*sc,0,1,3*sc); }
+        // face below mask
+        _pcR(ctx,sc, 5,3, 6,1, skin);
+        _pcR(ctx,sc, 7,4, 2,1, skin);
+        // chest protector (wide)
+        _pcB(ctx,sc, 3,5,10,8, pri);
+        _pcR(ctx,sc, 4,6, 3,4, padHi);
+        _pcR(ctx,sc,10,6, 3,4, _pcShade(pri,-30));
+        _pcR(ctx,sc, 3,9,10,1, sec);
+        // BLOCKER (right side)
+        _pcB(ctx,sc,13,7, 3,5, blocker);
+        _pcR(ctx,sc,13,7, 3,1, '#CC8833');
+        _pcR(ctx,sc,13,8, 3,1, '#AA6622');
+        // TRAPPER / CATCHER (left side)
+        _pcB(ctx,sc, 0,7, 3,4, catcher);
+        _pcR(ctx,sc, 0,7, 3,1, '#555');
+        _pcR(ctx,sc, 0,8, 1,2, '#333'); // webbing
+        _pcR(ctx,sc, 2,8, 1,2, '#333');
+        _pcR(ctx,sc, 1,9, 1,1, '#333');
+        // GOALIE STICK (L-shape)
+        ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.moveTo(2*sc+1,12*sc); ctx.lineTo(2*sc+1,22*sc); ctx.stroke();
+        ctx.strokeStyle='#555'; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.moveTo(2*sc+1,22*sc); ctx.lineTo(8*sc,22*sc); ctx.stroke();
+        // WIDE PADS (left)
+        _pcB(ctx,sc, 0,13, 7,10, padCol);
+        _pcR(ctx,sc, 1,14, 5,2, padHi);
+        _pcR(ctx,sc, 2,17, 4,1, sec);
+        _pcR(ctx,sc, 2,20, 4,1, sec);
+        // WIDE PADS (right)
+        _pcB(ctx,sc, 9,13, 7,10, padCol);
+        _pcR(ctx,sc,10,14, 5,2, padHi);
+        _pcR(ctx,sc,10,17, 4,1, sec);
+        _pcR(ctx,sc,10,20, 4,1, sec);
+        // boots
+        _pcB(ctx,sc, 0,23, 7,2, boot);
+        _pcB(ctx,sc, 9,23, 7,2, boot);
+        ctx.fillStyle=blade; ctx.fillRect(0,25*sc,7*sc,2); ctx.fillRect(9*sc,25*sc,7*sc,2);
+    }
+}
+
+function pcDrawLogo(ctx, size, code) {
+    const colors = PC_COLORS[code] || ['#003366','#CCAA00'];
+    ctx.fillStyle = colors[0];
+    ctx.beginPath(); ctx.arc(size/2,size/2,size/2,0,Math.PI*2); ctx.fill();
+    const logoPath = PC_LOGOS[code];
+    if (logoPath) {
+        const img = new Image();
+        img.onload = () => {
+            ctx.save();
+            ctx.beginPath(); ctx.arc(size/2,size/2,size/2-1,0,Math.PI*2); ctx.clip();
+            const pad = size * 0.12;
+            ctx.drawImage(img, pad, pad, size-pad*2, size-pad*2);
+            ctx.restore();
+        };
+        img.onerror = () => {
+            ctx.fillStyle='#fff'; ctx.font=`bold ${Math.floor(size*.3)}px monospace`;
+            ctx.textAlign='center'; ctx.textBaseline='middle';
+            ctx.fillText(code.slice(0,3), size/2, size/2);
+        };
+        img.src = logoPath;
+    } else {
+        ctx.fillStyle='#fff'; ctx.font=`bold ${Math.floor(size*.3)}px monospace`;
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(code.slice(0,3), size/2, size/2);
+    }
+}
+
+function pcBuildStats(pName, tab) {
+    const p = playerStats[pName];
+    if (!p) return '';
+    const isG = p.pos === 'G';
+    const f = (v,d) => v==null ? (d?'0.'+('0'.repeat(d)):'0') : (d?Number(v).toFixed(d):v);
+    const pm = v => (v>0?'+':'')+v;
+    const cell = (l,v,hi) => `<td style="color:#555;padding:2px 3px 2px 0;font-size:6px;white-space:nowrap">${l}</td><td style="color:${hi?'#FFD060':'#ccc'};padding:2px 8px 2px 0;font-weight:700;font-size:8px">${v}</td>`;
+    const tbl = (pairs, his=[]) => {
+        let h='<table style="width:100%;border-collapse:collapse">';
+        for(let i=0;i<pairs.length;i+=4){
+            h+='<tr>'+pairs.slice(i,i+4).map(([l,v],j)=>cell(l,v,his.includes(i+j))).join('')+'</tr>';
+        }
+        return h+'</table>';
+    };
+
+    if (tab==='season') {
+        const s=p.season||{};
+        if (isG) {
+            const sa=s.sa||0,sv=s.sv||0,ga=Math.max(0,sa-sv),gp=s.gp||0;
+            return tbl([['GP',f(gp)],['W',f(s.w)],['L',f(s.l)],['SO',f(s.so)],
+                ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',gp>0?(ga/gp).toFixed(2):'0.00'],['SVG',f(s.svg||sv)],['TOI',f(s.toi)]],[4,5]);
+        }
+        const g=s.g||0,a=s.a||0;
+        return tbl([['GP',f(s.gp)],['G',f(g)],['A',f(a)],['PTS',g+a],
+            ['+/-',pm(s.pm||0)],['PIM',f(s.pim)],['SOG',f(s.s)],['GWG',f(s.gwg)]],[2,3]);
+    }
+    if (tab==='career') {
+        const c=p.career||{};
+        if (isG) {
+            const sa=c.sa||0,sv=c.sv||0,ga=Math.max(0,sa-sv),gp=c.gp||0;
+            return tbl([['GP',f(gp)],['W',f(c.w)],['L',f(c.l)],['SO',f(c.so)],
+                ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',gp>0?(ga/gp).toFixed(2):'0.00']],[4,5]);
+        }
+        return tbl([['GP',f(c.gp)],['G',f(c.g)],['A',f(c.a)],['PTS',c.pts||((c.g||0)+(c.a||0))],
+            ['+/-',pm(c.pm||c.plusMinus||0)],['PIM',f(c.pim)],['SOG',f(c.s)],['GWG',f(c.gwg)]],[2,3]);
+    }
+    if (tab==='playoff' || tab==='c-po') {
+        const src = tab==='playoff' ? (p.playoff||{}) : (p.careerPlayoff||{});
+        if (tab==='playoff' && !isPlayoffs && !(src.gp>0)) {
+            return `<div style="text-align:center;color:#555;padding:18px 0;font-size:7px;letter-spacing:2px">DID NOT<br><br>QUALIFY</div>`;
+        }
+        if (isG) {
+            const sa=src.sa||0,sv=src.sv||0,ga=Math.max(0,sa-sv),gp=src.gp||0;
+            return tbl([['GP',f(gp)],['W',f(src.w)],['L',f(src.l)],['SO',f(src.so)],
+                ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',gp>0?(ga/gp).toFixed(2):'0.00']],[4,5]);
+        }
+        return tbl([['GP',f(src.gp)],['G',f(src.g)],['A',f(src.a)],['PTS',src.pts||((src.g||0)+(src.a||0))],
+            ['+/-',pm(src.pm||0)],['PIM',f(src.pim)],['SOG',f(src.s)],['GWG',f(src.gwg)]],[2,3]);
+    }
+    // ATTR tab
+    if (isG) {
+        return tbl([['GLV-L',p.attr.gloveL||'--'],['GLV-R',p.attr.gloveR||'--'],
+            ['STK-L',p.attr.stickL||'--'],['STK-R',p.attr.stickR||'--'],
+            ['AGIL',p.attr.agil||'--'],['SPD',p.attr.speed||'--'],
+            ['DEF',p.attr.def||'--'],['CTRL',p.attr.stkHnd||'--']],[]);
+    }
+    return tbl([['OFF',p.attr.off||'--'],['DEF',p.attr.def||'--'],
+        ['SPD',p.attr.speed||'--'],['AGIL',p.attr.agil||'--'],
+        ['SHT PWR',p.attr.shotPwr||'--'],['SHT ACC',p.attr.shotAcc||'--'],
+        ['PASS',p.attr.pass||'--'],['STK',p.attr.stkHnd||'--'],
+        ['CHECK',p.attr.check||'--'],['ROUGH',p.attr.rough||'--']],[]);
+}
+
+function pcBuildHonors(pName) {
+    const p = playerStats[pName]; if (!p) return '';
+    const miles = p.milestones && p.milestones.length > 0;
+    const trophies = p.trophies && p.trophies.length > 0;
+    const asg = p.asgAppearances > 0;
+    if (!miles && !trophies && !asg) return '';
+    let h = `<div style="padding:6px 10px 8px;background:#080808;border-top:1px solid #1a1a1a;">`;
+    if (asg) h += `<div style="font-size:7px;color:#FFD060;margin-bottom:5px">⭐ ${p.asgAppearances}× ALL-STAR</div>`;
+    if (trophies) {
+        h += `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">`;
+        p.trophies.forEach(t => { h += `<div style="font-size:6px;background:#1a1000;border:1px solid #664400;color:#FFD060;padding:2px 4px">🏆 ${t.year} ${t.name}</div>`; });
+        h += `</div>`;
+    }
+    if (miles) {
+        h += `<div style="display:flex;flex-wrap:wrap;gap:4px">`;
+        p.milestones.forEach(m => { h += `<div style="font-size:6px;background:#001a1a;border:1px solid #004444;color:#00CCFF;padding:2px 4px">🏅 ${m}</div>`; });
+        h += `</div>`;
+    }
+    return h + `</div>`;
+}
+
+function pcSwitchTab(pName, tab) {
+    ['season','career','playoff','c-po','attr'].forEach(k => {
+        const el = document.getElementById('pc-tab-'+k);
+        if (el) { el.style.background = k===tab?'#333':'#1a1a1a'; el.style.color = k===tab?'#fff':'#555'; }
+    });
+    const st = document.getElementById('pc-stats');
+    if (st) st.innerHTML = pcBuildStats(pName, tab);
+}
+
 function showPlayerCard(pName) {
     if(!playerStats[pName]) return;
-    const p = playerStats[pName]; 
+    const p = playerStats[pName];
     const ovr = getLiveIceOvr(pName);
-    const c = p.career;
-    
-    // 1. DYNAMIC DATA RETRIEVAL
-    const weightedData = getPlayerWeightedStats(pName);
-    const tag = weightedData.tag;
-    const badge = getArchetypeBadge(pName);
-    
-    // 📊 FATIGUE & STREAK LOGIC
+    const tag = getPlayerWeightedStats(pName).tag;
     const fatigue = getPlayerFatigueAmount(pName);
-    const streak = p.macro_streak || p.micro_streak || 'STABLE';
-    const streakEmoji = streak === 'HOT' ? '🔥' : (streak === 'COLD' ? '❄️' : '⚖️');
-    const fatigueColor = fatigue >= 8 ? '#FF5555' : (fatigue > 0 ? '#FFAA00' : '#888');
 
-    let h = `<div style="background:linear-gradient(to bottom, #1a1a1a, #000); padding:20px; border:2px solid var(--neon-cyan); position:relative;">`;
-    
+    const teamObj = league.find(t => t.code === p.teamCode || t.name === p.team);
+    const fullName = teamObj ? teamObj.name.toUpperCase() : (p.team || p.teamCode || '---').toUpperCase();
+    const confRaw = (teamObj && teamObj.conf) ? teamObj.conf.toLowerCase() : '';
+    const confName = (confRaw.includes('east') || PC_WALES.includes(p.teamCode)) ? 'WALES CONFERENCE' : 'CAMPBELL CONFERENCE';
+    const clr = PC_COLORS[p.teamCode] || ['#003366','#CCAA00'];
+    const pri = clr[0], sec = clr[1];
+    const sprType = p.pos==='G' ? 'goalie' : (p.pos==='D'||p.pos==='LD'||p.pos==='RD') ? 'defense' : 'forward';
+    const cardNum = String(((p.season.gp||0)*7 + (p.age||25)*3 + (ovr||70)) % 900 + 100);
+    const ovrCol = ovr>=86?'#FFD060':ovr>=78?'#00CCFF':'#88FF88';
+    const st = p.macro_streak || p.micro_streak || '';
+    const stBadge = st==='HOT' ? `<span style="color:#FF4400;font-size:7px"> ▲HOT</span>` :
+                    st==='COLD'? `<span style="color:#4488FF;font-size:7px"> ▼COLD</span>` : '';
+    const fatBadge = fatigue>0 ? `<span style="color:${fatigue>=8?'#FF5555':'#FFAA00'};font-size:7px"> ⚡-${fatigue}</span>` : '';
+
+    const h = `
+<div style="font-family:'Press Start 2P',cursive;background:#000;max-width:360px;margin:0 auto;user-select:none;">
+  <div style="background:#0a0a0a;display:flex;align-items:center;justify-content:space-between;padding:5px 10px;border-bottom:1px solid #1a1a1a;">
+    <div style="display:flex;gap:3px;align-items:center;">
+      <div style="background:#B22222;color:#fff;font-size:7px;padding:2px 5px;">PRO</div>
+      <div style="background:#1020A0;color:#fff;font-size:7px;padding:2px 5px;">SET</div>
+      <span style="font-size:6px;color:#444;margin-left:6px;letter-spacing:2px;">NHL '94</span>
+    </div>
+    <span style="font-size:7px;color:#333">#${cardNum}</span>
+  </div>
+  <div style="background:${pri};padding:6px 10px 5px;border-bottom:3px solid ${sec};">
+    <div style="font-size:8px;color:#fff;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fullName}</div>
+    <div style="font-size:6px;color:rgba(255,255,255,.5);margin-top:2px;letter-spacing:1px;">${confName}</div>
+  </div>
+  <div style="background:#06060e;position:relative;display:flex;align-items:center;justify-content:center;height:116px;overflow:hidden;">
+    <canvas id="pc-sprite" width="64" height="104" style="image-rendering:pixelated;image-rendering:crisp-edges;display:block;margin-top:8px;"></canvas>
+    <canvas id="pc-logo" width="34" height="34" style="position:absolute;top:7px;right:7px;border-radius:50%;border:1px solid rgba(255,255,255,.15);image-rendering:pixelated;"></canvas>
+    <div style="position:absolute;bottom:0;left:0;right:0;height:18px;background:linear-gradient(transparent,rgba(0,0,0,.75));"></div>
+  </div>
+  <div style="background:${sec};padding:5px 10px;display:flex;justify-content:space-between;align-items:center;">
+    <div style="font-size:9px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px;">${p.name.toUpperCase()}</div>
+    <div style="font-size:7px;color:rgba(255,255,255,.8);background:rgba(0,0,0,.35);padding:2px 5px;">${p.pos}</div>
+  </div>
+  <div style="background:#111;padding:4px 10px;display:flex;justify-content:space-between;align-items:center;font-size:7px;gap:6px;">
+    <span>AGE <b style="color:#ccc">${p.age}</b></span>
+    <span>OVR <b style="color:${ovrCol}">${ovr}</b></span>
+    <span style="color:#555;font-size:6px;flex:1;text-align:center;">${tag}</span>
+    ${stBadge}${fatBadge}
+  </div>
+  <div style="background:#0a0a0a;padding:2px 8px 4px;">${buildStatusBadges(pName)}</div>
+  <div style="display:flex;gap:2px;padding:5px 6px;background:#0e0e0e;">
+    ${['season','career','playoff','c-po','attr'].map((k,i)=>`<button onclick="pcSwitchTab('${pName}','${k}')" id="pc-tab-${k}" style="flex:1;font-size:6px;font-family:'Press Start 2P',cursive;padding:5px 1px;background:${i===0?'#333':'#1a1a1a'};color:${i===0?'#fff':'#555'};border:none;cursor:pointer;border-radius:2px;">${['SEASON','CAREER','PLAYOFF','C.PLYFF','ATTR'][i]}</button>`).join('')}
+  </div>
+  <div id="pc-stats" style="background:#0e0e0e;padding:8px 10px;min-height:60px;">${pcBuildStats(pName,'season')}</div>
+  ${pcBuildHonors(pName)}
+</div>`;
+
+    document.getElementById('playerCardContent').innerHTML = h;
+    const spCanvas = document.getElementById('pc-sprite');
+    if (spCanvas) pcDrawSprite(spCanvas.getContext('2d'), sprType, pri, sec);
+    const lgCanvas = document.getElementById('pc-logo');
+    if (lgCanvas) pcDrawLogo(lgCanvas.getContext('2d'), 34, p.teamCode);
+    document.getElementById('playerCardOverlay').style.display = 'flex';
+}
+
+// ─── dead old body below — replaced by Pro Set card above ─────────────────────
+function _pcOldBodyPlaceholder() { // never called — keeps linter happy if needed
+    let h=''; const p={},c={},ovr=0,tag='',badge='',fatigue=0;
     // CORNER LOGO
     h += `<div style="position:absolute; top:10px; right:10px; font-size:10px; color:var(--ea-yellow); text-shadow:1px 1px 0 #000;">${p.teamCode}</div>`;
     
@@ -6781,10 +7147,7 @@ function showPlayerCard(pName) {
     }
     if(p.asgAppearances > 0) h += `<div style="margin-top:10px; font-size:8px; color:var(--neon-cyan);">⭐ ${p.asgAppearances}x All-Star</div>`;
     h += `</div>`;
-    
-    document.getElementById('playerCardContent').innerHTML = h;
-    document.getElementById('playerCardOverlay').style.display = 'flex';
-}
+} // end _pcOldBodyPlaceholder
 
 function runDraftLottery() {
     alert("Draft Lottery simulated! Rookies have been distributed.");
