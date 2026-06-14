@@ -221,79 +221,108 @@ function generateTeam60MinSchedule(struct) {
         return { fSched: Array(60).fill(0), dSched: Array(60).fill(0) };
     }
 
-    // Helper to extract line/pairing average overall ratings
-    const getUnitAverageOvr = (players) => {
+    const getUnitOvr = (players) => {
         if (!players || players.length === 0) return 75;
-        let sum = players.reduce((acc, p) => acc + (typeof getLiveIceOvr === 'function' ? getLiveIceOvr(p.name) : (p.ovr || 75)), 0);
-        return sum / players.length;
+        return players.reduce((s, p) => s + (typeof getLiveIceOvr === 'function' ? getLiveIceOvr(p.name) : (p.ovr || 75)), 0) / players.length;
     };
 
-    let f1Ovr = getUnitAverageOvr(struct.f[0]);
-    let f2Ovr = getUnitAverageOvr(struct.f[1]);
-    let f3Ovr = getUnitAverageOvr(struct.f[2]);
-    let f4Ovr = getUnitAverageOvr(struct.f[3]);
+    // ── FORWARD ICE TIME ──────────────────────────────────────────────────
+    const fOvr = struct.f.map(getUnitOvr);               // [L1, L2, L3, L4]
+    const OVR_CAP = 75;   // lines below this get capped at 20 min
+    const MAX_CAP = 20;   // cap ceiling for sub-75 lines
 
-    // Base target minutes (Middle ground of your requested limits, must total 60)
-    let fMins = [20, 17, 14, 9]; 
+    // Start with OVR-weighted base from 60 minutes
+    const fWeight = fOvr.map(o => Math.max(o - 60, 1));  // weight = OVR above 60
+    const fWeightSum = fWeight.reduce((s, w) => s + w, 0);
+    let fMins = fWeight.map(w => (w / fWeightSum) * 60);
 
-    // RULE A: Line 1 heavily outweighs all other lines -> Play near max (22 minutes)
-    let bottomLinesAvg = (f2Ovr + f3Ovr + f4Ovr) / 3;
-    if (f1Ovr - bottomLinesAvg >= 8) {
-        fMins[0] = 22;
+    // Hard clamps per line position (realistic NHL ranges)
+    const fClamp = [[18, 24], [14, 20], [10, 16], [6, 13]];
+    fMins = fMins.map((m, i) => Math.max(fClamp[i][0], Math.min(fClamp[i][1], m)));
+
+    // Cap any sub-75 OVR line at 20 min and redistribute surplus to better lines
+    let surplus = 0;
+    fMins.forEach((m, i) => {
+        if (fOvr[i] < OVR_CAP && m > MAX_CAP) {
+            surplus += m - MAX_CAP;
+            fMins[i] = MAX_CAP;
+        }
+    });
+    if (surplus > 0) {
+        // Distribute surplus proportionally to lines that are NOT capped
+        const eligible = fMins.map((m, i) => (fOvr[i] >= OVR_CAP ? fWeight[i] : 0));
+        const eligSum = eligible.reduce((s, w) => s + w, 0);
+        if (eligSum > 0) {
+            fMins = fMins.map((m, i) => m + (eligible[i] / eligSum) * surplus);
+            // Re-clamp after redistribution
+            fMins = fMins.map((m, i) => Math.max(fClamp[i][0], Math.min(fClamp[i][1], m)));
+        }
     }
 
-    // RULE B: Even if Line 3 has lower OVR than Line 4, still play Line 3 more
-    if (f4Ovr > f3Ovr) {
-        fMins[2] = Math.max(fMins[2], fMins[3] + 2);
+    // Ensure line order is always respected (L1 >= L2 >= L3 >= L4)
+    for (let i = 0; i < 3; i++) {
+        if (fMins[i] < fMins[i + 1]) fMins[i] = fMins[i + 1] + 1;
     }
 
-    // RULE C: If lines OVR are within 3 rating points, give similar ice time
-    const threshold = 3;
-    if (Math.abs(f1Ovr - f2Ovr) <= threshold) { let avg = (fMins[0] + fMins[1]) / 2; fMins[0] = avg; fMins[1] = avg; }
-    if (Math.abs(f2Ovr - f3Ovr) <= threshold) { let avg = (fMins[1] + fMins[2]) / 2; fMins[1] = avg; fMins[2] = avg; }
-    if (Math.abs(f3Ovr - f4Ovr) <= threshold) { let avg = (fMins[2] + fMins[3]) / 2; fMins[2] = avg; fMins[3] = avg; }
-
-    // Enforce strict requested boundary clamps for forwards
-    fMins[0] = Math.max(18, Math.min(22, fMins[0]));
-    fMins[1] = Math.max(16, Math.min(18, fMins[1]));
-    fMins[2] = Math.max(13, Math.min(15, fMins[2]));
-    fMins[3] = Math.max(8, Math.min(12, fMins[3]));
-
-    // Round and force alignment to exactly 60 total game minutes
+    // Round and force total to exactly 60
     let finalFCounts = fMins.map(m => Math.round(m));
     while (finalFCounts.reduce((a, b) => a + b, 0) < 60) finalFCounts[0]++;
-    while (finalFCounts.reduce((a, b) => a + b, 0) > 60) finalFCounts[3]--;
+    while (finalFCounts.reduce((a, b) => a + b, 0) > 60) {
+        // Shave from the lowest-OVR line that is above its floor
+        for (let i = 3; i >= 0; i--) {
+            if (finalFCounts[i] > fClamp[i][0]) { finalFCounts[i]--; break; }
+        }
+    }
 
-    // Build the Forward Schedule sequence and shuffle it so lines rotate realistically
+    // Build shuffled forward schedule
     let fSched = [];
-    finalFCounts.forEach((count, idx) => { for(let i=0; i<count; i++) fSched.push(idx); });
+    finalFCounts.forEach((count, idx) => { for (let i = 0; i < count; i++) fSched.push(idx); });
     fSched.sort(() => Math.random() - 0.5);
 
-    // --- DEFENSE PERCENTAGE DISTRIBUTION MATRIX LOGIC ---
-    let dSched = [];
-    fSched.forEach(fLine => {
-        let roll = Math.random();
-        let chosenPair = 0;
-        
-        if (fLine === 0) { // Line 1 is on the ice
-            if (roll < 0.65) chosenPair = 0;       // 65% chance for Pair 1
-            else if (roll < 0.85) chosenPair = 1;  // 20% chance for Pair 2
-            else chosenPair = 2;                   // 15% chance for Pair 3
-        } else if (fLine === 1) { // Line 2 is on the ice
-            if (roll < 0.20) chosenPair = 0;       // 20% chance for Pair 1
-            else if (roll < 0.75) chosenPair = 1;  // 55% chance for Pair 2
-            else chosenPair = 2;                   // 25% chance for Pair 3
-        } else if (fLine === 2) { // Line 3 is on the ice
-            if (roll < 0.10) chosenPair = 0;       // 10% chance for Pair 1
-            else if (roll < 0.30) chosenPair = 1;  // 20% chance for Pair 2
-            else chosenPair = 2;                   // 70% chance for Pair 3
-        } else { // Line 4 is on the ice
-            if (roll < 0.05) chosenPair = 0;       // 5% chance for Pair 1
-            else if (roll < 0.15) chosenPair = 1;  // 10% chance for Pair 2
-            else chosenPair = 2;                   // 85% chance for Pair 3
-        }
-        dSched.push(chosenPair);
+    // ── DEFENSE ICE TIME (OVR-weighted, mirrors forward logic) ────────────
+    const dPairs = struct.d.length || 3;
+    const dOvr = struct.d.map(getUnitOvr);
+    const dWeight = dOvr.map(o => Math.max(o - 60, 1));
+    const dWeightSum = dWeight.reduce((s, w) => s + w, 0);
+    let dMins = dWeight.map(w => (w / dWeightSum) * 60);
+
+    // D pair clamps: Pair 1 plays most, Pair 3 least
+    const dClamp = [[22, 30], [18, 26], [8, 18]];
+    dMins = dMins.slice(0, 3).map((m, i) => Math.max(dClamp[i][0], Math.min(dClamp[i][1], m)));
+
+    // Same sub-75 cap for D pairs
+    let dSurplus = 0;
+    dMins.forEach((m, i) => {
+        if (dOvr[i] < OVR_CAP && m > MAX_CAP) { dSurplus += m - MAX_CAP; dMins[i] = MAX_CAP; }
     });
+    if (dSurplus > 0) {
+        const dElig = dMins.map((m, i) => (dOvr[i] >= OVR_CAP ? dWeight[i] : 0));
+        const dEligSum = dElig.reduce((s, w) => s + w, 0);
+        if (dEligSum > 0) dMins = dMins.map((m, i) => m + (dElig[i] / dEligSum) * dSurplus);
+    }
+
+    // Enforce Pair 1 >= Pair 2 >= Pair 3
+    for (let i = 0; i < dMins.length - 1; i++) {
+        if (dMins[i] < dMins[i + 1]) dMins[i] = dMins[i + 1] + 1;
+    }
+
+    // Convert D minutes to per-shift probability thresholds for each F line minute
+    // (60 D "slots" assigned independently of which F line is on ice)
+    let finalDCounts = dMins.map(m => Math.round(m));
+    while (finalDCounts.reduce((a, b) => a + b, 0) < 60) finalDCounts[0]++;
+    while (finalDCounts.reduce((a, b) => a + b, 0) > 60) {
+        for (let i = dPairs - 1; i >= 0; i--) {
+            if (finalDCounts[i] > dClamp[Math.min(i, dClamp.length - 1)][0]) { finalDCounts[i]--; break; }
+        }
+    }
+
+    // Build shuffled D schedule (independent of F schedule — D pairs rotate on their own)
+    let dSchedBase = [];
+    finalDCounts.forEach((count, idx) => { for (let i = 0; i < count; i++) dSchedBase.push(idx); });
+    dSchedBase.sort(() => Math.random() - 0.5);
+
+    // Map back to fSched length (D sched must be same length as fSched = 60)
+    const dSched = dSchedBase.slice(0, fSched.length);
 
     return { fSched, dSched };
 }
