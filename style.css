@@ -184,6 +184,13 @@ body {
     border: 4px solid #fff;
     color: #fff;
     text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+}
+
+.start-screen-btn:hover:not(:disabled) {
+    background: #fff;
+    color: #000;
 }
 
 .start-screen-continue {
@@ -667,14 +674,19 @@ td {
 }
 
 .sim-btn {
-    padding: 10px 20px;
-    font-size: 14px;
-    font-weight: bold;
+    padding: 10px 14px;
+    font-size: 8px;
+    font-family: 'Press Start 2P', cursive;
+    font-weight: normal;
     cursor: pointer;
-    background-color: #f0f0f0;
-    border: 2px solid #333;
-    border-radius: 4px;
+    background: #000;
+    border: 4px solid #fff;
+    border-right-color: var(--line-blue);
+    border-bottom-color: var(--line-blue);
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
     text-transform: uppercase;
+    color: #fff;
+    transition: background 0.1s, color 0.1s;
 }
 
 .player-badge {
@@ -683,13 +695,8 @@ td {
     vertical-align: middle;
 }
 
-.sim-btn:hover {
-    background-color: #dcdcdc;
-}
-
-.sim-btn:active {
-    background-color: #b0b0b0;
-}
+.sim-btn:hover:not(:disabled) { background: #fff; color: #000; }
+.sim-btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.3); }
 
 /* --- 3. SOLID INNER CONTAINERS --- */
 .collapsible-content,
@@ -742,7 +749,7 @@ button {
     cursor: pointer; 
     margin: 4px; 
     text-transform: uppercase; 
-    transition: 0.05s; 
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
     background: #000;
     color: #fff;
     border: 4px solid #fff; 
@@ -755,6 +762,11 @@ button {
 button:hover:not(:disabled) {
     background: #fff;
     color: #000;
+}
+
+button:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.3);
 }
 
 /* Standardized thick 16-bit buttons for the main UI */
@@ -844,6 +856,7 @@ button:hover:not(:disabled) {
     background: rgba(0,255,255,0.12);
     border-color: rgba(0,255,255,0.18);
     transform: translateY(-1px);
+    transition: transform 0.1s, background 0.1s;
 }
 
 .save-state-info {

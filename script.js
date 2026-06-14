@@ -3835,8 +3835,8 @@ function simGame(idx) {
         let diff = hLiveOvr - aLiveOvr;
         
         // 🏒 Realistic Shot Generation Rates per 30-seconds
-        let hShotChance = 0.22 + (diff * 0.0025) * asgBoost;
-        let aShotChance = 0.22 - (diff * 0.0025) * asgBoost;
+        let hShotChance = 0.26 + (diff * 0.0025) * asgBoost;
+        let aShotChance = 0.26 - (diff * 0.0025) * asgBoost;
         
         let period = minute <= 20 ? 1 : (minute <= 40 ? 2 : 3);
         let sec = Math.floor(Math.random() * 60);
@@ -3850,7 +3850,7 @@ function simGame(idx) {
             trk(aG_name, 'sa', 1);     // Record Goalie Shot Against
 
             // Conversion Roll (Goal vs Save)
-            let scoringProb = 0.128 + (diff * 0.004) * aWallMod;
+            let scoringProb = 0.108 + (diff * 0.004) * aWallMod;
             if (Math.random() < Math.max(0.02, Math.min(0.30, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
@@ -3877,7 +3877,7 @@ function simGame(idx) {
             trk(hG_name, 'sa', 1);     // Record Goalie Shot Against
 
             // Conversion Roll (Goal vs Save)
-            let scoringProb = 0.128 - (diff * 0.004) * hWallMod;
+            let scoringProb = 0.108 - (diff * 0.004) * hWallMod;
             if (Math.random() < Math.max(0.02, Math.min(0.30, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
