@@ -228,8 +228,8 @@ function getRandomInt(min, max) {
 const getOff = (pName) => parseInt(playerStats[pName]?.attr.off || playerStats[pName]?.attr.OFF || 0);
 const getDef = (pName) => parseInt(playerStats[pName]?.attr.def || playerStats[pName]?.attr.DEF || 0);
 const getChk = (pName) => parseInt(playerStats[pName]?.attr.chk || playerStats[pName]?.attr.CHK || 0);
-const getWgt = (pName) => getGradeMod(playerStats[pName]?.attr.weight || 'C'); // Column AC
-const getPly = (pName) => playerStats[pName]?.attr.play || 'B'; // Column AD
+const getWgt = (pName) => parseInt(playerStats[pName]?.attr.wgt || playerStats[pName]?.attr.WGT || 0); // Column AC
+const getAggr = (pName) => parseInt(playerStats[pName]?.attr.aggr || playerStats[pName]?.attr.AGR || 0);
 const getArch = (pName) => playerStats[pName]?.archetype || 'Unknown'; // Column AE
 
 /**
