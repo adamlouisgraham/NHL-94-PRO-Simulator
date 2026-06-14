@@ -6949,6 +6949,9 @@ function showPlayerCard(pName) {
     const clr = PC_COLORS[p.teamCode] || ['#003366','#CCAA00'];
     const pri = clr[0], sec = clr[1];
     const sprType = p.pos==='G' ? 'goalie' : (p.pos==='D'||p.pos==='LD'||p.pos==='RD') ? 'defense' : 'forward';
+    const dbBg  = pri.replace('#','');
+    const dbClr = sec.replace('#','');
+    const dbUrl = `https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(pName)}&backgroundColor=${dbBg}&clothingColor=${dbClr}&size=96`;
     const cardNum = String(((p.season.gp||0)*7 + (p.age||25)*3 + (ovr||70)) % 900 + 100);
     const ovrCol = ovr>=86?'#FFD060':ovr>=78?'#00CCFF':'#88FF88';
     const st = p.macro_streak || p.micro_streak || '';
@@ -6971,7 +6974,7 @@ function showPlayerCard(pName) {
     <div style="font-size:6px;color:rgba(255,255,255,.5);margin-top:2px;letter-spacing:1px;">${confName}</div>
   </div>
   <div style="background:#06060e;position:relative;display:flex;align-items:center;justify-content:center;height:116px;overflow:hidden;">
-    <canvas id="pc-sprite" width="64" height="104" style="image-rendering:pixelated;image-rendering:crisp-edges;display:block;margin-top:8px;"></canvas>
+    <img src="${dbUrl}" width="96" height="96" style="image-rendering:pixelated;image-rendering:crisp-edges;display:block;margin-top:4px;" alt="${p.name}">
     <canvas id="pc-logo" width="34" height="34" style="position:absolute;top:7px;right:7px;border-radius:50%;border:1px solid rgba(255,255,255,.15);image-rendering:pixelated;"></canvas>
     <div style="position:absolute;bottom:0;left:0;right:0;height:18px;background:linear-gradient(transparent,rgba(0,0,0,.75));"></div>
   </div>
@@ -6994,8 +6997,6 @@ function showPlayerCard(pName) {
 </div>`;
 
     document.getElementById('playerCardContent').innerHTML = h;
-    const spCanvas = document.getElementById('pc-sprite');
-    if (spCanvas) pcDrawSprite(spCanvas.getContext('2d'), sprType, pri, sec);
     const lgCanvas = document.getElementById('pc-logo');
     if (lgCanvas) pcDrawLogo(lgCanvas.getContext('2d'), 34, p.teamCode);
     document.getElementById('playerCardOverlay').style.display = 'flex';
