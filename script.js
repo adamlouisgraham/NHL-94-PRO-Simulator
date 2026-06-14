@@ -5041,14 +5041,13 @@ function renderTeamStats() {
             
             return `
             <div class="player-slot" style="cursor:pointer;" onclick="showPlayerCard('${p.name}')">
-                <div style="margin-bottom:2px;"><span class="pos-badge">${label}</span> ${getMoraleEmoji(p.name)} ${p.name} ${getArchetypeBadge(p.name)} ${getPlayerBadges(p.name)}</div>
-                <div style="color:#fff; font-weight:bold;">${p.name}</div>
+                <div style="margin-bottom:2px;"><span class="pos-badge">${label}</span> ${getMoraleEmoji(p.name)} ${p.name} ${getPlayerBadges(p.name)}</div>
                 <div style="font-size:7px; color:var(--ea-yellow); margin-top:3px;">
                     ${getArchetypeBadge(p.name)} OVR: ${getPlayerWeightedStats(p.name).ovr}
                 </div>
             </div>`;
         }).join('');
-        
+
         h += `</div>`; // Close grid wrapper
     });
     h += `</div>`;
@@ -5059,26 +5058,22 @@ function renderTeamStats() {
     h += `<div><div class="unit-header" style="background:#003366; color:#00FFFF;">PENALTY KILL UNITS</div>`;
     ['PK1', 'PK2'].forEach((unitName, i) => {
         let pkU = getSpecialTeamsUnit(tk, 'PK', i + 1);
-        
-        // Keep your custom header and EDIT button
+
         h += `<div style="font-size:7px; color:#aaa; margin-top:5px; display:flex; justify-content:space-between; align-items:center;">
-                <span>${unitName}</span> 
+                <span>${unitName}</span>
                 <button onclick="openSpecialTeamsMenu('${tk}', 'PK', ${i+1})" style="background:#222; color:#fff; border:1px solid #666; padding:2px 6px; cursor:pointer; font-size:7px;">EDIT</button>
               </div>`;
-              
-        // Open the new CSS Grid wrapper instead of a table
+
         h += `<div class="pk-grid-layout" style="margin-top: 5px;">`;
-        
-        // Map the players into the grid slots
+
         h += pkU.map((p, index) => {
-            if (!p) return `<div class="player-slot" style="color:#555; text-align:center;">-- EMPTY --</div>`; // 🛡️ SAFETY NET
-            
-            let label = index < 2 ? '[F]' : '[D]'; // First 2 slots are Forward, last 2 are Defense
-            
+            if (!p) return `<div class="player-slot" style="color:#555; text-align:center;">-- EMPTY --</div>`;
+
+            let label = index < 2 ? '[F]' : '[D]';
+
             return `
             <div class="player-slot" style="cursor:pointer;" onclick="showPlayerCard('${p.name}')">
-                <div style="margin-bottom:2px;"><span class="pos-badge" style="color:#00FFFF;">${label}</span> ${getMoraleEmoji(p.name)} ${p.name} ${getArchetypeBadge(p.name)} ${getPlayerBadges(p.name)}</div>
-                <div style="color:#fff; font-weight:bold;">${p.name}</div>
+                <div style="margin-bottom:2px;"><span class="pos-badge" style="color:#00FFFF;">${label}</span> ${getMoraleEmoji(p.name)} ${p.name} ${getPlayerBadges(p.name)}</div>
                 <div style="font-size:7px; color:#00FFFF; margin-top:3px;">
                     ${getArchetypeBadge(p.name)} OVR: ${getPlayerWeightedStats(p.name).ovr}
                 </div>
