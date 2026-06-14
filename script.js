@@ -5815,7 +5815,8 @@ function startWatchLive() {
                 if (ev.tm === g.a.code) { watchCurrentScore.a++; document.getElementById('wgAwayScore').innerText = watchCurrentScore.a; }
                 if (ev.tm === g.h.code) { watchCurrentScore.h++; document.getElementById('wgHomeScore').innerText = watchCurrentScore.h; }
             }
-            document.getElementById('wgTicker').innerHTML += `<div style="background:#111; border:2px solid ${ev.cl}; padding:8px; margin:5px 0;"><span style="color:${ev.cl}; font-weight:bold; margin-right:10px;">[${ev.tm}]</span> <span style="color:#fff;">${ev.isPenalty ? '⛔ ' + ev.txt : '🚨 GOAL! ' + ev.txt.split(' - ')[1]}</span></div>`;
+            const evDisplay = ev.isPenalty ? `⛔ ${ev.txt}` : `🚨 GOAL! ${ev.txt || (ev.scorer ? ev.scorer : '')}`;
+            document.getElementById('wgTicker').innerHTML += `<div style="background:#111; border:2px solid ${ev.cl||'#555'}; padding:8px; margin:5px 0;"><span style="color:${ev.cl||'#fff'}; font-weight:bold; margin-right:10px;">[${ev.tm||''}]</span> <span style="color:#fff;">${evDisplay}</span></div>`;
         }
         let t = document.getElementById('wgTicker'); t.scrollTop = t.scrollHeight;
     }, 1200); 
@@ -5829,29 +5830,7 @@ function skipWatchGame() {
     watchGameObj.result.boxLog.forEach(ev => {
         if (ev.isPenalty) { h += `<div style="background:#111; border:1px solid ${ev.cl}; padding:4px; margin:4px 0;"><span style="color:${ev.cl}; font-weight:bold; margin-right:10px;">[${ev.tm}]</span> <span style="color:#fff;">⛔ ${ev.txt}</span></div>`; } 
         else {
-            // To apply the simulated minutes directly to a player's season logs post-game:
-const iceTimeData = g.preCalculatedIceTime.home; // or away
-
-// Example setting Forward Player Ice Time
-struct.f.forEach((line, lineIdx) => {
-    line.forEach(player => {
-        let mins = iceTimeData.forwardLineAverages[lineIdx];
-        if (playerStats[player.name]) {
-            playerStats[player.name].season.toi = (playerStats[player.name].season.toi || 0) + mins;
-        }
-    });
-});
-
-// Example setting Defense Player Ice Time
-struct.d.forEach((pair, pairIdx) => {
-    pair.forEach(player => {
-        let mins = iceTimeData.defensePairAverages[pairIdx];
-        if (playerStats[player.name]) {
-            playerStats[player.name].season.toi = (playerStats[player.name].season.toi || 0) + mins;
-        }
-    });
-});
-             h += `<div style="background:#111; border:1px solid ${ev.cl}; padding:4px; margin:4px 0;"><span style="color:${ev.cl}; font-weight:bold; margin-right:10px;">[${ev.tm}]</span> <span style="color:#fff;">🚨 GOAL! ${ev.txt.split(' - ')[1]}</span></div>`; }
+            h += `<div style="background:#111; border:1px solid ${ev.cl||'#555'}; padding:4px; margin:4px 0;"><span style="color:${ev.cl||'#fff'}; font-weight:bold; margin-right:10px;">[${ev.tm||''}]</span> <span style="color:#fff;">🚨 GOAL! ${ev.txt || ev.scorer || ''}</span></div>`; }
     });
     h += `<div style="color:var(--ea-yellow); text-align:center; margin-top:20px; font-size:12px;">🚨 FINAL HORN 🚨</div>`;
     document.getElementById('wgTicker').innerHTML = h; let t = document.getElementById('wgTicker'); t.scrollTop = t.scrollHeight;
@@ -8042,7 +8021,7 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
 // =========================================================
 function triggerGameInjuries(matchStats, homeCode, awayCode) {
     if (!awardConfig.injuries) return;
-    const BASE_CHANCE = 0.022;
+    const BASE_CHANCE = 0.015; // lowered overall rate; short injuries now dominate volume
     for (let pName in matchStats) {
         const ps = playerStats[pName];
         if (!ps || !ps.injury) continue;
@@ -8050,20 +8029,20 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
         const stats = matchStats[pName];
         if (!stats.toi || stats.toi <= 0) continue;
 
-        const fatigueBonus = (ps.fatigue || 0) > 70 ? 0.008 : 0;
-        const physicalBonus = stats.pim >= 2 ? 0.005 : 0;
+        const fatigueBonus = (ps.fatigue || 0) > 70 ? 0.006 : 0;
+        const physicalBonus = stats.pim >= 2 ? 0.004 : 0;
         const chance = BASE_CHANCE + fatigueBonus + physicalBonus;
 
         if (Math.random() < chance) {
             const roll = Math.random();
             let days, label;
-            if (roll < 0.25)      { days = 0;  label = 'out for a period'; }
-            else if (roll < 0.52) { days = 1;  label = '1-game injury'; }
-            else if (roll < 0.72) { days = Math.floor(Math.random() * 3) + 2;  label = `${days}-game injury`; }
-            else if (roll < 0.88) { days = Math.floor(Math.random() * 4) + 5;  label = `${days}-game injury`; }
-            else                  { days = Math.floor(Math.random() * 5) + 11; label = `${days}-game injury`; }
+            // Reweighted: heavy bias toward short injuries; 12-15 rare
+            if      (roll < 0.30) { days = 0;                                   label = 'out for a period'; }
+            else if (roll < 0.58) { days = 1;                                   label = '1-game injury'; }
+            else if (roll < 0.78) { days = Math.floor(Math.random() * 4) + 2;  label = `${days}-game injury`; }
+            else if (roll < 0.93) { days = Math.floor(Math.random() * 6) + 6;  label = `${days}-game injury`; }
+            else                  { days = Math.floor(Math.random() * 4) + 12; label = `${days}-game injury`; }
 
-            // Cap at 15 games
             days = Math.min(days, 15);
 
             const teamCode = (rosters[homeCode] || []).find(p => p.name === pName) ? homeCode : awayCode;
@@ -8071,8 +8050,8 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
                 ? `🩹 INJURY NOTE: ${pName} (${teamCode.toUpperCase()}) was shaken up — out for a period.`
                 : `🩹 INJURY: ${pName} (${teamCode.toUpperCase()}) — ${label}, out ${days} game${days > 1 ? 's' : ''}.`;
 
-            // Prompt for 7+ game injuries so user can veto
-            if (days >= 7) {
+            // Only confirm long injuries (12-15 games)
+            if (days >= 12) {
                 const accept = confirm(`INJURY — ${pName} (${teamCode.toUpperCase()})\n${label.toUpperCase()}\n\nApply this injury? (OK = yes, Cancel = skip)`);
                 if (!accept) {
                     tradeLog.unshift({ day: currentDay, details: `⚡ INJURY AVOIDED: ${pName} (${teamCode.toUpperCase()}) played through a ${label}.` });
