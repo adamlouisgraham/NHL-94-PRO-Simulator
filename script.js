@@ -6798,7 +6798,7 @@ function pcDrawSprite(ctx, type, pri, sec) {
         'V': '#AADDFF', 'v': '#88CCEE',          // visor
         'm': '#E0E0E0',                           // goalie mask white
         's': '#F4C17A', 'S': '#C8905A',          // skin base/shadow
-        'j': priHi,    'J': pri,    'd': _pcShade(pri,-50), // jersey hi/base/shadow
+        'j': _pcShade(pri,55), 'J': pri, 'd': _pcShade(pri,-50), // jersey hi/base/shadow
         'c': _pcShade(sec,30), 'C': sec,         // secondary hi/base
         'g': '#111122', 'G': '#2a3a4a',          // trapper/glove dk/hi
         'p': _pcShade(pri,-30), 'P': _pcShade(pri,-60), // pad/pants
