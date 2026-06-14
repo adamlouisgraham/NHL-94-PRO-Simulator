@@ -6665,167 +6665,209 @@ function _pcB(ctx, sc, x, y, w, h, col) { // bordered fill (outline technique)
     ctx.fillRect(x*sc+1, y*sc+1, w*sc-2, h*sc-2);
 }
 
+// ── Sprite pixel data (25 cols × 32 rows, chars map to colors) ───────────────
+// . transparent  # black outline
+// H/h helmet dk/hi  V visor  s/S skin base/shadow
+// j/J/d jersey hi/base/shadow  c/C secondary/hi
+// g/G glove dk/hi  p/P pants dk/darker  b/B boot/hi
+// a/A blade silver/dk  k/K stick/hi  u puck
+const PC_SPR_FWD = [
+//  0         1         2
+//  0123456789012345678901234
+    '.........#######.........',// 0
+    '........#HHhhhH##........',// 1  helmet
+    '........#HHVVVhH#........',// 2  visor
+    '........#HH#ss#hH#.......',// 3  face cage bar + skin
+    '........#HH#SS#hH#.......',// 4  face lower + shadow
+    '.........#H#sS##.........',// 5  chin/neck
+    '......####JJJJJJ####.....',// 6  shoulders
+    '.....#jJJJJJJJJJJJJ#.....',// 7  upper chest
+    '....#jJJJJJJJJJJJJJJ#....',// 8
+    '..###JJjJJJcccJJJJJdJJ#..',// 9  left arm starts, stripe
+    '.#GgjJJJJJcccJJJJJJdJJJ#.',// 10 left arm + glove
+    '#GggjJJJJJJcJJJJJJJdJJJ#.',// 11 glove out
+    '#GgkjJJJJJJJJJJJJJJJdJJ#.',// 12 stick enters at glove
+    '#KkkkjJJJJJJJJJJJJJddJJ#.',// 13 stick
+    '.#KkkkjJdddddddddddddJ##..',// 14
+    '..#Kkkk#ddddddddddddd##...',// 15
+    '...#Kkk#ppppppppppppp##..',// 16 pants
+    '....#kk#ppppppppppppp#...',// 17
+    '.....#k##pppppppppppp#...',// 18
+    '......#K#ppppppppppp#....',// 19
+    '.......#k##HHHHHHHHH##...',// 20 shin guards
+    '......#Kk#HHhhhhhhHH#....',// 21
+    '.....#KKk#HHHhhhHHHH#....',// 22
+    '....#KKKk#HHHhhhHHHH#....',// 23
+    '...#KKKKk#bbbbbbbbbbb#...',// 24 boot
+    '..#KKKKKk##bBBBBBBBb##..',// 25
+    '.#uu#KKKK###aaaaaaaaaa#..',// 26 puck + blade starts
+    '#uuu#....#aaaaaaaaaaaaa#.',// 27
+    '#uu#.....#aaaaaaaaaaaaa#.',// 28
+    '##.......#aaaaaaaaaaaaa#.',// 29
+    '.........#aaaaaaaaaaaaA#.',// 30
+    'iiiiiiiiiiiiiiiiiiiiiiiii',// 31 ice
+];
+const PC_SPR_DEF = [
+//  0         1         2
+//  0123456789012345678901234
+    '..........#######........',// 0
+    '.........#HHhhhH##.......',// 1  helmet
+    '.........#HHVVVhH#.......',// 2  visor
+    '.........#HH#ss#hH#......',// 3
+    '.........#HH#SS#hH#......',// 4
+    '..........#H#sS##........',// 5  chin
+    '.......####JJJJJJ####....',// 6  shoulders — wider stance
+    '......#jJJJJJJJJJJJJ#...',// 7
+    '.....#jJJJJJJJJJJJJJJ#..',// 8
+    '...###JJjJJJcccJJJJJJdJJ#',// 9  stripe
+    '..#jJJJJJJJcccJJJJJJJdJ#.',// 10
+    '.#jJJJJJJJJJcJJJJJJJJdJ#.',// 11
+    '#GgjJJJJJJJJJJJJJJJJJdJ#.',// 12 right arm out (stick)
+    '#GggjJJJJJJJJJJJJJJddJJ#.',// 13
+    '#ggkjJJJJJJJJJJJJJJddJJ#.',// 14 stick hand
+    '#KkkkJdddddddddddddddJ##.',// 15
+    '.#KkkkJpppppppppppppJ##..',// 16 pants
+    '..#Kkkk#ppppppppppppp#...',// 17
+    '...#kkk#ppppppppppppp#...',// 18
+    '....#kk#ppppppppppppp#...',// 19
+    '.....#kk##HHHHHHHHHHH#...',// 20 shins — wide
+    '....#KkHHHHhhhhhHHHHH#...',// 21
+    '...#KKk#HHHhhhhhHHHH##..',// 22
+    '..#KKKk#HHHhhhHHHHH#....',// 23
+    '.#KKKKk#bbbbbbbbbbbbb#...',// 24 boots wide
+    '#KKKKKk##bBBBBBBBBBb##..',// 25
+    '#KKKK###.#aaaaaaaaaaaaa#.',// 26 stick blade goes left
+    '#KKK#....#aaaaaaaaaaaaa#.',// 27
+    '#KK#.....#aaaaaaaaaaaaa#.',// 28
+    '#K#......#aaaaaaaaaaaaa#.',// 29
+    '##.......#aaaaaaaaaaaaA#.',// 30
+    'iiiiiiiiiiiiiiiiiiiiiiiii',// 31 ice
+];
+const PC_SPR_GTL = [
+//  0         1         2
+//  0123456789012345678901234
+    '.........#########.......',// 0  mask top
+    '........#mmmmmmmmm#......',// 1  mask
+    '........#mVVmmVVmm#......',// 2  visor stripes
+    '........#m#mm#mm#m#......',// 3  cage bars vertical
+    '........#mm##mmm#m#......',// 4  cage bar horizontal
+    '........#mmmssmmm#.......',// 5  chin visible
+    '.........#ms##mm#........',// 6  neck
+    '....####JJJJJJJJJJ####..',// 7  wide chest protector
+    '...#JJJJJJJJJJJJJJJJJd#.',// 8
+    '..#JJJJJJJcccccccJJJJJd#',// 9  chest stripe
+    '.#gGGGJJJJcccccccJJJJJdJ#',// 10 — blocker/glove sides start (26 wide - trim 1)
+    '#gGGGjJJJJJcccJJJJJJdJJJ#',// 11 trapper (left), blocker (right)
+    '#gGGGjJJJJJJJJJJJJJddJJJ#',// 12
+    '#gGGkjJJJJJJJJJJJJJddJJJ#',// 13 stick enters trapper
+    '#ggg#jJJJJJJJJJJJJJJdJJ##',// 14
+    '#ggg#ppppppppppppppppp###.',// 15 — into pads
+    '#ppp#pppppppppppppppp##..',// 16  PAD TOPS — butterfly spread
+    '#ppp#JJJpppppppJJJJppp#..',// 17  pad highlight bands
+    '#ppp#JJpppppppppJJJppp#..',// 18
+    '#ccc#pppppppppppppppp##..',// 19  pad stripe
+    '#ppp#pppppppppppppppp#...',// 20
+    '#ppp#pppppppppppppppp#...',// 21
+    '#ccc#pJJJpppppppJJJpp#...',// 22  second stripe
+    '#ppp#pppppppppppppppp#...',// 23
+    '#bb##pppppppppppppppp#...',// 24  skate appearing at pad bottom
+    '#bb#.##aaaaaaaaaaaaaa#...',// 25  blade wide
+    '#bb#..#aaaaaaaaaaaaaaA#..',// 26
+    'www#...#aaaaaaaaaaaaaa#..',// 27  crease arc hint
+    'www....#aaaaaaaaaaaaa##..',// 28
+    '......iiiiiiiiiiiiiiiii..',// 29  ice
+    '.........................',// 30
+    '.........................',// 31
+];
+
+function pcRenderSprite(ctx, rows, cm, sc) {
+    for(let y=0;y<rows.length;y++) {
+        const row = rows[y];
+        for(let x=0;x<row.length;x++) {
+            const col = cm[row[x]];
+            if(col) { ctx.fillStyle=col; ctx.fillRect(x*sc, y*sc, sc, sc); }
+        }
+    }
+}
+
 function pcDrawSprite(ctx, type, pri, sec) {
-    const sc = 4;
-    const skin   = '#F4C07A';
-    const helmet = '#2a2a2a';
-    const visor  = '#88CCEE';
-    const boot   = '#111111';
-    const glv    = '#1a1a1a';
-    const priHi  = _pcShade(pri, 50);
-    const priLo  = _pcShade(pri, -50);
-
+    const sc = 5;
+    const cm = {
+        '#': '#000000',
+        'H': '#222233', 'h': '#556688',          // helmet dk/hi
+        'V': '#AADDFF', 'v': '#88CCEE',          // visor
+        'm': '#E0E0E0',                           // goalie mask white
+        's': '#F4C17A', 'S': '#C8905A',          // skin base/shadow
+        'j': priHi,    'J': pri,    'd': _pcShade(pri,-50), // jersey hi/base/shadow
+        'c': _pcShade(sec,30), 'C': sec,         // secondary hi/base
+        'g': '#111122', 'G': '#2a3a4a',          // trapper/glove dk/hi
+        'p': _pcShade(pri,-30), 'P': _pcShade(pri,-60), // pad/pants
+        'b': '#111111', 'B': '#446677',          // boot dk/hi
+        'a': '#CCCCCC', 'A': '#888888',          // blade silver/dk
+        'k': '#7B5000', 'K': '#AA7830',          // stick dk/hi
+        'u': '#111111', 'U': '#333333',          // puck
+        'w': 'rgba(100,180,255,0.35)',            // crease
+        'i': 'rgba(180,225,255,0.20)',            // ice
+        '.': null,
+    };
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    const rows = type==='forward' ? PC_SPR_FWD : type==='defense' ? PC_SPR_DEF : PC_SPR_GTL;
+    pcRenderSprite(ctx, rows, cm, sc);
 
-    // Ice surface hint
-    ctx.fillStyle = 'rgba(180,225,255,0.18)';
-    ctx.fillRect(0, 24*sc, 20*sc, 3);
-
-    if (type === 'forward') {
-        // ── SLAP SHOT: body twisting into follow-through ─────────────────
-        _pcB(ctx,sc, 9,0, 5,2, helmet);
-        _pcR(ctx,sc, 10,0, 3,1, visor);
-        _pcB(ctx,sc, 10,2, 3,2, skin);
-        ctx.fillStyle='#000';
-        ctx.fillRect(10*sc,3*sc,3*sc,1); ctx.fillRect(10*sc,4*sc-1,3*sc,1);
-        for(let i=0;i<2;i++) ctx.fillRect((10.8+i*1.2)*sc,3*sc,1,1*sc);
-        _pcR(ctx,sc, 11,4, 2,1, skin);
-        // jersey — body leaning into shot (wider left)
-        _pcB(ctx,sc, 7,5, 9,4, pri);
-        _pcR(ctx,sc, 8,6, 3,3, priHi);
-        _pcR(ctx,sc, 12,6, 2,3, priLo);
-        _pcB(ctx,sc, 8,9, 8,5, pri);
-        _pcR(ctx,sc, 8,10, 8,1, sec);
-        _pcR(ctx,sc, 10,11, 4,2, sec);
-        // left arm reaching toward puck
-        _pcB(ctx,sc, 4,5, 4,5, pri);
-        _pcR(ctx,sc, 4,6, 2,3, priHi);
-        // right arm following through down
-        _pcB(ctx,sc, 14,8, 4,5, pri);
-        // gloves
-        _pcB(ctx,sc, 3,9, 3,2, glv);
-        _pcB(ctx,sc, 14,12, 3,2, glv);
-        // pants
-        _pcB(ctx,sc, 8,14, 8,3, priLo);
-        // front leg (planted)
-        _pcB(ctx,sc, 8,17, 5,4, helmet);
-        _pcR(ctx,sc, 8,18, 5,1, sec);
-        // back leg (lifted in follow-through)
-        _pcB(ctx,sc, 13,17, 4,3, helmet);
-        _pcR(ctx,sc, 13,17, 4,1, sec);
-        // boots
-        _pcB(ctx,sc, 7,21, 6,2, boot);
-        _pcB(ctx,sc, 13,20, 5,2, boot);
-        ctx.fillStyle='#AAA';
-        ctx.fillRect(7*sc,23*sc,6*sc,2); ctx.fillRect(13*sc,22*sc,5*sc,2);
-        // STICK: diagonal from top-glove down to blade
+    // ── goalie extras drawn post-render ───────────────────────────────────
+    if(type==='goalie') {
+        // puck in trapper (top-left)
+        ctx.fillStyle='#111'; ctx.beginPath(); ctx.ellipse(2*sc,10*sc,sc*0.8,sc*0.32,0,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#444'; ctx.beginPath(); ctx.ellipse(2*sc,10*sc-1,sc*0.55,sc*0.2,0,0,Math.PI*2); ctx.fill();
+        // blocker block on right
+        ctx.fillStyle='#8B4513';
+        _pcB(ctx,sc,20,7, 4,6, '#8B4513');
+        _pcR(ctx,sc,21,7, 2,1, '#CC8833');
+        _pcR(ctx,sc,21,8, 2,1, '#AA6622');
+        // stick shaft
+        ctx.strokeStyle='#7B5000'; ctx.lineWidth=3; ctx.lineCap='round';
+        ctx.beginPath(); ctx.moveTo(3.5*sc,13*sc); ctx.lineTo(3.5*sc,28*sc); ctx.stroke();
+        ctx.strokeStyle='#AA7830'; ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.moveTo(3.5*sc+2,13*sc); ctx.lineTo(3.5*sc+2,28*sc); ctx.stroke();
+        // stick blade (flat on ice)
         ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
-        ctx.beginPath(); ctx.moveTo(5*sc,10*sc); ctx.lineTo(3*sc,24*sc); ctx.stroke();
-        ctx.strokeStyle='#666'; ctx.lineWidth=3;
-        ctx.beginPath(); ctx.moveTo(3*sc,24*sc); ctx.lineTo(0,24*sc); ctx.stroke();
-        // PUCK
-        ctx.fillStyle='#111';
-        ctx.beginPath(); ctx.ellipse(1.2*sc,24*sc+2,sc*0.7,sc*0.3,0,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle='#444';
-        ctx.beginPath(); ctx.ellipse(1.2*sc,24*sc+1,sc*0.5,sc*0.2,0,0,Math.PI*2); ctx.fill();
-        return;
+        ctx.beginPath(); ctx.moveTo(3.5*sc,28*sc); ctx.lineTo(9*sc,28*sc); ctx.stroke();
+        ctx.strokeStyle='#888'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(3.5*sc,28*sc+2); ctx.lineTo(9*sc,28*sc+2); ctx.stroke();
     }
 
-    if (type === 'defense') {
-        // ── POKE-CHECK CROUCH: low wide stance, stick extended ───────────
-        _pcB(ctx,sc, 7,2, 5,2, helmet);
-        _pcR(ctx,sc, 8,2, 3,1, visor);
-        _pcB(ctx,sc, 8,4, 3,2, skin);
-        ctx.fillStyle='#000';
-        ctx.fillRect(8*sc,5*sc,3*sc,1); ctx.fillRect(8*sc,5*sc+3,3*sc,1);
-        _pcR(ctx,sc, 9,6, 2,1, skin);
-        // jersey — bent forward (horizontally spread)
-        _pcB(ctx,sc, 5,7, 10,5, pri);
-        _pcR(ctx,sc, 6,8, 3,3, priHi);
-        _pcR(ctx,sc, 11,8, 3,3, priLo);
-        _pcR(ctx,sc, 5,10, 10,1, sec);
-        _pcR(ctx,sc, 8,11, 4,1, sec);
-        // left arm (extended far left with stick)
-        _pcB(ctx,sc, 1,9, 5,3, pri);
-        _pcB(ctx,sc, 0,11, 3,2, glv);
-        // right arm (balance)
-        _pcB(ctx,sc, 15,9, 4,3, pri);
-        _pcB(ctx,sc, 15,11, 3,2, glv);
-        // pants (wide crouch)
-        _pcB(ctx,sc, 5,12, 10,3, priLo);
-        _pcR(ctx,sc, 5,13, 10,1, sec);
-        // front leg (lunging)
-        _pcB(ctx,sc, 4,15, 5,5, helmet);
-        _pcR(ctx,sc, 4,16, 5,1, sec);
-        // back leg (pushing)
-        _pcB(ctx,sc, 11,15, 5,4, helmet);
-        _pcR(ctx,sc, 11,16, 5,1, sec);
-        _pcB(ctx,sc, 3,20, 6,2, boot);
-        _pcB(ctx,sc, 11,19, 6,2, boot);
-        ctx.fillStyle='#AAA';
-        ctx.fillRect(3*sc,22*sc,6*sc,2); ctx.fillRect(11*sc,21*sc,6*sc,2);
-        // STICK: horizontal poke-check extending left
-        ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
-        ctx.beginPath(); ctx.moveTo(15*sc,12*sc); ctx.lineTo(1*sc,15*sc); ctx.stroke();
-        ctx.strokeStyle='#666'; ctx.lineWidth=3;
-        ctx.beginPath(); ctx.moveTo(1*sc,15*sc); ctx.lineTo(1*sc,19*sc); ctx.stroke();
-        return;
+    // ── forward/defense puck drawn post-render ────────────────────────────
+    if(type==='forward' || type==='defense') {
+        const px = type==='forward' ? 2.5 : 1.5, py = 30;
+        ctx.fillStyle='#111'; ctx.beginPath(); ctx.ellipse(px*sc,py*sc,sc*0.9,sc*0.35,0,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#555'; ctx.beginPath(); ctx.ellipse(px*sc,py*sc-2,sc*0.65,sc*0.22,0,0,Math.PI*2); ctx.fill();
     }
 
-    // ── BUTTERFLY SAVE: pads spread, trapper high ────────────────────────
-    const padHi  = _pcShade(pri, 45);
-    const maskCol= '#E8E8E8';
-    const blocker= '#8B4513';
-    const catcher= '#1a1a1a';
+    // ── forward stick (diagonal overlay) ─────────────────────────────────
+    if(type==='forward') {
+        ctx.strokeStyle='#7B5000'; ctx.lineWidth=4; ctx.lineCap='round';
+        ctx.beginPath(); ctx.moveTo(5*sc,12*sc); ctx.lineTo(2*sc,30*sc); ctx.stroke();
+        ctx.strokeStyle='#AA7830'; ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.moveTo(5*sc+2,12*sc); ctx.lineTo(2*sc+2,30*sc); ctx.stroke();
+        // blade
+        ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.moveTo(2*sc,30*sc); ctx.lineTo(0,30*sc); ctx.stroke();
+        ctx.strokeStyle='#888'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(0,30*sc); ctx.lineTo(0,31*sc); ctx.stroke();
+    }
 
-    // Crease arc on ice
-    ctx.strokeStyle='rgba(0,100,200,0.35)'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.arc(10*sc,26*sc,8*sc,Math.PI,0); ctx.stroke();
-
-    // BUTTERFLY PADS (spread wide covering ice)
-    _pcB(ctx,sc, 0,12, 8,12, pri);
-    _pcR(ctx,sc, 1,13, 6,2, padHi);
-    _pcR(ctx,sc, 1,17, 6,1, sec); _pcR(ctx,sc, 1,20, 6,1, sec);
-    _pcB(ctx,sc, 12,12, 8,12, pri);
-    _pcR(ctx,sc, 13,13, 6,2, padHi);
-    _pcR(ctx,sc, 13,17, 6,1, sec); _pcR(ctx,sc, 13,20, 6,1, sec);
-
-    // Chest protector
-    _pcB(ctx,sc, 6,5, 8,8, pri);
-    _pcR(ctx,sc, 7,6, 3,4, padHi);
-    _pcR(ctx,sc, 6,9, 8,1, sec);
-
-    // Full cage mask
-    _pcB(ctx,sc, 6,0, 8,4, maskCol);
-    _pcR(ctx,sc, 6,0, 8,0.5, pri);
-    ctx.fillStyle='#555';
-    ctx.fillRect(6*sc,1*sc,8*sc,1); ctx.fillRect(6*sc,2*sc,8*sc,1); ctx.fillRect(6*sc,3*sc-1,8*sc,1);
-    for(let i=0;i<5;i++) ctx.fillRect((6.6+i*1.3)*sc,0,1,4*sc);
-    _pcR(ctx,sc, 7,4, 6,1, skin);
-
-    // TRAPPER high (catching puck overhead)
-    _pcB(ctx,sc, 0,5, 4,5, catcher);
-    _pcR(ctx,sc, 0,5, 4,1, '#555');
-    _pcR(ctx,sc, 0,6, 1,3, '#333'); _pcR(ctx,sc, 3,6, 1,3, '#333'); _pcR(ctx,sc, 1,8, 2,1, '#333');
-    // Puck in trapper
-    ctx.fillStyle='#111';
-    ctx.beginPath(); ctx.ellipse(2*sc,5*sc+2,sc*0.65,sc*0.28,0,0,Math.PI*2); ctx.fill();
-
-    // BLOCKER (right)
-    _pcB(ctx,sc, 16,5, 4,6, blocker);
-    _pcR(ctx,sc, 16,5, 4,1, '#CC8833'); _pcR(ctx,sc, 16,6, 4,1, '#AA6622');
-
-    // Goalie stick (blade flat on ice — butterfly)
-    ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
-    ctx.beginPath(); ctx.moveTo(8*sc,13*sc); ctx.lineTo(8*sc,24*sc); ctx.stroke();
-    ctx.strokeStyle='#666'; ctx.lineWidth=3;
-    ctx.beginPath(); ctx.moveTo(6*sc,24*sc); ctx.lineTo(13*sc,24*sc); ctx.stroke();
-
-    // Boot tips
-    ctx.fillStyle=boot;
-    ctx.fillRect(1*sc,23*sc,5*sc,sc*1.5); ctx.fillRect(14*sc,23*sc,5*sc,sc*1.5);
-    ctx.fillStyle='#AAA';
-    ctx.fillRect(1*sc,25*sc,5*sc,2); ctx.fillRect(14*sc,25*sc,5*sc,2);
+    // ── defense stick (horizontal poke overlay) ───────────────────────────
+    if(type==='defense') {
+        ctx.strokeStyle='#7B5000'; ctx.lineWidth=4; ctx.lineCap='round';
+        ctx.beginPath(); ctx.moveTo(24*sc,15*sc); ctx.lineTo(0,24*sc); ctx.stroke();
+        ctx.strokeStyle='#AA7830'; ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.moveTo(24*sc,15*sc+2); ctx.lineTo(0,24*sc+2); ctx.stroke();
+        // blade tip
+        ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.moveTo(0,24*sc); ctx.lineTo(0,27*sc); ctx.stroke();
+        ctx.strokeStyle='#888'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(1,24*sc); ctx.lineTo(1,27*sc); ctx.stroke();
+    }
 
 }
 
@@ -6984,8 +7026,8 @@ function showPlayerCard(pName) {
     <div style="font-size:8px;color:#fff;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fullName}</div>
     <div style="font-size:6px;color:rgba(255,255,255,.5);margin-top:2px;letter-spacing:1px;">${confName}</div>
   </div>
-  <div style="background:#06060e;position:relative;display:flex;align-items:center;justify-content:center;height:116px;overflow:hidden;">
-    <canvas id="pc-sprite" width="80" height="104" style="image-rendering:pixelated;image-rendering:crisp-edges;display:block;margin-top:4px;"></canvas>
+  <div style="background:#06060e;position:relative;display:flex;align-items:center;justify-content:center;height:162px;overflow:hidden;">
+    <canvas id="pc-sprite" width="125" height="160" style="image-rendering:pixelated;image-rendering:crisp-edges;display:block;"></canvas>
     <canvas id="pc-logo" width="34" height="34" style="position:absolute;top:7px;right:7px;border-radius:50%;border:1px solid rgba(255,255,255,.15);image-rendering:pixelated;"></canvas>
     <div style="position:absolute;bottom:0;left:0;right:0;height:18px;background:linear-gradient(transparent,rgba(0,0,0,.75));"></div>
   </div>
