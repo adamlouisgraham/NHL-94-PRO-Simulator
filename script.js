@@ -134,6 +134,17 @@ function getWeightLbs(grade) {
     const lbs = {'A+':182,'A':190,'B':200,'C':210,'D':220,'F':230,'F+':242,'F-':242};
     return lbs[grade] || 210;
 }
+// Reverse-map numeric lbs → weight grade
+function lbsToWeightGrade(lbs) {
+    if (!lbs || lbs <= 0) return 'C';
+    if (lbs <= 185) return 'A+';
+    if (lbs <= 194) return 'A';
+    if (lbs <= 204) return 'B';
+    if (lbs <= 214) return 'C';
+    if (lbs <= 224) return 'D';
+    if (lbs <= 234) return 'F';
+    return 'F+';
+}
 
 function getWeightModifier(weightGrade, arch) {
     const w = getWeightValue(weightGrade);
@@ -7494,8 +7505,9 @@ function pcBuildStats(pName, tab) {
             ['+/-',pm(src.pm||0)],['PIM',f(src.pim)],['SOG',f(src.s)],['GWG',f(src.gwg)]],[2,3]);
     }
     // ATTR tab
-    const wLbs = getWeightLbs(p.attr.weight || 'C');
-    const wtRow = `<div style="text-align:center;color:#555;font-size:6px;margin-top:4px;letter-spacing:1px;">WEIGHT <span style="color:#aaa;font-size:8px;margin-left:4px;">${wLbs} LBS</span> <span style="color:#444;font-size:6px;">(${p.attr.weight||'C'})</span></div>`;
+    const wLbs = p.weight || getWeightLbs(p.attr.weight || 'C');
+    const wGrade = lbsToWeightGrade(wLbs);
+    const wtRow = `<div style="text-align:center;color:#555;font-size:6px;margin-top:4px;letter-spacing:1px;">WEIGHT <span style="color:#aaa;font-size:8px;margin-left:4px;">${wLbs} LBS</span> <span style="color:#444;font-size:6px;">(${wGrade})</span></div>`;
     if (isG) {
         return tbl([['GLV-L',p.attr.gloveL||'--'],['GLV-R',p.attr.gloveR||'--'],
             ['STK-L',p.attr.stickL||'--'],['STK-R',p.attr.stickR||'--'],
