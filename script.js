@@ -3920,8 +3920,11 @@ function simGame(idx) {
     // 🧱 3. MACRO AURAS & MODIFIER MATH
     let hAuraMod = (getTeamSystemAura(g.h.nrm) === 'OFFENSIVE TEAM' ? 1.15 : (getTeamSystemAura(g.h.nrm) === 'DEFENSIVE TEAM' ? 0.85 : 1.0));
     let aAuraMod = (getTeamSystemAura(g.a.nrm) === 'OFFENSIVE TEAM' ? 1.15 : (getTeamSystemAura(g.a.nrm) === 'DEFENSIVE TEAM' ? 0.85 : 1.0));
-    let hWallMod = (hG_obj && getPlayerWeightedStats(hG_obj.name).tag === 'WALL') ? 0.85 : 1.0;
-    let aWallMod = (aG_obj && getPlayerWeightedStats(aG_obj.name).tag === 'WALL') ? 0.85 : 1.0;
+    // Sliding goalie save modifier — centered at OVR 75: bad goalie=1.12, avg=1.0, elite=0.88
+    const hGOvr = hG_obj ? (getPlayerWeightedStats(hG_obj.name).ovr || 75) : 75;
+    const aGOvr = aG_obj ? (getPlayerWeightedStats(aG_obj.name).ovr || 75) : 75;
+    let hWallMod = Math.max(0.86, Math.min(1.14, 1.0 + (75 - hGOvr) * 0.013));
+    let aWallMod = Math.max(0.86, Math.min(1.14, 1.0 + (75 - aGOvr) * 0.013));
     let asgBoost = isASG ? 1.8 : 1.0;
     let homeCrowdEnergy = 1.03;
 
@@ -3989,9 +3992,9 @@ function simGame(idx) {
         
         let diff = hLiveOvr - aLiveOvr;
         
-        // 🏒 Realistic Shot Generation Rates per 30-seconds
-        let hShotChance = 0.26 + (diff * 0.0025) * asgBoost;
-        let aShotChance = 0.26 - (diff * 0.0025) * asgBoost;
+        // Shot generation — softer diff multiplier balances shots across lines
+        let hShotChance = 0.26 + (diff * 0.0014) * asgBoost;
+        let aShotChance = 0.26 - (diff * 0.0014) * asgBoost;
         
         let period = minute <= 20 ? 1 : (minute <= 40 ? 2 : 3);
         let sec = Math.floor(Math.random() * 60);
@@ -4004,11 +4007,11 @@ function simGame(idx) {
             trk(shooter.name, 's', 1); // Record Skater Shot
             trk(aG_name, 'sa', 1);     // Record Goalie Shot Against
 
-            // Conversion Roll — base 9.2%, sniper gets +14% multiplier
+            // Conversion Roll — base 10.5%, sniper gets +14% multiplier, softer diff scaling
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const hSniperMod = hShooterTag === 'SNIPER' ? 1.14 : hShooterTag === 'SUPERSTAR' ? 1.05 : 1.0;
-            let scoringProb = (0.092 + (diff * 0.003)) * aWallMod * hSniperMod;
-            if (Math.random() < Math.max(0.02, Math.min(0.24, scoringProb))) {
+            let scoringProb = (0.105 + (diff * 0.0018)) * aWallMod * hSniperMod;
+            if (Math.random() < Math.max(0.03, Math.min(0.26, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
                 let ev = processSingleGoal(g.h.nrm, g.h.code, shooter, hOnIce, timeStr, period, (minute % 20 || 20), sec);
@@ -4037,8 +4040,8 @@ function simGame(idx) {
 
             const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const aSniperMod = aShooterTag === 'SNIPER' ? 1.14 : aShooterTag === 'SUPERSTAR' ? 1.05 : 1.0;
-            let scoringProb = (0.092 - (diff * 0.003)) * hWallMod * aSniperMod;
-            if (Math.random() < Math.max(0.02, Math.min(0.24, scoringProb))) {
+            let scoringProb = (0.105 - (diff * 0.0018)) * hWallMod * aSniperMod;
+            if (Math.random() < Math.max(0.03, Math.min(0.26, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
                 let ev = processSingleGoal(g.a.nrm, g.a.code, shooter, aOnIce, timeStr, period, (minute % 20 || 20), sec);
