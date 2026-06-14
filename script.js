@@ -577,12 +577,17 @@ function setSelectedSaveSlot(slot) { const select = document.getElementById('sav
 function getSelectedSaveSlotLabel() { const slot = getSelectedSaveSlot(); return slot === 'AUTO' ? 'Auto Save' : slot.replace('_', ' '); }
 function writeSavePayload(data) {
     try {
-        // Compress the JSON string before saving
-        let compressedData = LZString.compressToUTF16(JSON.stringify(data));
-        localStorage.setItem('nhl94dynasty', compressedData);
-        console.log("Dynasty saved successfully!");
+        const json = JSON.stringify(data);
+        // Yield between stringify and compress so the browser can breathe
+        setTimeout(() => {
+            try {
+                localStorage.setItem('nhl94dynasty', LZString.compressToUTF16(json));
+            } catch (e) {
+                console.error("[SAVE ERROR] Storage full or inaccessible:", e);
+            }
+        }, 0);
     } catch (e) {
-        console.error("[SAVE ERROR] Storage is full or inaccessible:", e);
+        console.error("[SAVE ERROR] JSON serialization failed:", e);
     }
 }
 
@@ -595,7 +600,25 @@ function loadSavePayload() {
     }
     return null;
 }
-function saveGame({slot = 'AUTO', force = false} = {}) { const storageKey = getSaveSlotKey(slot); if (saveGameTimer) clearTimeout(saveGameTimer); if (force) { writeSavePayload(buildSavePayload()); return; } saveGameTimer = setTimeout(() => writeSavePayload(buildSavePayload()), 220); }
+function saveGame({slot = 'AUTO', force = false} = {}) {
+    // Cancel any pending save
+    if (saveGameTimer !== null) {
+        if (window.cancelIdleCallback) cancelIdleCallback(saveGameTimer);
+        else clearTimeout(saveGameTimer);
+        saveGameTimer = null;
+    }
+    // Force-save (e.g. manual save slot): build + write synchronously this tick,
+    // but still split stringify/compress across two ticks via writeSavePayload.
+    if (force) { writeSavePayload(buildSavePayload()); return; }
+    // Debounced auto-save: defer until the browser reports idle time,
+    // so the heavy JSON.stringify + LZString work never blocks interaction.
+    const doSave = () => { writeSavePayload(buildSavePayload()); saveGameTimer = null; };
+    if (window.requestIdleCallback) {
+        saveGameTimer = requestIdleCallback(doSave, { timeout: 4000 });
+    } else {
+        saveGameTimer = setTimeout(doSave, 500);
+    }
+}
 function saveSlot() { const slot = getSelectedSaveSlot(); saveGame({slot, force: true}); displaySaveStateInfo(`Saved to ${getSelectedSaveSlotLabel()}.`, 'success'); }
 function displaySaveStateInfo(message, type = 'info') { const el = document.getElementById('saveStateInfo'); if (!el) return; el.innerText = message; el.className = `save-state-info ${type}`; }
 function buildSavePayload() {
