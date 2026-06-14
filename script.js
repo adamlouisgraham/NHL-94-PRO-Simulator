@@ -1916,7 +1916,8 @@ async function startNewGame(useCustomRoster = false) {
                 if(!playerStats[pN]) {
                     rosters[tk].push({ name: pN, pos: pos });
                     playerStats[pN] = {
-                        name: pN, team: teamObj.name, teamCode: teamObj.code, pos: pos, age: parseInt(getCol(r, ["AGE"], -1)) || (Math.floor(Math.random()*15)+18), 
+                        name: pN, team: teamObj.name, teamCode: teamObj.code, pos: pos, age: parseInt(getCol(r, ["AGE"], -1)) || (Math.floor(Math.random()*15)+18),
+                        weight: getWeightLbs(getCol(r, ["WEIGHT", "WGT"], 21) || 'C'),
                         streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false, 
                         injury: { severity: 0, daysRemaining: 0 },
                         cumulativeFatigue: 0,
@@ -1949,7 +1950,7 @@ async function startNewGame(useCustomRoster = false) {
     check: gradeToNum(getCol(r, ["CHECKING", "CHK"], 14)), 
     shotAcc: gradeToNum(getCol(r, ["SHOT ACCURACY", "SHOT ACC", "ACC"], 15)), 
     stkHnd: gradeToNum(getCol(r, ["PUCK CONTROL", "STICK HANDLING", "STICK", "STK"], 16)), 
-    wgt: parseInt(getCol(r, ["WEIGHT", "WGT"], 21)) || 180,
+    weight: getCol(r, ["WEIGHT", "WGT"], 21) || 'C', // grade string: A+, B, F+, etc.
 
     // --- OVERALL (Safe Fallback) ---
     ovr: parseInt(getCol(r, ["GOALIE NEW OVERALL", "OVERALL RATING", "OVERALL", "OVR"], 19)) || 70 
@@ -3651,30 +3652,6 @@ const getAWeight = (p, isSec) => {
                     playerStats[p.name][k].pm = (playerStats[p.name][k].pm || 0) - 1;
                 }
             });
-            
-            // To apply the simulated minutes directly to a player's season logs post-game:
-const iceTimeData = g.preCalculatedIceTime.home; // or away
-
-// Example setting Forward Player Ice Time
-struct.f.forEach((line, lineIdx) => {
-    line.forEach(player => {
-        let mins = iceTimeData.forwardLineAverages[lineIdx];
-        if (playerStats[player.name]) {
-            playerStats[player.name].season.toi = (playerStats[player.name].season.toi || 0) + mins;
-        }
-    });
-});
-
-// Example setting Defense Player Ice Time
-struct.d.forEach((pair, pairIdx) => {
-    pair.forEach(player => {
-        let mins = iceTimeData.defensePairAverages[pairIdx];
-        if (playerStats[player.name]) {
-            playerStats[player.name].season.toi = (playerStats[player.name].season.toi || 0) + mins;
-        }
-    });
-});
-
         }
 
         // 🛡️ MODIFIED: Added `isSH: sH` so the engine knows it was a shorthanded goal
