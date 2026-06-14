@@ -1,0 +1,129 @@
+Table of Contents
+🗄️ script.js (The Simulation Engine)
+SECTION 1: CONFIGURATION, STATE, & DATA LOADING
+
+1. Global State Variables (Toggles, Arrays, Trackers)
+
+2. Dictionaries & Constants (teamLogos, teamMap, teamColors, SPRITE_GOALIE, SPRITE_DEFENSEMAN, SPRITE_FORWARD, rivals, URLs)
+
+3. Utility Helpers ($, getGradeMod)
+
+4. Data Fetching (Google Sheets fetchCSV, parseCSV)
+
+5. Initialization Sequence (startNewGame(), Roster parsing)
+
+SECTION 2: THE CORE SIMULATION ENGINE
+
+1. Player Rating & Archetype Engine (getPlayerWeightedStats(), getLiveIceOvr())
+
+2. Fatigue & Team Ratings (playedYesterday(), getFatigueModifier(), getDynamicTeamOvr(), getRosterStructure())
+
+3. Chemistry & Streak Processors (updateChemistryAfterGame(), checkMilestones(), processStreaks(), processGoalieStreaks())
+
+4. Game Math & Play-by-Play (pois(), calculateStars(), creditStats() -> Goal/Assist distribution logic)
+
+5. Master Simulation Function (simGame() -> The heart of the game math, penalties, shots, and injuries)
+
+SECTION 3: SEASON & PLAYOFF MANAGEMENT
+
+1. Master Schedule Generator (loadScheduleFromCSV())
+
+2. Mid-Season Events (initAllStarGame(), checkMonthlyAwards(), takeMonthSnapshot())
+
+3. Playoffs Setup (initPlayoffs(), buildCalendar() -> Procedural fallback, buildPlayoffRound(), genPlayoffSlate(), handleRoundEnd(), showBracket(), initPlayoffsUI(), togglePlayoffView())
+
+4. Draft Lottery (runDraftLottery(), closeLottery())
+
+5. End of Season Awards (awardTrophy(), runEndOfSeasonAwards(), handleEndOfSeasonRestart())
+
+6. Offseason Aging & Progression (shiftGrade(), processOffseasonGrowth(), beginNewYear())
+
+SECTION 4: UI, DOM MANIPULATION & APP CONTROLLERS
+
+1. Simulation Loop Controllers (simDay(), advanceCalendar(), simWeek(), simMonth(), simSeason(), simRound(), simPlayoffs())
+
+2. Core UI & Dashboard Renderers (updateUI() -> Ticker, Standings, Leaders, renderTeamStats(), toggleStats(), toggleGameMenu(), populateTeamSelect())
+
+3. Jumbotron & Live Match Controls (selectGame(), openAdvEditor(), populateAdvDropdown(), toggleAdvInputs(), addAdvStatLine(), renderAdvStatList(), removeAdvStatLine(), openRosterChecklist(), saveRosterChecklist(), submitAdvGame() -> The new Advanced Box Score!, startWatchLive(), skipWatchGame(), closeWatchGame(), openBoxScore())
+
+4. Player Cards & Substitutions (getGradeColor(), attrRow(), showPlayerCard(), openSubMenu(), executeSub(), shiftLineup())
+
+5. Trades & Proposals (generateTradeProposal(), openProposalsModal(), approveProposal(), rejectProposal(), editProposal(), openTradeModal(), updateTradeDropdowns(), executeTrade())
+
+6. History, Records & Logs (renderTradeLog(), renderLeagueHistory(), renderHallOfFame(), renderRetiredPlayers(), showHistoricalStandings(), openAllTimeRecords())
+
+7. Settings & Utilities (openLeagueSettings(), openArenaSettings(), saveGame(), loadGame(), loadDefaultGoogleSheets(), resetLeague(), clearArchives(), exportCSV())
+
+8. Window Events (Modal dismissals, Responsive Resize listeners)
+
+🗄️ index.html (The Architecture)
+1. Start Screen (Title, Load Sheets Button, Continue Button, Modder Mode CSV Upload)
+
+2. Top Navigation (League Office Control Panel, Toggles, Sim Buttons, Settings)
+
+3. Presentation Wrapper
+
+Host Column (Ron Barr Image)
+
+Scoreboard Column (Jumbotron, Live Watch Button, Arena Menu, Advanced Editor Button)
+
+4. Main Display
+
+Standings & Bracket Grid
+
+Team Directory & Tactical Units
+
+League Leaders (Top 25)
+
+Transaction Log
+
+5. Ticker & Anchors (EASN Scrolling Marquee, Ron & Don overlays)
+
+6. Hidden Modals (The Pop-Ups)
+
+Draft Lottery
+
+Player Cards (Canvas generator)
+
+Box Score
+
+Watch Game (Live Play-by-Play UI)
+
+Trophy / Awards
+
+Master Archives (History, HOF, Retired)
+
+All-Time Records
+
+League / Arena Settings
+
+Trade Proposals / Blockbuster UI
+
+Roster Substitution
+
+Advanced Box Score Editor (Form & GP Checklist)
+
+🗄️ style.css (The Aesthetics)
+1. CSS Variables (Color Palette)
+
+2. Global & Body Settings (Ice Rink background pattern)
+
+3. Layout Grids (.grid-2, .grid-3)
+
+4. 16-Bit UI Components (.beveled, .menu-box, Checkerboard Backgrounds)
+
+5. Buttons & Inputs
+
+6. Tables & Lists (Solid black / Jumbotron overlays, Text Highlights)
+
+7. Jumbotron & Broadcast Elements (Scoreboard formatting)
+
+8. EASN Ticker & Anchors (CSS Animation logic)
+
+9. Modals & Overlays
+
+10. Specialty: Player Cards
+
+11. Specialty: Lottery Cage
+
+12. Utilities

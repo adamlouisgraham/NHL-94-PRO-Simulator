@@ -1,0 +1,6 @@
+services:
+  nhl94prosimulator:
+    image: nhl94prosimulator
+    build:
+      context: .
+      dockerfile: ./Dockerfile

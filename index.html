@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>NHL '94 Pro Simulator Alpha V1.00</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="script.js"></script>
+</head>
+<body>
+
+    <div id="startScreen" class="start-screen">
+        <h1 class="start-screen-title">
+            NHL '94 PRO SIMULATOR<br><span class="start-screen-subtitle">ALPHA V1.00 MASTER</span>
+        </h1>
+        <button onclick="startNewGame()" class="start-screen-btn">LOAD GOOGLE SHEET</button>
+        <button id="btnContinue" onclick="loadGame()" class="start-screen-btn start-screen-continue">CONTINUE DYNASTY</button>
+
+        <div class="start-screen-sheet-panel">
+            <div class="sheet-upload-group">
+                <div class="sheet-upload-group-title">TEAM Sheet</div>
+                <input type="url" id="teamSheetUrl" placeholder="Optional TEAM Sheet CSV URL" class="sheet-url-input">
+                <div class="sheet-file-row">
+                    <input type="file" id="teamSheetFile" accept=".csv" onchange="loadLocalSheetFile(event, 'team')" class="sheet-file-input">
+                    <div id="teamSheetFileLabel" class="sheet-file-label">No TEAM file selected</div>
+                </div>
+            </div>
+
+            <div class="sheet-upload-group">
+                <div class="sheet-upload-group-title">PLAYER Sheet</div>
+                <input type="url" id="playerSheetUrl" placeholder="Optional PLAYER Sheet CSV URL" class="sheet-url-input">
+                <div class="sheet-file-row">
+                    <input type="file" id="playerSheetFile" accept=".csv" onchange="loadLocalSheetFile(event, 'player')" class="sheet-file-input">
+                    <div id="playerSheetFileLabel" class="sheet-file-label">No PLAYER file selected</div>
+                </div>
+            </div>
+
+            <div class="sheet-upload-group">
+                <div class="sheet-upload-group-title">SCHEDULE Sheet</div>
+                <input type="url" id="scheduleSheetUrl" placeholder="Optional SCHEDULE Sheet CSV URL" class="sheet-url-input">
+                <div class="sheet-file-row">
+                    <input type="file" id="scheduleSheetFile" accept=".csv" onchange="loadLocalSheetFile(event, 'schedule')" class="sheet-file-input">
+                    <div id="scheduleSheetFileLabel" class="sheet-file-label">No SCHEDULE file selected</div>
+                </div>
+            </div>
+
+            <div class="sheet-upload-group">
+                <div class="sheet-upload-group-title">EVENT LOG Sheet</div>
+                <input type="url" id="eventLogSheetUrl" placeholder="Optional EVENT LOG CSV URL" class="sheet-url-input">
+                <div class="sheet-file-row">
+                    <input type="file" id="eventLogSheetFile" accept=".csv" onchange="loadLocalSheetFile(event, 'eventLog')" class="sheet-file-input">
+                    <div id="eventLogSheetFileLabel" class="sheet-file-label">No EVENT LOG file selected</div>
+                </div>
+            </div>
+
+            <div class="sheet-action-grid">
+                <button onclick="applyCustomSheetUrls()" class="start-screen-btn sheet-action-btn" style="border-color:#00FFFF; color:#00FFFF;">APPLY CUSTOM SHEETS</button>
+                <button onclick="testSheetConnection()" class="start-screen-btn sheet-action-btn" style="border-color:#7cff7c; color:#7cff7c;">TEST SHEET CONNECTION</button>
+                <button onclick="importEventLogSheet()" class="start-screen-btn sheet-action-btn" style="border-color:#8c66ff; color:#8c66ff;">IMPORT EVENT LOG</button>
+                <button onclick="resetSheetUrlsToDefault()" class="start-screen-btn sheet-action-btn" style="border-color:#ff8080; color:#ff8080;">RESET TO DEFAULT SHEETS</button>
+                <button onclick="toggleSheetSamplePanel()" class="start-screen-btn sheet-action-btn" style="border-color:#ffd166; color:#ffd166;">SHOW FORMAT EXAMPLE</button>
+            </div>
+
+            <div class="sheet-status-lines">
+                <div id="teamSheetStatus" class="sheet-status-line">TEAM: waiting</div>
+                <div id="playerSheetStatus" class="sheet-status-line">PLAYER: waiting</div>
+                <div id="scheduleSheetStatus" class="sheet-status-line">SCHEDULE: waiting</div>
+                <div id="eventLogSheetStatus" class="sheet-status-line">EVENT LOG: waiting</div>
+            </div>
+            <div class="sheet-url-message-row">
+                <div id="sheetUrlMessage" class="sheet-url-message">Leave URLs blank to use sample data (12 teams, 16 players).</div>
+                <span id="sheetUrlBadge" class="sheet-url-badge" style="display:none;">Saved sheet settings loaded</span>
+            </div>
+            <div id="sheetSamplePanel" class="sheet-sample-panel" style="display:none;">
+                <div class="sheet-sample-title">Custom Sheet Format Example</div>
+                <div class="sheet-sample-section"><strong>TEAM sheet headers</strong><br>TEAM NAME, TEAM CODE, CONFERENCE, DIVISION</div>
+                <div class="sheet-sample-section"><strong>PLAYER sheet headers</strong><br>FIRST NAME, LAST NAME, TEAM CODE, POS, OFFENSE, DEFENSE, G DEF, SHOT POWER</div>
+                <div class="sheet-sample-section"><strong>SCHEDULE sheet headers</strong><br>DATE / GAME DATE / MATCH DATE, HOME / HOST, AWAY / VISITOR / GUEST</div>
+                <div class="sheet-sample-section"><strong>EVENT LOG sheet headers</strong><br>GAME_ID, TYPE, PERIOD, TIME, TEAM, PLAYER, ASSIST_1, ASSIST_2, DETAIL</div>
+                <div class="sheet-sample-note">DAY may be included as an optional separate field on schedule rows. Use exact header names or close variants. After publishing, paste the shared/published Google Sheets URL.</div>
+            </div>
+            <div class="sheet-url-help">Tip: Paste a Google Sheets share or published URL. Custom sheets must include headers like TEAM NAME / TEAM CODE, FIRST NAME / LAST NAME / TEAM CODE, DATE / HOME / AWAY, and EVENT LOG columns. <a href="https://support.google.com/docs/answer/183965" target="_blank" rel="noopener">Publish as CSV</a>. For local development, run on a server (e.g., `python -m http.server`) to avoid CORS. Leave URLs blank to use built-in sample data.</div>
+        </div>
+        
+        <div class="start-screen-modder-panel">
+            <div class="modder-label">OFFLINE MODDER MODE:<br>UPLOAD CUSTOM ROSTER CSV / JSON</div>
+            <input type="file" id="rosterUpload" accept=".csv,.json" onchange="loadCustomRoster(event)" class="modder-input">
+        </div>
+    </div>
+
+    <div class="container appContainer" id="appContainer">
+        
+        <h1 class="page-title">
+            NHL '94 Pro Simulator 
+        </h1>    
+        
+        <div class="menu-box beveled">
+            <div class="menu-header clickable" onclick="toggleBox(this)">
+                <span>LEAGUE OFFICE | SEASON: <span id="seasonYearDisplay">1</span> <span id="dayDisplay" class="day-display"></span></span>
+                <div>
+                    <span id="saveStatus" class="save-status">SAVED</span>
+                    <span class="toggle-icon">[-]</span>
+                </div>
+            </div>
+                <div class="collapsible-content">
+                    <div style="padding:15px; background:#111; display:flex; flex-wrap:wrap; gap:10px;">
+                        <button onclick="toggleAwardConfig('streaks')" id="btnStreaks" class="award-toggle-btn" style="border-color:#FFD700; color:#FFD700;">STREAKS: ON</button>
+                        <button onclick="toggleAwardConfig('chemistry')" id="btnChemistry" class="award-toggle-btn" style="border-color:#FF69B4; color:#FF69B4;">CHEMISTRY: ON</button>
+                        <button onclick="toggleAwardConfig('rivalries')" id="btnRivalries" class="award-toggle-btn" style="border-color:#FF4500; color:#FF4500;">RIVALRIES: ON</button>
+                        <button onclick="toggleAwardConfig('aging')" id="btnAging" class="award-toggle-btn" style="border-color:#32CD32; color:#32CD32;">AGING: OFF</button>
+                        <button onclick="toggleAwardConfig('draft')" id="btnDraft" class="award-toggle-btn" style="border-color:#1E90FF; color:#1E90FF;">DRAFT: OFF</button>
+                        <button onclick="toggleAwardConfig('retirements')" id="btnRetirements" class="award-toggle-btn" style="border-color:#DC143C; color:#DC143C;">RETIREMENTS: OFF</button>
+                        <button onclick="toggleAwardConfig('headlines')" id="btnHeadlines" class="award-toggle-btn" style="border-color:#FFA500; color:#FFA500;">HEADLINES: ON</button>
+                        <button onclick="toggleAwardConfig('milestones')" id="btnMilestones" class="award-toggle-btn" style="border-color:#9370DB; color:#9370DB;">MILESTONES: ON</button>
+                        <button onclick="toggleAwardConfig('injuries')" id="btnInjuries" class="award-toggle-btn" style="border-color:#FF6347; color:#FF6347;">INJURIES: ON</button>
+                        <button onclick="toggleAwardConfig('legacy_schedule')" id="btnLegacySchedule" class="award-toggle-btn" style="border-color:#20B2AA; color:#20B2AA;">LEGACY SCHEDULE: ON</button>
+                        <button onclick="toggleAwardConfig('trades')" id="btnTrades" class="award-toggle-btn" style="border-color:#E088FF; color:#E088FF;">TRADES: OFF</button>
+                    
+                </div>
+            <div class="schedule-progress-wrapper">
+                <div class="schedule-progress-label">Schedule Progress</div>
+                <div class="schedule-progress-bar"><div id="scheduleProgressFill"></div></div>
+                <div id="saveMetadata" class="save-metadata">SAVE: none</div>
+                <div class="save-slot-panel">
+                    <label for="saveSlotSelect">Save Slot</label>
+                    <select id="saveSlotSelect" onchange="renderScheduleDashboard(); renderSaveSlotHistory(); updateSaveMetadataDisplay(getSelectedSaveSlot())">
+                        <option value="AUTO">AUTO</option>
+                        <option value="SLOT_1">SLOT 1</option>
+                        <option value="SLOT_2">SLOT 2</option>
+                        <option value="SLOT_3">SLOT 3</option>
+                    </select>
+                    <button onclick="loadGame()">Start Simulation</button>
+                    <button onclick="saveSlot()">SAVE SLOT</button>
+                    <button onclick="loadSlot()">LOAD SLOT</button>
+                    <button onclick="clearSaveSlot()">CLEAR SLOT</button>
+                </div>
+                <div id="saveStateInfo" class="save-state-info">Ready.</div>
+                <div class="save-slot-history-title">Save Slot History</div>
+                <div id="saveSlotHistory" class="save-slot-history"></div>
+                <div id="scheduleDashboard" class="schedule-dashboard">
+                    <div id="scheduleSummaryText" class="schedule-dashboard-row"></div>
+                    <div id="scheduleUpcomingGames" class="schedule-upcoming-games"></div>
+                </div>
+            </div>
+            <div id="officeControls" class="office-controls">   
+                <button onclick="saveGame()" style="border-color: #00FF00; color: #fff;">QUICK SAVE</button>
+                <button onclick="exportSaveData()" style="border-color: #00FF00; color: #fff;">EXPORT SAVE</button>
+                <button onclick="triggerLoadBackup()" style="border-color: #00FF00; color: #fff;">LOAD BACKUP</button>
+                <button onclick="loadDefaultGoogleSheets(event)" style="border-color: #00FF00; color: #fff;">DEFAULT SHEETS</button>
+                <input type="file" id="saveFileInput" style="display:none" accept=".json" onchange="importSaveData(event)">
+                
+                <button onclick="openArenaSettings()" style="border-color: #FF8800; color: #fff;">ARENA DB</button>
+                <button onclick="openLeagueSettings()" style="border-color: #FFFF00; color: #fff;">LEAGUE SETTINGS</button>
+                <button onclick="openTradeModal()" style="border-color: #E088FF; color: #E088FF;" id="btnTrade">TRADES</button>
+                <button onclick="document.getElementById('masterArchiveModal').style.display='flex'" style="border-color: #FF8800; color: #fff;">MASTER ARCHIVES</button>
+                <button onclick="openAllTimeRecords()" style="border-color: #FFFF00; color: #fff;">RECORD BOOK</button>
+
+                <button onclick="simDay()" style="border-color: #00FFFF; color: #00FFFF;">SIM DAY</button>
+                <button onclick="simWeek()" style="border-color: #00FFFF; color: #00FFFF;">SIM WEEK</button>
+                <button onclick="simMonth()" style="border-color: #00FFFF; color: #00FFFF;">SIM MONTH</button>
+                <button onclick="simSeason()" id="btnSimSeason" style="border-color: #00FFFF; color: #00FFFF;">SIM SEASON</button>
+                <button onclick="simSeason(true)" id="btnTurboSimSeason" style="border-color: #FFAA00; color: #FFAA00;">TURBO SIM SEASON</button>
+                <button id="btnNextDay" onclick="advanceCalendar()" style="border-color: #FFFFFF; color: #FFFFFF;" disabled>NEXT DAY ></button>
+                
+                <button onclick="exportCSV()" style="border-color: #00FFFF; color: #fff;">EXPORT CSV</button>
+                <button onclick="resetLeague()" style="border-color: #FF5555; color: #FF5555;">RESET DB</button>
+                <button onclick="clearArchives()" style="border-color: #FF5555; color: #FF5555; grid-column: span 3;">CLEAR ARCHIVES</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="presentation-wrapper beveled">  
+            <div class="host-column">
+                <img src="ron_barr.jpg" class="host-img" alt="Host" onerror="this.style.background='#222'; this.alt='[HOST]';">
+            </div>
+            
+        <div class="scoreboard-column">
+                <div class="grid-2" style="padding:15px; border-bottom:2px solid #333; margin-bottom:0;">
+                    <button onclick="startWatchLive()" style="color:#00FF00; border-color:#00FF00;">WATCH LIVE BROADCAST</button>
+                    <button onclick="openManualFinalizePopup()" style="color:var(--neon-cyan); border-color:var(--neon-cyan);">MANUAL FINALIZE (POPUP)</button>
+                </div>
+                
+                <div class="sb-header">
+		<div id="awayBanner" class="sb-banner banner-away">                    
+                        <img id="jLogoA" class="jumbo-logo" src="">
+                        <span id="aName">AWAY</span>
+                    </div>
+                    <div class="game-selector-container">
+                        <button id="btnGameSelect" onclick="toggleGameMenu()">ARENA</button>
+                        <div id="gameMenuList" class="game-menu-content beveled"></div>
+                    </div>
+                    <div id="homeBanner" class="sb-banner banner-home">
+                        <span id="hName">HOME</span>
+                        <img id="jLogoH" class="jumbo-logo" src="">
+                    </div>
+                </div>      
+                
+<div class="sb-main">
+                    <div class="sb-score" id="aScoreLabel">0</div>
+                    <div class="jumbo-message-board">
+                        <div style="background: #fff; padding: 2px 10px; border: 2px solid #000;">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Pro_set_cards_logo.png/250px-Pro_set_cards_logo.png" style="max-height: 25px;" onerror="this.style.display='none'; this.parentElement.innerText='EASN';">
+                        </div>
+                        <div id="jumboMessage">WELCOME TO THE EASN DYNASTY ENGINE</div>
+                    </div>
+                    <div class="sb-score" id="hScoreLabel">0</div>
+                </div>
+                
+		<div class="sb-footer">
+                    <button onclick="openAdvEditor()" style="width:100%; padding:15px; font-size:10px; border-color:var(--ea-yellow); color:var(--ea-yellow); background:#111; box-shadow: inset 0 0 10px rgba(0,0,0,0.8);">📋 OPEN ADVANCED BOX SCORE EDITOR</button>
+                </div>                
+            </div>
+        </div>
+
+        <div id="mainDisplay">
+            
+            <div class="menu-box beveled">
+                <div id="playoffViewToggles" style="display:none; text-align:center; margin-bottom:15px;">
+                    <button onclick="togglePlayoffView('standings')" id="tabStandings" class="mode-btn active">REG STANDINGS</button>
+                    <button onclick="togglePlayoffView('bracket')" id="tabBracket" class="mode-btn">BRACKET</button>
+                </div>
+                
+                <div id="standingsGrids" class="grid-2">
+                    <div>
+                        <div class="menu-header">EASTERN</div>
+                        <table id="eastStand"></table>
+                    </div>
+                    <div>
+                        <div class="menu-header">WESTERN</div>
+                        <table id="westStand"></table>
+                    </div>
+                </div>
+                
+                <div id="bracketContainer" style="display:none; padding:20px;">            
+                    <div class="menu-header" style="color:var(--as-orange);">PLAYOFF BRACKET</div>
+                    <div id="bracketContent" style="display:flex; flex-wrap:wrap; gap:15px; justify-content:center;"></div>
+                </div>
+            </div>
+
+            <div class="menu-box beveled">
+                <div class="menu-header" style="cursor:pointer;" onclick="toggleBox(this)">
+                    <span>TEAM DIRECTORY & TACTICAL UNITS</span>
+                    <span class="toggle-icon" style="color:var(--silver-mid);">[-]</span>
+                </div>
+                <div class="collapsible-content">
+                    <div style="padding:15px; background:#111; display:flex; gap:15px; align-items:center;">
+                        <span style="font-size:8px;">SELECT TEAM:</span>
+                        <select id="teamViewSelect" class="stat-input" style="width:300px;" onchange="renderTeamStats()"></select>
+                    </div>
+                    <div id="teamStatsContainer" style="padding:15px;"></div>
+                </div>
+            </div>
+
+            <div class="menu-box beveled">
+                <div class="menu-header">
+                    <span>LEAGUE LEADERS (TOP 25)</span>
+                    <button onclick="toggleStats()" id="btnStatMode" style="font-size:6px; height:auto; width:auto; margin:0;">VIEW: SEASON</button>
+                </div>
+                <div class="grid-3" style="padding:15px; border-bottom:2px solid #333;">
+                    <div id="pointsContainer"></div>
+                    <div id="goalsContainer"></div>
+                    <div id="assistsContainer"></div>
+                </div>
+                <div class="grid-3" style="padding:15px;">
+                    <div id="gaaContainer"></div>
+                    <div id="svContainer"></div>
+                    <div id="soContainer"></div>
+                </div>
+            </div>
+            
+            <div class="menu-box beveled">
+                <div class="menu-header" style="cursor:pointer;" onclick="toggleBox(this)">
+                    <span>TRANSACTION LOG</span>
+                    <span class="toggle-icon" style="color:var(--silver-mid);">[-]</span>
+                </div>
+                <div id="tradeLogContainer" class="collapsible-content" style="padding:15px; max-height:200px; overflow-y:auto; font-size:8px;">
+                    <table id="tradeLogTable">
+                        <tr><th>DAY</th><th>DETAILS</th></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="easn-ticker">
+        <div class="easn-logo">
+            <img src="easntickerlogo.png" class="easn-ticker-img" alt="EASN Logo" onerror="this.style.display='none'; this.parentElement.innerText='EASN';">
+        </div>
+        <div id="tickerScroll">INITIALIZING SATELLITE FEED... STANDING BY...</div>
+    </div>
+
+    <img src="ron.png" class="anchor-img anchor-left" alt="Ron" onerror="this.style.display='none'">
+    <img src="don.png" class="anchor-img anchor-right" alt="Don" onerror="this.style.display='none'">
+
+    <div id="lotteryOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" style="max-width: 400px; padding: 30px; text-align: center;" onclick="event.stopPropagation()">
+            <div class="menu-header" style="color:var(--ea-yellow); justify-content:center;">DRAFT LOTTERY</div>
+            <div class="lottery-cage" id="lotteryCage"></div>
+            <div class="bingo-text" id="lotteryStatus">TUMBLING BALLS...</div>
+            <button id="btnClaimPick" style="display:none; width:100%; margin-top:20px;" onclick="closeLottery()">PROCEED TO DRAFT</button>
+        </div>
+    </div>
+
+    <div id="playerCardOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card" style="max-width: 640px;" onclick="event.stopPropagation()">
+            <div class="player-card" id="playerCardContent" style="padding:0; border:10px solid #fff; outline:4px solid #000; outline-offset:-4px; background:var(--ice-base); width: 100%;"></div>
+            <button onclick="document.getElementById('playerCardOverlay').style.display='none'" style="width:100%; margin-top:15px; border-color:var(--neon-cyan); color:var(--neon-cyan); background:#000;">CLOSE PROFILE</button>
+        </div>
+    </div>
+
+    <div id="boxScoreOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" id="boxScoreContent" onclick="event.stopPropagation()" style="padding: 20px;"></div>
+    </div>
+
+    <div id="watchGameOverlay" class="modal" style="z-index: 3000;">
+        <div class="modal-card beveled" style="max-width: 700px; padding: 0;">
+            <div style="background:#111; border-bottom:4px solid var(--line-blue); padding:15px; display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center; gap:15px;">
+                    <img id="wgAwayLogo" src="" style="height:40px; filter:drop-shadow(2px 2px 0 #000);">
+                    
+                        <div id="wgAwayCode" style="color:#aaa; font-size:10px;">AWAY</div>
+                        <div id="wgAwayScore" style="color:var(--neon-cyan); font-size:28px; text-shadow:2px 2px 0 #000;">0</div>
+                    </div>
+                </div>
+                <div style="text-align:center; color:var(--ea-yellow);">
+                    <div style="font-size:8px;">EASN LIVE PLAY-BY-PLAY</div>
+                    <div id="wgClock" style="font-size:14px; margin-top:5px; text-shadow:2px 2px 0 #000;">P1 20:00</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:15px;">
+                    <div style="text-align:center;">
+                        <div id="wgHomeCode" style="color:#aaa; font-size:10px;">HOME</div>
+                        <div id="wgHomeScore" style="color:var(--neon-cyan); font-size:28px; text-shadow:2px 2px 0 #000;">0</div>
+                    </div>
+                    <img id="wgHomeLogo" src="" style="height:40px; filter:drop-shadow(2px 2px 0 #000);">
+                </div>
+            </div>
+            <div id="wgTicker" style="height:350px; overflow-y:auto; padding:20px; font-size:9px; line-height:2.2; display:flex; flex-direction:column; gap:8px;"></div>
+            <div style="padding:15px; background:#111; border-top:2px solid #333; display:flex; gap:10px;">
+                <button id="btnWgSkip" onclick="skipWatchGame()" style="width:100%; border-color:var(--as-orange); color:var(--as-orange);">SKIP TO FINAL HORN</button>
+                <button id="btnWgClose" onclick="closeWatchGame()" style="width:100%; border-color:var(--line-red); color:var(--line-red); display:none;">EXIT BROADCAST</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="masterArchiveModal" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding: 20px; max-width: 850px;">
+            <div class="menu-header" style="background:transparent; justify-content:center; border-bottom: 2px solid var(--neon-cyan); margin-bottom: 15px;">
+                EASN MASTER ARCHIVES & HONORS
+            </div>
+            <div class="grid-2" style="margin-bottom: 15px;">
+                <div>
+                    <div class="unit-header archive-hl">📜 LEAGUE HISTORY</div>
+                    <div style="max-height:220px; overflow-y:auto; background:#111; border:2px solid #000;">
+                        <table id="historyTable"></table>
+                    </div>
+                </div>
+                <div>
+                    <div class="unit-header hof-hl">🏛️ HALL OF FAME</div>
+                    <div style="max-height:220px; overflow-y:auto; background:#111; border:2px solid #000;">
+                        <table id="hofTable"></table>
+                    </div>
+                </div>
+            </div>
+            <div class="unit-header">🏒 RETIRED PLAYERS</div>
+            <div style="max-height:200px; overflow-y:auto; background:#111; border:2px solid #000; margin-bottom: 15px;">
+                <table id="retiredTable"></table>
+            </div>
+            <div class="unit-header">⭐ CAREER ALL-STAR SELECTIONS</div>
+            <div id="allStarLeaderboard" style="max-height:200px; overflow-y:auto; background:#111; border:2px solid #000;"></div>
+            <button onclick="document.getElementById('masterArchiveModal').style.display='none'" style="width:100%; margin-top:20px; border-color:var(--neon-cyan); color:var(--neon-cyan);">CLOSE ARCHIVES</button>
+        </div>
+    </div>
+
+    <div id="allTimeOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:20px; max-width:700px;">
+            <div class="menu-header" style="color:var(--gold-leaf); background:transparent; justify-content:center; border-bottom:2px solid var(--gold-leaf);">
+                🏆 ALL-TIME CAREER LEADERBOARDS
+            </div>
+            <div class="grid-2" style="margin-top:15px;">
+                <div><div class="unit-header">CAREER POINTS</div><table id="allTimePts"></table></div>
+                <div><div class="unit-header">CAREER GOALS</div><table id="allTimeGls"></table></div>
+            </div>
+            <div class="grid-2" style="margin-top:15px;">
+                <div><div class="unit-header">CAREER ASSISTS</div><table id="allTimeAst"></table></div>
+                <div><div class="unit-header">CAREER POWERPLAY GOALS</div><table id="allTimePpg"></table></div>
+            </div>
+            <div class="grid-2" style="margin-top:15px;">
+                <div><div class="unit-header">CAREER PENALTY MINUTES</div><table id="allTimePim"></table></div>
+                <div><div class="unit-header">CAREER WINS (GOALIES)</div><table id="allTimeWins"></table></div>
+            </div>
+            <button onclick="document.getElementById('allTimeOverlay').style.display='none'" style="width:100%; margin-top:20px; border-color:var(--gold-leaf); color:var(--gold-leaf);">CLOSE LEADERBOARDS</button>
+        </div>
+    </div>
+
+    <div id="awardOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:30px; max-width:450px;">
+            <div id="awardWinnerContent" style="font-size:10px; line-height: 1.6;"></div>
+            <button onclick="handleEndOfSeasonRestart()" style="width:100%; margin-top:20px; border-color:var(--neon-cyan); color:var(--neon-cyan);">PROCEED TO OFF-SEASON</button>
+        </div>
+    </div>
+
+    <div id="leagueSettingsOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" style="max-width:400px;" onclick="event.stopPropagation()">
+            <div class="menu-header">LEAGUE SETTINGS</div>
+            <div id="leagueSettingsContent" style="padding:20px; font-size:9px; line-height:2;"></div>
+            <button onclick="document.getElementById('leagueSettingsOverlay').style.display='none'" style="width:100%; border:none; border-top:4px solid var(--silver-mid);">SAVE & CLOSE</button>
+        </div>
+    </div>
+
+    <div id="arenaSettingsOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" style="max-width:400px;" onclick="event.stopPropagation()">
+            <div class="menu-header">ARENA dB (CROWD NOISE)</div>
+            <div id="arenaSettingsContent" style="padding:20px; max-height:60vh; overflow-y:auto;"></div>
+            <button onclick="document.getElementById('arenaSettingsOverlay').style.display='none'" style="width:100%; border:none; border-top:4px solid var(--silver-mid);">SAVE & CLOSE</button>
+        </div>
+    </div>
+
+    <div id="proposalOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:20px; max-width:650px;">
+            <div class="menu-header" style="color:#00FF00; justify-content:center; background:transparent;">PENDING TRADE PROPOSALS</div>
+            <p style="font-size:8px; color:#aaa; text-align:center;">Review deadline deals proposed by the AI.</p>
+            <div id="proposalList" style="margin-top:15px; max-height:400px; overflow-y:auto;"></div>
+            <button onclick="document.getElementById('proposalOverlay').style.display='none'" style="width:100%; margin-top:15px;">CLOSE</button>
+        </div>
+    </div>
+
+    <div id="tradeOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:20px; max-width:650px;">
+            <div class="menu-header" style="color:var(--line-red); justify-content:center; background:transparent;">BLOCKBUSTER TRANSACTIONS</div>
+            <p style="font-size:8px; color:#aaa; text-align:center;">WARNING: Trading resets Chemistry for all involved tactical units.</p>
+            <div class="grid-2" style="padding:15px;">
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <select id="tradeTeam1" class="stat-input" onchange="updateTradeDropdowns()"></select>
+                    <div style="font-size:7px; color:#666; margin-top:5px;">PLAYERS TO SEND:</div>
+                    <select id="tradePlayer1_1" class="stat-input"></select>
+                    <select id="tradePlayer1_2" class="stat-input"></select>
+                    <select id="tradePlayer1_3" class="stat-input"></select>
+                    <select id="tradePlayer1_4" class="stat-input"></select>
+                    <select id="tradePlayer1_5" class="stat-input"></select>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <select id="tradeTeam2" class="stat-input" onchange="updateTradeDropdowns()"></select>
+                    <div style="font-size:7px; color:#666; margin-top:5px;">PLAYERS TO RECEIVE:</div>
+                    <select id="tradePlayer2_1" class="stat-input"></select>
+                    <select id="tradePlayer2_2" class="stat-input"></select>
+                    <select id="tradePlayer2_3" class="stat-input"></select>
+                    <select id="tradePlayer2_4" class="stat-input"></select>
+                    <select id="tradePlayer2_5" class="stat-input"></select>
+                </div>
+            </div>
+            <button onclick="executeTrade()" style="width:100%; border-color:var(--neon-cyan); color:var(--neon-cyan);">EXECUTE MULTI-PLAYER TRADE</button>
+            <button onclick="document.getElementById('tradeOverlay').style.display='none'" style="width:100%; margin-top:10px;">CANCEL</button>
+        </div>
+    </div>
+
+  <div class="no-spaces-nrm" id="profileheader">
+  profileheader
+</div>
+
+    <div id="subOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:20px; max-width:450px; text-align:center;">
+            <div class="menu-header" style="color:var(--neon-cyan); justify-content:center; background:transparent;">ROSTER SUBSTITUTION</div>
+            <div style="margin:20px 0; font-size:10px;" id="subPrompt"></div>
+            <select id="subSelect" class="stat-input" style="width:100%; margin-bottom:20px; padding:10px;"></select>
+            <div class="grid-2" style="margin-bottom:0;">
+                <button onclick="executeSub()" style="border-color:#00FF00; color:#00FF00;">CONFIRM SWAP</button>
+                <button onclick="document.getElementById('subOverlay').style.display='none'" style="border-color:var(--line-red); color:var(--line-red);">CANCEL</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="historyOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:20px; max-width:700px;">
+            <div class="menu-header" style="color:var(--archive-blue); justify-content:center; background:transparent; border-bottom:2px solid var(--archive-blue);">
+                SEASON <span id="historyYearTitle"></span> ARCHIVE
+            </div>
+            <div class="grid-2" style="margin-top:15px;">
+                <div>
+                    <div class="unit-header">EASTERN CONFERENCE</div>
+                    <table id="historyEastStand"></table>
+                </div>
+                <div>
+                    <div class="unit-header">WESTERN CONFERENCE</div>
+                    <table id="historyWestStand"></table>
+                </div>
+            </div>
+            <button onclick="document.getElementById('historyOverlay').style.display='none'" style="width:100%; margin-top:20px; border-color:var(--archive-blue); color:var(--archive-blue);">CLOSE ARCHIVE</button>
+        </div>
+    </div>
+<div id="advEditorOverlay" class="modal" style="display:none; z-index: 3000;" onclick="this.style.display='none'">
+        <div class="menu-box adv-editor-box" onclick="event.stopPropagation()" style="width: 840px; max-height: 90vh; overflow-y: auto;">
+            <div class="menu-header adv-editor-header">ADVANCED BOX SCORE EDITOR</div>
+
+            <div class="adv-match-summary">
+                <div class="adv-summary-card">
+                    <div class="adv-summary-title">AWAY</div>
+                    <span id="advAwayName" class="adv-summary-team">AWAY</span>
+                    <div class="adv-summary-row">
+                        <label for="advAwayScore">FINAL SCORE</label>
+                        <input type="number" id="advAwayScore" class="stat-input adv-score-input" value="0">
+                    </div>
+                    <div class="adv-summary-row">
+                        <label for="advAwayEN">EMPTY NETS</label>
+                        <input type="number" id="advAwayEN" class="stat-input adv-score-input" value="0">
+                    </div>
+                </div>
+                <div class="adv-summary-card">
+                    <div class="adv-summary-title">HOME</div>
+                    <span id="advHomeName" class="adv-summary-team">HOME</span>
+                    <div class="adv-summary-row">
+                        <label for="advHomeScore">FINAL SCORE</label>
+                        <input type="number" id="advHomeScore" class="stat-input adv-score-input" value="0">
+                    </div>
+                    <div class="adv-summary-row">
+                        <label for="advHomeEN">EMPTY NETS</label>
+                        <input type="number" id="advHomeEN" class="stat-input adv-score-input" value="0">
+                    </div>
+                </div>
+            </div>
+
+            <div class="adv-editor-grid">
+                <div class="adv-player-group">
+                    <button onclick="openRosterChecklist('away')" class="adv-secondary-btn">📋 MANAGE DRESSED ROSTER (GP)</button>
+                    <select id="advAwayPlayer" class="stat-input adv-player-select" onchange="toggleAdvInputs('away')"></select>
+
+                    <div id="advAwayInputs" class="adv-stat-grid">
+                        <label>G: <input type="number" id="advAwayG" class="stat-input" value="0"></label>
+                        <label>A: <input type="number" id="advAwayA" class="stat-input" value="0"></label>
+                        <label>+/-: <input type="number" id="advAwayPM" class="stat-input" value="0"></label>
+                        <label>PIM: <input type="number" id="advAwayPIM" class="stat-input" value="0"></label>
+                        <label class="adv-checkbox-row"><input type="checkbox" id="advAwayPPG"> POWERPLAY GOAL</label>
+                        <label class="adv-checkbox-row"><input type="checkbox" id="advAwaySHG"> SHORTHANDED GOAL</label>
+                    </div>
+
+                    <div id="advAwayGoalieInputs" class="adv-goalie-inputs">
+                        <label>SHOTS AGAINST (SA): <input type="number" id="advAwaySA" class="stat-input adv-goalie-input" value="0"></label>
+                    </div>
+
+                    <button onclick="addAdvStatLine('away')" class="adv-primary-btn">+ ADD STAT LINE</button>
+                    <div id="advAwayList" class="adv-list-box"></div>
+                </div>
+
+                <div class="adv-player-group">
+                    <button onclick="openRosterChecklist('home')" class="adv-secondary-btn">📋 MANAGE DRESSED ROSTER (GP)</button>
+                    <select id="advHomePlayer" class="stat-input adv-player-select" onchange="toggleAdvInputs('home')"></select>
+
+                    <div id="advHomeInputs" class="adv-stat-grid">
+                        <label>G: <input type="number" id="advHomeG" class="stat-input" value="0"></label>
+                        <label>A: <input type="number" id="advHomeA" class="stat-input" value="0"></label>
+                        <label>+/-: <input type="number" id="advHomePM" class="stat-input" value="0"></label>
+                        <label>PIM: <input type="number" id="advHomePIM" class="stat-input" value="0"></label>
+                        <label class="adv-checkbox-row"><input type="checkbox" id="advHomePPG"> POWERPLAY GOAL</label>
+                        <label class="adv-checkbox-row"><input type="checkbox" id="advHomeSHG"> SHORTHANDED GOAL</label>
+                    </div>
+
+                    <div id="advHomeGoalieInputs" class="adv-goalie-inputs">
+                        <label>SHOTS AGAINST (SA): <input type="number" id="advHomeSA" class="stat-input adv-goalie-input" value="0"></label>
+                    </div>
+
+                    <button onclick="addAdvStatLine('home')" class="adv-primary-btn">+ ADD STAT LINE</button>
+                    <div id="advHomeList" class="adv-list-box"></div>
+                </div>
+            </div>
+
+            <div class="adv-footer-buttons">
+                <button onclick="submitAdvGame()" class="adv-primary-btn adv-finalize-btn">FINALIZE GAME (RUN VALIDATION)</button>
+                <button onclick="importEventLogSheet()" class="adv-secondary-btn" style="border-color:#8c66ff; color:#8c66ff;">IMPORT GAME FILE</button>
+                <button onclick="document.getElementById('advEditorOverlay').style.display='none'" class="adv-secondary-btn adv-cancel-btn">CANCEL ENTRY</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="gpChecklistOverlay" class="modal-overlay" style="display:none; z-index: 3001;">
+        <div class="menu-box" style="width: 400px;">
+            <div class="menu-header" style="color:var(--ea-yellow); justify-content:center;">DRESSED ROSTER CHECKLIST</div>
+            <div style="color:#aaa; font-size:7px; margin-bottom:10px; text-align:center;">Check the players who participated to award +1 Games Played (GP).</div>
+            <div id="gpChecklistContent" style="max-height:300px; overflow-y:auto; font-size:8px; text-align:left; border:1px solid #333; padding:10px; background:#000;"></div>
+            <button onclick="saveRosterChecklist()" style="width:100%; margin-top:15px; border-color:var(--neon-cyan); color:var(--neon-cyan);">CONFIRM ROSTER</button>
+        </div>
+    </div>
+    
+</body>
+</html>
