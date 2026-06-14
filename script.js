@@ -2502,16 +2502,6 @@ function getDuoPartner(playerName) {
     return null;
 }
 
-function getLineMates(playerName) {
-    for (let pair of dynamicDuos) {
-        if (pair.includes(playerName)) {
-            // Return all other members of the duo/trio
-            return pair.filter(name => name !== playerName);
-        }
-    }
-    return null;
-}
-
 // Example helper to ensure every player has a tag
 function getTag(name) {
     if (playerStats[name] && playerStats[name].tag) return playerStats[name].tag;
