@@ -6665,119 +6665,359 @@ function _pcB(ctx, sc, x, y, w, h, col) { // bordered fill (outline technique)
     ctx.fillRect(x*sc+1, y*sc+1, w*sc-2, h*sc-2);
 }
 
-// ── Sprite pixel data (25 cols × 32 rows, chars map to colors) ───────────────
-// . transparent  # black outline
-// H/h helmet dk/hi  V visor  s/S skin base/shadow
-// j/J/d jersey hi/base/shadow  c/C secondary/hi
-// g/G glove dk/hi  p/P pants dk/darker  b/B boot/hi
-// a/A blade silver/dk  k/K stick/hi  u puck
-const PC_SPR_FWD = [
-//  0         1         2
-//  0123456789012345678901234
-    '.........#######.........',// 0
-    '........#HHhhhH##........',// 1  helmet
-    '........#HHVVVhH#........',// 2  visor
-    '........#HH#ss#hH#.......',// 3  face cage bar + skin
-    '........#HH#SS#hH#.......',// 4  face lower + shadow
-    '.........#H#sS##.........',// 5  chin/neck
-    '......####JJJJJJ####.....',// 6  shoulders
-    '.....#jJJJJJJJJJJJJ#.....',// 7  upper chest
-    '....#jJJJJJJJJJJJJJJ#....',// 8
-    '..###JJjJJJcccJJJJJdJJ#..',// 9  left arm starts, stripe
-    '.#GgjJJJJJcccJJJJJJdJJJ#.',// 10 left arm + glove
-    '#GggjJJJJJJcJJJJJJJdJJJ#.',// 11 glove out
-    '#GgkjJJJJJJJJJJJJJJJdJJ#.',// 12 stick enters at glove
-    '#KkkkjJJJJJJJJJJJJJddJJ#.',// 13 stick
-    '.#KkkkjJdddddddddddddJ##..',// 14
-    '..#Kkkk#ddddddddddddd##...',// 15
-    '...#Kkk#ppppppppppppp##..',// 16 pants
-    '....#kk#ppppppppppppp#...',// 17
-    '.....#k##pppppppppppp#...',// 18
-    '......#K#ppppppppppp#....',// 19
-    '.......#k##HHHHHHHHH##...',// 20 shin guards
-    '......#Kk#HHhhhhhhHH#....',// 21
-    '.....#KKk#HHHhhhHHHH#....',// 22
-    '....#KKKk#HHHhhhHHHH#....',// 23
-    '...#KKKKk#bbbbbbbbbbb#...',// 24 boot
-    '..#KKKKKk##bBBBBBBBb##..',// 25
-    '.#uu#KKKK###aaaaaaaaaa#..',// 26 puck + blade starts
-    '#uuu#....#aaaaaaaaaaaaa#.',// 27
-    '#uu#.....#aaaaaaaaaaaaa#.',// 28
-    '##.......#aaaaaaaaaaaaa#.',// 29
-    '.........#aaaaaaaaaaaaA#.',// 30
-    'iiiiiiiiiiiiiiiiiiiiiiiii',// 31 ice
+// ── Sprite pixel data (36 cols × 46 rows, scale=5 → 180×230 canvas displayed at 120×153)
+// . transparent  # black
+// H/h helmet dk/hi  V visor  s/S skin/shadow
+// j/J/d jersey hi/base/shadow  c/C secondary hi/base
+// g/G glove dk/hi  p pants  b/B boot/hi
+// a/A blade silver/dk  k/K stick/hi  u puck  i ice  w crease
+// m goalie mask  r blocker leather
+// ── 36-wide × 46-tall sprites, scale=5 → 180×230 canvas, display 120×153 ──────
+// Forward v0: SLAP SHOT — body twisted left into follow-through
+const PC_SPR_FWD_0 = [
+//  0         1         2         3
+//  012345678901234567890123456789012345
+    '....................................',
+    '..............######................',// helmet
+    '.............#HHhhhH##..............',
+    '.............#HhVVVhH#..............',// visor
+    '.............#Hh#ss#hH#.............',// face + cage
+    '.............#Hh#SS#hH#.............',
+    '..............#H#sS##...............',// chin
+    '..........####JJJJJJJJ####..........',// shoulders
+    '.........#jJJJJJJJJJJJJJJJ#........',
+    '.......##JJjJJJJJJJJJJJJJJJJ#......',
+    '......#GGjJJJccccccJJJJJJJJdJJ#....',// stripe + arm
+    '.....#GGgjJJccccccccJJJJJJJJdJJJ#..',// glove
+    '....#GGggkjJJJJJccJJJJJJJJJJdJJJ#.',
+    '...#KkkkkkjJJJJJJJJJJJJJJJJJJdJJJ#',// stick through glove
+    '..#KkkkkkjJdddddddddddddddddddJJJ##',
+    '.#Kkkkkk##ddddddddddddddddddddd##..',
+    '#Kkkkkk#ddddddddddddddddddddddd##..',
+    '#KKkkkk#ddddddddddddddddddddddd#...',
+    '.#KKkkk#pppppppppppppppppppppppp##.',// pants
+    '..#KKkk#ppppppppppppppppppppppppp#.',
+    '...#Kkk#pppppppppppppppppppppppp##.',
+    '....#kk##HHHHHHHHHHHHHHHHHHHHHH##..',// shins
+    '.....#kHHHHHHhhhhhhhhhhhHHHHHHH#..',
+    '....#Kk#HHHHHHhhhhhhhhhHHHHHHHH#..',
+    '...#KKk#HHHHHHhhhhhhhhhHHHHHHHHH#.',
+    '..#KKKk#HHHHHHhhhhhhhhhHHHHHHHHH#.',
+    '.#KKKKk#HHHHHHhhhhhhhhhHHHHHHHHH#.',// boot
+    '#KKKKKk#bbbbbbbbbbbbbbbbbbbbbbbbb#.',
+    '#KKKKKk##bBBBBBBBBBBBBBBBBBBBBBb##',
+    '##KKKKK###aaaaaaaaaaaaaaaaaaaaaaaa#',// blade
+    '.#KKKK#..#aaaaaaaaaaaaaaaaaaaaaaaaA',
+    '.#uuu#...#aaaaaaaaaaaaaaaaaaaaaaaaA',// puck
+    '#uuuu#...#aaaaaaaaaaaaaaaaaaaaaaaA#',
+    '#uuu#....#aaaaaaaaaaaaaaaaaaaaaaaA#',
+    '##u#.....#aaaaaaaaaaaaaaaaaaaaaaA##',
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',// ice
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
 ];
-const PC_SPR_DEF = [
-//  0         1         2
-//  0123456789012345678901234
-    '..........#######........',// 0
-    '.........#HHhhhH##.......',// 1  helmet
-    '.........#HHVVVhH#.......',// 2  visor
-    '.........#HH#ss#hH#......',// 3
-    '.........#HH#SS#hH#......',// 4
-    '..........#H#sS##........',// 5  chin
-    '.......####JJJJJJ####....',// 6  shoulders — wider stance
-    '......#jJJJJJJJJJJJJ#...',// 7
-    '.....#jJJJJJJJJJJJJJJ#..',// 8
-    '...###JJjJJJcccJJJJJJdJJ#',// 9  stripe
-    '..#jJJJJJJJcccJJJJJJJdJ#.',// 10
-    '.#jJJJJJJJJJcJJJJJJJJdJ#.',// 11
-    '#GgjJJJJJJJJJJJJJJJJJdJ#.',// 12 right arm out (stick)
-    '#GggjJJJJJJJJJJJJJJddJJ#.',// 13
-    '#ggkjJJJJJJJJJJJJJJddJJ#.',// 14 stick hand
-    '#KkkkJdddddddddddddddJ##.',// 15
-    '.#KkkkJpppppppppppppJ##..',// 16 pants
-    '..#Kkkk#ppppppppppppp#...',// 17
-    '...#kkk#ppppppppppppp#...',// 18
-    '....#kk#ppppppppppppp#...',// 19
-    '.....#kk##HHHHHHHHHHH#...',// 20 shins — wide
-    '....#KkHHHHhhhhhHHHHH#...',// 21
-    '...#KKk#HHHhhhhhHHHH##..',// 22
-    '..#KKKk#HHHhhhHHHHH#....',// 23
-    '.#KKKKk#bbbbbbbbbbbbb#...',// 24 boots wide
-    '#KKKKKk##bBBBBBBBBBb##..',// 25
-    '#KKKK###.#aaaaaaaaaaaaa#.',// 26 stick blade goes left
-    '#KKK#....#aaaaaaaaaaaaa#.',// 27
-    '#KK#.....#aaaaaaaaaaaaa#.',// 28
-    '#K#......#aaaaaaaaaaaaa#.',// 29
-    '##.......#aaaaaaaaaaaaA#.',// 30
-    'iiiiiiiiiiiiiiiiiiiiiiiii',// 31 ice
+// Forward v1: WRIST SHOT — upright, releasing from the circle
+const PC_SPR_FWD_1 = [
+    '....................................',
+    '..............######................',
+    '.............#HHhhhH##..............',
+    '.............#HhVVVhH#..............',
+    '.............#Hh#ss#hH#.............',
+    '.............#Hh#SS#hH#.............',
+    '..............#H#sS##...............',
+    '..........####JJJJJJJJ####..........',
+    '.........#jJJJJJJJJJJJJJJJ#........',
+    '.........#jJJJJJJJJJJJJJJJJ#.......',
+    '.......##JJjJJJccccccJJJJJJdJJ##...',// arms forward
+    '......#GGjJJJccccccccJJJJJJdJJJJ#..',
+    '.....#GGgjJJJJJccccJJJJJJJJJdJJJJ#.',
+    '....#GGggkjJJJJJJJJJJJJJJJJJJJJ#JJ',// right arm pulls through
+    '...#KkkkkkJJJJJJJJJJJJJJJJJJJJ#...',
+    '..#KkkkkkJJdddddddddddddddddddJ#...',
+    '.#Kkkkkk##ppppppppppppppppppppp##..',// pants start
+    '#Kkkkkk##pppppppppppppppppppppp##..',
+    '#KKkkk##ppppppppppppppppppppppp#...',
+    '.#KKkk##pppppppppppppppppppppppp#..',
+    '..#Kkk#pppppppppppppppppppppppp#...',
+    '...#kk##HHHHHHHHHHHHHHHHHHHHHHH##..',// shins
+    '....#kHHHHHHhhhhhhhhhhhHHHHHHHH#..',
+    '...#KkHHHHHHhhhhhhhhhhhHHHHHHHHH#.',
+    '..#KKk#HHHHHhhhhhhhhhhhHHHHHHHHH#.',
+    '.#KKKk#HHHHHhhhhhhhhhhhHHHHHHHHH#.',
+    '#KKKKk#HHHHHhhhhhhhhhhhHHHHHHHHH#.',
+    '#KKKKk#bbbbbbbbbbbbbbbbbbbbbbbbb##.',
+    '##KKKK##bBBBBBBBBBBBBBBBBBBBBBb##.',
+    '.#KKK###.#aaaaaaaaaaaaaaaaaaaaaaaa#',// blade
+    '..#KK#...#aaaaaaaaaaaaaaaaaaaaaaA##',
+    '..###....#aaaaaaaaaaaaaaaaaaaaaA#..',// puck bottom
+    '..........#aaaaaaaaaaaaaaaaaaaaaA#.',
+    '...........#aaaaaaaaaaaaaaaaaaaaA#.',
+    '..#uuu.....#aaaaaaaaaaaaaaaaaaaaA#.',
+    '.#uuuu......#aaaaaaaaaaaaaaaaaaaA##',
+    '##uuu......iiiiiiiiiiiiiiiiiiiiiiii',// ice
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
 ];
-const PC_SPR_GTL = [
-//  0         1         2
-//  0123456789012345678901234
-    '.........#########.......',// 0  mask top
-    '........#mmmmmmmmm#......',// 1  mask
-    '........#mVVmmVVmm#......',// 2  visor stripes
-    '........#m#mm#mm#m#......',// 3  cage bars vertical
-    '........#mm##mmm#m#......',// 4  cage bar horizontal
-    '........#mmmssmmm#.......',// 5  chin visible
-    '.........#ms##mm#........',// 6  neck
-    '....####JJJJJJJJJJ####..',// 7  wide chest protector
-    '...#JJJJJJJJJJJJJJJJJd#.',// 8
-    '..#JJJJJJJcccccccJJJJJd#',// 9  chest stripe
-    '.#gGGGJJJJcccccccJJJJJdJ#',// 10 — blocker/glove sides start (26 wide - trim 1)
-    '#gGGGjJJJJJcccJJJJJJdJJJ#',// 11 trapper (left), blocker (right)
-    '#gGGGjJJJJJJJJJJJJJddJJJ#',// 12
-    '#gGGkjJJJJJJJJJJJJJddJJJ#',// 13 stick enters trapper
-    '#ggg#jJJJJJJJJJJJJJJdJJ##',// 14
-    '#ggg#ppppppppppppppppp###.',// 15 — into pads
-    '#ppp#pppppppppppppppp##..',// 16  PAD TOPS — butterfly spread
-    '#ppp#JJJpppppppJJJJppp#..',// 17  pad highlight bands
-    '#ppp#JJpppppppppJJJppp#..',// 18
-    '#ccc#pppppppppppppppp##..',// 19  pad stripe
-    '#ppp#pppppppppppppppp#...',// 20
-    '#ppp#pppppppppppppppp#...',// 21
-    '#ccc#pJJJpppppppJJJpp#...',// 22  second stripe
-    '#ppp#pppppppppppppppp#...',// 23
-    '#bb##pppppppppppppppp#...',// 24  skate appearing at pad bottom
-    '#bb#.##aaaaaaaaaaaaaa#...',// 25  blade wide
-    '#bb#..#aaaaaaaaaaaaaaA#..',// 26
-    'www#...#aaaaaaaaaaaaaa#..',// 27  crease arc hint
-    'www....#aaaaaaaaaaaaa##..',// 28
-    '......iiiiiiiiiiiiiiiii..',// 29  ice
-    '.........................',// 30
-    '.........................',// 31
+// Forward v2: BACKHAND — reaching around stick, weight back
+const PC_SPR_FWD_2 = [
+    '....................................',
+    '.............######.................',
+    '............#HHhhhH##...............',
+    '............#HhVVVhH#...............',
+    '............#Hh#ss#hH#..............',
+    '............#Hh#SS#hH#..............',
+    '.............#H#sS##................',
+    '.........####JJJJJJJJ####...........',
+    '........#jJJJJJJJJJJJJJJJJ#........',
+    '........#JJjJJJJJJJJJJJJJJJ#.......',
+    '.......#JJJJJJcccccccJJJJJJdJJ#....',// stripe
+    '......#JJJJJJccccccccJJJJJJJdJJ#...',
+    '.....#JJJJJJJJccccJJJJJJJJJJdJJJ#..',
+    '....#gGJJJJJJJJJJJJJJJJJJJJJdJJJJ#.',// right arm backhand
+    '...#gGgJJJJJJJJJJJJJJJJJJJJddJJJJ#',
+    '..#gGggkJdddddddddddddddddddJdJJJJ#',
+    '.#KkkkkkdddddddddddddddddddddJJJJ##',
+    '#KkkkkkJdddddddddddddddddddddJJ##..',
+    '#KKkkkk#ppppppppppppppppppppppp##..',// pants
+    '.#KKkkk#pppppppppppppppppppppppp#..',
+    '..#KKkk#ppppppppppppppppppppppp#...',
+    '...#Kkk##HHHHHHHHHHHHHHHHHHHHHH##..',// shins
+    '....#kk#HHHHHHhhhhhhhhhhhHHHHHHH#.',
+    '...#Kkk#HHHHHHhhhhhhhhhhhHHHHHHHH#',
+    '..#KKkk#HHHHHHhhhhhhhhhhhHHHHHHHHH',
+    '.#KKKkk#HHHHHHhhhhhhhhhhhHHHHHHHHH',
+    '#KKKKkk#bbbbbbbbbbbbbbbbbbbbbbbbb##',// boot
+    '#KKKKkk##bBBBBBBBBBBBBBBBBBBBBBb##',
+    '##KKKK###aaaaaaaaaaaaaaaaaaaaaaaa##',// blade
+    '.##KKK#..#aaaaaaaaaaaaaaaaaaaaaaaA#',
+    '...#KK#..#aaaaaaaaaaaaaaaaaaaaaaaA#',
+    '...#K#...#aaaaaaaaaaaaaaaaaaaaaaA##',// stick blade end
+    '....##....#aaaaaaaaaaaaaaaaaaaaaA#.',
+    '.....#uuu.#aaaaaaaaaaaaaaaaaaaaaA#.',// puck
+    '.....#uuuu.#aaaaaaaaaaaaaaaaaaaaA#.',
+    '......#uuu..#aaaaaaaaaaaaaaaaaaaA#.',
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+];
+// Defense v0: POKE CHECK — wide lunge, stick reaching left
+const PC_SPR_DEF_0 = [
+    '....................................',
+    '.............######.................',
+    '............#HHhhhH##...............',
+    '............#HhVVVhH#...............',
+    '............#Hh#ss#hH#..............',
+    '............#Hh#SS#hH#..............',
+    '.............#H#sS##................',
+    '.........####JJJJJJJJJJ####.........',// wide shoulders
+    '........#jJJJJJJJJJJJJJJJJJJ#......',
+    '......##JJJJJJJJJJJJJJJJJJJJJJJ#..',// arms both out
+    '.....#GGjJJJcccccccJJJJJJJJJJdJJJ#.',
+    '....#GGGjJJJcccccccJJJJJJJJJJdJJJJ',
+    '...#GGGgjJJJJJcccJJJJJJJJJJJJdJJJJ',
+    '..#GGGggkJJJJJJJJJJJJJJJJJJJJJJJ##',// stick exits left
+    '.#KkkkkkJJdddddddddddddddddddddJ###',
+    '#KkkkkkJJddddddddddddddddddddddd##.',
+    '#Kkkkkk#ddddddddddddddddddddddd##..',
+    '#KKkkkk#ppppppppppppppppppppppp##..',// pants wide
+    '.#KKkkk#pppppppppppppppppppppppp#..',
+    '..#KKkk#ppppppppppppppppppppppppp#.',
+    '...#Kkk#ppppppppppppppppppppppppp#.',
+    '....#kk##HHHHHHHHHHHHHHHHHHHHHHHH##',// shins
+    '.....#kHHHHHHhhhhhhhhhhhHHHHHHHHHH#',
+    '....#KkHHHHHHhhhhhhhhhhhHHHHHHHHHH#',
+    '...#KKk#HHHHHhhhhhhhhhhhHHHHHHHHHH#',
+    '..#KKKk#HHHHHhhhhhhhhhhhHHHHHHHHHH#',
+    '.#KKKKk#HHHHHhhhhhhhhhhhHHHHHHHHH##',
+    '#KKKKKk#bbbbbbbbbbbbbbbbbbbbbbbb###.',// boot
+    '#KKKKKk##bBBBBBBBBBBBBBBBBBBBBBb##.',
+    '##KKKKK###aaaaaaaaaaaaaaaaaaaaaaaaa#',// blade right
+    '.#KKKKK#..#aaaaaaaaaaaaaaaaaaaaaaA##',
+    '..#KKKK#...#aaaaaaaaaaaaaaaaaaaaaA#.',
+    '...##KK#....#aaaaaaaaaaaaaaaaaaaaA#.',
+    '....#K#.....#aaaaaaaaaaaaaaaaaaaaA#.',// stick tip
+    '.....##......#aaaaaaaaaaaaaaaaaaaA#.',
+    '..............#aaaaaaaaaaaaaaaaaaA#.',
+    '...............#aaaaaaaaaaaaaaaaaA#.',
+    '................#aaaaaaaaaaaaaaaaA##',
+    '.................#aaaaaaaaaaaaaaA##.',
+    '..................#aaaaaaaaaaaaa##..',
+    '..................#uuu#aaaaaaaaa#...',// puck at blade
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+];
+// Defense v1: DEFENSIVE CROUCH — backward skate, stick angled forward
+const PC_SPR_DEF_1 = [
+    '....................................',
+    '..............######................',
+    '.............#HHhhhH##..............',
+    '.............#HhVVVhH#..............',
+    '.............#Hh#ss#hH#.............',
+    '.............#Hh#SS#hH#.............',
+    '..............#H#sS##...............',
+    '..........####JJJJJJJJ####..........',// wide stance (backward skate)
+    '.........#jJJJJJJJJJJJJJJJJ#.......',
+    '.......##JJJJJJJJJJJJJJJJJJJJJ#....',
+    '......#GGjJJJccccccccJJJJJJJJdJJ#..',
+    '.....#GGGjJJccccccccccJJJJJJJJdJJJ#',
+    '....#GGGgjJJJJJcccccJJJJJJJJJJdJJJ#',
+    '...#GGGggkjJJJJJJJJJJJJJJJJJJJJJ##.',
+    '..#KkkkkkjJdddddddddddddddddddddJ##.',
+    '.#Kkkkkk##ddddddddddddddddddddddd##.',
+    '#Kkkkkk#pppppppppppppppppppppppppp##',// pants low/wide
+    '#KKkkk##ppppppppppppppppppppppppppp#',
+    '.#KKkk##pppppppppppppppppppppppppp##',
+    '..#Kkk#pppppppppppppppppppppppppp##.',
+    '...#kk#ppppppppppppppppppppppppp##..',
+    '....#k##HHHHHHHHHHHHHHHHHHHHHHHH##..',// shins wide
+    '....#kHHHHHHHhhhhhhhhhhhHHHHHHHHHH#',
+    '...#KkHHHHHHHhhhhhhhhhhhHHHHHHHHHHH',
+    '..#KKk#HHHHHHhhhhhhhhhhhHHHHHHHHHHH',
+    '.#KKKk#HHHHHHhhhhhhhhhhhHHHHHHHHHH#',
+    '#KKKKk#HHHHHHhhhhhhhhhhhHHHHHHHHHH#',
+    '#KKKKk#bbbbbbbbbbbbbbbbbbbbbbbbbb##.',// boot wide
+    '#KKKKk##bBBBBBBBBBBBBBBBBBBBBBBb##.',
+    '##KKK###aaaaaaaaaaaaaaaaaaaaaaaaaaa#',// blade
+    '.#KKK#..#aaaaaaaaaaaaaaaaaaaaaaaaaaA',
+    '..#KK#...#aaaaaaaaaaaaaaaaaaaaaaaaA#',
+    '..###....#aaaaaaaaaaaaaaaaaaaaaaaaA#',
+    '..........#aaaaaaaaaaaaaaaaaaaaaaA##',
+    '...........#aaaaaaaaaaaaaaaaaaaaaA#.',
+    '#uuu........#aaaaaaaaaaaaaaaaaaaA##.',// puck to the side
+    '##uu.........#aaaaaaaaaaaaaaaaaaA#..',
+    '###...........#aaaaaaaaaaaaaaaaaA#..',
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+];
+// Goalie v0: BUTTERFLY SAVE — pads fanned wide, trapper raised catching puck
+const PC_SPR_GTL_0 = [
+//  mask wide, pads super wide
+    '....................................',
+    '.............#########..............',// mask top
+    '............#mmmmmmmmm#.............',
+    '............#mVVmmmVVm#.............',// visor slits
+    '............#m##mmm##m#.............',// cage bars horizontal
+    '............#mmVmmmmVm#.............',// cage detail
+    '............#mmssmmssm#.............',// eyes/skin
+    '.............#mSSmmSSm#.............',
+    '.............#mssmmssm#.............',// chin
+    '..............#SSSSSSS#.............',// neck
+    '.........####JJJJJJJJJJJJ####.......',// wide chest
+    '........#JJJJJJJJJJJJJJJJJJJJd#...',
+    '.......#JJJJJJJJJJJJJJJJJJJJJJJd#.',
+    '......#JJJJJJJcccccccccJJJJJJJJJd#.',// chest stripe
+    '.....#gGGGJJJJcccccccccJJJJJJJJJdJ#',// arms out
+    '....#gGGGGJJJJJcccccJJJJJJJJJJJdJJ#',
+    '...#gGGGGGJJJJJJJJJJJJJJJJJJJddJJJ#',
+    '..#gGGGGGGJJJJJJJJJJJJJJJJJJddJJJJ#',// trapper + blocker sides
+    '.#gGGGGGGGJJJJJJJJJJJJJJJJdddJJJJJ#',
+    '#gGGGGGGGG#ppppppppppppppppp#JJJJJJ#',// into pads
+    '#ppppppppp#ppppppppppppppppppJJJJJJJ',
+    '#ppppppppp#pJJJJpppppppJJJJpppppppp#',// pad highlights
+    '#ccccccccc#pJJJJpppppppJJJJpppppppp#',// pad stripes
+    '#ppppppppp#pppppppppppppppppppppppp#',
+    '#ppppppppp#pppppppppppppppppppppppp#',
+    '#ppppppppp#pJJJJpppppppJJJJpppppppp#',
+    '#ccccccccc#pppppppppppppppppppppppp#',// second stripe
+    '#ppppppppp#pppppppppppppppppppppppp#',
+    '#ppppppppp#pppppppppppppppppppppppp#',
+    '#ppppppppp#pppppppppppppppppppppppp#',
+    '#ppppppbbb##bbbbbbbbbbbbbbbbbbb##pp#',// boots visible
+    '#ppppppbbbb#bBBBBBBBBBBBBBBBBBb#pp#',
+    '#######.####aaaaaaaaaaaaaaaaaaaaaa##',// blades wide
+    '.......#aaaaaaaaaaaaaaaaaaaaaaaaaaa#',
+    '........#aaaaaaaaaaaaaaaaaaaaaaaaA##',
+    '........wwwwwwwwwwwwwwwwwwwwwwwww..',// crease line
+    '.........wwwwwwwwwwwwwwwwwwwwwwww..',
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',// ice
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+];
+// Goalie v1: READY STANCE — standing upright in crease, gloves up
+const PC_SPR_GTL_1 = [
+    '....................................',
+    '.............#########..............',// mask
+    '............#mmmmmmmmm#.............',
+    '............#mVVmmmVVm#.............',
+    '............#m##mmm##m#.............',
+    '............#mmVmmmmVm#.............',
+    '............#mmssmmssm#.............',
+    '.............#mSSmmSSm#.............',
+    '.............#mssmmssm#.............',
+    '..............#SSSSSSS#.............',// neck
+    '.........####JJJJJJJJJJJJ####.......',// wide chest
+    '........#jJJJJJJJJJJJJJJJJJJJJd#..',
+    '.......#jJJJJJJJJJJJJJJJJJJJJJJJd#.',
+    '......#jJJJJJJcccccccccJJJJJJJJJJd#',// stripe
+    '.....#gGJJJJJcccccccccccJJJJJJJJJdJ',// trapper high (left)
+    '....#gGGJJJJJJJcccccJJJJJJJJJJJJdJJ',
+    '...#gGGGJJJJJJJJJJJJJJJJJJJJJJJdJJJ',
+    '..#gGGGGJJJJJJJJJJJJJJJJJJJJJddJJJJ',
+    '.#gGGGGG#ppppppppppppppppppppJdJJJJ#',
+    '#gGGGGGG#ppppppppppppppppppppppJJJJJ',// blocker on right
+    '#pppppppp#pJJJJpppppppJJJJJppppppppp',// pad top
+    '#pppppppp#pJJJJpppppppJJJJJppppppppp',
+    '#cccccccc#pppppppppppppppppppppppppp',// pad stripe
+    '#pppppppp#pppppppppppppppppppppppppp',
+    '#pppppppp#pppppppppppppppppppppppppp',
+    '#pppppppp#pJJJJpppppppJJJJJppppppppp',
+    '#cccccccc#pppppppppppppppppppppppppp',
+    '#pppppppp#pppppppppppppppppppppppppp',
+    '#pppppppp#pppppppppppppppppppppppppp',
+    '#pppppppp#pppppppppppppppppppppppppp',
+    '#ppppppbb##bbbbbbbbbbbbbbbbbbbbbbb##',// boots
+    '#ppppppbb#.#bBBBBBBBBBBBBBBBBBBBb#.',
+    '##########..#aaaaaaaaaaaaaaaaaaaaaa#',// blades
+    '...........#aaaaaaaaaaaaaaaaaaaaaaaA',
+    '............#aaaaaaaaaaaaaaaaaaaaaaA',
+    '............#aaaaaaaaaaaaaaaaaaaaaaA',
+    '.............#aaaaaaaaaaaaaaaaaaaaaA',
+    '.............wwwwwwwwwwwwwwwwwwwwww.',// crease
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',// ice
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
 ];
 
 function pcRenderSprite(ctx, rows, cm, sc) {
@@ -6790,85 +7030,39 @@ function pcRenderSprite(ctx, rows, cm, sc) {
     }
 }
 
-function pcDrawSprite(ctx, type, pri, sec) {
+function pcDrawSprite(ctx, type, pri, sec, playerName) {
     const sc = 5;
     const cm = {
         '#': '#000000',
-        'H': '#222233', 'h': '#556688',          // helmet dk/hi
-        'V': '#AADDFF', 'v': '#88CCEE',          // visor
-        'm': '#E0E0E0',                           // goalie mask white
-        's': '#F4C17A', 'S': '#C8905A',          // skin base/shadow
-        'j': _pcShade(pri,55), 'J': pri, 'd': _pcShade(pri,-50), // jersey hi/base/shadow
-        'c': _pcShade(sec,30), 'C': sec,         // secondary hi/base
-        'g': '#111122', 'G': '#2a3a4a',          // trapper/glove dk/hi
-        'p': _pcShade(pri,-30), 'P': _pcShade(pri,-60), // pad/pants
-        'b': '#111111', 'B': '#446677',          // boot dk/hi
-        'a': '#CCCCCC', 'A': '#888888',          // blade silver/dk
-        'k': '#7B5000', 'K': '#AA7830',          // stick dk/hi
-        'u': '#111111', 'U': '#333333',          // puck
-        'w': 'rgba(100,180,255,0.35)',            // crease
-        'i': 'rgba(180,225,255,0.20)',            // ice
+        'H': '#222233', 'h': '#556688',
+        'V': '#AADDFF',
+        'm': '#E0E0E0',
+        's': '#F4C17A', 'S': '#C8905A',
+        'j': _pcShade(pri,55), 'J': pri, 'd': _pcShade(pri,-50),
+        'c': _pcShade(sec,30), 'C': sec,
+        'g': '#111122', 'G': '#2a3a4a',
+        'p': _pcShade(pri,-30),
+        'b': '#111111', 'B': '#446677',
+        'a': '#CCCCCC', 'A': '#888888',
+        'k': '#7B5000', 'K': '#AA7830',
+        'u': '#111111',
+        'w': 'rgba(100,180,255,0.35)',
+        'i': 'rgba(180,225,255,0.20)',
         '.': null,
     };
+    // seed variant from player name hash
+    let hash = 0;
+    if (playerName) { for (let i = 0; i < playerName.length; i++) hash = (hash*31 + playerName.charCodeAt(i)) >>> 0; }
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    const rows = type==='forward' ? PC_SPR_FWD : type==='defense' ? PC_SPR_DEF : PC_SPR_GTL;
+    let rows;
+    if (type === 'forward') {
+        rows = [PC_SPR_FWD_0, PC_SPR_FWD_1, PC_SPR_FWD_2][hash % 3];
+    } else if (type === 'defense') {
+        rows = [PC_SPR_DEF_0, PC_SPR_DEF_1][hash % 2];
+    } else {
+        rows = [PC_SPR_GTL_0, PC_SPR_GTL_1][hash % 2];
+    }
     pcRenderSprite(ctx, rows, cm, sc);
-
-    // ── goalie extras drawn post-render ───────────────────────────────────
-    if(type==='goalie') {
-        // puck in trapper (top-left)
-        ctx.fillStyle='#111'; ctx.beginPath(); ctx.ellipse(2*sc,10*sc,sc*0.8,sc*0.32,0,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle='#444'; ctx.beginPath(); ctx.ellipse(2*sc,10*sc-1,sc*0.55,sc*0.2,0,0,Math.PI*2); ctx.fill();
-        // blocker block on right
-        ctx.fillStyle='#8B4513';
-        _pcB(ctx,sc,20,7, 4,6, '#8B4513');
-        _pcR(ctx,sc,21,7, 2,1, '#CC8833');
-        _pcR(ctx,sc,21,8, 2,1, '#AA6622');
-        // stick shaft
-        ctx.strokeStyle='#7B5000'; ctx.lineWidth=3; ctx.lineCap='round';
-        ctx.beginPath(); ctx.moveTo(3.5*sc,13*sc); ctx.lineTo(3.5*sc,28*sc); ctx.stroke();
-        ctx.strokeStyle='#AA7830'; ctx.lineWidth=1.5;
-        ctx.beginPath(); ctx.moveTo(3.5*sc+2,13*sc); ctx.lineTo(3.5*sc+2,28*sc); ctx.stroke();
-        // stick blade (flat on ice)
-        ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
-        ctx.beginPath(); ctx.moveTo(3.5*sc,28*sc); ctx.lineTo(9*sc,28*sc); ctx.stroke();
-        ctx.strokeStyle='#888'; ctx.lineWidth=2;
-        ctx.beginPath(); ctx.moveTo(3.5*sc,28*sc+2); ctx.lineTo(9*sc,28*sc+2); ctx.stroke();
-    }
-
-    // ── forward/defense puck drawn post-render ────────────────────────────
-    if(type==='forward' || type==='defense') {
-        const px = type==='forward' ? 2.5 : 1.5, py = 30;
-        ctx.fillStyle='#111'; ctx.beginPath(); ctx.ellipse(px*sc,py*sc,sc*0.9,sc*0.35,0,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle='#555'; ctx.beginPath(); ctx.ellipse(px*sc,py*sc-2,sc*0.65,sc*0.22,0,0,Math.PI*2); ctx.fill();
-    }
-
-    // ── forward stick (diagonal overlay) ─────────────────────────────────
-    if(type==='forward') {
-        ctx.strokeStyle='#7B5000'; ctx.lineWidth=4; ctx.lineCap='round';
-        ctx.beginPath(); ctx.moveTo(5*sc,12*sc); ctx.lineTo(2*sc,30*sc); ctx.stroke();
-        ctx.strokeStyle='#AA7830'; ctx.lineWidth=1.5;
-        ctx.beginPath(); ctx.moveTo(5*sc+2,12*sc); ctx.lineTo(2*sc+2,30*sc); ctx.stroke();
-        // blade
-        ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
-        ctx.beginPath(); ctx.moveTo(2*sc,30*sc); ctx.lineTo(0,30*sc); ctx.stroke();
-        ctx.strokeStyle='#888'; ctx.lineWidth=2;
-        ctx.beginPath(); ctx.moveTo(0,30*sc); ctx.lineTo(0,31*sc); ctx.stroke();
-    }
-
-    // ── defense stick (horizontal poke overlay) ───────────────────────────
-    if(type==='defense') {
-        ctx.strokeStyle='#7B5000'; ctx.lineWidth=4; ctx.lineCap='round';
-        ctx.beginPath(); ctx.moveTo(24*sc,15*sc); ctx.lineTo(0,24*sc); ctx.stroke();
-        ctx.strokeStyle='#AA7830'; ctx.lineWidth=1.5;
-        ctx.beginPath(); ctx.moveTo(24*sc,15*sc+2); ctx.lineTo(0,24*sc+2); ctx.stroke();
-        // blade tip
-        ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
-        ctx.beginPath(); ctx.moveTo(0,24*sc); ctx.lineTo(0,27*sc); ctx.stroke();
-        ctx.strokeStyle='#888'; ctx.lineWidth=2;
-        ctx.beginPath(); ctx.moveTo(1,24*sc); ctx.lineTo(1,27*sc); ctx.stroke();
-    }
-
 }
 
 function pcDrawLogo(ctx, size, code) {
@@ -7026,8 +7220,8 @@ function showPlayerCard(pName) {
     <div style="font-size:8px;color:#fff;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fullName}</div>
     <div style="font-size:6px;color:rgba(255,255,255,.5);margin-top:2px;letter-spacing:1px;">${confName}</div>
   </div>
-  <div style="background:#06060e;position:relative;display:flex;align-items:center;justify-content:center;height:162px;overflow:hidden;">
-    <canvas id="pc-sprite" width="125" height="160" style="image-rendering:pixelated;image-rendering:crisp-edges;display:block;"></canvas>
+  <div style="background:#06060e;position:relative;display:flex;align-items:center;justify-content:center;height:160px;overflow:hidden;">
+    <canvas id="pc-sprite" width="180" height="230" style="image-rendering:pixelated;image-rendering:crisp-edges;display:block;width:120px;height:153px;"></canvas>
     <canvas id="pc-logo" width="34" height="34" style="position:absolute;top:7px;right:7px;border-radius:50%;border:1px solid rgba(255,255,255,.15);image-rendering:pixelated;"></canvas>
     <div style="position:absolute;bottom:0;left:0;right:0;height:18px;background:linear-gradient(transparent,rgba(0,0,0,.75));"></div>
   </div>
@@ -7051,7 +7245,7 @@ function showPlayerCard(pName) {
 
     document.getElementById('playerCardContent').innerHTML = h;
     const spCanvas = document.getElementById('pc-sprite');
-    if (spCanvas) pcDrawSprite(spCanvas.getContext('2d'), sprType, pri, sec);
+    if (spCanvas) pcDrawSprite(spCanvas.getContext('2d'), sprType, pri, sec, pName);
     const lgCanvas = document.getElementById('pc-logo');
     if (lgCanvas) pcDrawLogo(lgCanvas.getContext('2d'), 34, p.teamCode);
     document.getElementById('playerCardOverlay').style.display = 'flex';
