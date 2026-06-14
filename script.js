@@ -226,15 +226,37 @@ function generateTeam60MinSchedule(struct) {
         return players.reduce((s, p) => s + (typeof getLiveIceOvr === 'function' ? getLiveIceOvr(p.name) : (p.ovr || 75)), 0) / players.length;
     };
 
+    // ── SHARED HELPERS ────────────────────────────────────────────────────
+    const OVR_CAP  = 75;  // units below this are capped at MAX_CAP minutes
+    const MAX_CAP  = 20;
+    const EVEN_GAP = 4;   // OVR gap threshold → blend toward equal time
+
+    // If two adjacent units are within EVEN_GAP OVR points, blend their
+    // minutes toward the midpoint. Blend strength scales linearly with
+    // how close they are (gap=0 → full average, gap=4 → no blend).
+    function blendClose(mins, ovrs) {
+        for (let i = 0; i < mins.length - 1; i++) {
+            const gap = Math.abs(ovrs[i] - ovrs[i + 1]);
+            if (gap < EVEN_GAP) {
+                const blend = (EVEN_GAP - gap) / EVEN_GAP; // 0..1
+                const mid   = (mins[i] + mins[i + 1]) / 2;
+                mins[i]     = mins[i]     + (mid - mins[i])     * blend;
+                mins[i + 1] = mins[i + 1] + (mid - mins[i + 1]) * blend;
+            }
+        }
+        return mins;
+    }
+
     // ── FORWARD ICE TIME ──────────────────────────────────────────────────
     const fOvr = struct.f.map(getUnitOvr);               // [L1, L2, L3, L4]
-    const OVR_CAP = 75;   // lines below this get capped at 20 min
-    const MAX_CAP = 20;   // cap ceiling for sub-75 lines
 
     // Start with OVR-weighted base from 60 minutes
     const fWeight = fOvr.map(o => Math.max(o - 60, 1));  // weight = OVR above 60
     const fWeightSum = fWeight.reduce((s, w) => s + w, 0);
     let fMins = fWeight.map(w => (w / fWeightSum) * 60);
+
+    // Blend adjacent lines that are within 4 OVR points toward equal time
+    fMins = blendClose(fMins, fOvr);
 
     // Hard clamps per line position (realistic NHL ranges)
     const fClamp = [[18, 24], [14, 20], [10, 16], [6, 13]];
@@ -279,41 +301,35 @@ function generateTeam60MinSchedule(struct) {
     finalFCounts.forEach((count, idx) => { for (let i = 0; i < count; i++) fSched.push(idx); });
     fSched.sort(() => Math.random() - 0.5);
 
-    // ── DEFENSE ICE TIME (OVR-weighted, mirrors forward logic) ────────────
-    const dPairs = struct.d.length || 3;
+    // ── DEFENSE ICE TIME ──────────────────────────────────────────────────
+    // D pairs rotate independently; Pair 1 ALWAYS leads ice time.
+    // Realistic NHL clamps: P1=22-30, P2=16-24, P3=6-16 (total must = 60)
+    const dClamp = [[22, 30], [16, 24], [6, 16]];
     const dOvr = struct.d.map(getUnitOvr);
     const dWeight = dOvr.map(o => Math.max(o - 60, 1));
     const dWeightSum = dWeight.reduce((s, w) => s + w, 0);
     let dMins = dWeight.map(w => (w / dWeightSum) * 60);
 
-    // D pair clamps: Pair 1 plays most, Pair 3 least
-    const dClamp = [[22, 30], [18, 26], [8, 18]];
+    // Blend adjacent D pairs within 4 OVR toward equal time (before clamping)
+    dMins = blendClose(dMins.slice(0, 3), dOvr.slice(0, 3));
+
+    // Apply per-pair clamps
     dMins = dMins.slice(0, 3).map((m, i) => Math.max(dClamp[i][0], Math.min(dClamp[i][1], m)));
 
-    // Same sub-75 cap for D pairs
-    let dSurplus = 0;
-    dMins.forEach((m, i) => {
-        if (dOvr[i] < OVR_CAP && m > MAX_CAP) { dSurplus += m - MAX_CAP; dMins[i] = MAX_CAP; }
-    });
-    if (dSurplus > 0) {
-        const dElig = dMins.map((m, i) => (dOvr[i] >= OVR_CAP ? dWeight[i] : 0));
-        const dEligSum = dElig.reduce((s, w) => s + w, 0);
-        if (dEligSum > 0) dMins = dMins.map((m, i) => m + (dElig[i] / dEligSum) * dSurplus);
-    }
+    // Enforce Pair 1 >= Pair 2 >= Pair 3 (with at least 2-min gap between pairs)
+    if (dMins[0] <= dMins[1]) dMins[0] = dMins[1] + 2;
+    if (dMins[1] <= dMins[2]) dMins[1] = dMins[2] + 2;
+    // Re-clamp after order enforcement
+    dMins = dMins.map((m, i) => Math.max(dClamp[i][0], Math.min(dClamp[i][1], m)));
 
-    // Enforce Pair 1 >= Pair 2 >= Pair 3
-    for (let i = 0; i < dMins.length - 1; i++) {
-        if (dMins[i] < dMins[i + 1]) dMins[i] = dMins[i + 1] + 1;
-    }
-
-    // Convert D minutes to per-shift probability thresholds for each F line minute
-    // (60 D "slots" assigned independently of which F line is on ice)
+    // Balance total to exactly 60 — trim/add from Pair 3 first, then Pair 2
     let finalDCounts = dMins.map(m => Math.round(m));
-    while (finalDCounts.reduce((a, b) => a + b, 0) < 60) finalDCounts[0]++;
-    while (finalDCounts.reduce((a, b) => a + b, 0) > 60) {
-        for (let i = dPairs - 1; i >= 0; i--) {
-            if (finalDCounts[i] > dClamp[Math.min(i, dClamp.length - 1)][0]) { finalDCounts[i]--; break; }
-        }
+    const dBalance = () => finalDCounts.reduce((a, b) => a + b, 0);
+    while (dBalance() < 60) finalDCounts[0]++;
+    while (dBalance() > 60) {
+        if (finalDCounts[2] > dClamp[2][0]) finalDCounts[2]--;
+        else if (finalDCounts[1] > dClamp[1][0]) finalDCounts[1]--;
+        else finalDCounts[0]--;
     }
 
     // Build shuffled D schedule (independent of F schedule — D pairs rotate on their own)
@@ -809,9 +825,53 @@ function syncArenaScoreboardUI() {
         hName.innerText = g.h.code || 'HOME';
         if (jLogoA) jLogoA.src = g.a.logo || '';
         if (jLogoH) jLogoH.src = g.h.logo || '';
+
+        // Dynamic two-tone banners using team colors (or ASG conference colors)
+        const awayBanner = document.getElementById('awayBanner');
+        const homeBanner = document.getElementById('homeBanner');
+        if (awayBanner && homeBanner) {
+            let aC1, aC2, hC1, hC2;
+            if (isAsgMatchup) {
+                aC1 = '#FF6600'; aC2 = '#000'; // Campbell orange
+                hC1 = '#003399'; hC2 = '#000'; // Wales blue
+            } else {
+                const aCols = teamColors[g.a.nrm] || ['#333', '#000'];
+                const hCols = teamColors[g.h.nrm] || ['#333', '#000'];
+                aC1 = aCols[0]; aC2 = aCols[1] || '#000';
+                hC1 = hCols[0]; hC2 = hCols[1] || '#000';
+            }
+            awayBanner.style.background = `linear-gradient(to bottom, ${aC1} 50%, ${aC2} 50%)`;
+            homeBanner.style.background = `linear-gradient(to bottom, ${hC2} 50%, ${hC1} 50%)`;
+            awayBanner.style.borderColor = aC1;
+            homeBanner.style.borderColor = hC1;
+        }
         aScore.innerText = g.result ? String(g.result.aG) : '0';
         hScore.innerText = g.result ? String(g.result.hG) : '0';
-        jumbo.innerText = g.result ? 'GAME FINAL.' : (isAsgMatchup ? 'ALL-STAR GAME — PUCK DROP PENDING...' : 'PUCK DROP PENDING...');
+        if (g.result) {
+            const ot = g.result.ot > 0 ? ` (OT)` : '';
+            const winTeam = g.result.aG > g.result.hG ? g.a.code : g.h.code;
+            let bsDay = currentDay, bsIdx = activeIdx;
+            if (bsIdx === null) {
+                const dl = getGamesForDay(currentDay);
+                bsIdx = dl.indexOf(g);
+                if (bsIdx < 0) bsIdx = 0;
+            }
+            // Build goal scorer ticker — one line per goal
+            const goalEvents = (g.result.boxLog || []).filter(ev => !ev.isPenalty && ev.scorer);
+            const aCode = g.a.code, hCode = g.h.code;
+            const aCl = teamColors[g.a.nrm] ? teamColors[g.a.nrm][0] : '#fff';
+            const hCl = teamColors[g.h.nrm] ? teamColors[g.h.nrm][0] : '#fff';
+            let scorerLines = goalEvents.map(ev => {
+                const cl = (ev.tm === aCode) ? aCl : hCl;
+                const tag = ev.isPP ? ' <span style="color:#FFD700;font-size:6px;">PP</span>' : ev.isSH ? ' <span style="color:#00FFFF;font-size:6px;">SH</span>' : '';
+                return `<div style="font-size:7px;color:${cl};line-height:1.8;">[${ev.tm}]${tag} ${ev.scorer}${ev.pAssist ? ` (${ev.pAssist})` : ''} <span style="color:#666">${ev.time||''}</span></div>`;
+            }).join('');
+            jumbo.innerHTML = `<span style="color:var(--ea-yellow);font-size:9px;">FINAL${ot} — ${winTeam} WIN</span>`
+                + (scorerLines ? `<div style="max-height:80px;overflow-y:auto;margin:6px 0;text-align:left;">${scorerLines}</div>` : '<br>')
+                + `<button onclick="openBoxScore(${bsDay},${bsIdx})" style="font-family:'Press Start 2P',cursive;font-size:7px;padding:6px 10px;background:#000;border:2px solid var(--neon-cyan);color:var(--neon-cyan);cursor:pointer;">&#x1F4CB; VIEW BOX SCORE</button>`;
+        } else {
+            jumbo.innerText = isAsgMatchup ? 'ALL-STAR GAME — PUCK DROP PENDING...' : 'PUCK DROP PENDING...';
+        }
         return;
     }
 
@@ -821,6 +881,10 @@ function syncArenaScoreboardUI() {
     hName.innerText = 'HOME';
     if (jLogoA) jLogoA.src = '';
     if (jLogoH) jLogoH.src = '';
+    const awayBannerReset = document.getElementById('awayBanner');
+    const homeBannerReset = document.getElementById('homeBanner');
+    if (awayBannerReset) { awayBannerReset.style.background = ''; awayBannerReset.style.borderColor = ''; }
+    if (homeBannerReset) { homeBannerReset.style.background = ''; homeBannerReset.style.borderColor = ''; }
     aScore.innerText = '0';
     hScore.innerText = '0';
     if (!calendar.length) jumbo.innerText = 'SCHEDULE NOT LOADED.';
@@ -3731,9 +3795,9 @@ function calculateDynamicIceTime(struct) {
     ];
 
     return {
-        forwardLineAverages: finalForwardLineMins, // [L1_mins, L2_mins, L3_mins, L4_mins]
-        defensePairAverages: finalDefensePairMins, // [P1_mins, P2_mins, P3_mins]
-        distributionMatrix: dDistributionMatrix
+        forwardLineAverages: finalForwardLineMins,   // [L1_mins, L2_mins, L3_mins, L4_mins]
+        defensePairAverages: finalDefensePairMins,   // [P1_mins, P2_mins, P3_mins]
+        defensePairingMatrix: dDistributionMatrix    // key the sim actually reads
     };
 }
 
@@ -3942,18 +4006,20 @@ function simGame(idx) {
             trk(shooter.name, 's', 1); // Record Skater Shot
             trk(aG_name, 'sa', 1);     // Record Goalie Shot Against
 
-            // Conversion Roll (Goal vs Save)
-            let scoringProb = 0.108 + (diff * 0.004) * aWallMod;
-            if (Math.random() < Math.max(0.02, Math.min(0.30, scoringProb))) {
+            // Conversion Roll (Goal vs Save) — ~8.8% base, elite lines can reach ~14%
+            let scoringProb = 0.088 + (diff * 0.003) * aWallMod;
+            if (Math.random() < Math.max(0.02, Math.min(0.22, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
                 let ev = processSingleGoal(g.h.nrm, g.h.code, shooter, hOnIce, timeStr, period, (minute % 20 || 20), sec);
                 if (ev) {
+                    ev.tm = g.h.code;
+                    ev.cl = teamColors[g.h.nrm] ? teamColors[g.h.nrm][0] : '#fff';
+                    ev.txt = `GOAL: ${ev.scorer}` + (ev.pAssist ? ` (${ev.pAssist}${ev.sAssist ? ', '+ev.sAssist : ''})` : '');
                     allGoals.push(ev);
-                    if (ev.scorer) trk(ev.scorer, 'g', 1);       // ev.scorer is already a name string (fixed in processSingleGoal)
+                    if (ev.scorer) trk(ev.scorer, 'g', 1);
                     if (ev.pAssist) trk(ev.pAssist, 'a', 1);
                     if (ev.sAssist) trk(ev.sAssist, 'a', 1);
-                    // Add plus/minus: home scores, so home players get +1, away get -1
                     hOnIce.forEach(p => { if(p && p.name) trk(p.name, 'pm', 1); });
                     aOnIce.forEach(p => { if(p && p.name) trk(p.name, 'pm', -1); });
                 }
@@ -3969,18 +4035,19 @@ function simGame(idx) {
             trk(shooter.name, 's', 1); // Record Skater Shot
             trk(hG_name, 'sa', 1);     // Record Goalie Shot Against
 
-            // Conversion Roll (Goal vs Save)
-            let scoringProb = 0.108 - (diff * 0.004) * hWallMod;
-            if (Math.random() < Math.max(0.02, Math.min(0.30, scoringProb))) {
+            let scoringProb = 0.088 - (diff * 0.003) * hWallMod;
+            if (Math.random() < Math.max(0.02, Math.min(0.22, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
                 let ev = processSingleGoal(g.a.nrm, g.a.code, shooter, aOnIce, timeStr, period, (minute % 20 || 20), sec);
                 if (ev) {
+                    ev.tm = g.a.code;
+                    ev.cl = teamColors[g.a.nrm] ? teamColors[g.a.nrm][0] : '#fff';
+                    ev.txt = `GOAL: ${ev.scorer}` + (ev.pAssist ? ` (${ev.pAssist}${ev.sAssist ? ', '+ev.sAssist : ''})` : '');
                     allGoals.push(ev);
                     if (ev.scorer) trk(ev.scorer, 'g', 1);
                     if (ev.pAssist) trk(ev.pAssist, 'a', 1);
                     if (ev.sAssist) trk(ev.sAssist, 'a', 1);
-                    // Add plus/minus: away scores, so away players get +1, home get -1
                     aOnIce.forEach(p => { if(p.name) trk(p.name, 'pm', 1); });
                     hOnIce.forEach(p => { if(p.name) trk(p.name, 'pm', -1); });
                 }
@@ -4015,31 +4082,37 @@ function simGame(idx) {
                     const ppShooterName = (ppShooter && typeof ppShooter === 'object') ? ppShooter.name : ppShooter;
                     const ppEv = processSingleGoal(advTeam.nrm, advTeam.code, ppShooter, ppUnit, timeStr, period, (minute % 20 || 20), sec);
                     if (ppEv) {
+                        ppEv.isPP = true;
+                        ppEv.tm = advTeam.code;
+                        ppEv.cl = teamColors[advTeam.nrm] ? teamColors[advTeam.nrm][0] : '#FFD700';
+                        ppEv.txt = `PP GOAL: ${ppEv.scorer}` + (ppEv.pAssist ? ` (${ppEv.pAssist}${ppEv.sAssist ? ', '+ppEv.sAssist : ''})` : '');
                         allGoals.push(ppEv);
                         if (advTeam.nrm === g.h.nrm) hG++; else aG++;
                         trk(ppEv.scorer, 'g', 1);
                         if (ppEv.pAssist) trk(ppEv.pAssist, 'a', 1);
                         if (ppEv.sAssist) trk(ppEv.sAssist, 'a', 1);
-                        // PPG on scorer and PPA on assisters
-                        if (playerStats[ppEv.scorer]) { const kk = (isPlayoffs||isASG)?'playoff':'season'; playerStats[ppEv.scorer][kk].ppg = (playerStats[ppEv.scorer][kk].ppg||0)+1; }
-                        if (ppEv.pAssist && playerStats[ppEv.pAssist]) { const kk = (isPlayoffs||isASG)?'playoff':'season'; playerStats[ppEv.pAssist][kk].ppa = (playerStats[ppEv.pAssist][kk].ppa||0)+1; }
-                        if (ppEv.sAssist && playerStats[ppEv.sAssist]) { const kk = (isPlayoffs||isASG)?'playoff':'season'; playerStats[ppEv.sAssist][kk].ppa = (playerStats[ppEv.sAssist][kk].ppa||0)+1; }
+                        const kk = (isPlayoffs||isASG)?'playoff':'season';
+                        if (playerStats[ppEv.scorer]) { playerStats[ppEv.scorer][kk].ppg = (playerStats[ppEv.scorer][kk].ppg||0)+1; }
+                        if (ppEv.pAssist && playerStats[ppEv.pAssist]) { playerStats[ppEv.pAssist][kk].ppa = (playerStats[ppEv.pAssist][kk].ppa||0)+1; }
+                        if (ppEv.sAssist && playerStats[ppEv.sAssist]) { playerStats[ppEv.sAssist][kk].ppa = (playerStats[ppEv.sAssist][kk].ppa||0)+1; }
                         if (advTeamObj) advTeamObj.season.ppg = (advTeamObj.season.ppg || 0) + 1;
-                        penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec+1, str: timeStr, tm: advTeam.code, txt: `PP GOAL: ${ppEv.scorer}`, isPenalty: false });
                     }
                 } else if (ppRoll < 0.24 && pkUnit.length > 0) {
                     // SHORTHANDED GOAL (~4% of PP opp result in SHG)
                     const shShooter = selectShooter(pkUnit);
                     const shEv = processSingleGoal(penTeam.nrm, penTeam.code, shShooter, pkUnit, timeStr, period, (minute % 20 || 20), sec);
                     if (shEv) {
+                        shEv.isSH = true;
+                        shEv.tm = penTeam.code;
+                        shEv.cl = teamColors[penTeam.nrm] ? teamColors[penTeam.nrm][0] : '#00FFFF';
+                        shEv.txt = `SH GOAL: ${shEv.scorer}` + (shEv.pAssist ? ` (${shEv.pAssist}${shEv.sAssist ? ', '+shEv.sAssist : ''})` : '');
                         allGoals.push(shEv);
                         if (penTeam.nrm === g.h.nrm) hG++; else aG++;
                         trk(shEv.scorer, 'g', 1);
                         if (shEv.pAssist) trk(shEv.pAssist, 'a', 1);
                         if (shEv.sAssist) trk(shEv.sAssist, 'a', 1);
-                        // SHG on scorer
-                        if (playerStats[shEv.scorer]) { const kk = (isPlayoffs||isASG)?'playoff':'season'; playerStats[shEv.scorer][kk].shg = (playerStats[shEv.scorer][kk].shg||0)+1; }
-                        penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec+1, str: timeStr, tm: penTeam.code, txt: `SH GOAL: ${shEv.scorer}`, isPenalty: false });
+                        const kk2 = (isPlayoffs||isASG)?'playoff':'season';
+                        if (playerStats[shEv.scorer]) { playerStats[shEv.scorer][kk2].shg = (playerStats[shEv.scorer][kk2].shg||0)+1; }
                     }
                 }
             }
@@ -4105,8 +4178,8 @@ function simGame(idx) {
 
     g.result = { 
         hG, aG, ot: otPeriods, boxLog: allGoals, matchStats, 
-        awayRoster: [...aStruct.f.flat(), ...aStruct.d.flat()].map(p=>p.name), 
-        homeRoster: [...hStruct.f.flat(), ...hStruct.d.flat()].map(p=>p.name),
+        awayRoster: [...aStruct.f.flat(), ...aStruct.d.flat(), ...(aStruct.g||[])].map(p=>p.name),
+        homeRoster: [...hStruct.f.flat(), ...hStruct.d.flat(), ...(hStruct.g||[])].map(p=>p.name),
         hGoalie: hG_name, aGoalie: aG_name, hShots, aShots 
     }; 
 
@@ -4141,7 +4214,9 @@ function simGame(idx) {
             if(hG > aG) { g.h.season.w++; g.h.season.pts += 2; g.a.season.l++; g.h.winStreak++; g.h.undefeated++; g.h.loseStreak = 0; g.h.winless = 0; g.a.loseStreak++; g.a.winless++; g.a.winStreak = 0; g.a.undefeated = 0; } 
             else if(aG > hG) { g.a.season.w++; g.a.season.pts += 2; g.h.season.l++; g.a.winStreak++; g.a.undefeated++; g.a.loseStreak = 0; g.a.winless = 0; g.h.loseStreak++; g.h.winless++; g.h.winStreak = 0; g.h.undefeated = 0; } 
             else { g.h.season.t++; g.a.season.t++; g.h.season.pts++; g.a.season.pts++; g.h.winStreak = 0; g.h.undefeated++; g.h.loseStreak = 0; g.h.winless++; g.a.winStreak = 0; g.a.undefeated++; g.a.loseStreak = 0; g.a.winless++; }
-            g.h.season.gp++; g.a.season.gp++; g.h.season.gf += hG; g.h.season.ga += aG; g.a.season.gf += aG; g.a.season.ga += hG;
+            g.h.season.gp++; g.a.season.gp++;
+            g.h.season.gf += hG; g.h.season.ga += aG; g.h.season.sf = (g.h.season.sf||0) + hShots; g.h.season.sa = (g.h.season.sa||0) + aShots;
+            g.a.season.gf += aG; g.a.season.ga += hG; g.a.season.sf = (g.a.season.sf||0) + aShots; g.a.season.sa = (g.a.season.sa||0) + hShots;
         } else if(g.series) { if(hG > aG) g.series.hW++; else g.series.aW++; }
     }
 
@@ -4592,6 +4667,13 @@ function genPlayoffSlate() { calendar = [[]]; playoffBracket.series.filter(s => 
 
 function handleRoundEnd() {
     const w = playoffBracket.series.map(s => s.hW === 4 ? s.h : s.a);
+    // Save completed round to history before clearing
+    if (!playoffBracket.history) playoffBracket.history = [];
+    playoffBracket.history.push({
+        round: playoffBracket.round,
+        label: playoffBracket.round === 1 ? 'DIVISION SEMIS' : playoffBracket.round === 2 ? 'DIVISION FINALS' : playoffBracket.round === 3 ? 'CONF FINALS' : 'STANLEY CUP FINALS',
+        series: playoffBracket.series.map(s => ({ hCode: s.h.code, hName: s.h.name, aCode: s.a.code, aName: s.a.name, hW: s.hW, aW: s.aW, conf: s.conf }))
+    });
     if(playoffBracket.round === 4) { 
         if(w[0]) currentCupChamp = w[0].name; 
         runEndOfSeasonAwards(); 
@@ -4729,6 +4811,7 @@ async function simDay(slowMode = true, bypassLock = false) {
 };
             // ------------------------------------------------
             simGame(i);
+            activeIdx = i;   // keep jumbotron pointed at the most recently finished game
             updateUI();
             if (slowMode) await sleep(200);
         }
@@ -5425,9 +5508,13 @@ function openBoxScore(day, idx) {
     const goalEvents = (g.result.boxLog || []).filter(ev => !ev.isPenalty);
     const penaltyEvents = (g.result.boxLog || []).filter(ev => ev.isPenalty);
 
-    h += `<div class="unit-header" style="margin-top:15px;">SCORING SUMMARY</div><div style="background:#000; padding:15px; font-size:8px; line-height:2;">`;
+    h += `<div class="unit-header" style="margin-top:15px;">SCORING SUMMARY</div><div style="background:#000; padding:10px 15px; font-size:8px; line-height:1.9;">`;
     if (goalEvents.length > 0) {
-        goalEvents.forEach(l => { h += `<div><span style="color:${l.cl}; font-weight:bold; margin-right:10px;">[${l.tm}]</span> <span style="color:#fff;">${l.txt}</span></div>`; });
+        goalEvents.forEach(l => {
+            const typeTag = l.isPP ? `<span style="color:#FFD700;font-size:6px;margin-left:4px;">PP</span>` : l.isSH ? `<span style="color:#00FFFF;font-size:6px;margin-left:4px;">SH</span>` : '';
+            const timeTag = l.time ? `<span style="color:#555;font-size:6px;margin-left:8px;">${l.time}</span>` : '';
+            h += `<div><span style="color:${l.cl||'#fff'}; font-weight:bold; margin-right:8px;">[${l.tm||''}]</span>${typeTag} <span style="color:#fff;">${l.txt||l.display||''}</span>${timeTag}</div>`;
+        });
     } else {
         h += `<div style="color:#aaa; text-align:center;">No scoring data.</div>`;
     }
@@ -6864,8 +6951,28 @@ function showBracket() {
               
         h += `</div>`;
     });
+    // Past rounds accordion
+    if (playoffBracket.history && playoffBracket.history.length > 0) {
+        h += `<div style="margin-top:15px; border-top:1px solid #333; padding-top:10px;">`;
+        h += `<div style="font-size:7px; color:#aaa; margin-bottom:8px; cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">&#x25BC; PAST ROUNDS</div>`;
+        h += `<div style="display:none;">`;
+        [...playoffBracket.history].reverse().forEach(rnd => {
+            h += `<div style="margin-bottom:8px;"><div style="font-size:7px; color:var(--ea-yellow); margin-bottom:4px;">RD ${rnd.round} — ${rnd.label}</div>`;
+            rnd.series.forEach(s => {
+                const winH = s.hW === 4; const winA = s.aW === 4;
+                h += `<div style="font-size:7px; background:#111; border:1px solid #333; padding:5px; margin-bottom:3px;">`;
+                h += `<span style="color:${winH?'var(--ea-yellow)':'#aaa'}">${s.hCode} <b>${s.hW}</b></span>`;
+                h += ` <span style="color:#555">vs</span> `;
+                h += `<span style="color:${winA?'var(--ea-yellow)':'#aaa'}"><b>${s.aW}</b> ${s.aCode}</span>`;
+                h += `</div>`;
+            });
+            h += `</div>`;
+        });
+        h += `</div></div>`;
+    }
+
     document.getElementById('bracketContent').innerHTML = h;
-    
+
     if(playoffBracket.series.some(s => s.hW === 4 || s.aW === 4) && !playoffBracket.series.some(s => s.hW < 4 && s.aW < 4)) {
         if(!document.getElementById('btnNextRound')) {
             const b = document.createElement('button'); b.id='btnNextRound'; b.innerText='ADVANCE ROUND'; b.onclick=handleRoundEnd; b.style.borderColor='#00FF00'; b.style.color='#00FF00'; document.getElementById('officeControls').insertBefore(b, document.getElementById('officeControls').firstChild);
