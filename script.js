@@ -835,8 +835,8 @@ function syncArenaScoreboardUI() {
                 aC1 = '#FF6600'; aC2 = '#000'; // Campbell orange
                 hC1 = '#003399'; hC2 = '#000'; // Wales blue
             } else {
-                const aCols = teamColors[g.a.nrm] || ['#333', '#000'];
-                const hCols = teamColors[g.h.nrm] || ['#333', '#000'];
+                const aCols = teamColors[g.a.code?.toLowerCase()] || teamColors[g.a.nrm] || ['#333', '#000'];
+                const hCols = teamColors[g.h.code?.toLowerCase()] || teamColors[g.h.nrm] || ['#333', '#000'];
                 aC1 = aCols[0]; aC2 = aCols[1] || '#000';
                 hC1 = hCols[0]; hC2 = hCols[1] || '#000';
             }
@@ -3580,13 +3580,11 @@ const getAWeight = (p, isSec) => {
 
         if (numAssists > 0 && pPassers.length > 0) {
             
-          // 🛡️ MODIFIED: Harsher penalty for defensemen assists
+          // Slight bonus for defensemen assists — D-men are active in the rush and transition
             const getModAWeight = (p, isSecondary) => {
                 let weight = getAWeight(p, isSecondary);
                 const isD = p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD';
-                
-                // Change 0.75 here to match whatever penalty you want to apply
-                return isD ? weight * 0.95 : weight;
+                return isD ? weight * 1.18 : weight;
             };
 
             // 🛡️ MODIFIED: Replaced 'getAWeight' with 'getModAWeight' below
@@ -4006,9 +4004,11 @@ function simGame(idx) {
             trk(shooter.name, 's', 1); // Record Skater Shot
             trk(aG_name, 'sa', 1);     // Record Goalie Shot Against
 
-            // Conversion Roll (Goal vs Save) — ~8.8% base, elite lines can reach ~14%
-            let scoringProb = 0.088 + (diff * 0.003) * aWallMod;
-            if (Math.random() < Math.max(0.02, Math.min(0.22, scoringProb))) {
+            // Conversion Roll — base 9.2%, sniper gets +14% multiplier
+            const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
+            const hSniperMod = hShooterTag === 'SNIPER' ? 1.14 : hShooterTag === 'SUPERSTAR' ? 1.05 : 1.0;
+            let scoringProb = (0.092 + (diff * 0.003)) * aWallMod * hSniperMod;
+            if (Math.random() < Math.max(0.02, Math.min(0.24, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
                 let ev = processSingleGoal(g.h.nrm, g.h.code, shooter, hOnIce, timeStr, period, (minute % 20 || 20), sec);
@@ -4035,8 +4035,10 @@ function simGame(idx) {
             trk(shooter.name, 's', 1); // Record Skater Shot
             trk(hG_name, 'sa', 1);     // Record Goalie Shot Against
 
-            let scoringProb = 0.088 - (diff * 0.003) * hWallMod;
-            if (Math.random() < Math.max(0.02, Math.min(0.22, scoringProb))) {
+            const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
+            const aSniperMod = aShooterTag === 'SNIPER' ? 1.14 : aShooterTag === 'SUPERSTAR' ? 1.05 : 1.0;
+            let scoringProb = (0.092 - (diff * 0.003)) * hWallMod * aSniperMod;
+            if (Math.random() < Math.max(0.02, Math.min(0.24, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
                 let ev = processSingleGoal(g.a.nrm, g.a.code, shooter, aOnIce, timeStr, period, (minute % 20 || 20), sec);
@@ -4275,10 +4277,10 @@ function selectShooter(unit) {
         // Archetype multiplier
         weight *= (arch.shotRate || 1.0);
 
-        // Position modifier — ALL forwards equal base (1.0), D penalized
+        // Position modifier — ALL forwards equal base (1.0), D penalized less than before
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
-        weight *= isD ? 0.69 : 1.0;  // D ~31% less likely to score than a forward
+        weight *= isD ? 0.80 : 1.0;  // D ~20% less likely to score than a forward
 
         // Hot/cold modifier
         if (ps.isHot)  weight *= 1.20;
@@ -8037,15 +8039,14 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
 // =========================================================
 function triggerGameInjuries(matchStats, homeCode, awayCode) {
     if (!awardConfig.injuries) return;
-    const BASE_CHANCE = 0.022; // ~2.2% per skater per game ≈ realistic NHL rate
+    const BASE_CHANCE = 0.022;
     for (let pName in matchStats) {
         const ps = playerStats[pName];
         if (!ps || !ps.injury) continue;
-        if (ps.injury.daysRemaining > 0) continue; // already hurt
+        if (ps.injury.daysRemaining > 0) continue;
         const stats = matchStats[pName];
-        if (!stats.toi || stats.toi <= 0) continue; // didn't play
+        if (!stats.toi || stats.toi <= 0) continue;
 
-        // fatigue and high PIMs raise risk slightly
         const fatigueBonus = (ps.fatigue || 0) > 70 ? 0.008 : 0;
         const physicalBonus = stats.pim >= 2 ? 0.005 : 0;
         const chance = BASE_CHANCE + fatigueBonus + physicalBonus;
@@ -8053,18 +8054,31 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
         if (Math.random() < chance) {
             const roll = Math.random();
             let days, label;
-            if (roll < 0.55)      { days = 1;  label = 'day-to-day'; }
-            else if (roll < 0.78) { days = 3;  label = '3-5 days'; }
-            else if (roll < 0.92) { days = 7;  label = '1-2 weeks'; }
-            else if (roll < 0.98) { days = 14; label = '2-4 weeks'; }
-            else                  { days = 28; label = '4-6 weeks'; }
+            if (roll < 0.25)      { days = 0;  label = 'out for a period'; }
+            else if (roll < 0.52) { days = 1;  label = '1-game injury'; }
+            else if (roll < 0.72) { days = Math.floor(Math.random() * 3) + 2;  label = `${days}-game injury`; }
+            else if (roll < 0.88) { days = Math.floor(Math.random() * 4) + 5;  label = `${days}-game injury`; }
+            else                  { days = Math.floor(Math.random() * 5) + 11; label = `${days}-game injury`; }
 
-            ps.injury = { severity: days, daysRemaining: days };
+            // Cap at 15 games
+            days = Math.min(days, 15);
+
             const teamCode = (rosters[homeCode] || []).find(p => p.name === pName) ? homeCode : awayCode;
-            tradeLog.unshift({
-                day: currentDay,
-                details: `🩹 INJURY: ${pName} (${teamCode.toUpperCase()}) is ${label} — out ${days} day${days>1?'s':''}.`
-            });
+            const note = days === 0
+                ? `🩹 INJURY NOTE: ${pName} (${teamCode.toUpperCase()}) was shaken up — out for a period.`
+                : `🩹 INJURY: ${pName} (${teamCode.toUpperCase()}) — ${label}, out ${days} game${days > 1 ? 's' : ''}.`;
+
+            // Prompt for 7+ game injuries so user can veto
+            if (days >= 7) {
+                const accept = confirm(`INJURY — ${pName} (${teamCode.toUpperCase()})\n${label.toUpperCase()}\n\nApply this injury? (OK = yes, Cancel = skip)`);
+                if (!accept) {
+                    tradeLog.unshift({ day: currentDay, details: `⚡ INJURY AVOIDED: ${pName} (${teamCode.toUpperCase()}) played through a ${label}.` });
+                    continue;
+                }
+            }
+
+            if (days > 0) ps.injury = { severity: days, daysRemaining: days };
+            tradeLog.unshift({ day: currentDay, details: note });
         }
     }
 }
