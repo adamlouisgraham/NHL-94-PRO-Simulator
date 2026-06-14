@@ -28,7 +28,7 @@
     // --- DEFENSEMEN ---
     "FRANCHISE D":    { shotRate: 1.20, penaltyRate: 0.80,  assistRate: 1.35 },
     "QUARTERBACK":    { shotRate: 0.99, penaltyRate: 0.85,  assistRate: 1.60 }, // Maximize playmaking from the blueline
-    "BOOMER":         { shotRate: 1.35, penaltyRate: 1.00,  assistRate: 0.92 },
+    "BOOMER":         { shotRate: 1.25, penaltyRate: 1.00,  assistRate: 0.99 }, // Higher shotRate, slightly lower assistRate to reflect their focus on powerful shots
     "SHUTDOWN":       { shotRate: 0.80, penaltyRate: 1.00,  assistRate: 0.95 },
     "TWO-WAY STAR":   { shotRate: 1.09, penaltyRate: 0.90,  assistRate: 1.15 },
     "TWO-WAY D":      { shotRate: 0.97, penaltyRate: 1.00,  assistRate: 1.05 },
@@ -7492,14 +7492,14 @@ function pcBuildStats(pName, tab) {
             ['STK-L',p.attr.stickL||'--'],['STK-R',p.attr.stickR||'--'],
             ['AGIL',p.attr.agil||'--'],['SPD',p.attr.speed||'--'],
             ['DEF',p.attr.def||'--'],['CTRL',p.attr.stkHnd||'--'],
-            ['ENDUR',p.attr.endur||'--'],['PLAY',p.attr.play||'--']],[]) + wtRow;
+            ['ENDUR',p.attr.endur||'--'],['AGGR',p.attr.aggr||'--']],[]) + wtRow;
     }
     return tbl([['OFF',p.attr.off||'--'],['DEF',p.attr.def||'--'],
         ['SPD',p.attr.speed||'--'],['AGIL',p.attr.agil||'--'],
         ['S.PWR',p.attr.shotPwr||'--'],['S.ACC',p.attr.shotAcc||'--'],
         ['PASS',p.attr.pass||'--'],['STK',p.attr.stkHnd||'--'],
         ['CHK',p.attr.check||'--'],['ROUGH',p.attr.rough||'--'],
-        ['ENDUR',p.attr.endur||'--'],['PLAY',p.attr.play||'--']],[]) + wtRow;
+        ['ENDUR',p.attr.endur||'--'],['AGGR',p.attr.aggr||'--']],[]) + wtRow;
 }
 
 function pcBuildHonors(pName) {
