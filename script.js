@@ -62,30 +62,60 @@
 function getPlayerBadges(pName) {
     const ps = playerStats[pName];
     if (!ps) return '';
-    
     let badges = '';
-    
-    // 🚑 Injured
     if (ps.injury && ps.injury.daysRemaining > 0) badges += '🚑';
-
-    // ⛔ Suspended
     if (ps.suspended && ps.suspended.days > 0) badges += '⛔';
-    
-    // 🔥 HOT / ❄️ COLD (Checks Macro, Micro, and Legacy streaks)
     let isHot = ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT' || ps.streakType === 'hot';
     let isCold = ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD' || ps.streakType === 'cold';
-    
     if (isHot) badges += '🔥';
     else if (isCold) badges += '❄️';
-    
-    // ⭐ All-Star
     if (ps.asgMvp) badges += '⭐';
-    
-    // 🏆 Award Winner 
     if (ps.career && ps.career.awards > 0) badges += '🏆';
-
-    // Only return the span if there are actually badges to show
     return badges ? `<span class="player-badge" style="font-size:10px; margin-left:4px;">${badges}</span>` : '';
+}
+
+function buildStatusBadges(pName) {
+    const ps = playerStats[pName];
+    if (!ps) return '';
+    const fatigue = typeof getPlayerFatigueAmount === 'function' ? getPlayerFatigueAmount(pName) : 0;
+    const isHot = ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT' || ps.streakType === 'hot';
+    const isCold = ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD' || ps.streakType === 'cold';
+    const streakLen = ps.streakDur || 0;
+
+    const badge = (emoji, label, color, bg) =>
+        `<div style="display:inline-flex;align-items:center;gap:4px;background:${bg};border:1px solid ${color};padding:3px 7px;border-radius:2px;font-size:7px;color:${color};font-family:'Press Start 2P',cursive;white-space:nowrap;">${emoji} ${label}</div>`;
+
+    let out = '';
+
+    if (ps.injury && ps.injury.daysRemaining > 0)
+        out += badge('🚑', `INJURED ${ps.injury.daysRemaining}d`, '#FF5555', '#2a0000');
+    if (ps.suspended && ps.suspended.days > 0)
+        out += badge('⛔', `SUSPENDED ${ps.suspended.days}d`, '#FF8800', '#2a1400');
+    if (isHot)
+        out += badge('🔥', streakLen >= 5 ? `HOT ${streakLen}G` : 'HOT', '#FFAA00', '#1a1000');
+    else if (isCold)
+        out += badge('❄️', 'COLD', '#55FFFF', '#001a1a');
+    if (!isHot && !isCold && ps.consPointless >= 3)
+        out += badge('📉', `SLUMP ${ps.consPointless}G`, '#FF6666', '#1a0000');
+    if (fatigue >= 6)
+        out += badge('😴', `FATIGUED -${fatigue}`, '#FFAA44', '#1a1000');
+    if (ps.asgMvp)
+        out += badge('⭐', 'ASG MVP', '#FFD700', '#1a1400');
+    if (ps.asgAppearances > 0)
+        out += badge('🌟', `ALL-STAR ${ps.asgAppearances}x`, '#00FFFF', '#001a1a');
+    if (ps.career && ps.career.awards > 0)
+        out += badge('🏆', `${ps.career.awards} TROPHY`, '#FFD700', '#1a1400');
+    if (ps.potential === 'Franchise')
+        out += badge('💎', 'FRANCHISE', '#AA88FF', '#0e0022');
+    if (ps.age <= 21)
+        out += badge('🐣', 'ROOKIE', '#88FF88', '#001a00');
+    else if (ps.age >= 35)
+        out += badge('🦅', 'VETERAN', '#AAAAAA', '#111111');
+    if (ps.milestones && ps.milestones.length > 0)
+        out += badge('🏅', `${ps.milestones.length} MILESTONE`, '#00CCFF', '#001a22');
+
+    if (!out) return '';
+    return `<div style="display:flex;flex-wrap:wrap;gap:5px;margin:10px 0 4px 0;">${out}</div>`;
 }
 
 function getWeightValue(grade) {
@@ -3329,7 +3359,7 @@ const gWeights = eligible.map(p => {
     let off = pA.off || 70;
     let pwr = pA.shotPwr || 70;
     let acc = pA.shotAcc || 70;
-    let baseChance = (off * 0.40) + (pwr * 0.30) + (acc * 0.30);
+    let baseChance = (off * 0.20) + (pwr * 0.40) + (acc * 0.40);
 
     // Apply Archetype Multiplier
     let archMod = arch.shotRate;
@@ -3345,10 +3375,10 @@ const gWeights = eligible.map(p => {
     // Position modifier: ALL forwards equal base (1.0), D-men penalized (~31% less)
     // No center bonus — C/LW/RW are identical base; difference comes only from attrs/archetype
     const isD = (p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD');
-    let compMod = isD ? 0.69 : 1.0;
+    let compMod = isD ? 0.80 : 1.0;
     // Extra accuracy penalty for D on non-Far shots
-    if (isD && goalDist !== 'Far') compMod *= (acc >= 90) ? 1.0 : 0.80;
-    if (isD && goalDist === 'Far') compMod *= (acc >= 80) ? 1.0 : 0.70;
+    if (isD && goalDist !== 'Far') compMod *= (acc >= 90) ? 1.0 : 0.65;
+    if (isD && goalDist === 'Far') compMod *= (acc >= 80) ? 1.0 : 0.75;
 
     let ppMod = 1.0;
     if (typeof specialTeams !== 'undefined' && specialTeams.active) {
@@ -3398,14 +3428,14 @@ const getAWeight = (p, isSec) => {
     let pass = pA.pass || 70;
     let stick = pA.stkHnd || 70;
     
-    let baseWeight = (off * 0.3) + (pass * 0.4) + (stick * 0.3);
+    let baseWeight = (off * 0.3) + (pass * 0.5) + (stick * 0.2);
     
     // Apply Archetype Multiplier
     let archMod = arch.assistRate;
     
     let mod = isSec ? 1.1 : 0.9; // Secondary assists get a slight boost, primary assists get a slight reduction to create more variance
     const isD = (p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD');
-    if (isD) mod *= 0.74; // Defensemen assist penalty, applies to both primary and secondary assists
+    if (isD) mod *= 0.90; // Defensemen assist penalty, applies to both primary and secondary assists
     
     return baseWeight * archMod * mod;
 };
@@ -6622,12 +6652,9 @@ function showPlayerCard(pName) {
     
     // ARCHETYPE TAG
     h += `<div style="color:var(--ea-yellow); font-size:10px; margin-bottom:8px; font-weight:bold; letter-spacing:1px;">${tag} ${badge}</div>`;
-    
-    // 🚀 DYNAMIC STATUS INDICATORS
-    h += `<div style="display:flex; gap:15px; margin-bottom:8px;">`;
-    h += `<div style="font-size:9px; color:#fff; background:#222; padding:2px 6px; border:1px solid #444;">STREAK: <span style="color:${streak === 'HOT' ? 'var(--ea-yellow)' : (streak === 'COLD' ? '#55FFFF' : '#fff')}">${streakEmoji} ${streak}</span></div>`;
-    h += `<div style="font-size:9px; color:#fff; background:#222; padding:2px 6px; border:1px solid #444;">FATIGUE: <span style="color:${fatigueColor}">-${fatigue} OVR</span></div>`;
-    h += `</div>`;
+
+    // STATUS BADGES
+    h += buildStatusBadges(pName);
     
     h += `<div style="color:#aaa; font-size:10px;">${p.pos} | AGE: ${p.age}</div>`;
     h += `<div style="color:var(--neon-cyan); font-size:14px; margin-top:5px;">LIVE OVR: ${ovr}</div>`;
