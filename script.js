@@ -6667,152 +6667,166 @@ function _pcB(ctx, sc, x, y, w, h, col) { // bordered fill (outline technique)
 
 function pcDrawSprite(ctx, type, pri, sec) {
     const sc = 4;
-    const skin = '#F4C07A';
+    const skin   = '#F4C07A';
     const helmet = '#2a2a2a';
     const visor  = '#88CCEE';
     const boot   = '#111111';
-    const blade  = '#AAAAAA';
     const glv    = '#1a1a1a';
     const priHi  = _pcShade(pri, 50);
     const priLo  = _pcShade(pri, -50);
 
-    // canvas background
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
+    // Ice surface hint
+    ctx.fillStyle = 'rgba(180,225,255,0.18)';
+    ctx.fillRect(0, 24*sc, 20*sc, 3);
+
     if (type === 'forward') {
-        // helmet
-        _pcB(ctx,sc, 5,0, 6,2, helmet);
-        // visor strip
-        _pcR(ctx,sc, 6,0, 4,1, visor);
-        // face
-        _pcB(ctx,sc, 6,2, 4,3, skin);
-        // cage bars (horizontal)
-        ctx.fillStyle='#000'; ctx.fillRect(6*sc,3*sc,4*sc,1); ctx.fillRect(6*sc,4*sc+2,4*sc,1);
-        // cage bars (vertical)
-        for(let i=0;i<3;i++){ ctx.fillRect((6+i+1.2)*sc,3*sc,1,2*sc); }
-        // neck
-        _pcR(ctx,sc, 7,5, 2,1, skin);
-        // jersey body
-        _pcB(ctx,sc, 4,6, 8,9, pri);
-        _pcR(ctx,sc, 5,7, 2,4, priHi);
-        _pcR(ctx,sc, 10,7,2,4, priLo);
-        // chest stripe
-        _pcR(ctx,sc, 4,10, 8,1, sec);
-        // number block
-        _pcR(ctx,sc, 6,12, 4,2, sec);
-        // left arm
-        _pcB(ctx,sc, 2,6, 3,6, pri);
-        // right arm
-        _pcB(ctx,sc,11,6, 3,6, pri);
+        // ── SLAP SHOT: body twisting into follow-through ─────────────────
+        _pcB(ctx,sc, 9,0, 5,2, helmet);
+        _pcR(ctx,sc, 10,0, 3,1, visor);
+        _pcB(ctx,sc, 10,2, 3,2, skin);
+        ctx.fillStyle='#000';
+        ctx.fillRect(10*sc,3*sc,3*sc,1); ctx.fillRect(10*sc,4*sc-1,3*sc,1);
+        for(let i=0;i<2;i++) ctx.fillRect((10.8+i*1.2)*sc,3*sc,1,1*sc);
+        _pcR(ctx,sc, 11,4, 2,1, skin);
+        // jersey — body leaning into shot (wider left)
+        _pcB(ctx,sc, 7,5, 9,4, pri);
+        _pcR(ctx,sc, 8,6, 3,3, priHi);
+        _pcR(ctx,sc, 12,6, 2,3, priLo);
+        _pcB(ctx,sc, 8,9, 8,5, pri);
+        _pcR(ctx,sc, 8,10, 8,1, sec);
+        _pcR(ctx,sc, 10,11, 4,2, sec);
+        // left arm reaching toward puck
+        _pcB(ctx,sc, 4,5, 4,5, pri);
+        _pcR(ctx,sc, 4,6, 2,3, priHi);
+        // right arm following through down
+        _pcB(ctx,sc, 14,8, 4,5, pri);
         // gloves
-        _pcB(ctx,sc, 1,11, 3,2, glv);
-        _pcB(ctx,sc,12,11, 3,2, glv);
+        _pcB(ctx,sc, 3,9, 3,2, glv);
+        _pcB(ctx,sc, 14,12, 3,2, glv);
         // pants
-        _pcB(ctx,sc, 4,15, 8,4, priLo);
-        // socks
-        _pcR(ctx,sc, 4,19, 4,1, sec);
-        _pcR(ctx,sc, 8,19, 4,1, sec);
-        // shin guards
-        _pcB(ctx,sc, 4,20, 4,3, helmet);
-        _pcB(ctx,sc, 8,20, 4,3, helmet);
+        _pcB(ctx,sc, 8,14, 8,3, priLo);
+        // front leg (planted)
+        _pcB(ctx,sc, 8,17, 5,4, helmet);
+        _pcR(ctx,sc, 8,18, 5,1, sec);
+        // back leg (lifted in follow-through)
+        _pcB(ctx,sc, 13,17, 4,3, helmet);
+        _pcR(ctx,sc, 13,17, 4,1, sec);
         // boots
-        _pcB(ctx,sc, 3,23, 5,2, boot);
-        _pcB(ctx,sc, 8,23, 5,2, boot);
-        // blades
-        ctx.fillStyle=blade; ctx.fillRect(3*sc,25*sc,5*sc,2); ctx.fillRect(8*sc,25*sc,5*sc,2);
-        // DIAGONAL STICK
+        _pcB(ctx,sc, 7,21, 6,2, boot);
+        _pcB(ctx,sc, 13,20, 5,2, boot);
+        ctx.fillStyle='#AAA';
+        ctx.fillRect(7*sc,23*sc,6*sc,2); ctx.fillRect(13*sc,22*sc,5*sc,2);
+        // STICK: diagonal from top-glove down to blade
         ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
-        ctx.beginPath(); ctx.moveTo(13*sc+2,13*sc); ctx.lineTo(4*sc,24*sc); ctx.stroke();
-        ctx.strokeStyle='#555'; ctx.lineWidth=2;
-        ctx.beginPath(); ctx.moveTo(4*sc,24*sc); ctx.lineTo(1*sc,24*sc+2); ctx.stroke();
-
-    } else if (type === 'defense') {
-        // helmet (slightly wider stance)
-        _pcB(ctx,sc, 5,0, 6,2, helmet);
-        _pcR(ctx,sc, 6,0, 4,1, visor);
-        _pcB(ctx,sc, 6,2, 4,3, skin);
-        ctx.fillStyle='#000'; ctx.fillRect(6*sc,3*sc,4*sc,1); ctx.fillRect(6*sc,4*sc+2,4*sc,1);
-        for(let i=0;i<3;i++){ ctx.fillRect((6+i+1.2)*sc,3*sc,1,2*sc); }
-        _pcR(ctx,sc, 7,5, 2,1, skin);
-        // wider jersey
-        _pcB(ctx,sc, 3,6,10,9, pri);
-        _pcR(ctx,sc, 4,7, 3,4, priHi);
-        _pcR(ctx,sc,10,7, 3,4, priLo);
-        _pcR(ctx,sc, 3,10,10,1, sec);
-        _pcR(ctx,sc, 6,12, 4,2, sec);
-        // wide arms
-        _pcB(ctx,sc, 1,6, 3,6, pri);
-        _pcB(ctx,sc,12,6, 3,6, pri);
-        _pcB(ctx,sc, 0,11, 3,2, glv);
-        _pcB(ctx,sc,13,11, 3,2, glv);
-        // pants
-        _pcB(ctx,sc, 3,15,10,4, priLo);
-        _pcR(ctx,sc, 3,19, 5,1, sec);
-        _pcR(ctx,sc, 8,19, 5,1, sec);
-        _pcB(ctx,sc, 3,20, 5,3, helmet);
-        _pcB(ctx,sc, 8,20, 5,3, helmet);
-        _pcB(ctx,sc, 2,23, 6,2, boot);
-        _pcB(ctx,sc, 8,23, 6,2, boot);
-        ctx.fillStyle=blade; ctx.fillRect(2*sc,25*sc,6*sc,2); ctx.fillRect(8*sc,25*sc,6*sc,2);
-        // HORIZONTAL DEFENSIVE STICK
-        ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
-        ctx.beginPath(); ctx.moveTo(0,15*sc); ctx.lineTo(16*sc,15*sc); ctx.stroke();
-        ctx.strokeStyle='#555'; ctx.lineWidth=2;
-        ctx.beginPath(); ctx.moveTo(0,15*sc); ctx.lineTo(3*sc,17*sc); ctx.stroke();
-
-    } else { // GOALIE
-        const padCol  = pri;
-        const padHi   = _pcShade(pri, 45);
-        const maskCol = '#E8E8E8';
-        const blocker = '#8B4513';
-        const catcher = '#222222';
-
-        // mask (full face cage)
-        _pcB(ctx,sc, 4,0, 8,3, maskCol);
-        // mask team-color stripe
-        _pcR(ctx,sc, 4,0, 8,0.5, pri);
-        // cage bars on mask
-        ctx.fillStyle='#555';
-        ctx.fillRect(4*sc,1*sc,8*sc,1); ctx.fillRect(4*sc,2*sc-1,8*sc,1);
-        for(let i=0;i<5;i++){ ctx.fillRect((4.8+i*1.3)*sc,0,1,3*sc); }
-        // face below mask
-        _pcR(ctx,sc, 5,3, 6,1, skin);
-        _pcR(ctx,sc, 7,4, 2,1, skin);
-        // chest protector (wide)
-        _pcB(ctx,sc, 3,5,10,8, pri);
-        _pcR(ctx,sc, 4,6, 3,4, padHi);
-        _pcR(ctx,sc,10,6, 3,4, _pcShade(pri,-30));
-        _pcR(ctx,sc, 3,9,10,1, sec);
-        // BLOCKER (right side)
-        _pcB(ctx,sc,13,7, 3,5, blocker);
-        _pcR(ctx,sc,13,7, 3,1, '#CC8833');
-        _pcR(ctx,sc,13,8, 3,1, '#AA6622');
-        // TRAPPER / CATCHER (left side)
-        _pcB(ctx,sc, 0,7, 3,4, catcher);
-        _pcR(ctx,sc, 0,7, 3,1, '#555');
-        _pcR(ctx,sc, 0,8, 1,2, '#333'); // webbing
-        _pcR(ctx,sc, 2,8, 1,2, '#333');
-        _pcR(ctx,sc, 1,9, 1,1, '#333');
-        // GOALIE STICK (L-shape)
-        ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
-        ctx.beginPath(); ctx.moveTo(2*sc+1,12*sc); ctx.lineTo(2*sc+1,22*sc); ctx.stroke();
-        ctx.strokeStyle='#555'; ctx.lineWidth=3;
-        ctx.beginPath(); ctx.moveTo(2*sc+1,22*sc); ctx.lineTo(8*sc,22*sc); ctx.stroke();
-        // WIDE PADS (left)
-        _pcB(ctx,sc, 0,13, 7,10, padCol);
-        _pcR(ctx,sc, 1,14, 5,2, padHi);
-        _pcR(ctx,sc, 2,17, 4,1, sec);
-        _pcR(ctx,sc, 2,20, 4,1, sec);
-        // WIDE PADS (right)
-        _pcB(ctx,sc, 9,13, 7,10, padCol);
-        _pcR(ctx,sc,10,14, 5,2, padHi);
-        _pcR(ctx,sc,10,17, 4,1, sec);
-        _pcR(ctx,sc,10,20, 4,1, sec);
-        // boots
-        _pcB(ctx,sc, 0,23, 7,2, boot);
-        _pcB(ctx,sc, 9,23, 7,2, boot);
-        ctx.fillStyle=blade; ctx.fillRect(0,25*sc,7*sc,2); ctx.fillRect(9*sc,25*sc,7*sc,2);
+        ctx.beginPath(); ctx.moveTo(5*sc,10*sc); ctx.lineTo(3*sc,24*sc); ctx.stroke();
+        ctx.strokeStyle='#666'; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.moveTo(3*sc,24*sc); ctx.lineTo(0,24*sc); ctx.stroke();
+        // PUCK
+        ctx.fillStyle='#111';
+        ctx.beginPath(); ctx.ellipse(1.2*sc,24*sc+2,sc*0.7,sc*0.3,0,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#444';
+        ctx.beginPath(); ctx.ellipse(1.2*sc,24*sc+1,sc*0.5,sc*0.2,0,0,Math.PI*2); ctx.fill();
+        return;
     }
+
+    if (type === 'defense') {
+        // ── POKE-CHECK CROUCH: low wide stance, stick extended ───────────
+        _pcB(ctx,sc, 7,2, 5,2, helmet);
+        _pcR(ctx,sc, 8,2, 3,1, visor);
+        _pcB(ctx,sc, 8,4, 3,2, skin);
+        ctx.fillStyle='#000';
+        ctx.fillRect(8*sc,5*sc,3*sc,1); ctx.fillRect(8*sc,5*sc+3,3*sc,1);
+        _pcR(ctx,sc, 9,6, 2,1, skin);
+        // jersey — bent forward (horizontally spread)
+        _pcB(ctx,sc, 5,7, 10,5, pri);
+        _pcR(ctx,sc, 6,8, 3,3, priHi);
+        _pcR(ctx,sc, 11,8, 3,3, priLo);
+        _pcR(ctx,sc, 5,10, 10,1, sec);
+        _pcR(ctx,sc, 8,11, 4,1, sec);
+        // left arm (extended far left with stick)
+        _pcB(ctx,sc, 1,9, 5,3, pri);
+        _pcB(ctx,sc, 0,11, 3,2, glv);
+        // right arm (balance)
+        _pcB(ctx,sc, 15,9, 4,3, pri);
+        _pcB(ctx,sc, 15,11, 3,2, glv);
+        // pants (wide crouch)
+        _pcB(ctx,sc, 5,12, 10,3, priLo);
+        _pcR(ctx,sc, 5,13, 10,1, sec);
+        // front leg (lunging)
+        _pcB(ctx,sc, 4,15, 5,5, helmet);
+        _pcR(ctx,sc, 4,16, 5,1, sec);
+        // back leg (pushing)
+        _pcB(ctx,sc, 11,15, 5,4, helmet);
+        _pcR(ctx,sc, 11,16, 5,1, sec);
+        _pcB(ctx,sc, 3,20, 6,2, boot);
+        _pcB(ctx,sc, 11,19, 6,2, boot);
+        ctx.fillStyle='#AAA';
+        ctx.fillRect(3*sc,22*sc,6*sc,2); ctx.fillRect(11*sc,21*sc,6*sc,2);
+        // STICK: horizontal poke-check extending left
+        ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.moveTo(15*sc,12*sc); ctx.lineTo(1*sc,15*sc); ctx.stroke();
+        ctx.strokeStyle='#666'; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.moveTo(1*sc,15*sc); ctx.lineTo(1*sc,19*sc); ctx.stroke();
+        return;
+    }
+
+    // ── BUTTERFLY SAVE: pads spread, trapper high ────────────────────────
+    const padHi  = _pcShade(pri, 45);
+    const maskCol= '#E8E8E8';
+    const blocker= '#8B4513';
+    const catcher= '#1a1a1a';
+
+    // Crease arc on ice
+    ctx.strokeStyle='rgba(0,100,200,0.35)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(10*sc,26*sc,8*sc,Math.PI,0); ctx.stroke();
+
+    // BUTTERFLY PADS (spread wide covering ice)
+    _pcB(ctx,sc, 0,12, 8,12, pri);
+    _pcR(ctx,sc, 1,13, 6,2, padHi);
+    _pcR(ctx,sc, 1,17, 6,1, sec); _pcR(ctx,sc, 1,20, 6,1, sec);
+    _pcB(ctx,sc, 12,12, 8,12, pri);
+    _pcR(ctx,sc, 13,13, 6,2, padHi);
+    _pcR(ctx,sc, 13,17, 6,1, sec); _pcR(ctx,sc, 13,20, 6,1, sec);
+
+    // Chest protector
+    _pcB(ctx,sc, 6,5, 8,8, pri);
+    _pcR(ctx,sc, 7,6, 3,4, padHi);
+    _pcR(ctx,sc, 6,9, 8,1, sec);
+
+    // Full cage mask
+    _pcB(ctx,sc, 6,0, 8,4, maskCol);
+    _pcR(ctx,sc, 6,0, 8,0.5, pri);
+    ctx.fillStyle='#555';
+    ctx.fillRect(6*sc,1*sc,8*sc,1); ctx.fillRect(6*sc,2*sc,8*sc,1); ctx.fillRect(6*sc,3*sc-1,8*sc,1);
+    for(let i=0;i<5;i++) ctx.fillRect((6.6+i*1.3)*sc,0,1,4*sc);
+    _pcR(ctx,sc, 7,4, 6,1, skin);
+
+    // TRAPPER high (catching puck overhead)
+    _pcB(ctx,sc, 0,5, 4,5, catcher);
+    _pcR(ctx,sc, 0,5, 4,1, '#555');
+    _pcR(ctx,sc, 0,6, 1,3, '#333'); _pcR(ctx,sc, 3,6, 1,3, '#333'); _pcR(ctx,sc, 1,8, 2,1, '#333');
+    // Puck in trapper
+    ctx.fillStyle='#111';
+    ctx.beginPath(); ctx.ellipse(2*sc,5*sc+2,sc*0.65,sc*0.28,0,0,Math.PI*2); ctx.fill();
+
+    // BLOCKER (right)
+    _pcB(ctx,sc, 16,5, 4,6, blocker);
+    _pcR(ctx,sc, 16,5, 4,1, '#CC8833'); _pcR(ctx,sc, 16,6, 4,1, '#AA6622');
+
+    // Goalie stick (blade flat on ice — butterfly)
+    ctx.strokeStyle='#7B5000'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(8*sc,13*sc); ctx.lineTo(8*sc,24*sc); ctx.stroke();
+    ctx.strokeStyle='#666'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(6*sc,24*sc); ctx.lineTo(13*sc,24*sc); ctx.stroke();
+
+    // Boot tips
+    ctx.fillStyle=boot;
+    ctx.fillRect(1*sc,23*sc,5*sc,sc*1.5); ctx.fillRect(14*sc,23*sc,5*sc,sc*1.5);
+    ctx.fillStyle='#AAA';
+    ctx.fillRect(1*sc,25*sc,5*sc,2); ctx.fillRect(14*sc,25*sc,5*sc,2);
+
 }
 
 function pcDrawLogo(ctx, size, code) {
@@ -6949,9 +6963,6 @@ function showPlayerCard(pName) {
     const clr = PC_COLORS[p.teamCode] || ['#003366','#CCAA00'];
     const pri = clr[0], sec = clr[1];
     const sprType = p.pos==='G' ? 'goalie' : (p.pos==='D'||p.pos==='LD'||p.pos==='RD') ? 'defense' : 'forward';
-    const dbBg  = pri.replace('#','');
-    const dbClr = sec.replace('#','');
-    const dbUrl = `https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(pName)}&backgroundColor=${dbBg}&clothingColor=${dbClr}&size=96`;
     const cardNum = String(((p.season.gp||0)*7 + (p.age||25)*3 + (ovr||70)) % 900 + 100);
     const ovrCol = ovr>=86?'#FFD060':ovr>=78?'#00CCFF':'#88FF88';
     const st = p.macro_streak || p.micro_streak || '';
@@ -6974,7 +6985,7 @@ function showPlayerCard(pName) {
     <div style="font-size:6px;color:rgba(255,255,255,.5);margin-top:2px;letter-spacing:1px;">${confName}</div>
   </div>
   <div style="background:#06060e;position:relative;display:flex;align-items:center;justify-content:center;height:116px;overflow:hidden;">
-    <img src="${dbUrl}" width="96" height="96" style="image-rendering:pixelated;image-rendering:crisp-edges;display:block;margin-top:4px;" alt="${p.name}">
+    <canvas id="pc-sprite" width="80" height="104" style="image-rendering:pixelated;image-rendering:crisp-edges;display:block;margin-top:4px;"></canvas>
     <canvas id="pc-logo" width="34" height="34" style="position:absolute;top:7px;right:7px;border-radius:50%;border:1px solid rgba(255,255,255,.15);image-rendering:pixelated;"></canvas>
     <div style="position:absolute;bottom:0;left:0;right:0;height:18px;background:linear-gradient(transparent,rgba(0,0,0,.75));"></div>
   </div>
@@ -6997,6 +7008,8 @@ function showPlayerCard(pName) {
 </div>`;
 
     document.getElementById('playerCardContent').innerHTML = h;
+    const spCanvas = document.getElementById('pc-sprite');
+    if (spCanvas) pcDrawSprite(spCanvas.getContext('2d'), sprType, pri, sec);
     const lgCanvas = document.getElementById('pc-logo');
     if (lgCanvas) pcDrawLogo(lgCanvas.getContext('2d'), 34, p.teamCode);
     document.getElementById('playerCardOverlay').style.display = 'flex';
