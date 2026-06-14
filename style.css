@@ -1,7 +1,87 @@
 /* =========================================================
    NHL '94 PRO SIMULATOR - MASTER STYLESHEET
    ========================================================= */
+/* ==========================================
+   🎮 16-BIT RETRO LINE EDITOR STYLES
+   ========================================== */
 
+/* 1. The Main Editor Window */
+#lineEditorOverlay .menu-box {
+    background-color: #000000;
+    border: 4px solid #0055A4; /* Classic EA Blue */
+    box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.9); /* Hard retro shadow */
+    border-radius: 0; /* NO rounded corners in 1994! */
+    padding: 20px;
+}
+
+/* 2. The Header Text */
+#lineEditorOverlay .menu-header {
+    background-color: transparent;
+    color: #FFCC00; /* EA Sports Yellow */
+    border-bottom: 4px solid #0055A4;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px;
+    text-shadow: 2px 2px 0px #333;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+}
+
+/* 3. The Line Containers (L1, D1, etc.) */
+.hockey-line {
+    background-color: #111;
+    border: 2px solid #333;
+    margin-bottom: 12px;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: inset 2px 2px 0px #000;
+}
+
+/* The Line Labels (e.g., "L1:") */
+.hockey-line strong {
+    color: #00FF00; /* 16-bit Neon Green */
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    min-width: 40px;
+    text-shadow: 1px 1px 0px #000;
+}
+
+/* 4. The Player Buttons */
+.player-btn {
+    background-color: #222;
+    color: #FFF;
+    border: 2px solid #555;
+    padding: 8px 12px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    cursor: pointer;
+    text-transform: uppercase;
+    box-shadow: 2px 2px 0px #000; /* Hard pixel shadow */
+    transition: none; /* Strip out modern smooth transitions */
+}
+
+/* Player Button Hover State */
+.player-btn:hover {
+    background-color: #333;
+    border-color: #FFCC00; /* Highlight EA Yellow */
+    color: #FFCC00;
+}
+
+/* 5. The Selected Player (With Blinking Animation!) */
+.player-btn.selected-player {
+    background-color: #0055A4 !important; /* Lock to EA Blue */
+    color: #FFF !important;
+    border: 2px solid #FFF !important;
+    box-shadow: 2px 2px 0px #000;
+    animation: blink-retro 0.8s infinite; /* Triggers the 90s flash */
+}
+
+/* The Animation Keyframes */
+@keyframes blink-retro {
+    0%, 100% { border-color: #FFFFFF; color: #FFFFFF; }
+    50% { border-color: #00FFFF; color: #00FFFF; } /* Flashes Cyan */
+}
 /* Option B: Power Play Styling */
   .no-spaces-nrm {
     display: inline-flex;
@@ -580,6 +660,37 @@ td {
     background: #000 !important; /* Solid Black */
 }
 
+.sim-controls-container {
+    display: flex;
+    gap: 10px;
+    margin: 15px 0;
+}
+
+.sim-btn {
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    background-color: #f0f0f0;
+    border: 2px solid #333;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.player-badge {
+    font-size: 10px;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+
+.sim-btn:hover {
+    background-color: #dcdcdc;
+}
+
+.sim-btn:active {
+    background-color: #b0b0b0;
+}
+
 /* --- 3. SOLID INNER CONTAINERS --- */
 .collapsible-content,
 #officeControls,
@@ -1076,6 +1187,24 @@ td {
     overflow-y: auto; 
 }
 
+/* Add these to style.css */
+.line-row { 
+    display: flex; 
+    margin-bottom: 8px; 
+    font-family: 'Press Start 2P', monospace; 
+    font-size: 8px; 
+    color: #FFF; 
+    border-bottom: 1px solid #333; 
+}
+.player-slot { 
+    margin-right: 10px; 
+    color: #FFCC00; 
+}
+.roster-grid { 
+    padding: 10px; 
+    background: #111; 
+}
+
 /* --- 10. SPECIALTY: PLAYER CARDS --- */
 .player-card { 
     background: #fff; 
@@ -1172,3 +1301,60 @@ td {
 .menu-game-item { display: flex; align-items: center; justify-content: center; gap: 15px; padding: 8px; border: 1px solid #333; cursor: pointer; transition: 0.1s; }
 .menu-game-item:hover { background: #222; border-color: var(--neon-cyan); }
 .menu-logo { height: 20px; width: auto; image-rendering: pixelated; filter: drop-shadow(1px 1px 0 rgba(255,255,255,0.7)) drop-shadow(-1px -1px 0 rgba(255,255,255,0.7)); }
+
+/* ==========================================
+   🏒 SPECIAL TEAMS CONDITIONAL LAYOUTS
+   ========================================== */
+
+/* 🛡️ PK layout: Clean 2 columns, 2 rows (4 Skaters) */
+.pk-grid-layout {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* 2 equal columns side by side */
+    gap: 10px;
+    margin-bottom: 15px;
+    background: #0a0a0a;
+    padding: 10px;
+    border: 1px solid #333;
+}
+
+/* 🛡️ PP Umbrella Layout: Centers the single D at the blue line (5 Skaters) */
+.pp-grid-layout {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr); /* 12-column grid for flexible alignment */
+    gap: 8px;
+    margin-bottom: 15px;
+    background: #001122; /* Slight blue tint for PP */
+    padding: 10px;
+    border: 1px solid #0055A4;
+}
+
+/* Arrange the 4 forwards on top rows */
+.pp-grid-layout .player-slot:nth-child(1) { grid-column: span 4; } /* Left Wing area */
+.pp-grid-layout .player-slot:nth-child(2) { grid-column: span 4; } /* Center/Crease area */
+.pp-grid-layout .player-slot:nth-child(3) { grid-column: span 4; } /* Right Wing area */
+.pp-grid-layout .player-slot:nth-child(4) { grid-column: 4 / span 6; } /* High Slot / Bumper */
+
+/* Center the lone Defenseman perfectly at the point */
+.pp-grid-layout .player-slot:nth-child(5) { 
+    grid-column: 3 / span 8; 
+    border-top: 2px solid var(--neon-cyan, #00FFFF); 
+}
+
+/* Base style for individual slots in both grids */
+.player-slot {
+    background: #111;
+    border: 1px solid #444;
+    padding: 8px;
+    text-align: center;
+    border-radius: 2px;
+    font-size: 9px;
+    cursor: pointer;
+}
+.player-slot:hover {
+    border-color: #FFCC00;
+}
+.pos-badge {
+    color: #FFCC00;
+    font-weight: bold;
+    margin-right: 4px;
+}

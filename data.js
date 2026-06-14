@@ -494,11 +494,13 @@ const SAMPLE_TEAM_DATA = [
     ["New York Rangers", "NYR", "Eastern", "Patrick"],
     ["Montreal Canadiens", "MTL", "Eastern", "Adams"],
     ["Toronto Maple Leafs", "TOR", "Eastern", "Norris"],
+    ["Hartford Whalers", "HFD", "Eastern", "Norris"],
+    ["Florida Panthers", "FLA", "Eastern", "Atlantic"],
     ["Detroit Red Wings", "DET", "Western", "Norris"],
     ["Chicago Blackhawks", "CHI", "Western", "Norris"],
     ["Vancouver Canucks", "VAN", "Western", "Smythe"],
     ["Calgary Flames", "CGY", "Western", "Smythe"],
-    ["Edmonton Oilers", "EDM", "Western", "Smythe"],
+    ["Edmonton Oilers", "EDM", "Western", "Pacific"],
     ["Los Angeles Kings", "LAK", "Western", "Smythe"],
     ["San Jose Sharks", "SJS", "Western", "Norris"]
 ];

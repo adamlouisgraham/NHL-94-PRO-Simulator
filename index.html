@@ -7,8 +7,9 @@
     <title>NHL '94 Pro Simulator Alpha V1.00</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<script src="script.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+    <script src="script.js"></script>
 </head>
 <body>
 
@@ -16,8 +17,8 @@
         <h1 class="start-screen-title">
             NHL '94 PRO SIMULATOR<br><span class="start-screen-subtitle">ALPHA V1.00 MASTER</span>
         </h1>
-        <button onclick="startNewGame()" class="start-screen-btn">LOAD GOOGLE SHEET</button>
-        <button id="btnContinue" onclick="loadGame()" class="start-screen-btn start-screen-continue">CONTINUE DYNASTY</button>
+        <button onclick="startNewGame()" class="start-screen-btn" style="border-color: #00FFFF; color: #00FFFF;">LOAD GOOGLE SHEET</button>
+        <button id="btnContinue" onclick="loadGame()" class="start-screen-btn start-screen-continue" style="border-color: #FF8800; color: #FF8800;">CONTINUE DYNASTY</button>
 
         <div class="start-screen-sheet-panel">
             <div class="sheet-upload-group">
@@ -63,7 +64,7 @@
                 <button onclick="resetSheetUrlsToDefault()" class="start-screen-btn sheet-action-btn" style="border-color:#ff8080; color:#ff8080;">RESET TO DEFAULT SHEETS</button>
                 <button onclick="toggleSheetSamplePanel()" class="start-screen-btn sheet-action-btn" style="border-color:#ffd166; color:#ffd166;">SHOW FORMAT EXAMPLE</button>
             </div>
-
+                
             <div class="sheet-status-lines">
                 <div id="teamSheetStatus" class="sheet-status-line">TEAM: waiting</div>
                 <div id="playerSheetStatus" class="sheet-status-line">PLAYER: waiting</div>
@@ -132,10 +133,10 @@
                         <option value="SLOT_2">SLOT 2</option>
                         <option value="SLOT_3">SLOT 3</option>
                     </select>
-                    <button onclick="loadGame()">Start Simulation</button>
-                    <button onclick="saveSlot()">SAVE SLOT</button>
-                    <button onclick="loadSlot()">LOAD SLOT</button>
-                    <button onclick="clearSaveSlot()">CLEAR SLOT</button>
+                    <button onclick="loadGame()" style="border-color: #00FFFF; color: #00FFFF;">Start Simulation</button>
+                    <button onclick="saveSlot()" style="border-color: #00FF00; color: #00FF00;">SAVE SLOT</button>
+                    <button onclick="loadSlot()" style="border-color: #00FF00; color: #00FF00;">LOAD SLOT</button>
+                    <button onclick="clearSaveSlot()" style="border-color: #FF5555; color: #FF5555;">CLEAR SLOT</button>
                 </div>
                 <div id="saveStateInfo" class="save-state-info">Ready.</div>
                 <div class="save-slot-history-title">Save Slot History</div>
@@ -146,17 +147,17 @@
                 </div>
             </div>
             <div id="officeControls" class="office-controls">   
-                <button onclick="saveGame()" style="border-color: #00FF00; color: #fff;">QUICK SAVE</button>
-                <button onclick="exportSaveData()" style="border-color: #00FF00; color: #fff;">EXPORT SAVE</button>
-                <button onclick="triggerLoadBackup()" style="border-color: #00FF00; color: #fff;">LOAD BACKUP</button>
-                <button onclick="loadDefaultGoogleSheets(event)" style="border-color: #00FF00; color: #fff;">DEFAULT SHEETS</button>
+                <button onclick="saveGame()" style="border-color: #00FF00; color: #00FF00;">QUICK SAVE</button>
+                <button onclick="exportSaveData()" style="border-color: #00FF00; color: #00FF00;">EXPORT SAVE</button>
+                <button onclick="triggerLoadBackup()" style="border-color: #00FF00; color: #00FF00;">LOAD BACKUP</button>
+                <button onclick="loadDefaultGoogleSheets(event)" style="border-color: #00FF00; color: #00FF00;">DEFAULT SHEETS</button>
                 <input type="file" id="saveFileInput" style="display:none" accept=".json" onchange="importSaveData(event)">
                 
-                <button onclick="openArenaSettings()" style="border-color: #FF8800; color: #fff;">ARENA DB</button>
-                <button onclick="openLeagueSettings()" style="border-color: #FFFF00; color: #fff;">LEAGUE SETTINGS</button>
+                <button onclick="openArenaSettings()" style="border-color: #FF8800; color: #FF8800;">ARENA DB</button>
+                <button onclick="openLeagueSettings()" style="border-color: #FFFF00; color: #FFFF00;">LEAGUE SETTINGS</button>
                 <button onclick="openTradeModal()" style="border-color: #E088FF; color: #E088FF;" id="btnTrade">TRADES</button>
-                <button onclick="document.getElementById('masterArchiveModal').style.display='flex'" style="border-color: #FF8800; color: #fff;">MASTER ARCHIVES</button>
-                <button onclick="openAllTimeRecords()" style="border-color: #FFFF00; color: #fff;">RECORD BOOK</button>
+                <button onclick="document.getElementById('masterArchiveModal').style.display='flex'" style="border-color: #FF8800; color: #FF8800;">MASTER ARCHIVES</button>
+                <button onclick="openAllTimeRecords()" style="border-color: #FFFF00; color: #FFFF00;">RECORD BOOK</button>
 
                 <button onclick="simDay()" style="border-color: #00FFFF; color: #00FFFF;">SIM DAY</button>
                 <button onclick="simWeek()" style="border-color: #00FFFF; color: #00FFFF;">SIM WEEK</button>
@@ -164,8 +165,9 @@
                 <button onclick="simSeason()" id="btnSimSeason" style="border-color: #00FFFF; color: #00FFFF;">SIM SEASON</button>
                 <button onclick="simSeason(true)" id="btnTurboSimSeason" style="border-color: #FFAA00; color: #FFAA00;">TURBO SIM SEASON</button>
                 <button id="btnNextDay" onclick="advanceCalendar()" style="border-color: #FFFFFF; color: #FFFFFF;" disabled>NEXT DAY ></button>
-                
-                <button onclick="exportCSV()" style="border-color: #00FFFF; color: #fff;">EXPORT CSV</button>
+                <button id="simRoundBtn" class="sim-btn" onclick="simRound()" style="display:none; border-color: #00FFFF; color: #00FFFF;">SIM ROUND</button>
+<button id="simPlayoffsBtn" class="sim-btn" onclick="simPlayoffs()" style="display:none; border-color: #FFAA00; color: #FFAA00;">SIM PLAYOFFS</button>
+                <button onclick="exportCSV()" style="border-color: #00FFFF; color: #00FFFF;">EXPORT CSV</button>
                 <button onclick="resetLeague()" style="border-color: #FF5555; color: #FF5555;">RESET DB</button>
                 <button onclick="clearArchives()" style="border-color: #FF5555; color: #FF5555; grid-column: span 3;">CLEAR ARCHIVES</button>
                 </div>
@@ -179,8 +181,8 @@
             
         <div class="scoreboard-column">
                 <div class="grid-2" style="padding:15px; border-bottom:2px solid #333; margin-bottom:0;">
-                    <button onclick="startWatchLive()" style="color:#00FF00; border-color:#00FF00;">WATCH LIVE BROADCAST</button>
-                    <button onclick="openManualFinalizePopup()" style="color:var(--neon-cyan); border-color:var(--neon-cyan);">MANUAL FINALIZE (POPUP)</button>
+                    <button onclick="startWatchLive()" style="border-color: #00FF00; color: #00FF00;">WATCH LIVE BROADCAST</button>
+                    <button onclick="openManualFinalizePopup()" style="border-color: #00FFFF; color: #00FFFF;">MANUAL FINALIZE (POPUP)</button>
                 </div>
                 
                 <div class="sb-header">
@@ -205,6 +207,7 @@
                             <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Pro_set_cards_logo.png/250px-Pro_set_cards_logo.png" style="max-height: 25px;" onerror="this.style.display='none'; this.parentElement.innerText='EASN';">
                         </div>
                         <div id="jumboMessage">WELCOME TO THE EASN DYNASTY ENGINE</div>
+                                <button id="btnSimGame" onclick="simNextGame()" style="display: block; margin: 15px auto 0 auto; background: #000; color: var(--neon-cyan); border: 2px solid var(--neon-cyan); font-family: 'Press Start 2P', cursive; font-size: 10px; padding: 8px 16px; cursor: pointer; box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);">SIM NEXT GAME</button>
                     </div>
                     <div class="sb-score" id="hScoreLabel">0</div>
                 </div>
@@ -307,7 +310,7 @@
     <div id="playerCardOverlay" class="modal" onclick="this.style.display='none'">
         <div class="modal-card" style="max-width: 640px;" onclick="event.stopPropagation()">
             <div class="player-card" id="playerCardContent" style="padding:0; border:10px solid #fff; outline:4px solid #000; outline-offset:-4px; background:var(--ice-base); width: 100%;"></div>
-            <button onclick="document.getElementById('playerCardOverlay').style.display='none'" style="width:100%; margin-top:15px; border-color:var(--neon-cyan); color:var(--neon-cyan); background:#000;">CLOSE PROFILE</button>
+            <button onclick="document.getElementById('playerCardOverlay').style.display='none'" style="width:100%; margin-top:15px; border-color:#00FFFF; color:#00FFFF; background:#000;">CLOSE PROFILE</button>
         </div>
     </div>
 
@@ -370,7 +373,7 @@
             </div>
             <div class="unit-header">⭐ CAREER ALL-STAR SELECTIONS</div>
             <div id="allStarLeaderboard" style="max-height:200px; overflow-y:auto; background:#111; border:2px solid #000;"></div>
-            <button onclick="document.getElementById('masterArchiveModal').style.display='none'" style="width:100%; margin-top:20px; border-color:var(--neon-cyan); color:var(--neon-cyan);">CLOSE ARCHIVES</button>
+            <button onclick="document.getElementById('masterArchiveModal').style.display='none'" style="width:100%; margin-top:20px; border-color:#00FFFF; color:#00FFFF;">CLOSE ARCHIVES</button>
         </div>
     </div>
 
@@ -391,7 +394,7 @@
                 <div><div class="unit-header">CAREER PENALTY MINUTES</div><table id="allTimePim"></table></div>
                 <div><div class="unit-header">CAREER WINS (GOALIES)</div><table id="allTimeWins"></table></div>
             </div>
-            <button onclick="document.getElementById('allTimeOverlay').style.display='none'" style="width:100%; margin-top:20px; border-color:var(--gold-leaf); color:var(--gold-leaf);">CLOSE LEADERBOARDS</button>
+            <button onclick="document.getElementById('allTimeOverlay').style.display='none'" style="width:100%; margin-top:20px; border-color:#D4AF37; color:#D4AF37;">CLOSE LEADERBOARDS</button>
         </div>
     </div>
 
@@ -406,7 +409,7 @@
         <div class="modal-card beveled" style="max-width:400px;" onclick="event.stopPropagation()">
             <div class="menu-header">LEAGUE SETTINGS</div>
             <div id="leagueSettingsContent" style="padding:20px; font-size:9px; line-height:2;"></div>
-            <button onclick="document.getElementById('leagueSettingsOverlay').style.display='none'" style="width:100%; border:none; border-top:4px solid var(--silver-mid);">SAVE & CLOSE</button>
+            <button onclick="document.getElementById('leagueSettingsOverlay').style.display='none'" style="width:100%; border:none; border-top:4px solid #A0A0A0; border-color:#FFFF00; color:#FFFF00;">SAVE & CLOSE</button>
         </div>
     </div>
 
@@ -414,7 +417,7 @@
         <div class="modal-card beveled" style="max-width:400px;" onclick="event.stopPropagation()">
             <div class="menu-header">ARENA dB (CROWD NOISE)</div>
             <div id="arenaSettingsContent" style="padding:20px; max-height:60vh; overflow-y:auto;"></div>
-            <button onclick="document.getElementById('arenaSettingsOverlay').style.display='none'" style="width:100%; border:none; border-top:4px solid var(--silver-mid);">SAVE & CLOSE</button>
+            <button onclick="document.getElementById('arenaSettingsOverlay').style.display='none'" style="width:100%; border:none; border-top:4px solid #A0A0A0; border-color:#FF8800; color:#FF8800;">SAVE & CLOSE</button>
         </div>
     </div>
 
@@ -423,7 +426,7 @@
             <div class="menu-header" style="color:#00FF00; justify-content:center; background:transparent;">PENDING TRADE PROPOSALS</div>
             <p style="font-size:8px; color:#aaa; text-align:center;">Review deadline deals proposed by the AI.</p>
             <div id="proposalList" style="margin-top:15px; max-height:400px; overflow-y:auto;"></div>
-            <button onclick="document.getElementById('proposalOverlay').style.display='none'" style="width:100%; margin-top:15px;">CLOSE</button>
+            <button onclick="document.getElementById('proposalOverlay').style.display='none'" style="width:100%; margin-top:15px; border-color:#00FFFF; color:#00FFFF;">CLOSE</button>
         </div>
     </div>
 
@@ -452,12 +455,12 @@
                 </div>
             </div>
             <button onclick="executeTrade()" style="width:100%; border-color:var(--neon-cyan); color:var(--neon-cyan);">EXECUTE MULTI-PLAYER TRADE</button>
-            <button onclick="document.getElementById('tradeOverlay').style.display='none'" style="width:100%; margin-top:10px;">CANCEL</button>
+            <button onclick="document.getElementById('tradeOverlay').style.display='none'" style="width:100%; margin-top:10px; border-color:#FF5555; color:#FF5555;">CANCEL</button>
         </div>
     </div>
 
   <div class="no-spaces-nrm" id="profileheader">
-  profileheader
+  
 </div>
 
     <div id="subOverlay" class="modal" onclick="this.style.display='none'">
@@ -467,7 +470,7 @@
             <select id="subSelect" class="stat-input" style="width:100%; margin-bottom:20px; padding:10px;"></select>
             <div class="grid-2" style="margin-bottom:0;">
                 <button onclick="executeSub()" style="border-color:#00FF00; color:#00FF00;">CONFIRM SWAP</button>
-                <button onclick="document.getElementById('subOverlay').style.display='none'" style="border-color:var(--line-red); color:var(--line-red);">CANCEL</button>
+                <button onclick="document.getElementById('subOverlay').style.display='none'" style="border-color:#D82020; color:#D82020;">CANCEL</button>
             </div>
         </div>
     </div>
@@ -487,7 +490,7 @@
                     <table id="historyWestStand"></table>
                 </div>
             </div>
-            <button onclick="document.getElementById('historyOverlay').style.display='none'" style="width:100%; margin-top:20px; border-color:var(--archive-blue); color:var(--archive-blue);">CLOSE ARCHIVE</button>
+            <button onclick="document.getElementById('historyOverlay').style.display='none'" style="width:100%; margin-top:20px; border-color:#4A90E2; color:#4A90E2;">CLOSE ARCHIVE</button>
         </div>
     </div>
 <div id="advEditorOverlay" class="modal" style="display:none; z-index: 3000;" onclick="this.style.display='none'">
@@ -523,7 +526,7 @@
 
             <div class="adv-editor-grid">
                 <div class="adv-player-group">
-                    <button onclick="openRosterChecklist('away')" class="adv-secondary-btn">📋 MANAGE DRESSED ROSTER (GP)</button>
+                    <button onclick="openRosterChecklist('away')" class="adv-secondary-btn" style="border-color:#FF8800; color:#FF8800;">📋 MANAGE DRESSED ROSTER (GP)</button>
                     <select id="advAwayPlayer" class="stat-input adv-player-select" onchange="toggleAdvInputs('away')"></select>
 
                     <div id="advAwayInputs" class="adv-stat-grid">
@@ -539,12 +542,12 @@
                         <label>SHOTS AGAINST (SA): <input type="number" id="advAwaySA" class="stat-input adv-goalie-input" value="0"></label>
                     </div>
 
-                    <button onclick="addAdvStatLine('away')" class="adv-primary-btn">+ ADD STAT LINE</button>
+                    <button onclick="addAdvStatLine('away')" class="adv-primary-btn" style="border-color:#00FFFF; color:#00FFFF;">+ ADD STAT LINE</button>
                     <div id="advAwayList" class="adv-list-box"></div>
                 </div>
 
                 <div class="adv-player-group">
-                    <button onclick="openRosterChecklist('home')" class="adv-secondary-btn">📋 MANAGE DRESSED ROSTER (GP)</button>
+                    <button onclick="openRosterChecklist('home')" class="adv-secondary-btn" style="border-color:#FF8800; color:#FF8800;">📋 MANAGE DRESSED ROSTER (GP)</button>
                     <select id="advHomePlayer" class="stat-input adv-player-select" onchange="toggleAdvInputs('home')"></select>
 
                     <div id="advHomeInputs" class="adv-stat-grid">
@@ -560,15 +563,15 @@
                         <label>SHOTS AGAINST (SA): <input type="number" id="advHomeSA" class="stat-input adv-goalie-input" value="0"></label>
                     </div>
 
-                    <button onclick="addAdvStatLine('home')" class="adv-primary-btn">+ ADD STAT LINE</button>
+                    <button onclick="addAdvStatLine('home')" class="adv-primary-btn" style="border-color:#00FFFF; color:#00FFFF;">+ ADD STAT LINE</button>
                     <div id="advHomeList" class="adv-list-box"></div>
                 </div>
             </div>
 
             <div class="adv-footer-buttons">
-                <button onclick="submitAdvGame()" class="adv-primary-btn adv-finalize-btn">FINALIZE GAME (RUN VALIDATION)</button>
+                <button onclick="submitAdvGame()" class="adv-primary-btn adv-finalize-btn" style="border-color:#00FFFF; color:#00FFFF;">FINALIZE GAME (RUN VALIDATION)</button>
                 <button onclick="importEventLogSheet()" class="adv-secondary-btn" style="border-color:#8c66ff; color:#8c66ff;">IMPORT GAME FILE</button>
-                <button onclick="document.getElementById('advEditorOverlay').style.display='none'" class="adv-secondary-btn adv-cancel-btn">CANCEL ENTRY</button>
+                <button onclick="document.getElementById('advEditorOverlay').style.display='none'" class="adv-secondary-btn adv-cancel-btn" style="border-color:#FF5555; color:#FF5555;">CANCEL ENTRY</button>
             </div>
         </div>
     </div>
@@ -581,6 +584,22 @@
             <button onclick="saveRosterChecklist()" style="width:100%; margin-top:15px; border-color:var(--neon-cyan); color:var(--neon-cyan);">CONFIRM ROSTER</button>
         </div>
     </div>
-    
+    <div id="lineEditorOverlay" class="modal-overlay" style="display:none; z-index: 3500;">
+        <div class="menu-box" style="width: 600px; max-height: 85vh; overflow-y: auto;">
+            <div class="menu-header" style="color:var(--ea-yellow); justify-content:center;">FRANCHISE MODE: LINE EDITOR</div>
+            <div style="color:#aaa; font-size:8px; margin-bottom:15px; text-align:center;">
+                Click two players to instantly swap their positions.
+            </div>
+            
+            <div style="text-align:center; margin-bottom: 20px; display: flex; justify-content: center; gap: 10px;">
+                <button id="save-lines-btn" class="adv-primary-btn" style="border-color:#00FFFF; color:#00FFFF;">💾 SAVE LINES</button>
+                <button id="clear-lines-btn" class="adv-secondary-btn" style="border-color:#ff4444; color:#ff4444;">🔄 RESET TO AI</button>
+                <button onclick="document.getElementById('lineEditorOverlay').style.display='none'" class="adv-secondary-btn" style="border-color:#FF5555; color:#FF5555;">❌ CLOSE</button>
+            </div>
+
+            <div id="lines-display" style="text-align: left;"></div>
+        </div>
+    </div>
+ 
 </body>
 </html>
