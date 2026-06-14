@@ -4104,6 +4104,7 @@ function simGame(idx) {
     if (typeof processPostGameStreaks === 'function') processPostGameStreaks(winningTeamRoster.concat(losingTeamRoster), activeGoalies);
     if (typeof applyPostGameFatigue === 'function' && awayGoalie && homeGoalie) applyPostGameFatigue(g.a.nrm, g.h.nrm, awayGoalie.name, homeGoalie.name);
     if (typeof reviewGameForSuspensions === 'function') reviewGameForSuspensions(matchStats, g.h.nrm, g.a.nrm);
+    if (typeof triggerGameInjuries === 'function') triggerGameInjuries(matchStats, g.h.nrm, g.a.nrm);
 }
 
 // --- Weighted Shooter Selection Helper ---
@@ -6673,12 +6674,15 @@ function _pcB(ctx, sc, x, y, w, h, col) { // bordered fill (outline technique)
 // a/A blade silver/dk  k/K stick/hi  u puck  i ice  w crease
 // m goalie mask  r blocker leather
 // ── 36-wide × 46-tall sprites, scale=5 → 180×230 canvas, display 120×153 ──────
-// Forward v0: SLAP SHOT — body twisted left into follow-through
+// Ref style: chunky skating-crouch, wide shin pads, prominent stick across body
+// Forward v0: SKATING CROUCH — stick held low across body, puck on blade
 const PC_SPR_FWD_0 = [
+//  Skating crouch, stick low across body, puck on left blade (ref-card style)
 //  0         1         2         3
 //  012345678901234567890123456789012345
     '....................................',
-    '..............######................',// helmet
+    '....................................',
+    '..............######................',
     '.............#HHhhhH##..............',
     '.............#HhVVVhH#..............',// visor
     '.............#Hh#ss#hH#.............',// face + cage
@@ -7669,6 +7673,43 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
                     details: `🚨 DOPS SUSPENSION: ${pName} (${teamCode.toUpperCase()}) has been suspended for ${gamesOut} games following a dangerous play.` 
                 });
             }
+        }
+    }
+}
+
+// =========================================================
+// 🩹 INJURY ENGINE
+// =========================================================
+function triggerGameInjuries(matchStats, homeCode, awayCode) {
+    if (!awardConfig.injuries) return;
+    const BASE_CHANCE = 0.022; // ~2.2% per skater per game ≈ realistic NHL rate
+    for (let pName in matchStats) {
+        const ps = playerStats[pName];
+        if (!ps || !ps.injury) continue;
+        if (ps.injury.daysRemaining > 0) continue; // already hurt
+        const stats = matchStats[pName];
+        if (!stats.toi || stats.toi <= 0) continue; // didn't play
+
+        // fatigue and high PIMs raise risk slightly
+        const fatigueBonus = (ps.fatigue || 0) > 70 ? 0.008 : 0;
+        const physicalBonus = stats.pim >= 2 ? 0.005 : 0;
+        const chance = BASE_CHANCE + fatigueBonus + physicalBonus;
+
+        if (Math.random() < chance) {
+            const roll = Math.random();
+            let days, label;
+            if (roll < 0.55)      { days = 1;  label = 'day-to-day'; }
+            else if (roll < 0.78) { days = 3;  label = '3-5 days'; }
+            else if (roll < 0.92) { days = 7;  label = '1-2 weeks'; }
+            else if (roll < 0.98) { days = 14; label = '2-4 weeks'; }
+            else                  { days = 28; label = '4-6 weeks'; }
+
+            ps.injury = { severity: days, daysRemaining: days };
+            const teamCode = (rosters[homeCode] || []).find(p => p.name === pName) ? homeCode : awayCode;
+            tradeLog.unshift({
+                day: currentDay,
+                details: `🩹 INJURY: ${pName} (${teamCode.toUpperCase()}) is ${label} — out ${days} day${days>1?'s':''}.`
+            });
         }
     }
 }
