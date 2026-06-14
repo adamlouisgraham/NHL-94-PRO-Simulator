@@ -7034,51 +7034,49 @@ function _pcB(ctx, sc, x, y, w, h, col) { // bordered fill (outline technique)
 // a/A blade silver/dk  k/K stick/hi  u puck  i ice  w crease
 // m goalie mask  r blocker leather
 // ── 36-wide × 46-tall sprites, scale=5 → 180×230 canvas, display 120×153 ──────
-// Ref style: chunky skating-crouch, wide shin pads, prominent stick across body
-// Forward v0: SKATING CROUCH — stick held low across body, puck on blade
+// Inspired by NHL card photos: extreme skating crouch, chunky cage mask, prominent stick
+// Goalies: front-facing butterfly, white cage mask with bars, net mesh behind pads
+
+// Forward v0: BREAKAWAY CROUCH — maximum forward lean, body nearly horizontal
 const PC_SPR_FWD_0 = [
-//  Skating crouch, stick low across body, puck on left blade (ref-card style)
-//  0         1         2         3
-//  012345678901234567890123456789012345
     '....................................',
     '....................................',
-    '..............######................',
-    '.............#HHhhhH##..............',
-    '.............#HhVVVhH#..............',// visor
-    '.............#Hh#ss#hH#.............',// face + cage
-    '.............#Hh#SS#hH#.............',
-    '..............#H#sS##...............',// chin
-    '..........####JJJJJJJJ####..........',// shoulders
-    '.........#jJJJJJJJJJJJJJJJ#........',
-    '.......##JJjJJJJJJJJJJJJJJJJ#......',
-    '......#GGjJJJccccccJJJJJJJJdJJ#....',// stripe + arm
-    '.....#GGgjJJccccccccJJJJJJJJdJJJ#..',// glove
-    '....#GGggkjJJJJJccJJJJJJJJJJdJJJ#.',
-    '...#KkkkkkjJJJJJJJJJJJJJJJJJJdJJJ#',// stick through glove
-    '..#KkkkkkjJdddddddddddddddddddJJJ##',
-    '.#Kkkkkk##ddddddddddddddddddddd##..',
-    '#Kkkkkk#ddddddddddddddddddddddd##..',
-    '#KKkkkk#ddddddddddddddddddddddd#...',
-    '.#KKkkk#pppppppppppppppppppppppp##.',// pants
-    '..#KKkk#ppppppppppppppppppppppppp#.',
-    '...#Kkk#pppppppppppppppppppppppp##.',
-    '....#kk##HHHHHHHHHHHHHHHHHHHHHH##..',// shins
-    '.....#kHHHHHHhhhhhhhhhhhHHHHHHH#..',
-    '....#Kk#HHHHHHhhhhhhhhhHHHHHHHH#..',
-    '...#KKk#HHHHHHhhhhhhhhhHHHHHHHHH#.',
-    '..#KKKk#HHHHHHhhhhhhhhhHHHHHHHHH#.',
-    '.#KKKKk#HHHHHHhhhhhhhhhHHHHHHHHH#.',// boot
-    '#KKKKKk#bbbbbbbbbbbbbbbbbbbbbbbbb#.',
-    '#KKKKKk##bBBBBBBBBBBBBBBBBBBBBBb##',
-    '##KKKKK###aaaaaaaaaaaaaaaaaaaaaaaa#',// blade
-    '.#KKKK#..#aaaaaaaaaaaaaaaaaaaaaaaaA',
-    '.#uuu#...#aaaaaaaaaaaaaaaaaaaaaaaaA',// puck
-    '#uuuu#...#aaaaaaaaaaaaaaaaaaaaaaaA#',
-    '#uuu#....#aaaaaaaaaaaaaaaaaaaaaaaA#',
-    '##u#.....#aaaaaaaaaaaaaaaaaaaaaaA##',
-    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',// ice
-    '....................................',
-    '....................................',
+    '...................######...........',  // helmet — far right (leaning hard left)
+    '..................#HHhhhH##.........',
+    '..................#HhVVVhH#.........',
+    '..................#H##ss##H#........',  // cage bars + face
+    '..................#H##SS##H#........',
+    '...................#HHsSSH##........',  // chin
+    '............####JJJJJJJJJJJ####....',  // wide shoulders
+    '...........#jJJJJJJJJJJJJJJJJJd#..',
+    '..........##JJjJJJJcccccJJJJJJdJJ#.',
+    '.........#GGjJJJJccccccccJJJJJdJJJ#',  // jersey stripe + glove arm
+    '........#GGgjJJJJJJcccJJJJJJJJdJJJ#',
+    '.......#KkGGgjJJJJJJJJJJJJJJJJdJJJ#',  // stick enters from left
+    '......#KkkkGgjJdddddddddddddddJJJJ##',
+    '.....#KKkkkk##dddddddddddddddddJJJ##',
+    '....#KKKkkkk#dddddddddddddddddddJ##.',
+    '...#KKKKkkk##pppppppppppppppppppp##.',  // pants
+    '..#KKKKKkk##ppppppppppppppppppppp##.',
+    '.#KKKKKKkk#pppppppppppppppppppppp##.',
+    '#KKKKKKKk##pppppppppppppppppppppp#..',
+    '#KKKKKKk##HHHHHHHHHHHHHHHHHHHHHHH#..',  // shin guards
+    '##KKKKKk#HHHHHHhhhhhhhhhHHHHHHHHH#.',
+    '.##KKKk#HHHHHHHhhhhhhhhhHHHHHHHHHH#',
+    '..##KKk#HHHHHHHhhhhhhhhhHHHHHHHHHH#',
+    '...##Kk#HHHHHHHhhhhhhhhhHHHHHHHHHH#',
+    '....##k#bbbbbbbbbbbbbbbbbbbbbbbbbbb#',  // skate boot
+    '.....###bBBBBBBBBBBBBBBBBBBBBBBBBb#',
+    '......##aaaaaaaaaaaaaaaaaaaaaaaaaa##',   // blade
+    '.....#uuu#aaaaaaaaaaaaaaaaaaaaaaA##.',
+    '....#uuuuu#aaaaaaaaaaaaaaaaaaaaA##..',
+    '....#uuuuu##aaaaaaaaaaaaaaaaaaaA#...',   // puck
+    '.....#uuu...#aaaaaaaaaaaaaaaaaaA#...',
+    '......###....#aaaaaaaaaaaaaaaaA##...',
+    '..............#aaaaaaaaaaaaaaaA#....',
+    '...............#aaaaaaaaaaaaaaA#....',
+    '................#aaaaaaaaaaaaaA#....',
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',  // ice
     '....................................',
     '....................................',
     '....................................',
@@ -7088,46 +7086,46 @@ const PC_SPR_FWD_0 = [
     '....................................',
     '....................................',
 ];
-// Forward v1: WRIST SHOT — upright, releasing from the circle
+// Forward v1: WRIST SHOT — weight transfers forward, stick releasing
 const PC_SPR_FWD_1 = [
     '....................................',
+    '....................................',
     '..............######................',
     '.............#HHhhhH##..............',
     '.............#HhVVVhH#..............',
-    '.............#Hh#ss#hH#.............',
-    '.............#Hh#SS#hH#.............',
-    '..............#H#sS##...............',
-    '..........####JJJJJJJJ####..........',
-    '.........#jJJJJJJJJJJJJJJJ#........',
-    '.........#jJJJJJJJJJJJJJJJJ#.......',
-    '.......##JJjJJJccccccJJJJJJdJJ##...',// arms forward
-    '......#GGjJJJccccccccJJJJJJdJJJJ#..',
-    '.....#GGgjJJJJJccccJJJJJJJJJdJJJJ#.',
-    '....#GGggkjJJJJJJJJJJJJJJJJJJJJ#JJ',// right arm pulls through
-    '...#KkkkkkJJJJJJJJJJJJJJJJJJJJ#...',
-    '..#KkkkkkJJdddddddddddddddddddJ#...',
-    '.#Kkkkkk##ppppppppppppppppppppp##..',// pants start
-    '#Kkkkkk##pppppppppppppppppppppp##..',
-    '#KKkkk##ppppppppppppppppppppppp#...',
-    '.#KKkk##pppppppppppppppppppppppp#..',
-    '..#Kkk#pppppppppppppppppppppppp#...',
-    '...#kk##HHHHHHHHHHHHHHHHHHHHHHH##..',// shins
-    '....#kHHHHHHhhhhhhhhhhhHHHHHHHH#..',
-    '...#KkHHHHHHhhhhhhhhhhhHHHHHHHHH#.',
-    '..#KKk#HHHHHhhhhhhhhhhhHHHHHHHHH#.',
-    '.#KKKk#HHHHHhhhhhhhhhhhHHHHHHHHH#.',
-    '#KKKKk#HHHHHhhhhhhhhhhhHHHHHHHHH#.',
-    '#KKKKk#bbbbbbbbbbbbbbbbbbbbbbbbb##.',
-    '##KKKK##bBBBBBBBBBBBBBBBBBBBBBb##.',
-    '.#KKK###.#aaaaaaaaaaaaaaaaaaaaaaaa#',// blade
-    '..#KK#...#aaaaaaaaaaaaaaaaaaaaaaA##',
-    '..###....#aaaaaaaaaaaaaaaaaaaaaA#..',// puck bottom
-    '..........#aaaaaaaaaaaaaaaaaaaaaA#.',
-    '...........#aaaaaaaaaaaaaaaaaaaaA#.',
-    '..#uuu.....#aaaaaaaaaaaaaaaaaaaaA#.',
-    '.#uuuu......#aaaaaaaaaaaaaaaaaaaA##',
-    '##uuu......iiiiiiiiiiiiiiiiiiiiiiii',// ice
-    '....................................',
+    '.............#H##ss##H#.............',
+    '.............#H##SS##H#.............',
+    '..............#HHsSSH##.............',
+    '..........####JJJJJJJJJJ####........',
+    '.........#jJJJJJJJJJJJJJJJJJd#.....',
+    '.......##JJjJJJJcccccJJJJJJJdJJ##..',
+    '......#GGjJJJJccccccccJJJJJJdJJJJ#.',
+    '.....#GGgjJJJJJJcccJJJJJJJJJdJJJJ#.',
+    '....#GGggkjJJJJJJJJJJJJJJJJJJJJJ##.',  // hands on stick
+    '...#KkkkkkjJdddddddddddddddddddJJJ#.',
+    '..#KkkkkkjJdddddddddddddddddddddJ##.',
+    '.#Kkkkkk##dddddddddddddddddddddJ##..',
+    '#Kkkkkk#ddddddddddddddddddddddJ##...',
+    '#KKkkkk#ppppppppppppppppppppppp##...',  // pants
+    '.#KKkkk#pppppppppppppppppppppppp#...',
+    '..#KKkk#ppppppppppppppppppppppp##...',
+    '...#Kkk##HHHHHHHHHHHHHHHHHHHHHH##..',  // shins
+    '....#kk#HHHHHHhhhhhhhhhHHHHHHHH#...',
+    '...#KkkHHHHHHhhhhhhhhhHHHHHHHHHH#..',
+    '..#KKkk#HHHHHHhhhhhhhhhHHHHHHHHH#..',
+    '.#KKKkk#HHHHHHhhhhhhhhhHHHHHHHHH#..',
+    '#KKKKkk#HHHHHHhhhhhhhhhHHHHHHHHH#..',
+    '#KKKKkk#bbbbbbbbbbbbbbbbbbbbbbbbb#..',  // boot
+    '##KKKkk##bBBBBBBBBBBBBBBBBBBBBBb##.',
+    '.##KKKk###aaaaaaaaaaaaaaaaaaaaaaaa##',  // blade
+    '...#KKk#.#aaaaaaaaaaaaaaaaaaaaaaA##.',
+    '...#uuu#..#aaaaaaaaaaaaaaaaaaaaA##..',  // puck
+    '..#uuuuu...#aaaaaaaaaaaaaaaaaaaA#...',
+    '...#uuu.....#aaaaaaaaaaaaaaaaaaA#...',
+    '....###......#aaaaaaaaaaaaaaaaaA#...',
+    '..............#aaaaaaaaaaaaaaaaA#...',
+    '...............#aaaaaaaaaaaaaaaA#...',
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
     '....................................',
     '....................................',
     '....................................',
@@ -7137,44 +7135,45 @@ const PC_SPR_FWD_1 = [
     '....................................',
     '....................................',
 ];
-// Forward v2: BACKHAND — reaching around stick, weight back
+// Forward v2: BACKHAND SWEEP — weight back, stick reaching behind body
 const PC_SPR_FWD_2 = [
     '....................................',
+    '....................................',
     '.............######.................',
     '............#HHhhhH##...............',
     '............#HhVVVhH#...............',
-    '............#Hh#ss#hH#..............',
-    '............#Hh#SS#hH#..............',
-    '.............#H#sS##................',
-    '.........####JJJJJJJJ####...........',
-    '........#jJJJJJJJJJJJJJJJJ#........',
-    '........#JJjJJJJJJJJJJJJJJJ#.......',
-    '.......#JJJJJJcccccccJJJJJJdJJ#....',// stripe
-    '......#JJJJJJccccccccJJJJJJJdJJ#...',
-    '.....#JJJJJJJJccccJJJJJJJJJJdJJJ#..',
-    '....#gGJJJJJJJJJJJJJJJJJJJJJdJJJJ#.',// right arm backhand
-    '...#gGgJJJJJJJJJJJJJJJJJJJJddJJJJ#',
-    '..#gGggkJdddddddddddddddddddJdJJJJ#',
-    '.#KkkkkkdddddddddddddddddddddJJJJ##',
-    '#KkkkkkJdddddddddddddddddddddJJ##..',
-    '#KKkkkk#ppppppppppppppppppppppp##..',// pants
-    '.#KKkkk#pppppppppppppppppppppppp#..',
-    '..#KKkk#ppppppppppppppppppppppp#...',
-    '...#Kkk##HHHHHHHHHHHHHHHHHHHHHH##..',// shins
-    '....#kk#HHHHHHhhhhhhhhhhhHHHHHHH#.',
-    '...#Kkk#HHHHHHhhhhhhhhhhhHHHHHHHH#',
-    '..#KKkk#HHHHHHhhhhhhhhhhhHHHHHHHHH',
-    '.#KKKkk#HHHHHHhhhhhhhhhhhHHHHHHHHH',
-    '#KKKKkk#bbbbbbbbbbbbbbbbbbbbbbbbb##',// boot
-    '#KKKKkk##bBBBBBBBBBBBBBBBBBBBBBb##',
-    '##KKKK###aaaaaaaaaaaaaaaaaaaaaaaa##',// blade
-    '.##KKK#..#aaaaaaaaaaaaaaaaaaaaaaaA#',
-    '...#KK#..#aaaaaaaaaaaaaaaaaaaaaaaA#',
-    '...#K#...#aaaaaaaaaaaaaaaaaaaaaaA##',// stick blade end
-    '....##....#aaaaaaaaaaaaaaaaaaaaaA#.',
-    '.....#uuu.#aaaaaaaaaaaaaaaaaaaaaA#.',// puck
-    '.....#uuuu.#aaaaaaaaaaaaaaaaaaaaA#.',
-    '......#uuu..#aaaaaaaaaaaaaaaaaaaA#.',
+    '............#H##ss##H#..............',
+    '............#H##SS##H#..............',
+    '.............#HHsSSH##..............',
+    '.........####JJJJJJJJJJ####.........',
+    '........#jJJJJJJJJJJJJJJJJJJd#.....',
+    '.......##JJJJJJcccccccJJJJJJJdJJJ#.',
+    '......#gGJJJJJccccccccJJJJJJJJdJJJ#',
+    '.....#gGGjJJJJJJcccJJJJJJJJJJdJJJ##',
+    '....#gGGGkjJJJJJJJJJJJJJJJJJdJJJJ##',  // backhand grip
+    '...#gGGggkkJdddddddddddddddddJJJJJ##',
+    '..#KkkkkkkkJdddddddddddddddddddJJJ##',
+    '.#KKkkkkkk#dddddddddddddddddddddJ##.',
+    '#KKKkkkk##dddddddddddddddddddddd##..',
+    '#KKKKkkk#ppppppppppppppppppppppp##..',  // pants
+    '.#KKKkk##pppppppppppppppppppppppp#..',
+    '..#KKkk#ppppppppppppppppppppppppp#..',
+    '...#Kkk##HHHHHHHHHHHHHHHHHHHHHHHH##.',  // shins
+    '....#kk#HHHHHHhhhhhhhhhHHHHHHHHHH#.',
+    '...#Kkkk#HHHHHhhhhhhhhhHHHHHHHHHHH#',
+    '..#KKkkk#HHHHHhhhhhhhhhHHHHHHHHHHH#',
+    '.#KKKkkk#HHHHHhhhhhhhhhHHHHHHHHHH##',
+    '#KKKKkkk#bbbbbbbbbbbbbbbbbbbbbbbbb#.',  // boot
+    '#KKKKkkkk#bBBBBBBBBBBBBBBBBBBBBb##.',
+    '##KKKKkkk##aaaaaaaaaaaaaaaaaaaaaaa#.',  // blade
+    '.##KKKkk##.#aaaaaaaaaaaaaaaaaaaaA##.',
+    '...##KKk#...#aaaaaaaaaaaaaaaaaaaA#..',
+    '.....#Kk#....#aaaaaaaaaaaaaaaaaaA#..',
+    '......#k#.....#aaaaaaaaaaaaaaaaaA#..',  // stick tip at ice
+    '.......##......#aaaaaaaaaaaaaaaaaA#.',
+    '#uuu...........#aaaaaaaaaaaaaaaaA##.',  // puck far side
+    '##uu............#aaaaaaaaaaaaaaaA#..',
+    '###.............#aaaaaaaaaaaaaaaA#..',
     'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
     '....................................',
     '....................................',
@@ -7184,98 +7183,95 @@ const PC_SPR_FWD_2 = [
     '....................................',
     '....................................',
     '....................................',
-    '....................................',
 ];
-// Defense v0: POKE CHECK — wide lunge, stick reaching left
+// Defense v0: POKE CHECK — lunging wide, stick extended to left
 const PC_SPR_DEF_0 = [
     '....................................',
-    '.............######.................',
-    '............#HHhhhH##...............',
-    '............#HhVVVhH#...............',
-    '............#Hh#ss#hH#..............',
-    '............#Hh#SS#hH#..............',
-    '.............#H#sS##................',
-    '.........####JJJJJJJJJJ####.........',// wide shoulders
-    '........#jJJJJJJJJJJJJJJJJJJ#......',
-    '......##JJJJJJJJJJJJJJJJJJJJJJJ#..',// arms both out
-    '.....#GGjJJJcccccccJJJJJJJJJJdJJJ#.',
-    '....#GGGjJJJcccccccJJJJJJJJJJdJJJJ',
-    '...#GGGgjJJJJJcccJJJJJJJJJJJJdJJJJ',
-    '..#GGGggkJJJJJJJJJJJJJJJJJJJJJJJ##',// stick exits left
-    '.#KkkkkkJJdddddddddddddddddddddJ###',
-    '#KkkkkkJJddddddddddddddddddddddd##.',
-    '#Kkkkkk#ddddddddddddddddddddddd##..',
-    '#KKkkkk#ppppppppppppppppppppppp##..',// pants wide
-    '.#KKkkk#pppppppppppppppppppppppp#..',
-    '..#KKkk#ppppppppppppppppppppppppp#.',
-    '...#Kkk#ppppppppppppppppppppppppp#.',
-    '....#kk##HHHHHHHHHHHHHHHHHHHHHHHH##',// shins
-    '.....#kHHHHHHhhhhhhhhhhhHHHHHHHHHH#',
-    '....#KkHHHHHHhhhhhhhhhhhHHHHHHHHHH#',
-    '...#KKk#HHHHHhhhhhhhhhhhHHHHHHHHHH#',
-    '..#KKKk#HHHHHhhhhhhhhhhhHHHHHHHHHH#',
-    '.#KKKKk#HHHHHhhhhhhhhhhhHHHHHHHHH##',
-    '#KKKKKk#bbbbbbbbbbbbbbbbbbbbbbbb###.',// boot
-    '#KKKKKk##bBBBBBBBBBBBBBBBBBBBBBb##.',
-    '##KKKKK###aaaaaaaaaaaaaaaaaaaaaaaaa#',// blade right
-    '.#KKKKK#..#aaaaaaaaaaaaaaaaaaaaaaA##',
-    '..#KKKK#...#aaaaaaaaaaaaaaaaaaaaaA#.',
-    '...##KK#....#aaaaaaaaaaaaaaaaaaaaA#.',
-    '....#K#.....#aaaaaaaaaaaaaaaaaaaaA#.',// stick tip
-    '.....##......#aaaaaaaaaaaaaaaaaaaA#.',
-    '..............#aaaaaaaaaaaaaaaaaaA#.',
-    '...............#aaaaaaaaaaaaaaaaaA#.',
-    '................#aaaaaaaaaaaaaaaaA##',
-    '.................#aaaaaaaaaaaaaaA##.',
-    '..................#aaaaaaaaaaaaa##..',
-    '..................#uuu#aaaaaaaaa#...',// puck at blade
+    '....................................',
+    '................######..............',
+    '...............#HHhhhH##............',
+    '...............#HhVVVhH#............',
+    '...............#H##ss##H#...........',
+    '...............#H##SS##H#...........',
+    '................#HHsSSH##...........',
+    '..........#####JJJJJJJJJJJ#####....',  // very wide defensive shoulders
+    '.........#jJJJJJJJJJJJJJJJJJJJd#..',
+    '.......##JJJJJJJJJJJcccccJJJJJJdJJ#',
+    '......#GGjJJJJJJcccccccccJJJJJJdJJJ',  // wide arms
+    '.....#GGGjJJJJJJcccccccJJJJJJJJdJJJ',
+    '....#GGGgkjJJJJJJJJJJJJJJJJJJJJJJJ#',
+    '...#KkGGggkJJdddddddddddddddddJJJJJ#',
+    '..#KkkkGGgkJdddddddddddddddddddJJJJ#',
+    '.#KKkkkk##ddddddddddddddddddddddJJ##',  // stick runs horizontal
+    '#KKKkkkk#pppppppppppppppppppppppp##.',
+    '#KKKKkkk#ppppppppppppppppppppppppp#.',  // wide pants — defensive
+    '.#KKKkk##pppppppppppppppppppppppp##.',
+    '..#KKkk#pppppppppppppppppppppppppp#.',
+    '...#Kkk##HHHHHHHHHHHHHHHHHHHHHHHH##.',  // shin guards
+    '....#kk#HHHHHHHhhhhhhhhhHHHHHHHHHH#',
+    '...#KkkHHHHHHHhhhhhhhhhHHHHHHHHHHHH',
+    '..#KKkk#HHHHHHhhhhhhhhhHHHHHHHHHHHH',
+    '.#KKKkk#HHHHHHhhhhhhhhhHHHHHHHHHHH#',
+    '#KKKKkk#bbbbbbbbbbbbbbbbbbbbbbbbbbb#',  // wide boot
+    '#KKKKkk##bBBBBBBBBBBBBBBBBBBBBBBBb#',
+    '##KKKk###aaaaaaaaaaaaaaaaaaaaaaaaaa#',   // blade
+    '.##KKk#..#aaaaaaaaaaaaaaaaaaaaaaA##.',
+    '...#Kk#...#aaaaaaaaaaaaaaaaaaaaaA#..',
+    '....#k#....#aaaaaaaaaaaaaaaaaaaaA#..',
+    '.....##.....#aaaaaaaaaaaaaaaaaaaA#..',
+    '............#aaaaaaaaaaaaaaaaaaA##..',  // stick blade tip
+    '...#uuu......#aaaaaaaaaaaaaaaaA##...',
+    '..#uuuuu......#aaaaaaaaaaaaaaaA#....',  // puck
+    '...#uuu........#aaaaaaaaaaaaaA##....',
+    '....###.........#aaaaaaaaaaaaA#.....',
     'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
     '....................................',
     '....................................',
     '....................................',
     '....................................',
     '....................................',
+    '....................................',
+    '....................................',
 ];
-// Defense v1: DEFENSIVE CROUCH — backward skate, stick angled forward
+// Defense v1: DEFENSIVE GAP — upright backskate, stick angled across body
 const PC_SPR_DEF_1 = [
     '....................................',
-    '..............######................',
-    '.............#HHhhhH##..............',
-    '.............#HhVVVhH#..............',
-    '.............#Hh#ss#hH#.............',
-    '.............#Hh#SS#hH#.............',
-    '..............#H#sS##...............',
-    '..........####JJJJJJJJ####..........',// wide stance (backward skate)
-    '.........#jJJJJJJJJJJJJJJJJ#.......',
-    '.......##JJJJJJJJJJJJJJJJJJJJJ#....',
-    '......#GGjJJJccccccccJJJJJJJJdJJ#..',
-    '.....#GGGjJJccccccccccJJJJJJJJdJJJ#',
-    '....#GGGgjJJJJJcccccJJJJJJJJJJdJJJ#',
-    '...#GGGggkjJJJJJJJJJJJJJJJJJJJJJ##.',
-    '..#KkkkkkjJdddddddddddddddddddddJ##.',
-    '.#Kkkkkk##ddddddddddddddddddddddd##.',
-    '#Kkkkkk#pppppppppppppppppppppppppp##',// pants low/wide
-    '#KKkkk##ppppppppppppppppppppppppppp#',
-    '.#KKkk##pppppppppppppppppppppppppp##',
-    '..#Kkk#pppppppppppppppppppppppppp##.',
-    '...#kk#ppppppppppppppppppppppppp##..',
-    '....#k##HHHHHHHHHHHHHHHHHHHHHHHH##..',// shins wide
-    '....#kHHHHHHHhhhhhhhhhhhHHHHHHHHHH#',
-    '...#KkHHHHHHHhhhhhhhhhhhHHHHHHHHHHH',
-    '..#KKk#HHHHHHhhhhhhhhhhhHHHHHHHHHHH',
-    '.#KKKk#HHHHHHhhhhhhhhhhhHHHHHHHHHH#',
-    '#KKKKk#HHHHHHhhhhhhhhhhhHHHHHHHHHH#',
-    '#KKKKk#bbbbbbbbbbbbbbbbbbbbbbbbbb##.',// boot wide
-    '#KKKKk##bBBBBBBBBBBBBBBBBBBBBBBb##.',
-    '##KKK###aaaaaaaaaaaaaaaaaaaaaaaaaaa#',// blade
-    '.#KKK#..#aaaaaaaaaaaaaaaaaaaaaaaaaaA',
-    '..#KK#...#aaaaaaaaaaaaaaaaaaaaaaaaA#',
-    '..###....#aaaaaaaaaaaaaaaaaaaaaaaaA#',
-    '..........#aaaaaaaaaaaaaaaaaaaaaaA##',
-    '...........#aaaaaaaaaaaaaaaaaaaaaA#.',
-    '#uuu........#aaaaaaaaaaaaaaaaaaaA##.',// puck to the side
-    '##uu.........#aaaaaaaaaaaaaaaaaaA#..',
-    '###...........#aaaaaaaaaaaaaaaaaA#..',
+    '....................................',
+    '...............######...............',
+    '..............#HHhhhH##.............',
+    '..............#HhVVVhH#.............',
+    '..............#H##ss##H#............',
+    '..............#H##SS##H#............',
+    '...............#HHsSSH##............',
+    '.........#####JJJJJJJJJJJ#####.....',  // wide upright stance
+    '........#jJJJJJJJJJJJJJJJJJJJJd#..',
+    '.......##JJJjJJJJcccccJJJJJJJJdJJ##',
+    '......#GGJJjJJJJccccccccJJJJJJdJJJJ',
+    '.....#GGGjJJJJJJJcccccJJJJJJJJdJJJJ',
+    '....#GGGgkjJJJJJJJJJJJJJJJJJJJdJJJJ',
+    '...#KkGGGgkJJdddddddddddddddddJdJJJ#',
+    '..#KkkkGGgkJdddddddddddddddddddddJJ#',
+    '.#KKkkkk##pppppppppppppppppppppppJ##',  // upright pants
+    '#KKKkkkk#ppppppppppppppppppppppppp##',
+    '#KKKKkk##pppppppppppppppppppppppp##.',
+    '.#KKKkk#ppppppppppppppppppppppppp#..',
+    '..#KKkk##HHHHHHHHHHHHHHHHHHHHHHH##..',  // wide shin guards
+    '...#Kkk#HHHHHHHhhhhhhhhhHHHHHHHHHH#',
+    '...#kkkHHHHHHHhhhhhhhhhHHHHHHHHHHHH',
+    '..#KkkkHHHHHHhhhhhhhhhHHHHHHHHHHHHH',
+    '.#KKkkkHHHHHHhhhhhhhhhHHHHHHHHHHHH#',
+    '#KKKkkk#HHHHHhhhhhhhhhHHHHHHHHHHH##',
+    '#KKKKkk#bbbbbbbbbbbbbbbbbbbbbbbbb##.',  // boot
+    '#KKKKkk##bBBBBBBBBBBBBBBBBBBBBBBb##',
+    '##KKKkk###aaaaaaaaaaaaaaaaaaaaaaaaa#',  // blade
+    '.##KKk##..#aaaaaaaaaaaaaaaaaaaaaA##.',
+    '...#Kk#....#aaaaaaaaaaaaaaaaaaaaA#..',
+    '....#k#.....#aaaaaaaaaaaaaaaaaaaA#..',
+    '.....##......#aaaaaaaaaaaaaaaaaaA#..',  // stick tip at ice
+    '..............#aaaaaaaaaaaaaaaaaA#..',
+    '#uuu...........#aaaaaaaaaaaaaaaaA#..',  // puck opposite side
+    '##uu............#aaaaaaaaaaaaaaaA##.',
+    '###..............#aaaaaaaaaaaaaA##..',
     'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
     '....................................',
     '....................................',
@@ -7283,48 +7279,48 @@ const PC_SPR_DEF_1 = [
     '....................................',
     '....................................',
     '....................................',
+    '....................................',
+    '....................................',
 ];
-// Goalie v0: BUTTERFLY SAVE — pads fanned wide, trapper raised catching puck
+// Goalie v0: BUTTERFLY SAVE — front-facing, pads fanned, cage mask, net behind
 const PC_SPR_GTL_0 = [
-//  mask wide, pads super wide
-    '....................................',
-    '.............#########..............',// mask top
-    '............#mmmmmmmmm#.............',
-    '............#mVVmmmVVm#.............',// visor slits
-    '............#m##mmm##m#.............',// cage bars horizontal
-    '............#mmVmmmmVm#.............',// cage detail
-    '............#mmssmmssm#.............',// eyes/skin
-    '.............#mSSmmSSm#.............',
-    '.............#mssmmssm#.............',// chin
-    '..............#SSSSSSS#.............',// neck
-    '.........####JJJJJJJJJJJJ####.......',// wide chest
-    '........#JJJJJJJJJJJJJJJJJJJJd#...',
-    '.......#JJJJJJJJJJJJJJJJJJJJJJJd#.',
-    '......#JJJJJJJcccccccccJJJJJJJJJd#.',// chest stripe
-    '.....#gGGGJJJJcccccccccJJJJJJJJJdJ#',// arms out
-    '....#gGGGGJJJJJcccccJJJJJJJJJJJdJJ#',
-    '...#gGGGGGJJJJJJJJJJJJJJJJJJJddJJJ#',
-    '..#gGGGGGGJJJJJJJJJJJJJJJJJJddJJJJ#',// trapper + blocker sides
-    '.#gGGGGGGGJJJJJJJJJJJJJJJJdddJJJJJ#',
-    '#gGGGGGGGG#ppppppppppppppppp#JJJJJJ#',// into pads
-    '#ppppppppp#ppppppppppppppppppJJJJJJJ',
-    '#ppppppppp#pJJJJpppppppJJJJpppppppp#',// pad highlights
-    '#ccccccccc#pJJJJpppppppJJJJpppppppp#',// pad stripes
-    '#ppppppppp#pppppppppppppppppppppppp#',
-    '#ppppppppp#pppppppppppppppppppppppp#',
-    '#ppppppppp#pJJJJpppppppJJJJpppppppp#',
-    '#ccccccccc#pppppppppppppppppppppppp#',// second stripe
-    '#ppppppppp#pppppppppppppppppppppppp#',
-    '#ppppppppp#pppppppppppppppppppppppp#',
-    '#ppppppppp#pppppppppppppppppppppppp#',
-    '#ppppppbbb##bbbbbbbbbbbbbbbbbbb##pp#',// boots visible
-    '#ppppppbbbb#bBBBBBBBBBBBBBBBBBb#pp#',
-    '#######.####aaaaaaaaaaaaaaaaaaaaaa##',// blades wide
-    '.......#aaaaaaaaaaaaaaaaaaaaaaaaaaa#',
-    '........#aaaaaaaaaaaaaaaaaaaaaaaaA##',
-    '........wwwwwwwwwwwwwwwwwwwwwwwww..',// crease line
-    '.........wwwwwwwwwwwwwwwwwwwwwwww..',
-    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',// ice
+    '#G.G.G.G.G.G.G.G.G.G.G.G.G.G.G.G.#',  // net top crossbar
+    '#B.B.B.B.B.B.B.B.B.B.B.B.B.B.B.B.#',  // net mesh
+    '#B.B.B.B.B.B....######..B.B.B.B.B.#',  // net behind helmet
+    '#B.B.B.B.B.B...#mmmmmm#.B.B.B.B.B.#',  // white cage mask top
+    '#B.B.B.B.B.B..#mm#mmm#mm#.B.B.B.B.#',  // cage bar horizontal
+    '#B.B.B.B.B.B..#mmVmssmVm#.B.B.B.B.#',  // visor slits + eyes
+    '#B.B.B.B.B.B..#mm##SS##mm#.B.B.B.B#',  // cage bars vertical + face
+    '#B.B.B.B.B.B..#mmSSSSSSm#.B.B.B.B.#',  // lower face
+    '#B.B.B.B.B.B...#mmSSSSm#..B.B.B.B.#',  // chin
+    '#B.B.B.B.B.B....#SSSSSS#..B.B.B.B.#',  // neck
+    '#B....####JJJJJJJJJJJJJJJJ####....#',  // wide chest
+    '#B...#JJJJJJJJJJJJJJJJJJJJJJJd#..#',
+    '#B..#JJJJJJJJcccccccccJJJJJJJJJd#.#',  // jersey stripe
+    '#B.#JJJJJJJJcccccccccccJJJJJJJJJd##',
+    '#gGGJJJJJJJJJJJJJJJJJJJJJJJJJJJdGg#',  // arms wide out
+    '#gGGGJJJJJJJJJJJJJJJJJJJJJJJJJdGGg#',
+    '#gGGGGJJJJJJJJJJJJJJJJJJJJJJJdGGGg#',  // trapper / blocker
+    '##gGGGGGJJJJJJJJJJJJJJJJJJJJdGGGGg#',
+    '.#gGGGGG##pppppppppppppppppp##GGGGg#',  // into pads
+    '.#ppppppp#ppppppppppppppppppp#ppppp#',
+    '.#pJJJJpp#pppJJJJppppJJJJppp#ppJJp#',  // pad jersey color highlights
+    '.#pJJJJpp#pppppppppppppppppp#ppJJp#',
+    '.#ccccccp#pppppppppppppppppp#pcccp#',   // pad stripes (alt color)
+    '.#ppppppp#pppppppppppppppppp#ppppp#',
+    '.#pJJJJpp#pppJJJJppppJJJJppp#ppJJp#',
+    '.#pJJJJpp#pppppppppppppppppp#ppJJp#',
+    '.#ccccccp#pppppppppppppppppp#pcccp#',
+    '.#ppppppp#pppppppppppppppppp#ppppp#',
+    '.#ppppppp#pppppppppppppppppp#ppppp#',
+    '.#ppppbbb##bbbbbbbbbbbbbbbbb##bbbp#',  // skate boots visible
+    '.#ppppbBBb#bBBBBBBBBBBBBBBBb#bBBp#',
+    '.########.#aaaaaaaaaaaaaaaaaa#.####',  // blade
+    '..........#aaaaaaaaaaaaaaaaaa#......',
+    '..........##aaaaaaaaaaaaaaaaaA#.....',
+    '...........wwwwwwwwwwwwwwwwww.......',  // crease
+    '............wwwwwwwwwwwwwwwww.......',
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',  // ice
     '....................................',
     '....................................',
     '....................................',
@@ -7334,47 +7330,46 @@ const PC_SPR_GTL_0 = [
     '....................................',
     '....................................',
 ];
-// Goalie v1: READY STANCE — standing upright in crease, gloves up
+// Goalie v1: STAND-UP BLOCKER — upright ready stance, blocker raised high right
 const PC_SPR_GTL_1 = [
+    '#G.G.G.G.G.G.G.G.G.G.G.G.G.G.G.G.#',  // net
+    '#B.B.B.B.B.B.B.B.B.B.B.B.B.B.B.B.#',
+    '#B.B.B.B.B.B....######..B.B.B.B.B.#',
+    '#B.B.B.B.B.B...#mmmmmm#.B.B.B.B.B.#',
+    '#B.B.B.B.B.B..#mm#mmm#mm#.B.B.B.B.#',
+    '#B.B.B.B.B.B..#mmVmssmVm#.B.B.B.B.#',
+    '#B.B.B.B.B.B..#mm##SS##mm#.B.B.B.B#',
+    '#B.B.B.B.B.B..#mmSSSSSSm#.B.B.B.B.#',
+    '#B.B.B.B.B.B...#mmSSSSm#..B.B.B.B.#',
+    '#B.B.B.B.B.B....#SSSSSS#..B.B.B.B.#',
+    '#B....####JJJJJJJJJJJJJJJJ####....#',
+    '#B...#jJJJJJJJJJJJJJJJJJJJJJJd#..#',
+    '#B..#jJJJJJJcccccccccJJJJJJJJJJd#.#',
+    '#B.#jJJJJJJcccccccccccJJJJJJJJJJd##',
+    '#gGGJJJJJJJJJJJJJJJJJJJJJJJJJJJdGg#',  // arm level
+    '#gGGJJJJJJJJJJJJJJJJJJJJJJJJJJGGGg#',  // blocker arm raised (right = wider G)
+    '#gGGGgJJJJJJJJJJJJJJJJJJJJJJJGGGGg#',
+    '##gGGgGGJJJJJJJJJJJJJJJJJJJJJGGGGg#',  // trapper raised left, blocker high right
+    '.##gGGGG#pppppppppppppppppp##GGGGg##',
+    '..#pppppp#ppppppppppppppppp#pppppp#.',
+    '..#pJJJpp#pppJJJJpppJJJJpp#ppJJpp#.',
+    '..#pJJJpp#pppppppppppppppp#ppJJpp#.',
+    '..#ccccp##pppppppppppppppp##pcccp#.',   // pad stripes
+    '..#pppppp#pppppppppppppppp#pppppp#.',
+    '..#pJJJpp#pppJJJJpppJJJJpp#ppJJpp#.',
+    '..#pJJJpp#pppppppppppppppp#ppJJpp#.',
+    '..#ccccp##pppppppppppppppp##pcccp#.',
+    '..#pppppp#pppppppppppppppp#pppppp#.',
+    '..#pppppp#pppppppppppppppp#pppppp#.',
+    '..#pppbbb##bbbbbbbbbbbbbbb##bbbpp#.',
+    '..#pppbBBb#bBBBBBBBBBBBBBb#bBBpp#.',
+    '..######..#aaaaaaaaaaaaaaaa#.#####.',  // blades
+    '.........#aaaaaaaaaaaaaaaaaaa#......',
+    '..........#aaaaaaaaaaaaaaaaaA#......',
+    '...........wwwwwwwwwwwwwwwwww.......',  // crease
+    '............wwwwwwwwwwwwwwwww.......',
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
     '....................................',
-    '.............#########..............',// mask
-    '............#mmmmmmmmm#.............',
-    '............#mVVmmmVVm#.............',
-    '............#m##mmm##m#.............',
-    '............#mmVmmmmVm#.............',
-    '............#mmssmmssm#.............',
-    '.............#mSSmmSSm#.............',
-    '.............#mssmmssm#.............',
-    '..............#SSSSSSS#.............',// neck
-    '.........####JJJJJJJJJJJJ####.......',// wide chest
-    '........#jJJJJJJJJJJJJJJJJJJJJd#..',
-    '.......#jJJJJJJJJJJJJJJJJJJJJJJJd#.',
-    '......#jJJJJJJcccccccccJJJJJJJJJJd#',// stripe
-    '.....#gGJJJJJcccccccccccJJJJJJJJJdJ',// trapper high (left)
-    '....#gGGJJJJJJJcccccJJJJJJJJJJJJdJJ',
-    '...#gGGGJJJJJJJJJJJJJJJJJJJJJJJdJJJ',
-    '..#gGGGGJJJJJJJJJJJJJJJJJJJJJddJJJJ',
-    '.#gGGGGG#ppppppppppppppppppppJdJJJJ#',
-    '#gGGGGGG#ppppppppppppppppppppppJJJJJ',// blocker on right
-    '#pppppppp#pJJJJpppppppJJJJJppppppppp',// pad top
-    '#pppppppp#pJJJJpppppppJJJJJppppppppp',
-    '#cccccccc#pppppppppppppppppppppppppp',// pad stripe
-    '#pppppppp#pppppppppppppppppppppppppp',
-    '#pppppppp#pppppppppppppppppppppppppp',
-    '#pppppppp#pJJJJpppppppJJJJJppppppppp',
-    '#cccccccc#pppppppppppppppppppppppppp',
-    '#pppppppp#pppppppppppppppppppppppppp',
-    '#pppppppp#pppppppppppppppppppppppppp',
-    '#pppppppp#pppppppppppppppppppppppppp',
-    '#ppppppbb##bbbbbbbbbbbbbbbbbbbbbbb##',// boots
-    '#ppppppbb#.#bBBBBBBBBBBBBBBBBBBBb#.',
-    '##########..#aaaaaaaaaaaaaaaaaaaaaa#',// blades
-    '...........#aaaaaaaaaaaaaaaaaaaaaaaA',
-    '............#aaaaaaaaaaaaaaaaaaaaaaA',
-    '............#aaaaaaaaaaaaaaaaaaaaaaA',
-    '.............#aaaaaaaaaaaaaaaaaaaaaA',
-    '.............wwwwwwwwwwwwwwwwwwwwww.',// crease
-    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',// ice
     '....................................',
     '....................................',
     '....................................',
