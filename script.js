@@ -2685,9 +2685,30 @@ function renderTeamDirectory(tk) {
 
 const getRosterStructure = (tk) => {
     let r = rosters[tk] || [];
-    
+
+    // ── Honor custom lines if the coach saved them ────────────────────────
+    if (customLines[tk]) {
+        const cl = customLines[tk];
+        const byName = n => r.find(p => p.name === n);
+        const resolveGroup = (nameArrays, fallback) =>
+            nameArrays.map(slots => slots.map(n => byName(n)).filter(Boolean));
+        const customF = cl.f ? resolveGroup(cl.f) : null;
+        const customD = cl.d ? resolveGroup(cl.d) : null;
+        const customG = cl.g ? cl.g.map(n => byName(n)).filter(Boolean) : null;
+        if (customF && customF.flat().length > 0) {
+            // Pad missing lines with empty arrays
+            while (customF.length < 4) customF.push([]);
+            while ((customD||[]).length < 3) (customD||[customF]).push([]);
+            return {
+                f: customF,
+                d: customD || [[], [], []],
+                g: customG || r.filter(p => p.pos === 'G')
+            };
+        }
+    }
+
     // 1. DATA PREP
-    const getPos = (p) => getPlayerPosition(p); 
+    const getPos = (p) => getPlayerPosition(p);
     const getTag = (p) => getPlayerWeightedStats(p.name).tag || '';
     const getOff = (p) => parseInt(playerStats[p.name]?.attr?.off) || 0;
     const getDef = (p) => parseInt(playerStats[p.name]?.attr?.def) || 0;
@@ -3927,7 +3948,8 @@ function simGame(idx) {
         }
 
         // Quick Penalty Roll — triggers a real powerplay opportunity
-        if (Math.random() < 0.005) { 
+        // 0.075 per 30-sec step → ~9 penalties/game (realistic NHL rate)
+        if (Math.random() < 0.075) {
             let penTeam = Math.random() > 0.5 ? g.h : g.a;
             let advTeam = penTeam.nrm === g.h.nrm ? g.a : g.h;
             let activeSkaters = penTeam.nrm === g.h.nrm ? hOnIce : aOnIce;
@@ -3963,8 +3985,8 @@ function simGame(idx) {
                         if (advTeamObj) advTeamObj.season.ppg = (advTeamObj.season.ppg || 0) + 1;
                         penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec+1, str: timeStr, tm: advTeam.code, txt: `PP GOAL: ${ppEv.scorer}`, isPenalty: false });
                     }
-                } else if (ppRoll < 0.225 && pkUnit.length > 0) {
-                    // SHORTHANDED GOAL (~2.5% of PP opp result in SHG)
+                } else if (ppRoll < 0.24 && pkUnit.length > 0) {
+                    // SHORTHANDED GOAL (~4% of PP opp result in SHG)
                     const shShooter = selectShooter(pkUnit);
                     const shEv = processSingleGoal(penTeam.nrm, penTeam.code, shShooter, pkUnit, timeStr, period, (minute % 20 || 20), sec);
                     if (shEv) {
@@ -5714,6 +5736,200 @@ function closeWatchGame() {
 }
 
 // --- LINE EDITORS & SPECIAL TEAMS MENUS ---
+
+// ─── renderLineEditor ────────────────────────────────────────────────────────
+// Draws the interactive line/pairing editor inside #lineEditorContent.
+// Click any player slot to open a dropdown swap. Preset pairs (Dynamic Duos)
+// are highlighted in gold. Save writes to tObj.customLines which overrides AI.
+// ─────────────────────────────────────────────────────────────────────────────
+function renderLineEditor(tk) {
+    const container = document.getElementById('lineEditorContent');
+    if (!container) return;
+
+    const tObj = league.find(t => t.nrm === tk);
+    const roster = rosters[tk];
+    if (!tObj || !roster) { container.innerHTML = `<div style="color:red">No roster for ${tk}</div>`; return; }
+
+    const struct = getRosterStructure(tk);
+    const isCustom = !!(customLines[tk] && customLines[tk].f);
+
+    // Helpers
+    const ovr  = n => getPlayerWeightedStats(n).ovr || 0;
+    const tag  = n => getArchetypeBadge(n);
+    const mates = n => { const r = getLineMates(n); return r ? r.flat() : []; };
+    const inj  = n => { const ps = playerStats[n]; return ps && ps.injury && ps.injury.daysRemaining > 0; };
+    const lineAvg = arr => arr.length ? Math.round(arr.reduce((s,p)=>s+ovr(p.name),0)/arr.length) : 0;
+
+    // ── Slot renderer (click opens swap dropdown) ──────────────────────────
+    const slotHTML = (p, slotId, posHint, accentColor) => {
+        if (!p) return `<div class="le-slot empty" style="color:#444; border:1px dashed #333; padding:6px 4px; text-align:center; font-size:8px; border-radius:3px;">-- EMPTY --</div>`;
+        const isDuo  = mates(p.name).length > 0;
+        const isInj  = inj(p.name);
+        const border = isDuo ? '2px solid var(--ea-yellow)' : `1px solid ${accentColor}33`;
+        const duoTip = isDuo ? ` title="Dynamic Duo: ${mates(p.name).join(' & ')}"` : '';
+        return `
+        <div class="le-slot" id="slot_${slotId}" style="border:${border}; background:#111; border-radius:3px; padding:5px 4px; cursor:pointer; position:relative;"
+             onclick="leOpenSwap('${tk}','${slotId}','${posHint}')"${duoTip}>
+            <div style="font-size:8px; color:#888; margin-bottom:1px;">${posHint}${isDuo?'<span style="color:var(--ea-yellow);margin-left:3px;">★</span>':''}</div>
+            <div style="font-size:9px; color:#fff; font-weight:bold;">${isInj?'🚑 ':''}${p.name}</div>
+            <div style="font-size:7px; color:${accentColor}; margin-top:1px;">${tag(p.name)} ${ovr(p.name)} OVR</div>
+        </div>`;
+    };
+
+    // ── Forward lines (4 × LW-C-RW) ───────────────────────────────────────
+    let fHTML = `<div style="color:var(--ea-yellow); font-size:9px; font-weight:bold; margin-bottom:8px; letter-spacing:2px;">⚔️ FORWARD LINES</div>`;
+    struct.f.forEach((line, li) => {
+        const [lw, c, rw] = line; // getRosterStructure already arranges LW,C,RW
+        const avg = lineAvg(line);
+        const accent = li===0 ? 'var(--neon-cyan)' : li===1 ? '#88aaff' : li===2 ? '#aaa' : '#666';
+        fHTML += `
+        <div style="margin-bottom:8px; background:#0d0d0d; border-left:3px solid ${accent}; border-radius:2px;">
+            <div style="padding:4px 8px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:${accent}; font-size:8px; font-weight:bold;">LINE ${li+1}</span>
+                <span style="color:#666; font-size:7px;">AVG ${avg} OVR</span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; padding:0 6px 6px;">
+                ${slotHTML(lw || line[0], `f${li}0`, 'LW', accent)}
+                ${slotHTML(c  || line[1], `f${li}1`, 'C',  accent)}
+                ${slotHTML(rw || line[2], `f${li}2`, 'RW', accent)}
+            </div>
+        </div>`;
+    });
+
+    // ── Defense pairings (3 × LD-RD) ──────────────────────────────────────
+    let dHTML = `<div style="color:#00FFFF; font-size:9px; font-weight:bold; margin-bottom:8px; letter-spacing:2px; margin-top:12px;">🛡️ DEFENSE PAIRINGS</div>`;
+    struct.d.forEach((pair, pi) => {
+        const [ld, rd] = pair;
+        const avg = lineAvg(pair);
+        const accent = pi===0 ? 'var(--neon-cyan)' : pi===1 ? '#88aaff' : '#aaa';
+        dHTML += `
+        <div style="margin-bottom:8px; background:#0d0d0d; border-left:3px solid ${accent}; border-radius:2px;">
+            <div style="padding:4px 8px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:${accent}; font-size:8px; font-weight:bold;">PAIR ${pi+1}</span>
+                <span style="color:#666; font-size:7px;">AVG ${avg} OVR</span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:0 6px 6px;">
+                ${slotHTML(ld, `d${pi}0`, 'LD', accent)}
+                ${slotHTML(rd, `d${pi}1`, 'RD', accent)}
+            </div>
+        </div>`;
+    });
+
+    // ── Goalies ────────────────────────────────────────────────────────────
+    let gHTML = `<div style="color:#FF55FF; font-size:9px; font-weight:bold; margin-bottom:8px; letter-spacing:2px; margin-top:12px;">🥅 GOALIES</div>`;
+    gHTML += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">`;
+    const goalies = roster.filter(p=>p.pos==='G').sort((a,b)=>ovr(b.name)-ovr(a.name)).slice(0,2);
+    goalies.forEach((g, gi) => {
+        const isInj = inj(g.name);
+        gHTML += `<div style="background:#111; border:1px solid #333; border-radius:3px; padding:6px; cursor:pointer;" onclick="showPlayerCard('${g.name}')">
+            <div style="font-size:7px; color:#FF55FF;">${gi===0?'STARTER':'BACKUP'}</div>
+            <div style="font-size:9px; color:#fff; font-weight:bold;">${isInj?'🚑 ':''}${g.name}</div>
+            <div style="font-size:7px; color:#aaa;">${ovr(g.name)} OVR</div>
+        </div>`;
+    });
+    gHTML += `</div>`;
+
+    // ── Legend & action buttons ────────────────────────────────────────────
+    const legendHTML = `
+    <div style="margin-top:10px; padding:6px 8px; background:#0a0a0a; border:1px solid #222; border-radius:3px; font-size:7px; color:#666;">
+        <span style="color:var(--ea-yellow);">★</span> Dynamic Duo pairing &nbsp;|&nbsp; Click any slot to swap &nbsp;|&nbsp; OVR = live weighted rating
+    </div>`;
+
+    const modeLabel = isCustom
+        ? `<span style="color:#0f0; font-size:7px;">✔ CUSTOM LINES ACTIVE</span>`
+        : `<span style="color:#aaa; font-size:7px;">AUTO-COACH (AI) ACTIVE</span>`;
+
+    const btnRow = `
+    <div style="display:flex; gap:8px; margin-top:10px;">
+        <button onclick="leSaveLines('${tk}')" style="flex:1; border-color:#0f0; color:#0f0; font-size:8px;">SAVE LINES</button>
+        <button onclick="leClearLines('${tk}')" style="flex:1; border-color:var(--line-red); color:var(--line-red); font-size:8px;">RESET TO AI</button>
+        <button onclick="document.getElementById('lineEditorOverlay').style.display='none'" style="flex:1; font-size:8px;">CLOSE</button>
+    </div>
+    <div style="margin-top:6px; text-align:center;">${modeLabel}</div>`;
+
+    container.innerHTML = fHTML + dHTML + gHTML + legendHTML + btnRow;
+}
+
+// ── Swap dropdown ─────────────────────────────────────────────────────────────
+function leOpenSwap(tk, slotId, posHint) {
+    const existing = document.getElementById('le-swap-overlay');
+    if (existing) existing.remove();
+
+    const roster = rosters[tk] || [];
+    const isF = posHint !== 'LD' && posHint !== 'RD';
+    const pool = roster.filter(p => isF ? (p.pos !== 'G' && p.pos !== 'D') : p.pos === 'D')
+                       .sort((a,b) => (getPlayerWeightedStats(b.name).ovr||0) - (getPlayerWeightedStats(a.name).ovr||0));
+
+    let h = `<div style="background:#111; border:2px solid var(--ea-yellow); border-radius:4px; padding:12px; width:240px; max-height:320px; overflow-y:auto;">`;
+    h += `<div style="color:var(--ea-yellow); font-size:9px; font-weight:bold; margin-bottom:8px;">SWAP ${posHint} SLOT</div>`;
+    pool.forEach(p => {
+        const inj = playerStats[p.name]?.injury?.daysRemaining > 0;
+        const duo = getLineMates(p.name);
+        const duoLabel = duo ? `<span style="color:var(--ea-yellow); font-size:7px;"> ★</span>` : '';
+        h += `<div style="padding:5px 6px; cursor:pointer; border-radius:2px; margin-bottom:2px; background:#1a1a1a;"
+                   onmouseover="this.style.background='#222'" onmouseout="this.style.background='#1a1a1a'"
+                   onclick="leSwapSlot('${tk}','${slotId}','${p.name}')">
+            <span style="color:#fff; font-size:9px;">${inj?'🚑 ':''}${p.name}${duoLabel}</span>
+            <span style="color:#aaa; font-size:7px; float:right;">${getPlayerWeightedStats(p.name).ovr} OVR</span>
+        </div>`;
+    });
+    h += `<button onclick="document.getElementById('le-swap-overlay').remove()" style="width:100%; margin-top:6px; border-color:#555; color:#aaa; font-size:7px;">CANCEL</button>`;
+    h += `</div>`;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'le-swap-overlay';
+    overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999999; display:flex; align-items:center; justify-content:center;';
+    overlay.innerHTML = h;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+}
+
+// ── Apply a swap and re-render ────────────────────────────────────────────────
+function leSwapSlot(tk, slotId, newPlayerName) {
+    // Parse slot id: f01 = forward line 0 slot 1, d10 = defense pair 1 slot 0
+    const type     = slotId[0];         // 'f' or 'd'
+    const lineIdx  = parseInt(slotId[1]);
+    const spotIdx  = parseInt(slotId[2]);
+
+    // Seed customLines[tk] from AI structure if first edit
+    if (!customLines[tk]) {
+        const struct = getRosterStructure(tk);
+        customLines[tk] = {
+            f: struct.f.map(line => line.map(p => p.name)),
+            d: struct.d.map(pair => pair.map(p => p.name)),
+            g: struct.g.map(p => p.name)
+        };
+    }
+
+    const lines = customLines[tk][type];
+    // Swap: find where newPlayer currently lives and exchange
+    let oldLine = -1, oldSpot = -1;
+    lines.forEach((ln, li) => ln.forEach((n, si) => { if (n === newPlayerName) { oldLine = li; oldSpot = si; } }));
+    const displaced = lines[lineIdx][spotIdx];
+    lines[lineIdx][spotIdx] = newPlayerName;
+    if (oldLine !== -1) lines[oldLine][oldSpot] = displaced;
+
+    document.getElementById('le-swap-overlay')?.remove();
+    renderLineEditor(tk);
+}
+
+// ── Persist custom lines ──────────────────────────────────────────────────────
+function leSaveLines(tk) {
+    if (!customLines[tk]) { alert('No changes to save. Swap players first.'); return; }
+    localStorage.setItem('nhl94_customLines', JSON.stringify(customLines));
+    saveGame();
+    alert(`Lines saved for ${tk.toUpperCase()}! Custom lines are now active.`);
+    renderLineEditor(tk);
+}
+
+// ── Clear custom lines (revert to AI) ────────────────────────────────────────
+function leClearLines(tk) {
+    delete customLines[tk];
+    localStorage.setItem('nhl94_customLines', JSON.stringify(customLines));
+    saveGame();
+    renderLineEditor(tk);
+}
+
 function openLineEditorFromRoster() {
     // Grab the team code directly from the dropdown menu
     let tk = document.getElementById('teamViewSelect').value;
