@@ -4014,8 +4014,55 @@ function simGame(idx) {
     let hShots = 0, aShots = 0;
     let allGoals = [];
     let penaltyEvents = [];
-    let hStruct = getRosterStructure(g.h.nrm);
-    let aStruct = getRosterStructure(g.a.nrm);
+    const _hBase = getRosterStructure(g.h.nrm);
+    const _aBase = getRosterStructure(g.a.nrm);
+
+    // Mutable per-game copies — don't pollute the struct cache
+    const hFLines = _hBase.f.map(line => [...line]);
+    const hDPairs = _hBase.d.map(pair => [...pair]);
+    const hGPool  = [...(_hBase.g || [])];
+    const aFLines = _aBase.f.map(line => [...line]);
+    const aDPairs = _aBase.d.map(pair => [...pair]);
+    const aGPool  = [...(_aBase.g || [])];
+
+    // Keep hStruct/aStruct aliases for downstream code that reads .f/.d/.g
+    const hStruct = { f: hFLines, d: hDPairs, g: hGPool };
+    const aStruct = { f: aFLines, d: aDPairs, g: aGPool };
+
+    // ─── PRE-GAME INJURY FILL ─────────────────────────────────────────────
+    // If a player is injured before puck drop, fill their spot with the
+    // highest-OVR healthy player at the same position; fall back to any pos.
+    const _fillPreGame = (fLines, dPairs, tk) => {
+        const roster = rosters[tk] || [];
+        const inLineup = new Set([
+            ...fLines.flat().filter(Boolean).map(p => p.name),
+            ...dPairs.flat().filter(Boolean).map(p => p.name)
+        ]);
+        const bench = (preferPos) => roster
+            .filter(p => !inLineup.has(p.name) && (playerStats[p.name]?.injury?.daysRemaining || 0) === 0)
+            .sort((a, b) => {
+                const aMatch = getPlayerPosition(a) === preferPos ? 1 : 0;
+                const bMatch = getPlayerPosition(b) === preferPos ? 1 : 0;
+                if (bMatch !== aMatch) return bMatch - aMatch;
+                return (getPlayerWeightedStats(b.name).ovr || 0) - (getPlayerWeightedStats(a.name).ovr || 0);
+            });
+        const slotPos = [['C','LW','RW'], ['D','D']];
+        [fLines, dPairs].forEach((group, gi) => {
+            group.forEach(line => {
+                line.forEach((p, idx) => {
+                    if (p && (playerStats[p.name]?.injury?.daysRemaining || 0) > 0) {
+                        inLineup.delete(p.name);
+                        const pos = slotPos[gi][idx] || (gi === 0 ? 'LW' : 'D');
+                        const sub = bench(pos).find(s => !inLineup.has(s.name));
+                        line[idx] = sub || null;
+                        if (sub) inLineup.add(sub.name);
+                    }
+                });
+            });
+        });
+    };
+    _fillPreGame(hFLines, hDPairs, g.h.nrm);
+    _fillPreGame(aFLines, aDPairs, g.a.nrm);
 
     function buildLineSchedule(minsArray) {
         let sched = [];
@@ -4048,17 +4095,94 @@ function simGame(idx) {
         return 2; 
     }
 
-    // Players shaken up mid-game — out for the rest of this game only
-    const gameInjuredH = new Set();
+    // ─── MID-GAME SUBSTITUTION SYSTEM ────────────────────────────────────
+    const gameInjuredH = new Set();   // shaken-up names — out for this game
     const gameInjuredA = new Set();
+    const gameSubsH = { f: {}, d: {} }; // {f: {lineIdx: {slot: player}}, d: ...}
+    const gameSubsA = { f: {}, d: {} };
 
-    // Helper: swap backup goalie in
-    const swapGoalie = (tk, injuredName) => {
+    const _getFatigue = (pName) => playerStats[pName]?.status?.fatigue || 0;
+
+    const _swapGoalie = (tk, injuredName) => {
         const backups = (rosters[tk] || []).filter(p =>
             p.pos === 'G' && p.name !== injuredName &&
-            playerStats[p.name]?.injury?.daysRemaining === 0
+            (playerStats[p.name]?.injury?.daysRemaining || 0) === 0
         );
         return backups.length ? backups[0].name : injuredName;
+    };
+
+    // Find the freshest available forward for a shaken-up slot
+    const _findFwdSub = (fLines, slotIdx, excludeName, gameInj) => {
+        const FATIGUE_CAP = 65;
+        const candidates = [];
+        fLines.forEach((line, lIdx) => {
+            line.forEach((p, sIdx) => {
+                if (!p || p.name === excludeName || gameInj.has(p.name)) return;
+                const fat = _getFatigue(p.name);
+                const sameSlot  = sIdx === slotIdx;
+                const naturalC  = getPlayerPosition(p) === 'C';
+                candidates.push({ p, fat, sameSlot, naturalC });
+            });
+        });
+        if (!candidates.length) return null;
+        // C slot (0): prefer natural Cs from same slot, then natural Cs on wing, then freshest anyone
+        if (slotIdx === 0) {
+            const natCs = candidates.filter(c => c.sameSlot).sort((a, b) => a.fat - b.fat);
+            if (natCs.length) return natCs[0].p;
+            const wingCs = candidates.filter(c => !c.sameSlot && c.naturalC).sort((a, b) => a.fat - b.fat);
+            if (wingCs.length) return wingCs[0].p;
+        } else {
+            // Wing: prefer same wing slot first
+            const sameWing = candidates.filter(c => c.sameSlot).sort((a, b) => a.fat - b.fat);
+            if (sameWing.length) return sameWing[0].p;
+        }
+        // Fallback: freshest player under fatigue cap, else absolute freshest
+        const fresh = candidates.filter(c => c.fat <= FATIGUE_CAP).sort((a, b) => a.fat - b.fat);
+        return (fresh.length ? fresh : candidates.sort((a, b) => a.fat - b.fat))[0].p;
+    };
+
+    const _findDSub = (dPairs, excludeName, gameInj) => {
+        const candidates = [];
+        dPairs.forEach(pair => {
+            pair.forEach(p => {
+                if (!p || p.name === excludeName || gameInj.has(p.name)) return;
+                candidates.push({ p, fat: _getFatigue(p.name) });
+            });
+        });
+        return candidates.sort((a, b) => a.fat - b.fat)[0]?.p || null;
+    };
+
+    // Register a shaken-up event: find sub, store in gameSubs, log to boxlog
+    const _shakenUp = (fLines, dPairs, gameSubs, gameInj, victim, teamName, teamCode, step) => {
+        gameInj.add(victim.name);
+        const isD  = getPlayerPosition(victim) === 'D';
+        const t    = Math.floor(step / 2) % 20 || 20;
+        const per  = Math.ceil((step + 1) / 40);
+        let subMsg = '';
+
+        if (isD) {
+            const pairIdx = dPairs.findIndex(pair => pair.some(p => p?.name === victim.name));
+            const slotIdx = pairIdx >= 0 ? dPairs[pairIdx].findIndex(p => p?.name === victim.name) : -1;
+            const sub = _findDSub(dPairs, victim.name, gameInj);
+            if (sub && pairIdx >= 0 && slotIdx >= 0) {
+                if (!gameSubs.d[pairIdx]) gameSubs.d[pairIdx] = {};
+                gameSubs.d[pairIdx][slotIdx] = sub;
+                subMsg = ` — ${sub.name} double-shifts in`;
+            }
+        } else {
+            const lineIdx = fLines.findIndex(line => line.some(p => p?.name === victim.name));
+            const slotIdx = lineIdx >= 0 ? fLines[lineIdx].findIndex(p => p?.name === victim.name) : -1;
+            const sub = lineIdx >= 0 ? _findFwdSub(fLines, slotIdx, victim.name, gameInj) : null;
+            if (sub && lineIdx >= 0 && slotIdx >= 0) {
+                if (!gameSubs.f[lineIdx]) gameSubs.f[lineIdx] = {};
+                gameSubs.f[lineIdx][slotIdx] = sub;
+                subMsg = ` — ${sub.name} double-shifts in`;
+            } else if (!sub) {
+                subMsg = ' — no available replacement';
+            }
+        }
+        allGoals.push({ p: per, m: t, s: 0, str: `${t}:00`, tm: teamCode, cl: '#fff',
+            txt: `🚑 ${victim.name} (${teamCode.toUpperCase()}) shaken up — out for the game${subMsg}`, isPenalty: false });
     };
 
     // ==========================================
@@ -4073,46 +4197,53 @@ function simGame(idx) {
         let hDPair = getPairingForLine(hFLine, homeIceData.defensePairingMatrix || [[1,0,0],[0,1,0],[0,0,1]]);
         let aDPair = getPairingForLine(aFLine, awayIceData.defensePairingMatrix || [[1,0,0],[0,1,0],[0,0,1]]);
 
-        let hOnIce = [...hStruct.f[hFLine], ...hStruct.d[hDPair]];
-        let aOnIce = [...aStruct.f[aFLine], ...aStruct.d[aDPair]];
+        // Build on-ice units: start from per-game lines, apply any mid-game subs
+        const _applyLineSubs = (baseLine, lineSubs, lineIdx, gameInj) => {
+            const out = [...baseLine];
+            const slotSubs = lineSubs[lineIdx] || {};
+            Object.entries(slotSubs).forEach(([slot, sub]) => { out[parseInt(slot)] = sub; });
+            return out.filter(p => p && !gameInj.has(p.name));
+        };
+        let hFPlayers = _applyLineSubs(hFLines[hFLine], gameSubsH.f, hFLine, gameInjuredH);
+        let hDPlayers = _applyLineSubs(hDPairs[hDPair], gameSubsH.d, hDPair, gameInjuredH);
+        let aFPlayers = _applyLineSubs(aFLines[aFLine], gameSubsA.f, aFLine, gameInjuredA);
+        let aDPlayers = _applyLineSubs(aDPairs[aDPair], gameSubsA.d, aDPair, gameInjuredA);
+        let hOnIce = [...hFPlayers, ...hDPlayers];
+        let aOnIce = [...aFPlayers, ...aDPlayers];
 
-        // Mid-game shaken-up check (~1.2% per step per team = roughly 1-2 events per game)
+        // Mid-game shaken-up check (~1.2% per step per team ≈ 1-2 events/game)
         if (Math.random() < 0.012) {
-            const candidates = hOnIce.filter(p => p && p.name);
+            const candidates = hOnIce.filter(p => p && p.name && !gameInjuredH.has(p.name));
             if (candidates.length) {
                 const victim = candidates[Math.floor(Math.random() * candidates.length)];
-                if (victim.pos === 'G') {
-                    const newG = swapGoalie(g.h.nrm, victim.name);
-                    if (newG !== victim.name) {
-                        hG_name = newG;
-                        allGoals.push({ p: Math.ceil(step/40)+1, m: Math.floor(step/2)%20||20, s:0, str: `${Math.floor(step/2)%20||20}:00`, tm: g.h.code, cl: '#fff', txt: `🚑 GOALIE INJURY: ${victim.name} (${g.h.code.toUpperCase()}) — ${newG} enters the game`, isPenalty: false });
-                    }
+                if (getPlayerPosition(victim) === 'G') {
+                    const newG = _swapGoalie(g.h.nrm, victim.name);
+                    if (newG !== victim.name) { hG_name = newG; allGoals.push({ p: Math.ceil((step+1)/40), m: Math.floor(step/2)%20||20, s:0, str:`${Math.floor(step/2)%20||20}:00`, tm:g.h.code, cl:'#fff', txt:`🚑 GOALIE INJURY: ${victim.name} (${g.h.code.toUpperCase()}) — ${newG} enters`, isPenalty:false }); }
                 } else {
-                    gameInjuredH.add(victim.name);
-                    allGoals.push({ p: Math.ceil(step/40)+1, m: Math.floor(step/2)%20||20, s:0, str: `${Math.floor(step/2)%20||20}:00`, tm: g.h.code, cl: '#fff', txt: `🚑 ${victim.name} (${g.h.code.toUpperCase()}) shaken up — out for the game`, isPenalty: false });
+                    _shakenUp(hFLines, hDPairs, gameSubsH, gameInjuredH, victim, g.h.nrm, g.h.code, step);
                 }
             }
         }
         if (Math.random() < 0.012) {
-            const candidates = aOnIce.filter(p => p && p.name);
+            const candidates = aOnIce.filter(p => p && p.name && !gameInjuredA.has(p.name));
             if (candidates.length) {
                 const victim = candidates[Math.floor(Math.random() * candidates.length)];
-                if (victim.pos === 'G') {
-                    const newG = swapGoalie(g.a.nrm, victim.name);
-                    if (newG !== victim.name) {
-                        aG_name = newG;
-                        allGoals.push({ p: Math.ceil(step/40)+1, m: Math.floor(step/2)%20||20, s:0, str: `${Math.floor(step/2)%20||20}:00`, tm: g.a.code, cl: '#fff', txt: `🚑 GOALIE INJURY: ${victim.name} (${g.a.code.toUpperCase()}) — ${newG} enters the game`, isPenalty: false });
-                    }
+                if (getPlayerPosition(victim) === 'G') {
+                    const newG = _swapGoalie(g.a.nrm, victim.name);
+                    if (newG !== victim.name) { aG_name = newG; allGoals.push({ p: Math.ceil((step+1)/40), m: Math.floor(step/2)%20||20, s:0, str:`${Math.floor(step/2)%20||20}:00`, tm:g.a.code, cl:'#fff', txt:`🚑 GOALIE INJURY: ${victim.name} (${g.a.code.toUpperCase()}) — ${newG} enters`, isPenalty:false }); }
                 } else {
-                    gameInjuredA.add(victim.name);
-                    allGoals.push({ p: Math.ceil(step/40)+1, m: Math.floor(step/2)%20||20, s:0, str: `${Math.floor(step/2)%20||20}:00`, tm: g.a.code, cl: '#fff', txt: `🚑 ${victim.name} (${g.a.code.toUpperCase()}) shaken up — out for the game`, isPenalty: false });
+                    _shakenUp(aFLines, aDPairs, gameSubsA, gameInjuredA, victim, g.a.nrm, g.a.code, step);
                 }
             }
         }
 
-        // Filter game-injured skaters — no subs, remaining players double-shift
-        if (gameInjuredH.size) hOnIce = hOnIce.filter(p => !gameInjuredH.has(p.name));
-        if (gameInjuredA.size) aOnIce = aOnIce.filter(p => !gameInjuredA.has(p.name));
+        // Re-build on-ice after any new shaken-up events this step
+        hFPlayers = _applyLineSubs(hFLines[hFLine], gameSubsH.f, hFLine, gameInjuredH);
+        hDPlayers = _applyLineSubs(hDPairs[hDPair], gameSubsH.d, hDPair, gameInjuredH);
+        aFPlayers = _applyLineSubs(aFLines[aFLine], gameSubsA.f, aFLine, gameInjuredA);
+        aDPlayers = _applyLineSubs(aDPairs[aDPair], gameSubsA.d, aDPair, gameInjuredA);
+        hOnIce = [...hFPlayers, ...hDPlayers];
+        aOnIce = [...aFPlayers, ...aDPlayers];
 
         // Track skater ATOI values securely (0.5 mins per step)
         hOnIce.forEach(p => trk(p.name, 'toi', 0.5));
