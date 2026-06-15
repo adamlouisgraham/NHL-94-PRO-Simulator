@@ -4052,17 +4052,6 @@ function simGame(idx) {
     const gameInjuredH = new Set();
     const gameInjuredA = new Set();
 
-    // Helper: pick a sub from the roster not on-ice and not game-injured
-    const pickSub = (tk, gameInjured, onIceNames) => {
-        const bench = (rosters[tk] || []).filter(p =>
-            p.pos !== 'G' &&
-            !gameInjured.has(p.name) &&
-            !onIceNames.has(p.name) &&
-            playerStats[p.name]?.injury?.daysRemaining === 0
-        );
-        return bench.length ? bench[Math.floor(Math.random() * bench.length)] : null;
-    };
-
     // Helper: swap backup goalie in
     const swapGoalie = (tk, injuredName) => {
         const backups = (rosters[tk] || []).filter(p =>
@@ -4121,27 +4110,9 @@ function simGame(idx) {
             }
         }
 
-        // Filter game-injured skaters; sub in a healthy bench player if available
-        if (gameInjuredH.size) {
-            const onIceNames = new Set(hOnIce.map(p => p.name));
-            hOnIce = hOnIce.filter(p => !gameInjuredH.has(p.name));
-            while (hOnIce.length < 5) {
-                const sub = pickSub(g.h.nrm, gameInjuredH, onIceNames);
-                if (!sub) break;
-                hOnIce.push(sub);
-                onIceNames.add(sub.name);
-            }
-        }
-        if (gameInjuredA.size) {
-            const onIceNames = new Set(aOnIce.map(p => p.name));
-            aOnIce = aOnIce.filter(p => !gameInjuredA.has(p.name));
-            while (aOnIce.length < 5) {
-                const sub = pickSub(g.a.nrm, gameInjuredA, onIceNames);
-                if (!sub) break;
-                aOnIce.push(sub);
-                onIceNames.add(sub.name);
-            }
-        }
+        // Filter game-injured skaters — no subs, remaining players double-shift
+        if (gameInjuredH.size) hOnIce = hOnIce.filter(p => !gameInjuredH.has(p.name));
+        if (gameInjuredA.size) aOnIce = aOnIce.filter(p => !gameInjuredA.has(p.name));
 
         // Track skater ATOI values securely (0.5 mins per step)
         hOnIce.forEach(p => trk(p.name, 'toi', 0.5));
@@ -5462,10 +5433,9 @@ function renderTeamStats() {
             // We use st[k].toi because 'k' is your dynamic key (season or playoff)
             const totalToi = st[k].toi || 0;
             const gamesPlayed = st[k].gp || 0;
-            const avgToi = gamesPlayed > 0 ? Math.round(totalToi / gamesPlayed) : 0;
-            
-            // DEBUG: Uncomment the next line to check if TOI is actually being captured in console
-            // console.log(`ATOI Debug for ${p.name}: TotalTOI=${totalToi}, GP=${gamesPlayed}, Result=${avgToi}`);
+            const avgToiMin = gamesPlayed > 0 ? totalToi / gamesPlayed : 0;
+            const avgToiM = Math.floor(avgToiMin), avgToiS = Math.round((avgToiMin - avgToiM) * 60);
+            const avgToi = gamesPlayed > 0 ? `${avgToiM}:${String(avgToiS).padStart(2,'0')}` : '--';
 
             return `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')">
                 <td style="text-align:left;">${p.name} ${getArchetypeBadge(p.name)} ${getEmoji(p.name)}</td>
