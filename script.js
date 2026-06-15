@@ -3995,8 +3995,8 @@ function simGame(idx) {
     };
 
     const hG_obj = selG(g.h.nrm), aG_obj = selG(g.a.nrm);
-    const hG_name = hG_obj ? hG_obj.name : null;
-    const aG_name = aG_obj ? aG_obj.name : null;
+    let hG_name = hG_obj ? hG_obj.name : null;
+    let aG_name = aG_obj ? aG_obj.name : null;
 
     // 🧱 3. MACRO AURAS & MODIFIER MATH
     let hAuraMod = (getTeamSystemAura(g.h.nrm) === 'OFFENSIVE TEAM' ? 1.15 : (getTeamSystemAura(g.h.nrm) === 'DEFENSIVE TEAM' ? 0.85 : 1.0));
@@ -4048,6 +4048,30 @@ function simGame(idx) {
         return 2; 
     }
 
+    // Players shaken up mid-game — out for the rest of this game only
+    const gameInjuredH = new Set();
+    const gameInjuredA = new Set();
+
+    // Helper: pick a sub from the roster not on-ice and not game-injured
+    const pickSub = (tk, gameInjured, onIceNames) => {
+        const bench = (rosters[tk] || []).filter(p =>
+            p.pos !== 'G' &&
+            !gameInjured.has(p.name) &&
+            !onIceNames.has(p.name) &&
+            playerStats[p.name]?.injury?.daysRemaining === 0
+        );
+        return bench.length ? bench[Math.floor(Math.random() * bench.length)] : null;
+    };
+
+    // Helper: swap backup goalie in
+    const swapGoalie = (tk, injuredName) => {
+        const backups = (rosters[tk] || []).filter(p =>
+            p.pos === 'G' && p.name !== injuredName &&
+            playerStats[p.name]?.injury?.daysRemaining === 0
+        );
+        return backups.length ? backups[0].name : injuredName;
+    };
+
     // ==========================================
     // ⏱️ THE 60-MINUTE SIMULATION LOOP (120 steps)
     // ==========================================
@@ -4062,6 +4086,62 @@ function simGame(idx) {
 
         let hOnIce = [...hStruct.f[hFLine], ...hStruct.d[hDPair]];
         let aOnIce = [...aStruct.f[aFLine], ...aStruct.d[aDPair]];
+
+        // Mid-game shaken-up check (~1.2% per step per team = roughly 1-2 events per game)
+        if (Math.random() < 0.012) {
+            const candidates = hOnIce.filter(p => p && p.name);
+            if (candidates.length) {
+                const victim = candidates[Math.floor(Math.random() * candidates.length)];
+                if (victim.pos === 'G') {
+                    const newG = swapGoalie(g.h.nrm, victim.name);
+                    if (newG !== victim.name) {
+                        hG_name = newG;
+                        allGoals.push({ p: Math.ceil(step/40)+1, m: Math.floor(step/2)%20||20, s:0, str: `${Math.floor(step/2)%20||20}:00`, tm: g.h.code, cl: '#fff', txt: `🚑 GOALIE INJURY: ${victim.name} (${g.h.code.toUpperCase()}) — ${newG} enters the game`, isPenalty: false });
+                    }
+                } else {
+                    gameInjuredH.add(victim.name);
+                    allGoals.push({ p: Math.ceil(step/40)+1, m: Math.floor(step/2)%20||20, s:0, str: `${Math.floor(step/2)%20||20}:00`, tm: g.h.code, cl: '#fff', txt: `🚑 ${victim.name} (${g.h.code.toUpperCase()}) shaken up — out for the game`, isPenalty: false });
+                }
+            }
+        }
+        if (Math.random() < 0.012) {
+            const candidates = aOnIce.filter(p => p && p.name);
+            if (candidates.length) {
+                const victim = candidates[Math.floor(Math.random() * candidates.length)];
+                if (victim.pos === 'G') {
+                    const newG = swapGoalie(g.a.nrm, victim.name);
+                    if (newG !== victim.name) {
+                        aG_name = newG;
+                        allGoals.push({ p: Math.ceil(step/40)+1, m: Math.floor(step/2)%20||20, s:0, str: `${Math.floor(step/2)%20||20}:00`, tm: g.a.code, cl: '#fff', txt: `🚑 GOALIE INJURY: ${victim.name} (${g.a.code.toUpperCase()}) — ${newG} enters the game`, isPenalty: false });
+                    }
+                } else {
+                    gameInjuredA.add(victim.name);
+                    allGoals.push({ p: Math.ceil(step/40)+1, m: Math.floor(step/2)%20||20, s:0, str: `${Math.floor(step/2)%20||20}:00`, tm: g.a.code, cl: '#fff', txt: `🚑 ${victim.name} (${g.a.code.toUpperCase()}) shaken up — out for the game`, isPenalty: false });
+                }
+            }
+        }
+
+        // Filter game-injured skaters; sub in a healthy bench player if available
+        if (gameInjuredH.size) {
+            const onIceNames = new Set(hOnIce.map(p => p.name));
+            hOnIce = hOnIce.filter(p => !gameInjuredH.has(p.name));
+            while (hOnIce.length < 5) {
+                const sub = pickSub(g.h.nrm, gameInjuredH, onIceNames);
+                if (!sub) break;
+                hOnIce.push(sub);
+                onIceNames.add(sub.name);
+            }
+        }
+        if (gameInjuredA.size) {
+            const onIceNames = new Set(aOnIce.map(p => p.name));
+            aOnIce = aOnIce.filter(p => !gameInjuredA.has(p.name));
+            while (aOnIce.length < 5) {
+                const sub = pickSub(g.a.nrm, gameInjuredA, onIceNames);
+                if (!sub) break;
+                aOnIce.push(sub);
+                onIceNames.add(sub.name);
+            }
+        }
 
         // Track skater ATOI values securely (0.5 mins per step)
         hOnIce.forEach(p => trk(p.name, 'toi', 0.5));
@@ -8066,11 +8146,11 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
             const roll = Math.random();
             let days, label;
             // Reweighted: heavy bias toward short injuries; 12-15 rare
-            if      (roll < 0.25) { days = 0;                                   label = 'out for a period'; }
-            else if (roll < 0.55) { days = 1;                                   label = '1-game injury'; }
-            else if (roll < 0.78) { days = Math.floor(Math.random() * 4) + 2;  label = `${days}-game injury`; }
-            else if (roll < 0.94) { days = Math.floor(Math.random() * 6) + 6;  label = `${days}-game injury`; }
-            else                  { days = Math.floor(Math.random() * 4) + 12; label = `${days}-game injury`; }
+            if      (roll < 0.20) { days = 0;                                                    label = 'out for a period'; }
+            else if (roll < 0.40) { days = Math.floor(Math.random() * 2) + 1;                 label = `${days}-game injury`; }
+            else if (roll < 0.75) { days = Math.floor(Math.random() * 5) + 3;                 label = `${days}-game injury`; }
+            else if (roll < 0.95) { days = Math.floor(Math.random() * 4) + 8;                 label = `${days}-game injury`; }
+            else                  { days = Math.floor(Math.random() * 4) + 12;                label = `${days}-game injury`; }
 
             days = Math.min(days, 15);
 
