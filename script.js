@@ -26,11 +26,11 @@
     "DEFENSIVE FWD":  { shotRate: 0.75, penaltyRate: 1.00,  assistRate: 0.95 },
 
     // --- DEFENSEMEN ---
-    "FRANCHISE D":    { shotRate: 1.20, penaltyRate: 0.80,  assistRate: 1.35 },
+    "FRANCHISE D":    { shotRate: 1.15, penaltyRate: 0.80,  assistRate: 1.45 }, // High assistRate to reflect their role in starting plays and quarterbacking from the blueline
     "QUARTERBACK":    { shotRate: 0.99, penaltyRate: 0.85,  assistRate: 1.60 }, // Maximize playmaking from the blueline
-    "BOOMER":         { shotRate: 1.25, penaltyRate: 1.00,  assistRate: 0.99 }, // Higher shotRate, slightly lower assistRate to reflect their focus on powerful shots
-    "SHUTDOWN":       { shotRate: 0.80, penaltyRate: 1.00,  assistRate: 0.95 },
-    "TWO-WAY STAR":   { shotRate: 1.09, penaltyRate: 0.90,  assistRate: 1.15 },
+    "BOOMER":         { shotRate: 1.20, penaltyRate: 1.00,  assistRate: 1.11 }, // Higher shotRate, slightly lower assistRate to reflect their focus on powerful shots
+    "SHUTDOWN":       { shotRate: 0.80, penaltyRate: 1.00,  assistRate: 1.00 }, // Lower shotRate, balanced assistRate to reflect their defensive focus
+    "TWO-WAY STAR":   { shotRate: 1.09, penaltyRate: 0.90,  assistRate: 1.25 },
     "TWO-WAY D":      { shotRate: 0.97, penaltyRate: 1.00,  assistRate: 1.05 },
     "PRO OFFENSIVE D":{ shotRate: 1.05, penaltyRate: 0.70,  assistRate: 1.15 },
     "PRO DEFENSIVE D":{ shotRate: 0.80, penaltyRate: 0.70,  assistRate: 0.95 },
@@ -134,6 +134,15 @@ function getWeightLbs(grade) {
     const lbs = {'A+':182,'A':190,'B':200,'C':210,'D':220,'F':230,'F+':242,'F-':242};
     return lbs[grade] || 210;
 }
+// Shared helper — parse a raw weight cell (grade string OR numeric string) into
+// { grade, lbs } so both CSV init paths stay in sync.
+function parseWeightCell(raw) {
+    const g = String(raw || '').trim();
+    if (/^[ABCDFabcdf][+-]?$/.test(g)) return { grade: g.toUpperCase(), lbs: getWeightLbs(g.toUpperCase()) };
+    const n = parseInt(g, 10);
+    if (!isNaN(n) && n > 100) return { grade: lbsToWeightGrade(n), lbs: n };
+    return { grade: 'C', lbs: 210 };
+}
 // Reverse-map numeric lbs → weight grade
 function lbsToWeightGrade(lbs) {
     if (!lbs || lbs <= 0) return 'C';
@@ -228,7 +237,7 @@ function getRandomInt(min, max) {
 const getOff = (pName) => parseInt(playerStats[pName]?.attr.off || playerStats[pName]?.attr.OFF || 0);
 const getDef = (pName) => parseInt(playerStats[pName]?.attr.def || playerStats[pName]?.attr.DEF || 0);
 const getChk = (pName) => parseInt(playerStats[pName]?.attr.chk || playerStats[pName]?.attr.CHK || 0);
-const getWgt = (pName) => parseInt(playerStats[pName]?.attr.wgt || playerStats[pName]?.attr.WGT || 0); // Column AC
+const getWgt = (pName) => playerStats[pName]?.weight || getWeightLbs(playerStats[pName]?.attr.weight || 'C');
 const getAggr = (pName) => parseInt(playerStats[pName]?.attr.aggr || playerStats[pName]?.attr.AGR || 0);
 const getArch = (pName) => playerStats[pName]?.archetype || 'Unknown'; // Column AE
 
@@ -1319,14 +1328,14 @@ function importRosterFromCSV(csvText) {
             };
         }
 
-        const wGrade = getCell(row, weightIdx) || 'C'; // e.g. 'A+', 'B', 'F+'
-        playerAttributes.weight = wGrade; // store grade for display & modifiers
+        const wParsed = parseWeightCell(getCell(row, weightIdx));
+        playerAttributes.weight = wParsed.grade;
         const player = {
             teamCode: getCell(row, teamCodeIdx),
             name: fullName,
             pos: playerPosition,
             overall: parseIntCell(row, overallIdx, 30),
-            weight: getWeightLbs(wGrade), // numeric lbs for fatigue/collision math
+            weight: wParsed.lbs,
             attr: playerAttributes,
             career: {
                 gp: parseIntCell(row, careerGpIdx, 0),
@@ -1917,7 +1926,7 @@ async function startNewGame(useCustomRoster = false) {
                     rosters[tk].push({ name: pN, pos: pos });
                     playerStats[pN] = {
                         name: pN, team: teamObj.name, teamCode: teamObj.code, pos: pos, age: parseInt(getCol(r, ["AGE"], -1)) || (Math.floor(Math.random()*15)+18),
-                        weight: getWeightLbs(getCol(r, ["WEIGHT", "WGT"], 21) || 'C'),
+                        weight: parseWeightCell(getCol(r, ["WEIGHT", "WGT"], 21)).lbs,
                         streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false, 
                         injury: { severity: 0, daysRemaining: 0 },
                         cumulativeFatigue: 0,
@@ -1950,7 +1959,7 @@ async function startNewGame(useCustomRoster = false) {
     check: gradeToNum(getCol(r, ["CHECKING", "CHK"], 14)), 
     shotAcc: gradeToNum(getCol(r, ["SHOT ACCURACY", "SHOT ACC", "ACC"], 15)), 
     stkHnd: gradeToNum(getCol(r, ["PUCK CONTROL", "STICK HANDLING", "STICK", "STK"], 16)), 
-    weight: getCol(r, ["WEIGHT", "WGT"], 21) || 'C', // grade string: A+, B, F+, etc.
+    weight: parseWeightCell(getCol(r, ["WEIGHT", "WGT"], 21)).grade, // grade string: A+, B, F+
 
     // --- OVERALL (Safe Fallback) ---
     ovr: parseInt(getCol(r, ["GOALIE NEW OVERALL", "OVERALL RATING", "OVERALL", "OVR"], 19)) || 70 
@@ -2180,12 +2189,12 @@ function getPlayerWeightedStats(pName) {
             if (baseOvr >= 85) tag = "SUPERSTAR";
             else if (shotAcc >= 80 && pwr >= 75 && off >= 80) tag = "SNIPER"; 
             else if (pass >= 80 && off >= 80) tag = "PLAYMAKER";
-            else if (off >= 75 && def >= 80 && check >= 75 && pass >= 75 && pwr >= 75) tag = "TWO-WAY STAR F";
+            else if (rough >= 80 && aggr >= 80) tag = "ENFORCER F";
+            else if (off >= 75 && def >= 80 && check >= 75 || aggr >= 75 && pass >= 75 || pwr >= 75 || shotAcc >= 75 ) tag = "TWO-WAY STAR F";
             else if (off >= 75 && agl >= 75 && spd >= 80) tag = "SPEEDSTER"; 
             else if (off >= 75 && agl >= 80 && stkHnd >= 80) tag = "DANGLER";
-            else if (off >= 75 && check >= 65 && pwr >= 70 && aggr >= 65 && rough >= 60 && weight >= 215) tag = "POWER FORWARD"; 
-            else if (def >= 70 && off >= 70 && check >= 70 && aggr >= 70 && rough >= 60 ) tag = "GRINDER";
-            else if (rough >= 80 && aggr >= 80) tag = "ENFORCER F";
+            else if (off >= 70 || check >= 60 && pwr >= 70 || aggr >= 60 || rough >= 60 && weight >= 215) tag = "POWER FORWARD"; 
+            else if (def >= 65 && off >= 65 && check >= 60 || aggr >= 70 || rough >= 60 && weight <= 215) tag = "GRINDER";
             else if (off >= 70) tag = "PRO OFFENSIVE FWD";
             else if (def >= 70) tag = "PRO DEFENSIVE FWD";
             
@@ -3536,7 +3545,15 @@ const gWeights = eligible.map(p => {
         ppMod = (p.team === specialTeams.teamAdvantage) ? 1.40 : 0.35;
     }
 
-    return Math.max(1, baseChance * archMod * modifier * compMod * ppMod);
+    // Underperformance penalty: skilled shooter (B+ shotPwr or shotAcc) with ≤1.0 SOG/GP
+    let usageMod = 1.0;
+    const _ps = playerStats[p.name]?.season;
+    if (_ps && _ps.gp >= 5) {
+        const soPerGame = (_ps.s || 0) / _ps.gp;
+        if (soPerGame <= 1.0 && (pA.shotPwr >= 65 || pA.shotAcc >= 65)) usageMod = 0.78;
+    }
+
+    return Math.max(1, baseChance * archMod * modifier * compMod * ppMod * usageMod);
 });
 
         // 3. Roll scorer
@@ -3580,15 +3597,23 @@ const getAWeight = (p, isSec) => {
     let stick = pA.stkHnd || 70;
     
     let baseWeight = (off * 0.3) + (pass * 0.5) + (stick * 0.2);
-    
+
     // Apply Archetype Multiplier
     let archMod = arch.assistRate;
-    
+
     let mod = isSec ? 1.1 : 0.9; // Secondary assists get a slight boost, primary assists get a slight reduction to create more variance
     const isD = (p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD');
     if (isD) mod *= 0.90; // Defensemen assist penalty, applies to both primary and secondary assists
-    
-    return baseWeight * archMod * mod;
+
+    // Underperformance penalty: skilled passer (B+ pass) with ≤0.35 A/GP
+    let passUsageMod = 1.0;
+    const _aps = playerStats[p.name]?.season;
+    if (_aps && _aps.gp >= 5 && pass >= 65) {
+        const aPerGame = (_aps.a || 0) / _aps.gp;
+        if (aPerGame <= 0.35) passUsageMod = 0.78;
+    }
+
+    return baseWeight * archMod * mod * passUsageMod;
 };
 
        let assistRoll = Math.random();
