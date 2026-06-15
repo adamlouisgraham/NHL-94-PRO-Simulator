@@ -138,15 +138,17 @@ function getWeightLbs(grade) {
 function numToGrade(n) {
     const v = parseInt(n);
     if (isNaN(v)) return n || '--';
-    if (v >= 85) return 'A+';
-    if (v >= 75) return 'A';
-    if (v >= 65) return 'B+';
-    if (v >= 55) return 'B';
-    if (v >= 45) return 'C+';
-    if (v >= 40) return 'C';
-    if (v >= 35) return 'D+';
-    if (v >= 30) return 'D';
-    if (v >= 20) return 'F+';
+    if (v >= 95) return 'A+';
+    if (v >= 90) return 'A';
+    if (v >= 85) return 'A-';
+    if (v >= 80) return 'B+';
+    if (v >= 75) return 'B';
+    if (v >= 70) return 'B-';
+    if (v >= 63) return 'C+';
+    if (v >= 56) return 'C';
+    if (v >= 50) return 'C-';
+    if (v >= 40) return 'D';
+    if (v >= 30) return 'F+';
     return 'F';
 }
 
@@ -2238,7 +2240,7 @@ function getPlayerWeightedStats(pName) {
             else if (shotAcc >= 80 && pwr >= 75 && off >= 80) tag = "SNIPER"; 
             else if (pass >= 80 && off >= 80) tag = "PLAYMAKER";
             else if (rough >= 80 && aggr >= 80) tag = "ENFORCER F";
-            else if (off >= 75 && def >= 80 && check >= 75 || aggr >= 75 && pass >= 75 || pwr >= 75 || shotAcc >= 75 ) tag = "TWO-WAY STAR F";
+            else if ((off >= 75 && def >= 80 && check >= 75) || (aggr >= 75 && pass >= 75 && off >= 70)) tag = "TWO-WAY STAR F";
             else if (off >= 75 && agl >= 75 && spd >= 80) tag = "SPEEDSTER"; 
             else if (off >= 75 && agl >= 80 && stkHnd >= 80) tag = "DANGLER";
             else if (off >= 70 || check >= 60 && pwr >= 70 || aggr >= 60 || rough >= 60 && weight >= 215) tag = "POWER FORWARD"; 
@@ -4145,7 +4147,11 @@ function simGame(idx) {
             let advTeam = penTeam.nrm === g.h.nrm ? g.a : g.h;
             let activeSkaters = penTeam.nrm === g.h.nrm ? hOnIce : aOnIce;
             if (activeSkaters.length > 0) {
-                let offender = activeSkaters[Math.floor(Math.random() * activeSkaters.length)].name;
+                const penWeights = activeSkaters.map(p => archMods[getPlayerWeightedStats(p.name)?.tag]?.penaltyRate || 1.0);
+                const penTotal = penWeights.reduce((s, w) => s + w, 0);
+                let penRnd = Math.random() * penTotal, penIdx = 0;
+                for (let i = 0; i < penWeights.length; i++) { penRnd -= penWeights[i]; if (penRnd <= 0) { penIdx = i; break; } }
+                let offender = activeSkaters[penIdx].name;
                 trk(offender, 'pim', 2);
                 penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: penTeam.code, cl: teamColors[penTeam.nrm] ? teamColors[penTeam.nrm][0] : '#fff', txt: `PENALTY: ${offender} (2 min minor)`, isPenalty: true });
                 
@@ -4840,14 +4846,14 @@ async function beginNewYear() {
             p.playoff = {gp:0, w:0, l:0, so:0, sv:0, sa:0, consStarts:0};
         } else {
             // Archive Regular Season to Career Regular Season
-            p.career.gp += p.season.gp; p.career.g += p.season.g; p.career.a += p.season.a; p.career.pts += (p.season.g + p.season.a); p.career.pm += (p.season.pm || 0); p.career.pim += (p.season.pim || 0); p.career.ppg += (p.season.ppg || 0); p.career.shg += (p.season.shg || 0); p.career.gwg += (p.season.gwg || 0); p.career.s += (p.season.s || 0); 
-            
+            p.career.gp += p.season.gp; p.career.g += p.season.g; p.career.a += p.season.a; p.career.pts += (p.season.g + p.season.a); p.career.pm += (p.season.pm || 0); p.career.pim += (p.season.pim || 0); p.career.ppg += (p.season.ppg || 0); p.career.shg += (p.season.shg || 0); p.career.gwg += (p.season.gwg || 0); p.career.s += (p.season.s || 0); p.career.toi = (p.career.toi || 0) + (p.season.toi || 0);
+
             // Archive Playoff to Career Playoff
-            p.careerPlayoff.gp += p.playoff.gp; p.careerPlayoff.g += p.playoff.g; p.careerPlayoff.a += p.playoff.a; p.careerPlayoff.pts += (p.playoff.g + p.playoff.a); p.careerPlayoff.pm += (p.playoff.pm || 0); p.careerPlayoff.pim += (p.playoff.pim || 0); p.careerPlayoff.ppg += (p.playoff.ppg || 0); p.careerPlayoff.shg += (p.playoff.shg || 0); p.careerPlayoff.gwg += (p.playoff.gwg || 0); p.careerPlayoff.s += (p.playoff.s || 0);
-            
+            p.careerPlayoff.gp += p.playoff.gp; p.careerPlayoff.g += p.playoff.g; p.careerPlayoff.a += p.playoff.a; p.careerPlayoff.pts += (p.playoff.g + p.playoff.a); p.careerPlayoff.pm += (p.playoff.pm || 0); p.careerPlayoff.pim += (p.playoff.pim || 0); p.careerPlayoff.ppg += (p.playoff.ppg || 0); p.careerPlayoff.shg += (p.playoff.shg || 0); p.careerPlayoff.gwg += (p.playoff.gwg || 0); p.careerPlayoff.s += (p.playoff.s || 0); p.careerPlayoff.toi = (p.careerPlayoff.toi || 0) + (p.playoff.toi || 0);
+
             // Wipe clean for the new year
-            p.season = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0}; 
-            p.playoff = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0};
+            p.season = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0};
+            p.playoff = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0};
         }
         p.streakType = 'stable'; p.hasScored = false; 
     });
