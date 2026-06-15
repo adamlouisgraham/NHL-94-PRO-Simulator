@@ -134,6 +134,22 @@ function getWeightLbs(grade) {
     const lbs = {'A+':182,'A':190,'B':200,'C':210,'D':220,'F':230,'F+':242,'F-':242};
     return lbs[grade] || 210;
 }
+// Reverse-map a stored numeric attr value back to a display grade string
+function numToGrade(n) {
+    const v = parseInt(n);
+    if (isNaN(v)) return n || '--';
+    if (v >= 85) return 'A+';
+    if (v >= 75) return 'A';
+    if (v >= 65) return 'B+';
+    if (v >= 55) return 'B';
+    if (v >= 45) return 'C+';
+    if (v >= 40) return 'C';
+    if (v >= 35) return 'D+';
+    if (v >= 30) return 'D';
+    if (v >= 20) return 'F+';
+    return 'F';
+}
+
 // Shared helper — parse a raw weight cell (grade string OR numeric string) into
 // { grade, lbs } so both CSV init paths stay in sync.
 function parseWeightCell(raw) {
@@ -2083,9 +2099,14 @@ async function startNewGame(useCustomRoster = false) {
 }
 
 // --- RATING ENGINE (WITH LIVE OVR + FATIGUE MATH) ---
+// Per-game cache — cleared at the top of simGame() each game tick
+let _wpCache = {};
+function clearWpCache() { _wpCache = {}; }
+
 function getPlayerWeightedStats(pName) {
-    const p = playerStats[pName]; 
-    
+    if (_wpCache[pName]) return _wpCache[pName];
+    const p = playerStats[pName];
+
     // 🚨 FALLBACK UPDATE: If player doesn't exist, return a 57
     if (!p) return { ovr: 57, tag: 'NONE' };
 
@@ -2256,7 +2277,9 @@ function getPlayerWeightedStats(pName) {
         finalOvr += morale;
     }
 
-    return { ovr: finalOvr, tag: tag, baseOvr: baseOvr };
+    const result = { ovr: finalOvr, tag: tag, baseOvr: baseOvr };
+    _wpCache[pName] = result;
+    return result;
 }
 
 // ==========================================
@@ -3876,6 +3899,7 @@ function executeShotSequence(attackingTeamId, line, opposingGoalie) {
 }
 
 function simGame(idx) {
+    clearWpCache(); // invalidate per-game OVR/tag cache at start of each game
     const dayGames = Array.isArray(calendar[currentDay]) ? calendar[currentDay] : [];
     const g = dayGames[idx];
     let awayGoalie = getStartingGoalie(g.a.nrm);
@@ -7513,19 +7537,20 @@ function pcBuildStats(pName, tab) {
     const wGrade = p.attr.weight || lbsToWeightGrade(p.weight) || 'C';
     const wLbs = p.weight || getWeightLbs(wGrade);
     const wtRow = `<div style="text-align:center;color:#555;font-size:6px;margin-top:4px;letter-spacing:1px;">WEIGHT <span style="color:#aaa;font-size:8px;margin-left:4px;">${wLbs} LBS</span> <span style="color:#444;font-size:6px;">(${wGrade})</span></div>`;
+    const ng = v => numToGrade(v);
     if (isG) {
-        return tbl([['GLV-L',p.attr.gloveL||'--'],['GLV-R',p.attr.gloveR||'--'],
-            ['STK-L',p.attr.stickL||'--'],['STK-R',p.attr.stickR||'--'],
-            ['AGIL',p.attr.agil||'--'],['SPD',p.attr.speed||'--'],
-            ['DEF',p.attr.def||'--'],['CTRL',p.attr.stkHnd||'--'],
-            ['ENDUR',p.attr.endur||'--'],['AGGR',p.attr.aggr||'--']],[]) + wtRow;
+        return tbl([['GLV-L',ng(p.attr.gloveL)],['GLV-R',ng(p.attr.gloveR)],
+            ['STK-L',ng(p.attr.stickL)],['STK-R',ng(p.attr.stickR)],
+            ['AGIL',ng(p.attr.agil)],['SPD',ng(p.attr.speed)],
+            ['DEF',p.attr.def||'--'],['CTRL',ng(p.attr.stkHnd)],
+            ['ENDUR',ng(p.attr.endur)],['AGGR',ng(p.attr.aggr)]],[]) + wtRow;
     }
     return tbl([['OFF',p.attr.off||'--'],['DEF',p.attr.def||'--'],
-        ['SPD',p.attr.speed||'--'],['AGIL',p.attr.agil||'--'],
-        ['S.PWR',p.attr.shotPwr||'--'],['S.ACC',p.attr.shotAcc||'--'],
-        ['PASS',p.attr.pass||'--'],['STK',p.attr.stkHnd||'--'],
-        ['CHK',p.attr.check||'--'],['ROUGH',p.attr.rough||'--'],
-        ['ENDUR',p.attr.endur||'--'],['AGGR',p.attr.aggr||'--']],[]) + wtRow;
+        ['SPD',ng(p.attr.speed)],['AGIL',ng(p.attr.agil)],
+        ['S.PWR',ng(p.attr.shotPwr)],['S.ACC',ng(p.attr.shotAcc)],
+        ['PASS',ng(p.attr.pass)],['STK',ng(p.attr.stkHnd)],
+        ['CHK',ng(p.attr.check)],['ROUGH',ng(p.attr.rough)],
+        ['ENDUR',ng(p.attr.endur)],['AGGR',ng(p.attr.aggr)]],[]) + wtRow;
 }
 
 function pcBuildHonors(pName) {
