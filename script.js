@@ -171,20 +171,20 @@ function lbsToWeightGrade(lbs) {
     return 'F+';
 }
 
-function getWeightModifier(weightGrade, arch) {
-    const w = getWeightValue(weightGrade);
-    
-    if (arch === 'POWER FORWARD') {
-        // Power Forwards: Reward heavy (230-240), penalize light (185-195)
-        return w >= 215 ? 1.15 : (w <= 195 ? 0.90 : 1.05);
-    } 
-    
-    if (arch === 'SPEEDSTER' || arch === 'DANGLER') {
-        // Speedsters/Danglers: Reward light (185-195), penalize heavy (230-240)
-        return w <= 204 ? 1.15 : (w >= 230 ? 0.90 : 1.05);
+// Accepts numeric lbs (p.weight) — no random re-roll needed
+function getWeightModifier(lbs, arch) {
+    const w = (typeof lbs === 'number' && lbs > 100) ? lbs : getWeightLbs(lbs); // back-compat if grade string passed
+    switch (arch) {
+        case 'POWER FORWARD':   return w >= 215 ? 1.15 : (w <= 195 ? 0.90 : 1.05);
+        case 'ENFORCER F':      return w >= 220 ? 1.15 : (w <= 200 ? 0.85 : 1.05);
+        case 'GRINDER':         return w >= 210 ? 1.10 : (w <= 190 ? 0.92 : 1.0);
+        case 'SPEEDSTER':
+        case 'DANGLER':         return w <= 194 ? 1.15 : (w >= 225 ? 0.88 : 1.05);
+        case 'SNIPER':          return w <= 204 ? 1.08 : (w >= 230 ? 0.95 : 1.0);
+        case 'FRANCHISE D':
+        case 'TWO-WAY D':       return w >= 205 && w <= 225 ? 1.05 : 1.0;
+        default:                return 1.0;
     }
-    
-    return 1.0; // Other archetypes are unaffected
 }
 
 const $ = (id) => document.getElementById(id);
@@ -1300,7 +1300,7 @@ function importRosterFromCSV(csvText) {
     const getCell = (row, idx) => String(row[idx] || '').trim();
     const parseGradeStat = (row, idx, fallback = 60) => {
         const raw = getCell(row, idx);
-        return raw === '' ? fallback : gradeToNumber(raw);
+        return raw === '' ? fallback : gradeToNum(raw);
     };
     const parseIntCell = (row, idx, fallback = 0) => {
         const value = parseInt(getCell(row, idx), 10);
@@ -2269,10 +2269,8 @@ function getPlayerWeightedStats(pName) {
     // =========================================================
     // 🚨 WEIGHT MODIFIER INJECTION ZONE (FIXED) 🚨
     // =========================================================
-    let wGrade = p.attr.weight || 'B';
-    
-    // Get the synergy modifier (1.15 = great, 0.90 = bad, 1.05/1.0 = normal)
-    let weightMod = (typeof getWeightModifier === 'function') ? getWeightModifier(wGrade, tag) : 1.0;
+    // Use stored numeric lbs — no random re-roll
+    let weightMod = getWeightModifier(p.weight || getWeightLbs(p.attr.weight || 'C'), tag);
     
     // Instead of massively multiplying the rating, we apply a balanced flat adjustment
     if (weightMod >= 1.15) {
@@ -7522,6 +7520,13 @@ function pcBuildStats(pName, tab) {
     const isG = p.pos === 'G';
     const f = (v,d) => v==null ? (d?'0.'+('0'.repeat(d)):'0') : (d?Number(v).toFixed(d):v);
     const pm = v => (v>0?'+':'')+v;
+    // Format total minutes → avg MM:SS per game
+    const fTOI = (toi, gp) => {
+        if (!gp) return '--';
+        const avg = toi / gp;
+        const m = Math.floor(avg), s = Math.round((avg - m) * 60);
+        return `${m}:${String(s).padStart(2,'0')}`;
+    };
     const cell = (l,v,hi) => `<td style="color:#555;padding:2px 3px 2px 0;font-size:6px;white-space:nowrap">${l}</td><td style="color:${hi?'#FFD060':'#ccc'};padding:2px 8px 2px 0;font-weight:700;font-size:8px">${v}</td>`;
     const tbl = (pairs, his=[]) => {
         let h='<table style="width:100%;border-collapse:collapse">';
@@ -7536,21 +7541,23 @@ function pcBuildStats(pName, tab) {
         if (isG) {
             const sa=s.sa||0,sv=s.sv||0,ga=Math.max(0,sa-sv),gp=s.gp||0;
             return tbl([['GP',f(gp)],['W',f(s.w)],['L',f(s.l)],['SO',f(s.so)],
-                ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',gp>0?(ga/gp).toFixed(2):'0.00'],['SVG',f(s.svg||sv)],['TOI',f(s.toi)]],[4,5]);
+                ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',gp>0?(ga/gp).toFixed(2):'0.00'],
+                ['SVG',f(s.svg||sv)],['TOI',fTOI(s.toi,gp)]],[4,5]);
         }
         const g=s.g||0,a=s.a||0;
         return tbl([['GP',f(s.gp)],['G',f(g)],['A',f(a)],['PTS',g+a],
-            ['+/-',pm(s.pm||0)],['PIM',f(s.pim)],['SOG',f(s.s)],['GWG',f(s.gwg)]],[2,3]);
+            ['+/-',pm(s.pm||0)],['PIM',f(s.pim)],['SOG',f(s.s)],['TOI',fTOI(s.toi,s.gp)]],[2,3]);
     }
     if (tab==='career') {
         const c=p.career||{};
         if (isG) {
             const sa=c.sa||0,sv=c.sv||0,ga=Math.max(0,sa-sv),gp=c.gp||0;
             return tbl([['GP',f(gp)],['W',f(c.w)],['L',f(c.l)],['SO',f(c.so)],
-                ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',gp>0?(ga/gp).toFixed(2):'0.00']],[4,5]);
+                ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',gp>0?(ga/gp).toFixed(2):'0.00'],
+                ['SVG',f(c.svg||0)],['TOI',fTOI(c.toi,gp)]],[4,5]);
         }
         return tbl([['GP',f(c.gp)],['G',f(c.g)],['A',f(c.a)],['PTS',c.pts||((c.g||0)+(c.a||0))],
-            ['+/-',pm(c.pm||c.plusMinus||0)],['PIM',f(c.pim)],['SOG',f(c.s)],['GWG',f(c.gwg)]],[2,3]);
+            ['+/-',pm(c.pm||c.plusMinus||0)],['PIM',f(c.pim)],['SOG',f(c.s)],['TOI',fTOI(c.toi,c.gp)]],[2,3]);
     }
     if (tab==='playoff' || tab==='c-po') {
         const src = tab==='playoff' ? (p.playoff||{}) : (p.careerPlayoff||{});
@@ -7560,10 +7567,11 @@ function pcBuildStats(pName, tab) {
         if (isG) {
             const sa=src.sa||0,sv=src.sv||0,ga=Math.max(0,sa-sv),gp=src.gp||0;
             return tbl([['GP',f(gp)],['W',f(src.w)],['L',f(src.l)],['SO',f(src.so)],
-                ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',gp>0?(ga/gp).toFixed(2):'0.00']],[4,5]);
+                ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',gp>0?(ga/gp).toFixed(2):'0.00'],
+                ['SVG',f(src.svg||0)],['TOI',fTOI(src.toi,gp)]],[4,5]);
         }
         return tbl([['GP',f(src.gp)],['G',f(src.g)],['A',f(src.a)],['PTS',src.pts||((src.g||0)+(src.a||0))],
-            ['+/-',pm(src.pm||0)],['PIM',f(src.pim)],['SOG',f(src.s)],['GWG',f(src.gwg)]],[2,3]);
+            ['+/-',pm(src.pm||0)],['PIM',f(src.pim)],['SOG',f(src.s)],['TOI',fTOI(src.toi,src.gp)]],[2,3]);
     }
     // ATTR tab
     const wGrade = p.attr.weight || lbsToWeightGrade(p.weight) || 'C';
@@ -7619,6 +7627,7 @@ function pcSwitchTab(pName, tab) {
 
 function showPlayerCard(pName) {
     if(!playerStats[pName]) return;
+    clearWpCache(); // ensure OVR/tag reflect current state, not stale game cache
     const p = playerStats[pName];
     const ovr = getLiveIceOvr(pName);
     const tag = getPlayerWeightedStats(pName).tag;
