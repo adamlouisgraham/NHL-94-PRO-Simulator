@@ -3947,20 +3947,22 @@ function simGame(idx) {
     };
     
     // 🩹 1. HEALING & PRE-GAME SETUP
-    const heal = tk => { 
-        if(rosters[tk]) rosters[tk].forEach(p => { 
+    const heal = tk => {
+        if(rosters[tk]) rosters[tk].forEach(p => {
             if(playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining > 0) {
                 playerStats[p.name].injury.daysRemaining--;
+                if (p.status) p.status.injuryDays = playerStats[p.name].injury.daysRemaining;
                 if(playerStats[p.name].injury.daysRemaining === 0) {
                     if (!playerStats[p.name].injuryHistory) playerStats[p.name].injuryHistory = [];
                     playerStats[p.name].injuryHistory.push({
                         date: currentDay,
-                        daysMissed: playerStats[p.name].injury.severity || 0 
+                        daysMissed: playerStats[p.name].injury.severity || 0
                     });
                     playerStats[p.name].injury = { severity: 0, daysRemaining: 0 };
+                    if (p.status) p.status.injuryDays = 0;
                 }
             }
-        }); 
+        });
     };
 
     heal(g.h.nrm); 
@@ -7956,80 +7958,6 @@ function applyPostGameFatigue(awayTeamCode, homeTeamCode, awayGoalieName, homeGo
     });
 }
 
-// 2. THE MIDNIGHT LOOP (Runs at the end of the day)
-function processDailyUpdates() {
-    // A. Find out which teams played today
-    let teamsPlayedToday = new Set();
-    let todaysGames = calendar[currentDay] || [];
-    
-    todaysGames.forEach(g => {
-        teamsPlayedToday.add(g.a.nrm);
-        teamsPlayedToday.add(g.h.nrm);
-    });
-
-    // B. Loop through every team in the league
-    for (let tk in rosters) {
-        let playedToday = teamsPlayedToday.has(tk);
-
-        rosters[tk].forEach(p => {
-            if (!p.status) return;
-
-            // 1. INJURY RECOVERY: Heal 1 day
-            if (p.status.injuryDays > 0) p.status.injuryDays--;
-
-            // 2. SUSPENSION: Drops by 1 *only* if the team played a game today
-            if (playedToday && p.status.suspension > 0) p.status.suspension--;
-
-            // 3. FATIGUE RECOVERY: If the team had an off-day, sleep it off!
-            if (!playedToday) {
-                p.status.fatigue = Math.max(0, p.status.fatigue - 25); // Recovers 25 fatigue
-            // Check if the league needs to announce the Trade Deadline
-            checkTradeDeadlineAnnouncements();
-            // =========================================================
-    // 🤝 AI TRADE GENERATOR
-    // =========================================================
-    // Grab the current multiplier (0 if deadline passed, 5 if deadline day, 1 if normal)
-    let tradeMult = getTradeProbabilityMultiplier();
-    
-    // Multiply the base trade chance by the multiplier!
-    if (awardConfig.trades && Math.random() < (0.05 * tradeMult)) {
-        
-        // 1. Pick two random teams
-        let activeTeams = Object.keys(rosters);
-        let teamA = activeTeams[Math.floor(Math.random() * activeTeams.length)];
-        let teamB = activeTeams[Math.floor(Math.random() * activeTeams.length)];
-        
-        // 2. Make sure they aren't the same team, and both have enough players
-        if (teamA !== teamB && rosters[teamA] && rosters[teamB] && rosters[teamA].length > 15 && rosters[teamB].length > 15) {
-
-            // 3. Grab a random player from each team to swap
-            let playerA = rosters[teamA][Math.floor(Math.random() * rosters[teamA].length)];
-            let playerB = rosters[teamB][Math.floor(Math.random() * rosters[teamB].length)];
-            if (!playerA || !playerB) return;
-            
-            // 4. Execute the Trade! (Swap their team tags)
-            playerA.team = teamB;
-            playerB.team = teamA;
-            
-            // 5. Swap them in the actual roster arrays
-            rosters[teamA] = rosters[teamA].filter(p => p.name !== playerA.name);
-            rosters[teamA].push(playerB);
-            
-            rosters[teamB] = rosters[teamB].filter(p => p.name !== playerB.name);
-            rosters[teamB].push(playerA);
-            
-            // 6. Broadcast the blockbuster to the news feed!
-            tradeLog.unshift({ 
-                day: currentDay, 
-                details: `🔁 BLOCKBUSTER: ${teamA.toUpperCase()} trades ${playerA.name} to ${teamB.toUpperCase()} in exchange for ${playerB.name}.` 
-            });
-        }
-    }
-        }
-        });
-    }
-}
-
 function processDailyUpdates() {
     let teamsPlayedToday = new Set();
     let todaysGames = calendar[currentDay] || [];
@@ -8039,9 +7967,8 @@ function processDailyUpdates() {
         let playedToday = teamsPlayedToday.has(tk);
         rosters[tk].forEach(p => {
             if (!p.status) return;
-            if (p.status.injuryDays > 0) p.status.injuryDays--;
             if (playedToday && p.status.suspension > 0) p.status.suspension--;
-            if (!playedToday) p.status.fatigue = Math.max(0, p.status.fatigue - 25); 
+            if (!playedToday) p.status.fatigue = Math.max(0, p.status.fatigue - 25);
         });
     }
 
@@ -8161,7 +8088,12 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
                 }
             }
 
-            if (days > 0) ps.injury = { severity: days, daysRemaining: days };
+            if (days > 0) {
+                ps.injury = { severity: days, daysRemaining: days };
+                // Sync status.injuryDays so goalie rotation + fatigue system sees the injury
+                const rosterPlayer = (rosters[teamCode] || []).find(p => p.name === pName);
+                if (rosterPlayer && rosterPlayer.status) rosterPlayer.status.injuryDays = days;
+            }
             tradeLog.unshift({ day: currentDay, details: note });
         }
     }
