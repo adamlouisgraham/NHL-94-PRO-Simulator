@@ -8259,18 +8259,35 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
         const chance = BASE_CHANCE + fatigueBonus + physicalBonus;
 
         if (Math.random() < chance) {
-            const roll = Math.random();
-            let days, label;
-            // Reweighted: heavy bias toward short injuries; 12-15 rare
-            if      (roll < 0.20) { days = 0;                                                    label = 'out for a period'; }
-            else if (roll < 0.40) { days = Math.floor(Math.random() * 2) + 1;                 label = `${days}-game injury`; }
-            else if (roll < 0.75) { days = Math.floor(Math.random() * 5) + 3;                 label = `${days}-game injury`; }
-            else if (roll < 0.95) { days = Math.floor(Math.random() * 4) + 8;                 label = `${days}-game injury`; }
-            else                  { days = Math.floor(Math.random() * 4) + 12;                label = `${days}-game injury`; }
-
-            days = Math.min(days, 15);
-
             const teamCode = (rosters[homeCode] || []).find(p => p.name === pName) ? homeCode : awayCode;
+
+            // Check if team has a healthy replacement in the same position group
+            const injPos = ps.pos;
+            const isFwdPos = ['C','LW','RW','F'].includes(injPos);
+            const isDPos   = injPos === 'D';
+            const isGPos   = injPos === 'G';
+            const roster   = rosters[teamCode] || [];
+            const hasReplacement = roster.some(p =>
+                p.name !== pName &&
+                (playerStats[p.name]?.injury?.daysRemaining || 0) === 0 &&
+                (isFwdPos ? ['C','LW','RW','F'].includes(p.pos) :
+                 isDPos   ? p.pos === 'D' :
+                 isGPos   ? p.pos === 'G' : false)
+            );
+
+            // If no replacement available, cap at shaken-up (0 days) regardless of roll
+            let days, label;
+            if (!hasReplacement) {
+                days = 0; label = 'out for a period';
+            } else {
+                const roll = Math.random();
+                if      (roll < 0.20) { days = 0;                                 label = 'out for a period'; }
+                else if (roll < 0.40) { days = Math.floor(Math.random() * 2) + 1; label = `${days}-game injury`; }
+                else if (roll < 0.75) { days = Math.floor(Math.random() * 5) + 3; label = `${days}-game injury`; }
+                else if (roll < 0.95) { days = Math.floor(Math.random() * 4) + 8; label = `${days}-game injury`; }
+                else                  { days = Math.floor(Math.random() * 4) + 12; label = `${days}-game injury`; }
+                days = Math.min(days, 15);
+            }
             const note = days === 0
                 ? `🩹 INJURY NOTE: ${pName} (${teamCode.toUpperCase()}) was shaken up — out for a period.`
                 : `🩹 INJURY: ${pName} (${teamCode.toUpperCase()}) — ${label}, out ${days} game${days > 1 ? 's' : ''}.`;
