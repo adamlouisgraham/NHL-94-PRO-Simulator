@@ -5211,7 +5211,7 @@ function renderTeamStats() {
             let psObj = playerStats[p.name];
             let toi = psObj && psObj[k] && psObj[k].gp > 0 ? Math.round(psObj[k].toi / psObj[k].gp) : 0;
 
-            return `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')"><td><span style="color:var(--neon-cyan); font-weight:bold; font-size:8px;">${posLabel}</span> <button style="${yStyle}" onclick="openSubMenu('${tk}', '${p.name}', 'F'); event.stopPropagation();">🔁</button>${getMoraleEmoji(p.name)} ${p.name} ${getArchetypeBadge(p.name)} ${getPlayerBadges(p.name)}</td><td style="text-align:right;"><span style="color:#ccc; font-size:8px; margin-right:6px; font-weight:bold;">ATOI: ${toi}</span> <span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(p.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(p.name)}</span></td></tr>`; 
+            return `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')"><td><span style="color:var(--neon-cyan); font-weight:bold; font-size:8px;">${posLabel}</span> <button style="${yStyle}" onclick="openSubMenu('${tk}', '${p.name}', 'F'); event.stopPropagation();">🔁</button>${getMoraleEmoji(p.name)} ${p.name} ${getArchetypeBadge(p.name)} ${getPlayerBadges(p.name)}</td><td style="text-align:right;"><span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(p.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(p.name)}</span></td></tr>`;
         }).join('');
 
         h += `</table>`;
@@ -5236,7 +5236,7 @@ function renderTeamStats() {
             let psObj = playerStats[d.name];
             let toi = psObj && psObj[k] && psObj[k].gp > 0 ? Math.round(psObj[k].toi / psObj[k].gp) : 0;
 
-            return `<tr style="cursor:pointer;" onclick="showPlayerCard('${d.name}')"><td><span style="color:var(--line-red); font-weight:bold; font-size:8px;">${posLabel}</span> <button style="${yStyle}" onclick="openSubMenu('${tk}', '${d.name}', 'D'); event.stopPropagation();">🔁</button>${getStatusBadge(d.name)}${getMoraleEmoji(d.name)}${d.name} ${getArchetypeBadge(d.name)} ${getEmoji(d.name)}</td><td style="text-align:right;"><span style="color:#ccc; font-size:8px; margin-right:6px; font-weight:bold;">ATOI: ${toi}</span> <span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(d.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(d.name)}</span></td></tr>`; 
+            return `<tr style="cursor:pointer;" onclick="showPlayerCard('${d.name}')"><td><span style="color:var(--line-red); font-weight:bold; font-size:8px;">${posLabel}</span> <button style="${yStyle}" onclick="openSubMenu('${tk}', '${d.name}', 'D'); event.stopPropagation();">🔁</button>${getStatusBadge(d.name)}${getMoraleEmoji(d.name)}${d.name} ${getArchetypeBadge(d.name)} ${getEmoji(d.name)}</td><td style="text-align:right;"><span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(d.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(d.name)}</span></td></tr>`;
         }).join('');
         
         h += `</table>`;
