@@ -4038,26 +4038,41 @@ function simGame(idx) {
             ...fLines.flat().filter(Boolean).map(p => p.name),
             ...dPairs.flat().filter(Boolean).map(p => p.name)
         ]);
-        const bench = (preferPos) => roster
-            .filter(p => !inLineup.has(p.name) && (playerStats[p.name]?.injury?.daysRemaining || 0) === 0)
-            .sort((a, b) => {
-                const aMatch = getPlayerPosition(a) === preferPos ? 1 : 0;
-                const bMatch = getPlayerPosition(b) === preferPos ? 1 : 0;
-                if (bMatch !== aMatch) return bMatch - aMatch;
-                return (getPlayerWeightedStats(b.name).ovr || 0) - (getPlayerWeightedStats(a.name).ovr || 0);
+        const isFwd = (p) => ['C','LW','RW'].includes(getPlayerPosition(p));
+        const isD   = (p) => getPlayerPosition(p) === 'D';
+        const isG   = (p) => getPlayerPosition(p) === 'G';
+        const healthy = roster.filter(p => !inLineup.has(p.name) && (playerStats[p.name]?.injury?.daysRemaining || 0) === 0);
+        // Forwards only fill forward slots (prefer exact pos then any fwd); D only fills D; G only fills G
+        const bench = (slotGroup) => {
+            let pool;
+            if (slotGroup === 'F') pool = healthy.filter(isFwd);
+            else if (slotGroup === 'D') pool = healthy.filter(isD);
+            else pool = healthy.filter(isG);
+            return pool.sort((a, b) => (getPlayerWeightedStats(b.name).ovr || 0) - (getPlayerWeightedStats(a.name).ovr || 0));
+        };
+        // Forward lines: all slots are 'F' group; prefer exact pos within that pool handled by pos sort
+        fLines.forEach(line => {
+            line.forEach((p, idx) => {
+                if (p && (playerStats[p.name]?.injury?.daysRemaining || 0) > 0) {
+                    inLineup.delete(p.name);
+                    const preferPos = ['C','LW','RW'][idx] || 'LW';
+                    const pool = bench('F').filter(s => !inLineup.has(s.name));
+                    // Exact position first, then any forward
+                    const sub = pool.find(s => getPlayerPosition(s) === preferPos) || pool[0] || null;
+                    line[idx] = sub;
+                    if (sub) inLineup.add(sub.name);
+                }
             });
-        const slotPos = [['C','LW','RW'], ['D','D']];
-        [fLines, dPairs].forEach((group, gi) => {
-            group.forEach(line => {
-                line.forEach((p, idx) => {
-                    if (p && (playerStats[p.name]?.injury?.daysRemaining || 0) > 0) {
-                        inLineup.delete(p.name);
-                        const pos = slotPos[gi][idx] || (gi === 0 ? 'LW' : 'D');
-                        const sub = bench(pos).find(s => !inLineup.has(s.name));
-                        line[idx] = sub || null;
-                        if (sub) inLineup.add(sub.name);
-                    }
-                });
+        });
+        dPairs.forEach(pair => {
+            pair.forEach((p, idx) => {
+                if (p && (playerStats[p.name]?.injury?.daysRemaining || 0) > 0) {
+                    inLineup.delete(p.name);
+                    const pool = bench('D').filter(s => !inLineup.has(s.name));
+                    const sub = pool[0] || null;
+                    pair[idx] = sub;
+                    if (sub) inLineup.add(sub.name);
+                }
             });
         });
     };
