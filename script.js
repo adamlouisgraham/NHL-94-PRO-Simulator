@@ -144,8 +144,8 @@ function numToGrade(n) {
     if (v >= 80) return 'B+';
     if (v >= 75) return 'B';
     if (v >= 70) return 'B-';
-    if (v >= 63) return 'C+';
-    if (v >= 56) return 'C';
+    if (v >= 65) return 'C+';
+    if (v >= 57) return 'C';
     if (v >= 50) return 'C-';
     if (v >= 40) return 'D';
     if (v >= 30) return 'F+';
@@ -222,9 +222,9 @@ function gradeToNum(val) {
         'B+': () => roll(80, 84), 
         'B':  () => roll(75, 79), 
         'B-': () => roll(70, 74),
-        'C+': () => roll(63, 69), 
-        'C':  () => roll(56, 62), 
-        'C-': () => roll(50, 55),
+        'C+': () => roll(65, 69),
+        'C':  () => roll(57, 64),
+        'C-': () => roll(50, 56),
         
         // All 'D' grades map to the same wide 40-49 range
         'D+': () => roll(40, 49), 
@@ -2243,8 +2243,8 @@ function getPlayerWeightedStats(pName) {
             else if ((off >= 75 && def >= 80 && check >= 75) || (aggr >= 75 && pass >= 75 && off >= 70)) tag = "TWO-WAY STAR F";
             else if (off >= 75 && agl >= 75 && spd >= 80) tag = "SPEEDSTER"; 
             else if (off >= 75 && agl >= 80 && stkHnd >= 80) tag = "DANGLER";
-            else if (off >= 70 || check >= 60 && pwr >= 70 || aggr >= 60 || rough >= 60 && weight >= 215) tag = "POWER FORWARD"; 
-            else if (def >= 65 && off >= 65 && check >= 60 || aggr >= 70 || rough >= 60 && weight <= 215) tag = "GRINDER";
+            else if (weight >= 215 && (off >= 65 || pwr >= 70 || aggr >= 65 || rough >= 65)) tag = "POWER FORWARD";
+            else if (weight >= 205 && (def >= 65 || check >= 65 || aggr >= 65 || rough >= 65)) tag = "GRINDER";
             else if (off >= 70) tag = "PRO OFFENSIVE FWD";
             else if (def >= 70) tag = "PRO DEFENSIVE FWD";
             
