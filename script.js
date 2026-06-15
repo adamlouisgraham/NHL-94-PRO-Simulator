@@ -2243,7 +2243,7 @@ function getPlayerWeightedStats(pName) {
             else if ((off >= 75 && def >= 80 && check >= 75) || (aggr >= 75 && pass >= 75 && off >= 70)) tag = "TWO-WAY STAR F";
             else if (off >= 75 && agl >= 75 && spd >= 80) tag = "SPEEDSTER"; 
             else if (off >= 75 && agl >= 80 && stkHnd >= 80) tag = "DANGLER";
-            else if (weight >= 215 && off >= 65 && pwr >= 70 && aggr >= 65 && rough >= 65) tag = "POWER FORWARD";
+            else if (off >= 70 && check >= 65 && pwr >= 70 && aggr >= 65 && rough >= 65 && weight >= 215) tag = "POWER FORWARD";
             else if (weight >= 205 && def >= 65 && check >= 65 && aggr >= 65 && rough >= 65) tag = "GRINDER";
             else if (off >= 70) tag = "PRO OFFENSIVE FWD";
             else if (def >= 70) tag = "PRO DEFENSIVE FWD";
