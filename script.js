@@ -7583,22 +7583,20 @@ function pcBuildStats(pName, tab) {
     const wGrade = p.attr.weight || lbsToWeightGrade(p.weight) || 'C';
     const wLbs = p.weight || getWeightLbs(wGrade);
     const wtRow = `<div style="text-align:center;color:#555;font-size:6px;margin-top:4px;letter-spacing:1px;">WEIGHT <span style="color:#aaa;font-size:8px;margin-left:4px;">${wLbs} LBS</span> <span style="color:#444;font-size:6px;">(${wGrade})</span></div>`;
-    // Use stored grade strings for exact display; fall back to numToGrade for old saves
-    const gr = p.attr.grades || {};
-    const gd = (key, num) => gr[key] || numToGrade(num);
+    const nv = (v) => v || '--';
     if (isG) {
         const gOvr = p.attr.gDef || p.attr.goalieDefense || p.attr.ovr || '--';
-        return tbl([['G.OVR', gOvr], ['G.OFF', p.attr.gOff || '--'],
-            ['SPD', gd('speed', p.attr.speed)], ['AGIL', gd('agil', p.attr.agil)],
-            ['STK', gd('stkHnd', p.attr.stkHnd)], ['ENDUR', gd('endur', p.attr.endur)],
-            ['AGGR', gd('aggr', p.attr.aggr)], ['ROUGH', gd('rough', p.attr.rough)]],[]) + wtRow;
+        return tbl([['G.OVR', gOvr], ['G.OFF', nv(p.attr.gOff)],
+            ['SPD', nv(p.attr.speed)], ['AGIL', nv(p.attr.agil)],
+            ['STK', nv(p.attr.stkHnd)], ['ENDUR', nv(p.attr.endur)],
+            ['AGGR', nv(p.attr.aggr)], ['ROUGH', nv(p.attr.rough)]],[]) + wtRow;
     }
-    return tbl([['OFF',p.attr.off||'--'],['DEF',p.attr.def||'--'],
-        ['SPD',gd('speed',p.attr.speed)],['AGIL',gd('agil',p.attr.agil)],
-        ['S.PWR',gd('shotPwr',p.attr.shotPwr)],['S.ACC',gd('shotAcc',p.attr.shotAcc)],
-        ['PASS',gd('pass',p.attr.pass)],['STK',gd('stkHnd',p.attr.stkHnd)],
-        ['CHK',gd('check',p.attr.check)],['ROUGH',gd('rough',p.attr.rough)],
-        ['ENDUR',gd('endur',p.attr.endur)],['AGGR',gd('aggr',p.attr.aggr)]],[]) + wtRow;
+    return tbl([['OFF',nv(p.attr.off)],['DEF',nv(p.attr.def)],
+        ['SPD',nv(p.attr.speed)],['AGIL',nv(p.attr.agil)],
+        ['S.PWR',nv(p.attr.shotPwr)],['S.ACC',nv(p.attr.shotAcc)],
+        ['PASS',nv(p.attr.pass)],['STK',nv(p.attr.stkHnd)],
+        ['CHK',nv(p.attr.check)],['ROUGH',nv(p.attr.rough)],
+        ['ENDUR',nv(p.attr.endur)],['AGGR',nv(p.attr.aggr)]],[]) + wtRow;
 }
 
 function pcBuildHonors(pName) {
