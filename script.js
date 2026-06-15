@@ -2107,6 +2107,7 @@ function getPlayerWeightedStats(pName) {
         let rough = gradeToNum(p.attr.rough);
         let aggr = gradeToNum(p.attr.aggr);
         let endur = gradeToNum(p.attr.endur);
+        let weight = p.weight || getWeightLbs(p.attr.weight || 'C');
         let wgt = parseInt(p.attr.wgt || p.weight) || 180;
 
         // =========================================================
@@ -2182,8 +2183,8 @@ function getPlayerWeightedStats(pName) {
             else if (off >= 75 && def >= 80 && check >= 75 && pass >= 75 && pwr >= 75) tag = "TWO-WAY STAR F";
             else if (off >= 75 && agl >= 75 && spd >= 80) tag = "SPEEDSTER"; 
             else if (off >= 75 && agl >= 80 && stkHnd >= 80) tag = "DANGLER";
-            else if (off >= 75 && check >= 65 && pwr >= 70 && aggr >= 65 && rough >= 65 && wgt >= 215) tag = "POWER FORWARD"; 
-            else if (def >= 70 && off >= 70 && check >= 70 && aggr >= 70 && rough >= 60) tag = "GRINDER";
+            else if (off >= 75 && check >= 65 && pwr >= 70 && aggr >= 65 && rough >= 60 && weight >= 215) tag = "POWER FORWARD"; 
+            else if (def >= 70 && off >= 70 && check >= 70 && aggr >= 70 && rough >= 60 ) tag = "GRINDER";
             else if (rough >= 80 && aggr >= 80) tag = "ENFORCER F";
             else if (off >= 70) tag = "PRO OFFENSIVE FWD";
             else if (def >= 70) tag = "PRO DEFENSIVE FWD";
