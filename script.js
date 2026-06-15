@@ -8066,10 +8066,10 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
             const roll = Math.random();
             let days, label;
             // Reweighted: heavy bias toward short injuries; 12-15 rare
-            if      (roll < 0.30) { days = 0;                                   label = 'out for a period'; }
-            else if (roll < 0.58) { days = 1;                                   label = '1-game injury'; }
+            if      (roll < 0.25) { days = 0;                                   label = 'out for a period'; }
+            else if (roll < 0.55) { days = 1;                                   label = '1-game injury'; }
             else if (roll < 0.78) { days = Math.floor(Math.random() * 4) + 2;  label = `${days}-game injury`; }
-            else if (roll < 0.93) { days = Math.floor(Math.random() * 6) + 6;  label = `${days}-game injury`; }
+            else if (roll < 0.94) { days = Math.floor(Math.random() * 6) + 6;  label = `${days}-game injury`; }
             else                  { days = Math.floor(Math.random() * 4) + 12; label = `${days}-game injury`; }
 
             days = Math.min(days, 15);
