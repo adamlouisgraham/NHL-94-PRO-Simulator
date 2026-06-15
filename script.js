@@ -1331,16 +1331,28 @@ function importRosterFromCSV(csvText) {
             };
         } else {
             playerAttributes = {
-                shotPower: parseGradeStat(row, shotPowerIdx, 60),
-                passing: parseGradeStat(row, passingIdx, 60),
-                aggression: parseGradeStat(row, aggressionIdx, 60),
-                roughness: parseGradeStat(row, roughnessIdx, 60),
-                endurance: parseGradeStat(row, enduranceIdx, 60),
-                checking: parseGradeStat(row, checkingIdx, 60),
-                shotAccuracy: parseGradeStat(row, shotAccuracyIdx, 60),
-                stickHandling: parseGradeStat(row, stickHandlingIdx, 60),
-                agil: parseGradeStat(row, agilityIdx, 60),
-                speed: parseGradeStat(row, speedIdx, 60)
+                shotPwr: parseGradeStat(row, shotPowerIdx, 60),
+                pass:    parseGradeStat(row, passingIdx, 60),
+                aggr:    parseGradeStat(row, aggressionIdx, 60),
+                rough:   parseGradeStat(row, roughnessIdx, 60),
+                endur:   parseGradeStat(row, enduranceIdx, 60),
+                check:   parseGradeStat(row, checkingIdx, 60),
+                shotAcc: parseGradeStat(row, shotAccuracyIdx, 60),
+                stkHnd:  parseGradeStat(row, stickHandlingIdx, 60),
+                agil:    parseGradeStat(row, agilityIdx, 60),
+                speed:   parseGradeStat(row, speedIdx, 60),
+                grades: {
+                    speed:   getCell(row, speedIdx)        || 'C',
+                    agil:    getCell(row, agilityIdx)      || 'C',
+                    shotPwr: getCell(row, shotPowerIdx)    || 'C',
+                    pass:    getCell(row, passingIdx)      || 'C',
+                    aggr:    getCell(row, aggressionIdx)   || 'C',
+                    rough:   getCell(row, roughnessIdx)    || 'C',
+                    endur:   getCell(row, enduranceIdx)    || 'C',
+                    check:   getCell(row, checkingIdx)     || 'C',
+                    shotAcc: getCell(row, shotAccuracyIdx) || 'C',
+                    stkHnd:  getCell(row, stickHandlingIdx)|| 'C',
+                }
             };
         }
 
@@ -1967,18 +1979,32 @@ async function startNewGame(useCustomRoster = false) {
     agil: gradeToNum(getCol(r, ["GOALIE AGILITY", "AGILITY", "AGL"], 17)), 
 
     // --- OTHER STATS ---
-    shotPwr: gradeToNum(getCol(r, ["SHOT POWER", "PWR"], 9)), 
-    pass: gradeToNum(getCol(r, ["PASSING", "PASS", "PAS"], 10)), 
-    aggr: gradeToNum(getCol(r, ["AGGRESSION", "AGR"], 11)), 
-    rough: gradeToNum(getCol(r, ["ROUGHNESS", "RGH"], 12)), 
-    endur: gradeToNum(getCol(r, ["ENDURANCE", "END"], 13)), 
-    check: gradeToNum(getCol(r, ["CHECKING", "CHK"], 14)), 
-    shotAcc: gradeToNum(getCol(r, ["SHOT ACCURACY", "SHOT ACC", "ACC"], 15)), 
-    stkHnd: gradeToNum(getCol(r, ["PUCK CONTROL", "STICK HANDLING", "STICK", "STK"], 16)), 
-    weight: parseWeightCell(getCol(r, ["WEIGHT", "WGT"], 21)).grade, // grade string: A+, B, F+
+    shotPwr: gradeToNum(getCol(r, ["SHOT POWER", "PWR"], 9)),
+    pass: gradeToNum(getCol(r, ["PASSING", "PASS", "PAS"], 10)),
+    aggr: gradeToNum(getCol(r, ["AGGRESSION", "AGR"], 11)),
+    rough: gradeToNum(getCol(r, ["ROUGHNESS", "RGH"], 12)),
+    endur: gradeToNum(getCol(r, ["ENDURANCE", "END"], 13)),
+    check: gradeToNum(getCol(r, ["CHECKING", "CHK"], 14)),
+    shotAcc: gradeToNum(getCol(r, ["SHOT ACCURACY", "SHOT ACC", "ACC"], 15)),
+    stkHnd: gradeToNum(getCol(r, ["PUCK CONTROL", "STICK HANDLING", "STICK", "STK"], 16)),
+    weight: parseWeightCell(getCol(r, ["WEIGHT", "WGT"], 21)).grade,
 
     // --- OVERALL (Safe Fallback) ---
-    ovr: parseInt(getCol(r, ["GOALIE NEW OVERALL", "OVERALL RATING", "OVERALL", "OVR"], 19)) || 70 
+    ovr: parseInt(getCol(r, ["GOALIE NEW OVERALL", "OVERALL RATING", "OVERALL", "OVR"], 19)) || 70,
+
+    // --- ORIGINAL GRADE STRINGS for exact card display ---
+    grades: {
+        speed:  getCol(r, ["GOALIE SPEED", "SPEED", "SPD"], 18)                              || 'C',
+        agil:   getCol(r, ["GOALIE AGILITY", "AGILITY", "AGL"], 17)                          || 'C',
+        shotPwr:getCol(r, ["SHOT POWER", "PWR"], 9)                                          || 'C',
+        pass:   getCol(r, ["PASSING", "PASS", "PAS"], 10)                                    || 'C',
+        aggr:   getCol(r, ["AGGRESSION", "AGR"], 11)                                         || 'C',
+        rough:  getCol(r, ["ROUGHNESS", "RGH"], 12)                                          || 'C',
+        endur:  getCol(r, ["ENDURANCE", "END"], 13)                                          || 'C',
+        check:  getCol(r, ["CHECKING", "CHK"], 14)                                           || 'C',
+        shotAcc:getCol(r, ["SHOT ACCURACY", "SHOT ACC", "ACC"], 15)                          || 'C',
+        stkHnd: getCol(r, ["PUCK CONTROL", "STICK HANDLING", "STICK", "STK"], 16)            || 'C',
+    }
                         },
                         potential: Math.random() < 0.05 ? 'Franchise' : (Math.random() < 0.25 ? 'Top 6' : (Math.random() < 0.60 ? 'Depth' : 'Bust')),
                         career: { 
@@ -2101,7 +2127,8 @@ async function startNewGame(useCustomRoster = false) {
 // --- RATING ENGINE (WITH LIVE OVR + FATIGUE MATH) ---
 // Per-game cache — cleared at the top of simGame() each game tick
 let _wpCache = {};
-function clearWpCache() { _wpCache = {}; }
+let _structCache = {};
+function clearWpCache() { _wpCache = {}; _structCache = {}; }
 
 function getPlayerWeightedStats(pName) {
     if (_wpCache[pName]) return _wpCache[pName];
@@ -2846,6 +2873,7 @@ function renderTeamDirectory(tk) {
 }
 
 const getRosterStructure = (tk) => {
+    if (_structCache[tk]) return _structCache[tk];
     let r = rosters[tk] || [];
 
     // ── Honor custom lines if the coach saved them ────────────────────────
@@ -3247,7 +3275,9 @@ const getRosterStructure = (tk) => {
         return getPos(p) === 'G' && ps && (!ps.injury || ps.injury.daysRemaining === 0);
     }).sort((a,b) => getOvr(b) - getOvr(a));
     
-    return { f: fLines, d: dPairs, g: gPool };
+    const struct = { f: fLines, d: dPairs, g: gPool };
+    _structCache[tk] = struct;
+    return struct;
 }
 
 // 🛡️ SPECIAL TEAMS AUTO-COACH ENGINE
@@ -4783,6 +4813,7 @@ function processOffseasonGrowth() {
 }
 
 async function beginNewYear() {
+    clearWpCache();
     currentSeason++; isPlayoffs = false;
     league.forEach(t => { 
         t.season = {gp:0, w:0, l:0, t:0, pts:0, gf:0, ga:0, ppo:0, ppg:0, ts:0, ppga:0}; t.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null}; 
@@ -4854,6 +4885,7 @@ async function simDay(slowMode = true, bypassLock = false) {
         for (let i = 0; i < dayGames.length; i++) {
             const g = dayGames[i];
             if (!g || g.result) continue;
+            clearWpCache(); // fresh OVR/tag values for each game's pre-game setup
             // --- 1. PRE-GAME DYNAMIC ICE TIME CALCULATION ---
             // Calculate minutes for both teams based on their current roster health/fatigue
             const hStruct = getRosterStructure(g.h.nrm);
@@ -7537,20 +7569,22 @@ function pcBuildStats(pName, tab) {
     const wGrade = p.attr.weight || lbsToWeightGrade(p.weight) || 'C';
     const wLbs = p.weight || getWeightLbs(wGrade);
     const wtRow = `<div style="text-align:center;color:#555;font-size:6px;margin-top:4px;letter-spacing:1px;">WEIGHT <span style="color:#aaa;font-size:8px;margin-left:4px;">${wLbs} LBS</span> <span style="color:#444;font-size:6px;">(${wGrade})</span></div>`;
-    const ng = v => numToGrade(v);
+    // Use stored grade strings for exact display; fall back to numToGrade for old saves
+    const gr = p.attr.grades || {};
+    const gd = (key, num) => gr[key] || numToGrade(num);
     if (isG) {
-        return tbl([['GLV-L',ng(p.attr.gloveL)],['GLV-R',ng(p.attr.gloveR)],
-            ['STK-L',ng(p.attr.stickL)],['STK-R',ng(p.attr.stickR)],
-            ['AGIL',ng(p.attr.agil)],['SPD',ng(p.attr.speed)],
-            ['DEF',p.attr.def||'--'],['CTRL',ng(p.attr.stkHnd)],
-            ['ENDUR',ng(p.attr.endur)],['AGGR',ng(p.attr.aggr)]],[]) + wtRow;
+        const gOvr = p.attr.gDef || p.attr.goalieDefense || p.attr.ovr || '--';
+        return tbl([['G.OVR', gOvr], ['G.OFF', p.attr.gOff || '--'],
+            ['SPD', gd('speed', p.attr.speed)], ['AGIL', gd('agil', p.attr.agil)],
+            ['STK', gd('stkHnd', p.attr.stkHnd)], ['ENDUR', gd('endur', p.attr.endur)],
+            ['AGGR', gd('aggr', p.attr.aggr)], ['ROUGH', gd('rough', p.attr.rough)]],[]) + wtRow;
     }
     return tbl([['OFF',p.attr.off||'--'],['DEF',p.attr.def||'--'],
-        ['SPD',ng(p.attr.speed)],['AGIL',ng(p.attr.agil)],
-        ['S.PWR',ng(p.attr.shotPwr)],['S.ACC',ng(p.attr.shotAcc)],
-        ['PASS',ng(p.attr.pass)],['STK',ng(p.attr.stkHnd)],
-        ['CHK',ng(p.attr.check)],['ROUGH',ng(p.attr.rough)],
-        ['ENDUR',ng(p.attr.endur)],['AGGR',ng(p.attr.aggr)]],[]) + wtRow;
+        ['SPD',gd('speed',p.attr.speed)],['AGIL',gd('agil',p.attr.agil)],
+        ['S.PWR',gd('shotPwr',p.attr.shotPwr)],['S.ACC',gd('shotAcc',p.attr.shotAcc)],
+        ['PASS',gd('pass',p.attr.pass)],['STK',gd('stkHnd',p.attr.stkHnd)],
+        ['CHK',gd('check',p.attr.check)],['ROUGH',gd('rough',p.attr.rough)],
+        ['ENDUR',gd('endur',p.attr.endur)],['AGGR',gd('aggr',p.attr.aggr)]],[]) + wtRow;
 }
 
 function pcBuildHonors(pName) {
