@@ -8172,9 +8172,9 @@ function applyPostGameFatigue(awayTeamCode, homeTeamCode, awayGoalieName, homeGo
         rosters[tk].forEach(p => {
             if (!p.status) p.status = { fatigue: 0, morale: 0, injuryDays: 0, suspension: 0, consecutiveStarts: 0 };
 
-            // Skaters gain 15 fatigue per game
+            // Skaters gain 10 fatigue per game
             if (p.pos !== 'G' && p.status.injuryDays === 0) {
-                p.status.fatigue = Math.min(100, p.status.fatigue + 15);
+                p.status.fatigue = Math.min(100, p.status.fatigue + 10);
             } 
             // Goalies 
             else if (p.pos === 'G') {
