@@ -3997,6 +3997,10 @@ function simGame(idx) {
     const hG_obj = selG(g.h.nrm), aG_obj = selG(g.a.nrm);
     let hG_name = hG_obj ? hG_obj.name : null;
     let aG_name = aG_obj ? aG_obj.name : null;
+    let hG_starterName = hG_name;  // original starter — may differ from hG_name if backup entered
+    let aG_starterName = aG_name;
+    let hG_swapStep = -1;          // step at which backup entered (-1 = no swap)
+    let aG_swapStep = -1;
 
     // 🧱 3. MACRO AURAS & MODIFIER MATH
     let hAuraMod = (getTeamSystemAura(g.h.nrm) === 'OFFENSIVE TEAM' ? 1.15 : (getTeamSystemAura(g.h.nrm) === 'DEFENSIVE TEAM' ? 0.85 : 1.0));
@@ -4233,7 +4237,7 @@ function simGame(idx) {
                 const victim = candidates[Math.floor(Math.random() * candidates.length)];
                 if (getPlayerPosition(victim) === 'G') {
                     const newG = _swapGoalie(g.h.nrm, victim.name);
-                    if (newG !== victim.name) { hG_name = newG; allGoals.push({ p: Math.ceil((step+1)/40), m: Math.floor(step/2)%20||20, s:0, str:`${Math.floor(step/2)%20||20}:00`, tm:g.h.code, cl:'#fff', txt:`🚑 GOALIE INJURY: ${victim.name} (${g.h.code.toUpperCase()}) — ${newG} enters`, isPenalty:false }); }
+                    if (newG !== victim.name) { hG_name = newG; hG_swapStep = step; allGoals.push({ p: Math.ceil((step+1)/40), m: Math.floor(step/2)%20||20, s:0, str:`${Math.floor(step/2)%20||20}:00`, tm:g.h.code, cl:'#fff', txt:`🚑 GOALIE INJURY: ${victim.name} (${g.h.code.toUpperCase()}) — ${newG} enters`, isPenalty:false }); }
                 } else {
                     _shakenUp(hFLines, hDPairs, gameSubsH, gameInjuredH, victim, g.h.nrm, g.h.code, step);
                 }
@@ -4245,7 +4249,7 @@ function simGame(idx) {
                 const victim = candidates[Math.floor(Math.random() * candidates.length)];
                 if (getPlayerPosition(victim) === 'G') {
                     const newG = _swapGoalie(g.a.nrm, victim.name);
-                    if (newG !== victim.name) { aG_name = newG; allGoals.push({ p: Math.ceil((step+1)/40), m: Math.floor(step/2)%20||20, s:0, str:`${Math.floor(step/2)%20||20}:00`, tm:g.a.code, cl:'#fff', txt:`🚑 GOALIE INJURY: ${victim.name} (${g.a.code.toUpperCase()}) — ${newG} enters`, isPenalty:false }); }
+                    if (newG !== victim.name) { aG_name = newG; aG_swapStep = step; allGoals.push({ p: Math.ceil((step+1)/40), m: Math.floor(step/2)%20||20, s:0, str:`${Math.floor(step/2)%20||20}:00`, tm:g.a.code, cl:'#fff', txt:`🚑 GOALIE INJURY: ${victim.name} (${g.a.code.toUpperCase()}) — ${newG} enters`, isPenalty:false }); }
                 } else {
                     _shakenUp(aFLines, aDPairs, gameSubsA, gameInjuredA, victim, g.a.nrm, g.a.code, step);
                 }
@@ -4451,16 +4455,36 @@ function simGame(idx) {
     let totalGameMinutes = 60 + (otPeriods * 5);
     
     if (hG_obj) {
-        playerStats[hG_name][k].gp++;
-        if (aG === 0) playerStats[hG_name][k].so++;
-        if (hStatus === 'win') playerStats[hG_name][k].w++; else if (hStatus === 'loss') playerStats[hG_name][k].l++; else playerStats[hG_name][k].t++;
-        trk(hG_name, 'toi', totalGameMinutes);
+        if (hG_swapStep >= 0 && hG_name !== hG_starterName) {
+            // Starter played up to swap; backup played remainder — split TOI, both get GP
+            const starterMins = Math.round(hG_swapStep * 0.5 * 10) / 10;
+            const backupMins  = Math.round((totalGameMinutes - starterMins) * 10) / 10;
+            if (playerStats[hG_starterName]) { playerStats[hG_starterName][k].gp++; trk(hG_starterName, 'toi', starterMins); }
+            if (playerStats[hG_name])        { playerStats[hG_name][k].gp++; trk(hG_name, 'toi', backupMins); }
+            // Decision goes to goalie who played more; no shutout possible
+            const decisionG = starterMins >= backupMins ? hG_starterName : hG_name;
+            if (playerStats[decisionG]) { if (hStatus === 'win') playerStats[decisionG][k].w++; else if (hStatus === 'loss') playerStats[decisionG][k].l++; else playerStats[decisionG][k].t++; }
+        } else {
+            playerStats[hG_name][k].gp++;
+            if (aG === 0) playerStats[hG_name][k].so++;
+            if (hStatus === 'win') playerStats[hG_name][k].w++; else if (hStatus === 'loss') playerStats[hG_name][k].l++; else playerStats[hG_name][k].t++;
+            trk(hG_name, 'toi', totalGameMinutes);
+        }
     }
     if (aG_obj) {
-        playerStats[aG_name][k].gp++;
-        if (hG === 0) playerStats[aG_name][k].so++;
-        if (aStatus === 'win') playerStats[aG_name][k].w++; else if (aStatus === 'loss') playerStats[aG_name][k].l++; else playerStats[aG_name][k].t++;
-        trk(aG_name, 'toi', totalGameMinutes);
+        if (aG_swapStep >= 0 && aG_name !== aG_starterName) {
+            const starterMins = Math.round(aG_swapStep * 0.5 * 10) / 10;
+            const backupMins  = Math.round((totalGameMinutes - starterMins) * 10) / 10;
+            if (playerStats[aG_starterName]) { playerStats[aG_starterName][k].gp++; trk(aG_starterName, 'toi', starterMins); }
+            if (playerStats[aG_name])        { playerStats[aG_name][k].gp++; trk(aG_name, 'toi', backupMins); }
+            const decisionG = starterMins >= backupMins ? aG_starterName : aG_name;
+            if (playerStats[decisionG]) { if (aStatus === 'win') playerStats[decisionG][k].w++; else if (aStatus === 'loss') playerStats[decisionG][k].l++; else playerStats[decisionG][k].t++; }
+        } else {
+            playerStats[aG_name][k].gp++;
+            if (hG === 0) playerStats[aG_name][k].so++;
+            if (aStatus === 'win') playerStats[aG_name][k].w++; else if (aStatus === 'loss') playerStats[aG_name][k].l++; else playerStats[aG_name][k].t++;
+            trk(aG_name, 'toi', totalGameMinutes);
+        }
     }
 
     g.result = { 
@@ -4528,6 +4552,16 @@ function simGame(idx) {
 
     let activeGoalies = [hG_obj, aG_obj].filter(g => g !== null);
     if (typeof processPostGameStreaks === 'function') processPostGameStreaks(winningTeamRoster.concat(losingTeamRoster), activeGoalies);
+    // Extra fatigue for players who double-shifted due to mid-game injury
+    const _doubleShifters = new Set([
+        ...Object.values(gameSubsH.f).flatMap(s => Object.values(s).map(p => p?.name)),
+        ...Object.values(gameSubsH.d).flatMap(s => Object.values(s).map(p => p?.name)),
+        ...Object.values(gameSubsA.f).flatMap(s => Object.values(s).map(p => p?.name)),
+        ...Object.values(gameSubsA.d).flatMap(s => Object.values(s).map(p => p?.name))
+    ].filter(Boolean));
+    _doubleShifters.forEach(pName => {
+        if (playerStats[pName]?.status) playerStats[pName].status.fatigue = Math.min(100, (playerStats[pName].status.fatigue || 0) + 12);
+    });
     if (typeof applyPostGameFatigue === 'function' && awayGoalie && homeGoalie) applyPostGameFatigue(g.a.nrm, g.h.nrm, awayGoalie.name, homeGoalie.name);
     if (typeof reviewGameForSuspensions === 'function') reviewGameForSuspensions(matchStats, g.h.nrm, g.a.nrm);
     if (typeof triggerGameInjuries === 'function') triggerGameInjuries(matchStats, g.h.nrm, g.a.nrm);
