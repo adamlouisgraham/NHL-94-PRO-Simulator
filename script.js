@@ -3689,19 +3689,28 @@ function calculateDynamicIceTime(struct) {
         fShares[2] = Math.max(fShares[2], fShares[3] + 2);
     }
 
-    // RULE C: If lines OVR are within 3 rating points, give similar ice time to lines
-    const ratingClosenessThreshold = 3;
-    if (Math.abs(f1Ovr - f2Ovr) <= ratingClosenessThreshold) {
-        let avg = (fShares[0] + fShares[1]) / 2;
-        fShares[0] = avg; fShares[1] = avg;
+    // RULE C: If adjacent lines are within 3 OVR, average ice time across the cluster.
+    // Evaluate all adjacent gaps first, then average the full cluster in one pass
+    // so no line gets averaged twice (e.g. line 2 between two close pairs).
+    const T = 3;
+    const close12 = Math.abs(f1Ovr - f2Ovr) <= T;
+    const close23 = Math.abs(f2Ovr - f3Ovr) <= T;
+    const close34 = Math.abs(f3Ovr - f4Ovr) <= T;
+
+    if (close12 && close23) {
+        // Lines 1, 2, 3 all close — average all three
+        const avg = (fShares[0] + fShares[1] + fShares[2]) / 3;
+        fShares[0] = avg; fShares[1] = avg; fShares[2] = avg;
+    } else {
+        if (close12) { const avg = (fShares[0] + fShares[1]) / 2; fShares[0] = avg; fShares[1] = avg; }
+        if (close23) { const avg = (fShares[1] + fShares[2]) / 2; fShares[1] = avg; fShares[2] = avg; }
     }
-    if (Math.abs(f2Ovr - f3Ovr) <= ratingClosenessThreshold) {
-        let avg = (fShares[1] + fShares[2]) / 2;
-        fShares[1] = avg; fShares[2] = avg;
-    }
-    if (Math.abs(f3Ovr - f4Ovr) <= ratingClosenessThreshold) {
-        let avg = (fShares[2] + fShares[3]) / 2;
-        fShares[2] = avg; fShares[3] = avg;
+    if (close23 && close34) {
+        // Lines 2, 3, 4 all close — average all three
+        const avg = (fShares[1] + fShares[2] + fShares[3]) / 3;
+        fShares[1] = avg; fShares[2] = avg; fShares[3] = avg;
+    } else if (close34) {
+        const avg = (fShares[2] + fShares[3]) / 2; fShares[2] = avg; fShares[3] = avg;
     }
 
     // Scale Forward Shares to exactly fit 180 total skater minutes
