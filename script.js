@@ -7398,25 +7398,19 @@ function pcDrawSprite(canvas, type, pri, sec) {
         r(x0,y+bh*2,tw,bh,WHT); r(x0,y+bh*2,tw,1,WHTl); r(x0,y+bh*3-1,tw,1,WHTd);
     };
 
-    // Helmet: compact dome, simple visor slit, no face detail below visor
+    // Helmet: bigger dome (rx=14) to match grid proportions — head ≈ 28px wide
     const drawHelmet = (hx, hy) => {
-        // dome — primary dark shell
-        arc(hx, hy, 13, 12, HLM);
-        arc(hx, hy, 13, 12, HLd, 0, Math.PI);     // shadow underside
-        // side jaw panels
-        r(hx-13, hy-2, 4, 16, HLd); r(hx+9, hy-2, 4, 16, HLd);
-        // visor slot — tinted full-width opening
-        r(hx-9, hy+2, 18, 11, 'rgba(70,150,240,0.42)');
-        r(hx-9, hy+2, 18, 2,  'rgba(220,244,255,0.50)');  // glare
-        r(hx-9, hy+11, 18, 1, 'rgba(30,90,200,0.30)');    // bottom edge
-        // eyes through visor
-        r(hx-6, hy+5, 4, 2, 'rgba(15,15,15,0.55)');
-        r(hx+2, hy+5, 4, 2, 'rgba(15,15,15,0.55)');
-        // chin pad
-        r(hx-9, hy+13, 18, 4, HLd); r(hx-9, hy+13, 18, 1, HLl);
-        // dome shine
-        arc(hx, hy-3, 7, 5, HLs, Math.PI, Math.PI*2);
-        r(hx-3, hy-11, 6, 2, HLl);
+        arc(hx, hy, 14, 13, HLM);
+        arc(hx, hy, 14, 13, HLd, 0, Math.PI);
+        r(hx-14, hy-2, 5, 17, HLd); r(hx+9, hy-2, 5, 17, HLd); // jaw panels
+        r(hx-10, hy+2, 20, 12, 'rgba(70,150,240,0.42)'); // visor
+        r(hx-10, hy+2, 20, 2,  'rgba(220,244,255,0.50)');
+        r(hx-10, hy+12, 20, 1, 'rgba(30,90,200,0.30)');
+        r(hx-7,  hy+5, 5, 2, 'rgba(15,15,15,0.55)'); // eyes
+        r(hx+2,  hy+5, 5, 2, 'rgba(15,15,15,0.55)');
+        r(hx-10, hy+14, 20, 5, HLd); r(hx-10, hy+14, 20, 1, HLl); // chin
+        arc(hx, hy-3, 8, 6, HLs, Math.PI, Math.PI*2);
+        r(hx-4, hy-12, 8, 2, HLl);
     };
 
     // Limb segment — vector-perpendicular quad with highlight edge
@@ -7502,11 +7496,11 @@ function pcDrawSprite(canvas, type, pri, sec) {
         r(82,174,46,10,BLK); r(82,174,4,10,'#2e2e2e');
         r(80,183,48,3,BLD); r(80,183,48,1,BLDl);
 
-        // BODY (jersey with waist sandwich stripes: WHT→S→WHT)
-        const gBodyPts = [[46,72],[82,72],[84,116],[44,116]];
-        jsy(gBodyPts, [[82,4],[86,4,S,Sl,Sd],[90,4]]); // waist1/2/3
-        arc(64,80,18,10,Pl2,Math.PI,Math.PI*2); arc(64,80,12,7,P,Math.PI,Math.PI*2); // chest prot dome
-        r(44,108,40,10,Pd); r(44,108,3,10,Pl2); // belly pad
+        // BODY — narrower torso 34px wide (grid-calibrated)
+        const gBodyPts = [[48,70],[82,70],[84,112],[46,112]];
+        jsy(gBodyPts, [[82,4],[86,4,S,Sl,Sd],[90,4]]);
+        arc(65,78,16,10,Pl2,Math.PI,Math.PI*2); arc(65,78,11,7,P,Math.PI,Math.PI*2);
+        r(46,104,38,10,Pd); r(46,104,3,10,Pl2); // belly pad
 
         // TRAPPER ARM — armStripe sandwich
         drawArm([44,78],[34,102],[24,118], 7);
@@ -7527,141 +7521,141 @@ function pcDrawSprite(canvas, type, pri, sec) {
         stripe3(82,104,120,3); // blocker face stripes
 
         // SHOULDER PADS
-        arc(46,74,14,11,Pl); arc(46,74,9,7,Pl2); arc(46,74,5,3,S);
-        arc(82,74,14,11,Pl); arc(82,74,9,7,Pl2); arc(82,74,5,3,S);
+        arc(48,72,15,12,Pl); arc(48,72,10,8,Pl2); arc(48,72,5,3,S);
+        arc(82,72,15,12,Pl); arc(82,72,10,8,Pl2); arc(82,72,5,3,S);
 
         // NECK
-        r(60,66,8,8,SKN); r(60,66,2,8,SKl); r(66,66,2,8,SKd);
+        r(60,63,10,9,SKN); r(60,63,2,9,SKl); r(68,63,2,9,SKd);
 
-        // GOALIE MASK
-        arc(64,46,21,20,HLM);
-        arc(64,42,12,8,HLs,Math.PI,Math.PI*2);
-        arc(64,46,21,20,HLd,0,Math.PI);
-        arc(64,46,17,15,Pdd,0,Math.PI); // chin color
-        r(43,36,12,28,HLd); r(74,36,12,28,HLd); // side wings
-        // visor
-        r(48,27,32,14,'rgba(100,185,255,0.46)'); r(48,27,32,2,'rgba(225,246,255,0.38)');
-        // cage bars (3v + 4h)
-        r(44,54,5,25,BLK); r(62,54,5,25,BLK); r(79,54,5,25,BLK);
-        r(42,54,46,3,BLK); r(42,61,46,3,BLK); r(42,68,46,3,BLK); r(42,75,46,2,BLK);
-        // face patches through cage
-        r(50,57,10,5,SKN); r(70,57,8,5,SKN);
-        r(51,58,4,2,BLK); r(72,58,4,2,BLK); // eyes
-        // chin strap
-        r(44,79,36,5,HLM); r(44,79,36,1,HLl);
-        arc(64,30,13,8,HLs,Math.PI,Math.PI*2);
+        // GOALIE MASK — bigger dome (rx=22) to match grid head size
+        arc(65,44,22,21,HLM);
+        arc(65,40,13,8,HLs,Math.PI,Math.PI*2);
+        arc(65,44,22,21,HLd,0,Math.PI);
+        arc(65,44,18,16,Pdd,0,Math.PI);
+        r(43,34,13,30,HLd); r(76,34,13,30,HLd); // side wings
+        r(48,25,34,15,'rgba(100,185,255,0.46)'); r(48,25,34,2,'rgba(225,246,255,0.38)');
+        // cage bars
+        r(44,53,5,26,BLK); r(62,53,5,26,BLK); r(80,53,5,26,BLK);
+        r(42,53,47,3,BLK); r(42,60,47,3,BLK); r(42,67,47,3,BLK); r(42,74,47,2,BLK);
+        r(50,56,10,5,SKN); r(71,56,8,5,SKN);
+        r(51,57,4,2,BLK); r(73,57,4,2,BLK);
+        r(44,78,38,5,HLM); r(44,78,38,1,HLl);
+        arc(65,28,14,8,HLs,Math.PI,Math.PI*2);
 
     } else if (type === 'defense') {
-        // ── DEFENSE — poke-check lunge left, stick nearly horizontal ─────────
+        // ── DEFENSE — poke-check lunge left ──────────────────────────────────
+        // Grid-calibrated: head=28px, jersey=34px wide, pants=44px wide
+        // Figure y=20→165. Body leans left ~15°.
 
-        // STICK (near-horizontal, right-to-left)
-        ln(102,92,4,146,STKd,3); ln(102,92,4,146,STK,2); ln(102,92,4,146,STKl,1);
-        poly([[0,142],[16,148],[14,156],[0,150]],STK); poly([[0,142],[5,144],[3,152],[0,150]],STKl);
-        r(0,150,18,4,BLD); r(0,150,18,1,BLDl); r(12,146,6,6,STKd);
-        for(let t=0;t<5;t++) r(18+t*16,145-t*10,6,4,STKd); // tape
+        // STICK — nearly horizontal, upper-right to lower-left
+        ln(108,82,2,152,STKd,3); ln(108,82,2,152,STK,2); ln(108,82,2,152,STKl,1);
+        poly([[0,148],[14,154],[12,162],[0,156]],STK);
+        poly([[0,148],[4,150],[2,158],[0,156]],STKl);
+        r(0,156,16,4,BLD); r(0,156,16,1,BLDl); r(10,152,6,6,STKd);
+        for(let t=0;t<5;t++) r(16+t*18,151-t*12,7,4,STKd);
 
-        // SKATES
-        drawSkate(34,56,168); drawSkate(76,98,166);
+        // SKATES (left lunged fwd, right planted back)
+        drawSkate(30,50,158); drawSkate(76,96,156);
 
-        // SHINS
-        drawShin(36,54,138,168, 44,140); drawShin(76,96,136,166, 86,138);
+        // SHINS — 16px wide × 28px tall each
+        drawShin(30,46,130,158, 37,132); drawShin(76,92,128,156, 83,130);
 
-        // PANTS — pantsStripe1 (WHT) + pantsStripe2 (S) on leg
-        poly([[32,110],[86,104],[88,138],[30,140]],Pd);
-        poly([[32,110],[38,109],[36,139],[30,140]],Pl2);
-        poly([[80,104],[86,104],[88,138],[82,138]],Pdd);
-        // pantsStripe1 & 2 running down each leg
-        r(36,116,18,3,WHT); r(36,119,18,3,S,Sl); // left leg stripes
-        r(62,114,18,3,WHT); r(62,117,18,3,S,Sl); // right leg stripes
-        r(58,115,3,23,Pdd); // leg seam
+        // PANTS — 44px wide, pantsStripe1+2 on each leg
+        poly([[30,108],[74,102],[76,130],[28,132]],Pd);
+        poly([[30,108],[35,107],[33,131],[28,132]],Pl2);
+        poly([[69,102],[74,102],[76,130],[71,130]],Pdd);
+        r(34,113,18,3,WHT); r(34,116,18,3,S);   // left leg
+        r(56,111,16,3,WHT); r(56,114,16,3,S);   // right leg
+        r(52,110,3,20,Pdd); // seam
 
-        // JERSEY — waist sandwich stripes (waist1/2/3)
-        jsy([[32,56],[70,52],[74,112],[28,114]], [[68,4],[72,4,S,Sl,Sd],[76,4]]); // waist sandwich
+        // JERSEY — 34px wide, lean left (top right of bottom)
+        jsy([[34,52],[68,48],[70,108],[30,110]], [[76,4],[80,4,S,Sl,Sd],[84,4]]);
 
-        // LEFT ARM — armStripe sandwich
-        drawArm([32,64],[16,90],[6,116], 8);
-        stripe3(22,38,67,3);
-        drawGlove([[0,112],[18,116],[14,132],[0,128]],
-                  [[0,112],[4,113],[2,129],[0,128]],
-                  [[14,116],[18,116],[14,132],[10,132]]);
+        // LEFT ARM — punch lunge hard left (wide reach to canvas edge)
+        drawArm([34,60],[12,88],[2,118], 8);
+        stripe3(18,36,63,3);
+        drawGlove([[0,114],[16,118],[12,136],[0,132]],
+                  [[0,114],[3,115],[1,133],[0,132]],
+                  [[12,118],[16,118],[12,136],[8,136]]);
 
-        // RIGHT ARM — armStripe sandwich
-        drawArm([62,60],[72,84],[68,110], 8);
-        stripe3(60,74,63,3);
-        drawGlove([[60,106],[80,110],[76,126],[58,122]],
-                  [[60,106],[64,107],[62,123],[58,122]],
-                  [[76,110],[80,110],[76,126],[72,126]]);
+        // RIGHT ARM — raised back/high
+        drawArm([62,56],[76,80],[72,108], 8);
+        stripe3(62,78,59,3);
+        drawGlove([[62,104],[84,108],[80,126],[60,122]],
+                  [[62,104],[66,105],[64,123],[60,122]],
+                  [[80,108],[84,108],[80,126],[76,126]]);
 
         // SHOULDER PADS
-        arc(32,64,14,12,Pl); arc(32,64,9,8,Pl2); arc(32,64,5,3,S);
-        arc(68,61,11,9,Pl); arc(68,61,7,6,Pl2); arc(68,61,4,3,S);
+        arc(34,60,15,12,Pl); arc(34,60,10,8,Pl2); arc(34,60,5,3,S);
+        arc(66,57,12,10,Pl); arc(66,57,8,7,Pl2); arc(66,57,4,3,S);
 
-        // NECK + HELMET
-        r(46,46,8,12,SKN); r(46,46,2,12,SKl); r(52,46,2,12,SKd);
-        drawHelmet(50,32);
+        // NECK + HELMET (head center x=48, y=24)
+        r(44,42,10,12,SKN); r(44,42,2,12,SKl); r(52,42,2,12,SKd);
+        drawHelmet(49,26);
 
     } else {
         // ── FORWARD — full skating stride, wrist shot release ─────────────────
+        // Grid-calibrated: head=28px, jersey=34px wide, pants=46px wide
+        // Figure y=18→165. Body tipped forward ~25°.
 
-        // STICK (steep diagonal, low blade left)
-        ln(92,50,10,160,STKd,3); ln(92,50,10,160,STK,2); ln(92,50,10,160,STKl,1);
-        poly([[2,154],[20,160],[18,168],[2,162]],STK); poly([[2,154],[7,156],[5,164],[2,162]],STKl);
-        r(1,162,22,4,BLD); r(1,162,22,1,BLDl); r(16,158,6,6,STKd);
-        for(let t=0;t<5;t++) r(22+t*14,157-t*19,6,4,STKd);
+        // STICK — steep diagonal, top-right to bottom-left blade
+        ln(96,46,8,162,STKd,3); ln(96,46,8,162,STK,2); ln(96,46,8,162,STKl,1);
+        poly([[2,158],[18,164],[16,172],[2,166]],STK);
+        poly([[2,158],[6,160],[4,168],[2,166]],STKl);
+        r(1,166,20,4,BLD); r(1,166,20,1,BLDl); r(14,162,6,6,STKd);
+        for(let t=0;t<5;t++) r(20+t*14,159-t*18,6,4,STKd);
 
-        // SKATES (stride split: left planted, right back)
-        drawSkate(30,54,166); // left planted
-        // right back — angled
-        poly([[80,158],[102,164],[104,176],[78,178]],BLK);
-        r(78,162,24,10,DRK); r(78,158,4,14,'#303030');
-        for(let lx=83;lx<102;lx+=4) r(lx,160,2,10,'#3a3a3a');
-        r(76,176,30,3,BLD); r(76,176,30,1,BLDl);
+        // SKATES — left planted, right stride back
+        drawSkate(28,46,160); // left planted
+        poly([[78,154],[100,160],[102,172],[76,174]],BLK); // right angled
+        r(76,158,24,10,DRK); r(76,154,4,14,'#282828');
+        for(let lx=81;lx<100;lx+=4) r(lx,156,2,10,'#383838');
+        r(74,172,30,3,BLD); r(74,172,30,1,BLDl);
 
-        // SHINS (left full, right angled away/shorter)
-        drawShin(30,52,130,166, 40,132);
-        // right shin foreshortened — sandwich stripes compressed
-        poly([[78,132],[98,136],[96,160],[76,158]],SHN);
-        poly([[78,132],[82,133],[80,159],[76,158]],SHNl);
-        poly([[94,136],[98,136],[96,160],[92,160]],SHNd);
-        r(80,140,14,3,WHT); r(80,143,14,3,S); r(80,146,14,3,WHT); // sock stripe 1
-        r(80,152,14,3,WHT); r(80,155,14,3,S); r(80,158,14,3,WHT); // sock stripe 2
-        arc(88,135,9,6,SHNl); arc(88,135,6,4,SHN);
+        // SHINS — left full 16×30px, right foreshortened
+        drawShin(28,44,128,160, 35,130);
+        poly([[76,126],[96,130],[94,156],[74,154]],SHN); // right shin
+        poly([[76,126],[80,127],[78,155],[74,154]],SHNl);
+        poly([[92,130],[96,130],[94,156],[90,156]],SHNd);
+        r(78,134,14,3,WHT); r(78,137,14,3,S); r(78,140,14,3,WHT); // sock1
+        r(78,146,14,3,WHT); r(78,149,14,3,S); r(78,152,14,3,WHT); // sock2
+        arc(86,129,9,6,SHNl); arc(86,129,6,4,SHN);
 
-        // PANTS — pantsStripe1 (WHT) + pantsStripe2 (S) on legs
-        poly([[28,102],[88,94],[90,128],[26,132]],Pd);
-        poly([[28,102],[34,101],[32,131],[26,132]],Pl2);
-        poly([[82,94],[88,94],[90,128],[84,128]],Pdd);
-        r(32,108,20,3,WHT); r(32,111,20,3,S); // left leg stripe
-        r(64,105,20,3,WHT); r(64,108,20,3,S); // right leg stripe
-        r(56,107,3,25,Pdd);
+        // PANTS — 46px wide forward-lean split, pantsStripe1+2
+        poly([[28,98],[88,90],[90,124],[26,128]],Pd);
+        poly([[28,98],[33,97],[31,127],[26,128]],Pl2);
+        poly([[83,90],[88,90],[90,124],[85,124]],Pdd);
+        r(30,104,18,3,WHT); r(30,107,18,3,S);  // left leg
+        r(62,101,18,3,WHT); r(62,104,18,3,S);  // right leg
+        r(54,102,3,24,Pdd); // seam
 
-        // JERSEY — waist sandwich stripes
-        jsy([[34,46],[72,40],[78,98],[30,102]], [[56,4],[60,4,S,Sl,Sd],[64,4]]); // waist sandwich
+        // JERSEY — 34px wide, forward lean (top shifted right vs bottom)
+        jsy([[36,44],[70,38],[74,98],[30,102]], [[64,4],[68,4,S,Sl,Sd],[72,4]]);
 
-        // LEFT ARM — armStripe sandwich (bottom hand)
-        drawArm([34,54],[20,82],[10,110], 8);
-        stripe3(22,40,57,3);
-        drawGlove([[2,106],[20,110],[16,130],[0,126]],
-                  [[2,106],[6,107],[4,127],[0,126]],
-                  [[16,110],[20,110],[16,130],[12,130]]);
+        // LEFT ARM — bottom hand reaching far down-left to stick
+        drawArm([36,52],[16,80],[4,112], 9);
+        stripe3(18,38,55,3);
+        drawGlove([[0,108],[18,112],[14,132],[0,128]],
+                  [[0,108],[3,109],[1,129],[0,128]],
+                  [[14,112],[18,112],[14,132],[10,132]]);
 
-        // RIGHT ARM — armStripe sandwich (top hand)
-        drawArm([68,44],[80,72],[76,100], 8);
-        stripe3(66,80,47,3);
-        drawGlove([[64,96],[86,100],[82,120],[62,116]],
-                  [[64,96],[68,97],[66,117],[62,116]],
-                  [[82,100],[86,100],[82,120],[78,120]]);
+        // RIGHT ARM — top hand raised high+back, wide right
+        drawArm([66,42],[82,68],[80,98], 8);
+        stripe3(66,84,45,3);
+        drawGlove([[66,94],[92,98],[88,118],[64,114]],
+                  [[66,94],[70,95],[68,115],[64,114]],
+                  [[88,98],[92,98],[88,118],[84,118]]);
 
         // PUCK at blade
-        arc(12,166,9,4,BLK); arc(12,166,6,3,DRK);
+        arc(10,170,8,4,BLK); arc(10,170,5,3,DRK);
 
         // SHOULDER PADS
-        arc(36,54,14,12,Pl); arc(36,54,9,8,Pl2); arc(36,54,5,3,S);
-        arc(72,48,11,9,Pl); arc(72,48,7,6,Pl2); arc(72,48,4,3,S);
+        arc(38,52,15,12,Pl); arc(38,52,10,8,Pl2); arc(38,52,5,3,S);
+        arc(68,46,12,10,Pl); arc(68,46,8,7,Pl2); arc(68,46,4,3,S);
 
-        // NECK + HELMET
-        r(50,34,8,12,SKN); r(50,34,2,12,SKl); r(56,34,2,12,SKd);
-        drawHelmet(56,20);
+        // NECK + HELMET — head at x=58,y=20 (forward lean)
+        r(54,32,10,14,SKN); r(54,32,2,14,SKl); r(62,32,2,14,SKd);
+        drawHelmet(59,20);
     }
 }
 
