@@ -446,66 +446,6 @@ function swapPlayersInStructure(struct, name1, name2) {
     return false; 
 }
 
-// 2. The Integrated Line Builder
-function buildSpecialTeams(fullRosterArray, type) {
-    // 1. FORCE FRESH POOLS: Filter from the full roster to ignore 5v5 line assignments
-    const allForwards = fullRosterArray.filter(p => ['C', 'LW', 'RW'].includes(p.pos));
-    const allDefenders = fullRosterArray.filter(p => ['LD', 'RD', 'D'].includes(p.pos));
-
-    let teams = { 1: [], 2: [] };
-
-    if (type === 'PP') {
-        // --- POWER PLAY LOGIC ---
-        // Sort by Offensive Awareness ('offawr')
-        const sortByOffense = (a, b) => {
-            const offA = playerStats[a.name]?.attr?.offawr || 0;
-            const offB = playerStats[b.name]?.attr?.offawr || 0;
-            return offB - offA; // Descending
-        };
-
-        const sortedF = [...allForwards].sort(sortByOffense);
-        const sortedD = [...allDefenders].sort(sortByOffense);
-
-        // PP1: Top 4 Forwards (indices 0-3), Best Defender (index 0)
-        teams[1] = [
-            ...sortedF.slice(0, 4), 
-            sortedD[0] 
-        ].filter(Boolean);
-
-        // PP2: Next 4 Forwards (indices 4-7), 2nd Best Defender (index 1)
-        teams[2] = [
-            ...sortedF.slice(4, 8), 
-            sortedD[1] 
-        ].filter(Boolean);
-        
-    } else if (type === 'PK') {
-        // --- PENALTY KILL LOGIC ---
-        // Sort by Combined Defensive Utility (Defense + Checking)
-        const sortByDefense = (a, b) => {
-            const defA = (playerStats[a.name]?.attr?.def || 0) + (playerStats[a.name]?.attr?.chk || 0);
-            const defB = (playerStats[b.name]?.attr?.def || 0) + (playerStats[b.name]?.attr?.chk || 0);
-            return defB - defA; // Descending
-        };
-
-        const sortedF = [...allForwards].sort(sortByDefense);
-        const sortedD = [...allDefenders].sort(sortByDefense);
-
-        // PK1: Top 2 Forwards (indices 0-1), Top 2 Defenders (indices 0-1)
-        teams[1] = [
-            ...sortedF.slice(0, 2), 
-            ...sortedD.slice(0, 2)
-        ].filter(Boolean);
-
-        // PK2: Next 2 Forwards (indices 2-3), Next 2 Defenders (indices 2-3)
-        teams[2] = [
-            ...sortedF.slice(2, 4), 
-            ...sortedD.slice(2, 4)
-        ].filter(Boolean);
-    }
-
-    return teams;
-}
-
 // 3. Logic to find SN + PL pairings
 function findDuo(wings) {
     for (let i = 0; i < wings.length; i++) {
@@ -1515,45 +1455,6 @@ function checkHitPenalty(attacker, severity) {
     return false;
 }
 
-// 🎲 2. THE BACKGROUND PENALTY ROLLER (Call this randomly during standard play)
-// Example usage: let penResult = rollGeneralPenalty(playerStats['Cam Neely']);
-function rollGeneralPenalty(playerStatsObj) {
-    // Safely extract roughness
-    let roughness = playerStatsObj.roughness || (playerStatsObj.attr ? playerStatsObj.attr.rough : 50); 
-    
-    // If your stats are still letter grades (e.g., 'B+'), convert it to a number roughly 0-99
-    if (typeof roughness === 'string') {
-        roughness = getGradeMod(roughness) * 60; // Helper to turn grades into numerical weight
-    }
-
-    // Base chance for a penalty during a standard time tick (Adjust this up/down to tune gameplay)
-    let basePenaltyChance = 0.05; 
-
-    // Roughness Modifier: 50 = 1.0x, 99 = ~2.0x chance to take a penalty
-    let roughnessModifier = (roughness / 50); 
-    
-    // Calculate final probability including Ref Strictness
-    let finalPenaltyChance = basePenaltyChance * roughnessModifier * REF_STRICTNESS;
-
-    // Roll the dice!
-    if (Math.random() < finalPenaltyChance) {
-        // 85% chance of a Minor (2 min), 15% chance of a Major (5 min)
-        let isMajor = Math.random() < 0.15; 
-        
-        return {
-            penaltyCalled: true,
-            minutes: isMajor ? 5 : 2,
-            type: isMajor ? "Major" : "Minor"
-        };
-    }
-
-    // No penalty occurred
-    return {
-        penaltyCalled: false,
-        minutes: 0,
-        type: "None"
-    };
-}
 
 // Example of how to trigger it:
 function startPowerplay(advantageTeam, minutes) {
@@ -6550,14 +6451,6 @@ function toggleBox(el) {
     const icon = header.querySelector('.toggle-icon'); if (icon) { icon.innerText = isHidden ? '[-]' : '[+]'; }
 } 
 
-function clearArchives() { 
-    if(confirm("Delete past History & HOF?")) { 
-        leagueHistory = []; hallOfFame = []; retiredPlayers = []; 
-        localStorage.removeItem(HISTORY_STORAGE_KEY); localStorage.removeItem(HOF_STORAGE_KEY); localStorage.removeItem(RETIRED_STORAGE_KEY); 
-        renderLeagueHistory(); renderHallOfFame(); renderRetiredPlayers(); 
-    } 
-}
-
 function exportCSV() { 
     let csv = "Player,Team,Pos,Age,GP,G,A,PTS,W,SO,SV%,GAA,OVR,ASG_APP\n"; 
     Object.values(playerStats).forEach(p => { 
@@ -8548,50 +8441,25 @@ function clearSaveSlot() {
 }
 
 function loadDefaultGoogleSheets(event) {
-    // Prevent default form submission behavior if an event is passed
     if (event) event.preventDefault();
-    
-    // Array of the URL input IDs from your HTML
+
     const sheetInputs = [
-        'teamSheetUrl', 
-        'playerSheetUrl', 
-        'scheduleSheetUrl', 
+        'teamSheetUrl',
+        'playerSheetUrl',
+        'scheduleSheetUrl',
         'eventLogSheetUrl'
     ];
-    
-    // Clear out each input field
+
     sheetInputs.forEach(id => {
         const inputElement = document.getElementById(id);
         if (inputElement) {
             inputElement.value = '';
         }
     });
-    
+
     console.log("Sheet URLs reset. Engine will default to sample data.");
-    
-    // If you have a status update function, call it here
+
     if (typeof resetSheetUrlsToDefault === 'function') {
         resetSheetUrlsToDefault();
     }
-function loadDefaultGoogleSheets(event) {
-    if (event) event.preventDefault();
-
-    const sheetInputs = [
-        'teamSheetUrl', 
-        'playerSheetUrl', 
-        'scheduleSheetUrl', 
-        'eventLogSheetUrl'
-    ];
-
-    sheetInputs.forEach(id => {
-        const inputElement = document.getElementById(id);
-        if (inputElement) {
-            inputElement.value = '';
-        }
-    });
-
-    console.log("Sheet URLs reset. Engine will default to sample data.");
-
-    if (typeof resetSheetUrlsToDefault === 'function') {
-        resetSheetUrlsToDefault();
-    }}}
+}
