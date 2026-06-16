@@ -7377,22 +7377,25 @@ function pcDrawSprite(canvas, type, pri, sec) {
     // ── Shared helpers (reference-style) ────────────────────────────────────
 
     // Jersey with classic horizontal stripe bands (like reference sprite)
-    // body=primary color quad, stripes are secondary/white horizontal bands
+    // body=primary color quad, stripes=[y,h,col?,litCol?,dkCol?] horizontal bands
+    // default col=WHT — pass S/Sl/Sd for secondary-color bands
     const jsy = (pts, stripes) => {
         poly(pts, P);
-        // left-edge highlight, right-edge shadow on body
         const x0=pts[0][0], x1=pts[1][0];
         poly([[x0,pts[0][1]],[x0+3,pts[0][1]],[x0+3,pts[3][1]],[x0,pts[3][1]]],Pl2);
         poly([[x1-3,pts[1][1]],[x1,pts[1][1]],[x1,pts[2][1]],[x1-3,pts[2][1]]],Pd);
-        // horizontal stripe bands
-        stripes.forEach(([y,h])=>{
-            const f=pts, tw=x1-x0;
-            r(x0, y, tw, h, WHT);
-            r(x0, y, tw, 1, WHTl);
-            r(x0, y+h-1, tw, 1, WHTd);
-            // left/right edge shade on stripe
-            r(x0, y, 2, h, WHTd); r(x1-2, y, 2, h, WHTd);
+        stripes.forEach(([y,h,col=WHT,cL=WHTl,cD=WHTd])=>{
+            const tw=x1-x0;
+            r(x0,y,tw,h,col); r(x0,y,tw,1,cL); r(x0,y+h-1,tw,1,cD);
+            r(x0,y,2,h,cD); r(x1-2,y,2,h,cD);
         });
+    };
+    // sandwich: 3-band stripe group (waist1=WHT, waist2=S, waist3=WHT)
+    const stripe3 = (x0,x1,y,bh) => {
+        const tw=x1-x0;
+        r(x0,y,tw,bh,WHT);   r(x0,y,tw,1,WHTl); r(x0,y+bh-1,tw,1,WHTd);
+        r(x0,y+bh,tw,bh,S);  r(x0,y+bh,tw,1,Sl); r(x0,y+bh*2-1,tw,1,Sd);
+        r(x0,y+bh*2,tw,bh,WHT); r(x0,y+bh*2,tw,1,WHTl); r(x0,y+bh*3-1,tw,1,WHTd);
     };
 
     // Helmet: compact dome, simple visor slit, no face detail below visor
@@ -7437,16 +7440,21 @@ function pcDrawSprite(canvas, type, pri, sec) {
         for(let k=pts[0][0]+2; k<pts[1][0]-2; k+=4) r(k, pts[0][1], 2, 4, GLVl);
         r(pts[0][0], pts[0][1], pts[1][0]-pts[0][0], 2, Pl2);
     };
-    // Shin guard block
+    // Shin guard block — sandwich sock stripes: WHT → S → WHT (socksStripe1/2 model)
     const drawShin = (x0, x1, yt, yb, kx, ky) => {
         const w=x1-x0;
         poly([[x0,yt],[x1,yt],[x1,yb],[x0,yb]], SHN);
         poly([[x0,yt],[x0+3,yt],[x0+3,yb],[x0,yb]], SHNl);
         poly([[x1-3,yt],[x1,yt],[x1,yb],[x1-3,yb]], SHNd);
-        // two white shin stripes
-        r(x0+2, yt+8,  w-4, 4, WHT); r(x0+2, yt+8,  w-4, 1, WHTl);
-        r(x0+2, yt+18, w-4, 4, WHT); r(x0+2, yt+18, w-4, 1, WHTl);
-        r(x0+2, yb-6,  w-4, 4, Pdd); // ankle
+        // socksStripe band 1: WHT→S→WHT sandwich
+        r(x0+2,yt+7, w-4,3,WHT);  r(x0+2,yt+7,w-4,1,WHTl);
+        r(x0+2,yt+10,w-4,3,S);    r(x0+2,yt+10,w-4,1,Sl);
+        r(x0+2,yt+13,w-4,3,WHT);  r(x0+2,yt+13,w-4,1,WHTl);
+        // socksStripe band 2
+        r(x0+2,yt+19,w-4,3,WHT);  r(x0+2,yt+19,w-4,1,WHTl);
+        r(x0+2,yt+22,w-4,3,S);    r(x0+2,yt+22,w-4,1,Sl);
+        r(x0+2,yt+25,w-4,3,WHT);  r(x0+2,yt+25,w-4,1,WHTl);
+        r(x0+2,yb-5, w-4,4,Pdd); // ankle
         arc(kx, ky, 9, 7, SHNl); arc(kx, ky, 6, 4, SHN); arc(kx, ky, 3, 2, WHT);
     };
     // Skate boot + blade
@@ -7494,27 +7502,29 @@ function pcDrawSprite(canvas, type, pri, sec) {
         r(82,174,46,10,BLK); r(82,174,4,10,'#2e2e2e');
         r(80,183,48,3,BLD); r(80,183,48,1,BLDl);
 
-        // BODY (jersey with stripes)
+        // BODY (jersey with waist sandwich stripes: WHT→S→WHT)
         const gBodyPts = [[46,72],[82,72],[84,116],[44,116]];
-        jsy(gBodyPts, [[82,11],[96,11]]); // chest + hem stripe
+        jsy(gBodyPts, [[82,4],[86,4,S,Sl,Sd],[90,4]]); // waist1/2/3
         arc(64,80,18,10,Pl2,Math.PI,Math.PI*2); arc(64,80,12,7,P,Math.PI,Math.PI*2); // chest prot dome
         r(44,108,40,10,Pd); r(44,108,3,10,Pl2); // belly pad
 
-        // TRAPPER ARM (left, extending down-left)
+        // TRAPPER ARM — armStripe sandwich
         drawArm([44,78],[34,102],[24,118], 7);
+        stripe3(38,52,80,3); // armStripe1/2/3 on upper arm
         poly([[4,114],[26,118],[20,140],[2,136]],BRN);
         poly([[4,114],[8,115],[4,137],[2,136]],BRNl);
         poly([[22,118],[26,118],[20,140],[16,140]],BRNd);
         for(let i=0;i<4;i++) r(6,118+i*5,18,3,BRNl);
         r(8,114,14,22,'rgba(200,140,60,0.20)');
 
-        // BLOCKER ARM (right, up and out)
+        // BLOCKER ARM — armStripe sandwich
         drawArm([82,76],[90,98],[96,114], 7);
+        stripe3(80,96,79,3);
         poly([[78,110],[104,104],[108,126],[78,130]],GLV);
         poly([[78,110],[84,109],[88,128],[78,130]],GLVl);
         poly([[100,104],[104,104],[108,126],[104,126]],GLVd);
         r(80,112,26,8,Pd); r(80,112,3,8,P); r(100,112,4,8,Pdd);
-        r(82,120,22,4,WHT); r(82,126,22,3,WHT); // blocker stripes
+        stripe3(82,104,120,3); // blocker face stripes
 
         // SHOULDER PADS
         arc(46,74,14,11,Pl); arc(46,74,9,7,Pl2); arc(46,74,5,3,S);
@@ -7556,25 +7566,28 @@ function pcDrawSprite(canvas, type, pri, sec) {
         // SHINS
         drawShin(36,54,138,168, 44,140); drawShin(76,96,136,166, 86,138);
 
-        // PANTS — angled breezer shape
+        // PANTS — pantsStripe1 (WHT) + pantsStripe2 (S) on leg
         poly([[32,110],[86,104],[88,138],[30,140]],Pd);
         poly([[32,110],[38,109],[36,139],[30,140]],Pl2);
         poly([[80,104],[86,104],[88,138],[82,138]],Pdd);
-        r(32,111,52,5,WHT); r(32,111,2,5,WHTl); // waistband stripe
+        // pantsStripe1 & 2 running down each leg
+        r(36,116,18,3,WHT); r(36,119,18,3,S,Sl); // left leg stripes
+        r(62,114,18,3,WHT); r(62,117,18,3,S,Sl); // right leg stripes
         r(58,115,3,23,Pdd); // leg seam
 
-        // JERSEY (upright body, slight left lean)
-        jsy([[32,56],[70,52],[74,112],[28,114]], [[68,10],[82,10]]); // 2 stripes
+        // JERSEY — waist sandwich stripes (waist1/2/3)
+        jsy([[32,56],[70,52],[74,112],[28,114]], [[68,4],[72,4,S,Sl,Sd],[76,4]]); // waist sandwich
 
-        // SLEEVE STRIPES on arms - baked into drawArm call via stripe rects after
+        // LEFT ARM — armStripe sandwich
         drawArm([32,64],[16,90],[6,116], 8);
-        r(20,68,18,5,WHT); r(20,68,2,5,WHTl); // sleeve stripe
+        stripe3(22,38,67,3);
         drawGlove([[0,112],[18,116],[14,132],[0,128]],
                   [[0,112],[4,113],[2,129],[0,128]],
                   [[14,116],[18,116],[14,132],[10,132]]);
 
+        // RIGHT ARM — armStripe sandwich
         drawArm([62,60],[72,84],[68,110], 8);
-        r(64,64,14,5,WHT); r(64,64,2,5,WHTl);
+        stripe3(60,74,63,3);
         drawGlove([[60,106],[80,110],[76,126],[58,122]],
                   [[60,106],[64,107],[62,123],[58,122]],
                   [[76,110],[80,110],[76,126],[72,126]]);
@@ -7606,33 +7619,35 @@ function pcDrawSprite(canvas, type, pri, sec) {
 
         // SHINS (left full, right angled away/shorter)
         drawShin(30,52,130,166, 40,132);
-        // right shin foreshortened
+        // right shin foreshortened — sandwich stripes compressed
         poly([[78,132],[98,136],[96,160],[76,158]],SHN);
         poly([[78,132],[82,133],[80,159],[76,158]],SHNl);
         poly([[94,136],[98,136],[96,160],[92,160]],SHNd);
-        r(80,140,14,4,WHT); r(80,148,14,4,WHT); r(80,156,14,3,Pdd);
+        r(80,140,14,3,WHT); r(80,143,14,3,S); r(80,146,14,3,WHT); // sock stripe 1
+        r(80,152,14,3,WHT); r(80,155,14,3,S); r(80,158,14,3,WHT); // sock stripe 2
         arc(88,135,9,6,SHNl); arc(88,135,6,4,SHN);
 
-        // PANTS (forward lean, split stride)
+        // PANTS — pantsStripe1 (WHT) + pantsStripe2 (S) on legs
         poly([[28,102],[88,94],[90,128],[26,132]],Pd);
         poly([[28,102],[34,101],[32,131],[26,132]],Pl2);
         poly([[82,94],[88,94],[90,128],[84,128]],Pdd);
-        r(28,103,58,5,WHT); r(28,103,2,5,WHTl); // waistband stripe
+        r(32,108,20,3,WHT); r(32,111,20,3,S); // left leg stripe
+        r(64,105,20,3,WHT); r(64,108,20,3,S); // right leg stripe
         r(56,107,3,25,Pdd);
 
-        // JERSEY (body tipped ~30° forward)
-        jsy([[34,46],[72,40],[78,98],[30,102]], [[56,10],[72,10]]); // 2 stripes
+        // JERSEY — waist sandwich stripes
+        jsy([[34,46],[72,40],[78,98],[30,102]], [[56,4],[60,4,S,Sl,Sd],[64,4]]); // waist sandwich
 
-        // LEFT ARM (bottom hand, reaching to puck)
+        // LEFT ARM — armStripe sandwich (bottom hand)
         drawArm([34,54],[20,82],[10,110], 8);
-        r(20,58,18,5,WHT); r(20,58,2,5,WHTl);
+        stripe3(22,40,57,3);
         drawGlove([[2,106],[20,110],[16,130],[0,126]],
                   [[2,106],[6,107],[4,127],[0,126]],
                   [[16,110],[20,110],[16,130],[12,130]]);
 
-        // RIGHT ARM (top hand, high and back)
+        // RIGHT ARM — armStripe sandwich (top hand)
         drawArm([68,44],[80,72],[76,100], 8);
-        r(68,48,16,5,WHT); r(68,48,2,5,WHTl);
+        stripe3(66,80,47,3);
         drawGlove([[64,96],[86,100],[82,120],[62,116]],
                   [[64,96],[68,97],[66,117],[62,116]],
                   [[82,100],[86,100],[82,120],[78,120]]);
