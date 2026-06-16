@@ -1811,7 +1811,7 @@ function createGoalieStats(firstName, lastName, teamCode, attributes) {
         suspended: { days: 0, reason: "" },
         goalieDays: 0,
         lastStart: -1,
-        career: { gp: 0, g: 0, a: 0, pts: 0, pm: 0, pim: 0, ppg: 0, w: 0, l: 0, t: 0, so: 0, sv: 0, sa: 0 },
+        career: { gp: 0, g: 0, a: 0, pts: 0, pm: 0, pim: 0, ppg: 0, w: 0, l: 0, t: 0, so: 0, sv: 0, sa: 0, asg: 0 },
         careerPlayoff: { gp: 0, w: 0, l: 0, t: 0, so: 0, sv: 0, sa: 0, toi: 0, svg: 0 },
         season: { gp: 0, g: 0, a: 0, pm: 0, so: 0, sv: 0, sa: 0, w: 0, l: 0, t: 0, pim: 0, ppg: 0, lastGAA: 0, lastSV: 0, consStarts: 0, toi: 0, svg: 0 },
         playoff: { gp: 0, g: 0, a: 0, pm: 0, so: 0, sv: 0, sa: 0, w: 0, l: 0, pim: 0, ppg: 0, lastGAA: 0, lastSV: 0, consStarts: 0, toi: 0, svg: 0 }
@@ -2077,8 +2077,8 @@ async function startNewGame(useCustomRoster = false) {
                 suspended: { days: 0, reason: "" },
                 goalieDays: 0,
                 lastStart: -1,
-                asgAppearances: 0,
-                
+                asgAppearances: parseInt(getCol(r, ["ASG", "ALL STAR", "APP"], 20)) || 0,
+
                 // 🚨 INJECT THE CALCULATED STATS DIRECTLY 🚨
                 attr: { 
                     off: gradeToNum(getCol(r, ["GOALIE OFFENSE AWARENESS", "OFFENSE"], 10)) || 20, 
@@ -2093,19 +2093,20 @@ async function startNewGame(useCustomRoster = false) {
                 
                 potential: 'Depth',
                 career: {
-                    gp: parseInt(getCol(r, ["CAREER GP", "C_GP", "CAR GP"], -1)) || 0,
+                    gp: parseInt(getCol(r, ["Goalie CAREER GP", "CAREER GP"], -1)) || 0,
                     g: 0, a: 0, pts: 0, pm: 0, pim: 0, ppg: 0,
-                    w: parseInt(getCol(r, ["CAREER W", "C_W", "CAR W"], -1)) || 0,
-                    l: parseInt(getCol(r, ["CAREER L", "C_L", "CAR L"], -1)) || 0,
-                    t: parseInt(getCol(r, ["CAREER T", "C_T", "CAR T"], -1)) || 0,
-                    so: parseInt(getCol(r, ["CAREER SO", "C_SO", "CAR SO"], -1)) || 0,
-                    sv: parseInt(getCol(r, ["CAREER SV", "C_SV", "CAR SV"], -1)) || 0,
-                    sa: parseInt(getCol(r, ["CAREER SA", "C_SA", "CAR SA"], -1)) || 0
+                    w:  parseInt(getCol(r, ["CAREER W"],  -1)) || 0,
+                    l:  parseInt(getCol(r, ["CAREER L"],  -1)) || 0,
+                    t:  parseInt(getCol(r, ["CAREER T"],  -1)) || 0,
+                    so: parseInt(getCol(r, ["CAREER SO"], -1)) || 0,
+                    sv: parseInt(getCol(r, ["CAREER SV"], -1)) || 0,
+                    sa: parseInt(getCol(r, ["CAREER SA"], -1)) || 0,
+                    asg: parseInt(getCol(r, ["Goalie Career Allstar Games", "CAREER ASG"], -1)) || 0
                 },
                 careerPlayoff: {
-                    gp: parseInt(getCol(r, ["CAREER PLAYOFF GP"], -1)) || 0,
-                    w: parseInt(getCol(r, ["CAREER PLAYOFF W"], -1)) || 0,
-                    l: parseInt(getCol(r, ["CAREER PLAYOFF L"], -1)) || 0,
+                    gp: parseInt(getCol(r, ["Goalie CAREER PLAYOFF GP", "CAREER PLAYOFF GP"], -1)) || 0,
+                    w:  parseInt(getCol(r, ["CAREER PLAYOFF W"],  -1)) || 0,
+                    l:  parseInt(getCol(r, ["CAREER PLAYOFF L"],  -1)) || 0,
                     t: 0,
                     so: parseInt(getCol(r, ["CAREER PLAYOFF SO"], -1)) || 0,
                     sv: parseInt(getCol(r, ["CAREER PLAYOFF SV"], -1)) || 0,
@@ -7792,7 +7793,7 @@ function pcBuildStats(pName, tab) {
             const sa=c.sa||0,sv=c.sv||0,ga=Math.max(0,sa-sv),gp=c.gp||0;
             return tbl([['GP',f(gp)],['W',f(c.w)],['L',f(c.l)],['SO',f(c.so)],
                 ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',gp>0?(ga/gp).toFixed(2):'0.00'],
-                ['SVG',f(c.svg||0)],['TOI',fTOI(c.toi,gp)]],[4,5]);
+                ['SVG',f(c.svg||0)],['TOI',fTOI(c.toi,gp)],['ASG',f((c.asg||0)+(p.asgAppearances||0))]],[4,5]);
         }
         return tbl([['GP',f(c.gp)],['G',f(c.g)],['A',f(c.a)],['PTS',c.pts||((c.g||0)+(c.a||0))],
             ['+/-',pm(c.pm||c.plusMinus||0)],['PIM',f(c.pim)],['SOG',f(c.s)],['TOI',fTOI(c.toi,c.gp)]],[2,3]);
