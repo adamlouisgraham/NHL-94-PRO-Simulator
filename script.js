@@ -2268,10 +2268,6 @@ function getPlayerWeightedStats(pName) {
     // =========================================================
     // 🚨 WEIGHT MODIFIER INJECTION ZONE 🚨
     // =========================================================
-    let baseMod = (typeof archMods !== 'undefined' && archMods[tag]) ? archMods[tag].shotRate : 1.0;
-    // =========================================================
-    // 🚨 WEIGHT MODIFIER INJECTION ZONE (FIXED) 🚨
-    // =========================================================
     // Use stored numeric lbs — no random re-roll
     let weightMod = getWeightModifier(p.weight || getWeightLbs(p.attr.weight || 'C'), tag);
     
@@ -4208,6 +4204,12 @@ function simGame(idx) {
     // ==========================================
     // ⏱️ THE 60-MINUTE SIMULATION LOOP (120 steps)
     // ==========================================
+    const _applyLineSubs = (baseLine, lineSubs, lineIdx, gameInj) => {
+        const out = [...baseLine];
+        const slotSubs = lineSubs[lineIdx] || {};
+        Object.entries(slotSubs).forEach(([slot, sub]) => { out[parseInt(slot)] = sub; });
+        return out.filter(p => p && !gameInj.has(p.name));
+    };
     for (let step = 0; step < 120; step++) {
         let minute = Math.floor(step / 2) + 1;
 
@@ -4218,12 +4220,6 @@ function simGame(idx) {
         let aDPair = getPairingForLine(aFLine, awayIceData.defensePairingMatrix || [[1,0,0],[0,1,0],[0,0,1]]);
 
         // Build on-ice units: start from per-game lines, apply any mid-game subs
-        const _applyLineSubs = (baseLine, lineSubs, lineIdx, gameInj) => {
-            const out = [...baseLine];
-            const slotSubs = lineSubs[lineIdx] || {};
-            Object.entries(slotSubs).forEach(([slot, sub]) => { out[parseInt(slot)] = sub; });
-            return out.filter(p => p && !gameInj.has(p.name));
-        };
         let hFPlayers = _applyLineSubs(hFLines[hFLine], gameSubsH.f, hFLine, gameInjuredH);
         let hDPlayers = _applyLineSubs(hDPairs[hDPair], gameSubsH.d, hDPair, gameInjuredH);
         let aFPlayers = _applyLineSubs(aFLines[aFLine], gameSubsA.f, aFLine, gameInjuredA);
@@ -6931,7 +6927,7 @@ function getConnSmytheScore(p) {
             if (!rosters[t.nrm]) rosters[t.nrm] = []; 
             playerStats[rN] = { 
                 name: rN, team: t.name, teamCode: t.code, pos: 'F', age: 18, streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false, injury: 0, attr: { off: 65 + Math.floor(Math.random()*15), def: 60 + Math.floor(Math.random()*15), gDef: 60 }, 
-                career: {gp:0, g:0, a:0, pts:0, w:0, so:0, sv:0, sa:0, pim:0, ppg:0}, season: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, t:0, pim:0, ppg:0}, playoff: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, pim:0, ppg:0} 
+                career: {gp:0, g:0, a:0, pts:0, w:0, so:0, sv:0, sa:0, pim:0, ppg:0, asg:0}, season: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, t:0, pim:0, ppg:0}, playoff: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, pim:0, ppg:0}
             }; 
             rosters[t.nrm].push({name: rN, pos: 'F'}); 
         }); 
