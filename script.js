@@ -2536,24 +2536,30 @@ function getDynamicTeamOvr(tk) {
 
 function playedYesterday(tk) { if (currentDay === 0 || !calendar[currentDay - 1]) return false; return calendar[currentDay - 1].some(g => (g.h && g.h.nrm === tk) || (g.a && g.a.nrm === tk)); }
 
-function getPlayerFatigueAmount(pName) { 
+function getPlayerFatigueAmount(pName) {
     const p = playerStats[pName]; if (!p) return 0;
-    let pen = 0; 
-    let endur = p.attr.endur || 70; // Fallback is now a number
+    let pen = 0;
+    const endur = p.attr?.endur || 70;
+    // Endurance modifier: elite endurance resists fatigue better
+    const endurMod = endur >= 88 ? 0.4 : endur >= 75 ? 0.7 : 1.0;
 
     // 📅 Back-to-Back Schedule Penalty
     if (playedYesterday(p.teamCode || p.team)) {
-        if (endur >= 88) pen += 1;          // 'A' tier endurance
-        else if (endur >= 75) pen += 4;     // 'B' tier endurance
-        else pen += 8;                      // Low endurance crashes on back-to-backs
+        pen += endur >= 88 ? 1 : endur >= 75 ? 4 : 8;
     }
 
-    // 🥵 In-Game Exhaustion (Covering for injured teammates)
+    // 🥵 In-Game Exhaustion (covering for injured teammates)
     if (p.extra_shifts && p.extra_shifts > 0) {
-        if (endur >= 88) pen += 2;
-        else if (endur >= 75) pen += 5;
-        else pen += 10; // Hitting the "3rd Period Wall"
+        pen += endur >= 88 ? 2 : endur >= 75 ? 5 : 10;
     }
+
+    // 🏃 Accumulated season fatigue (0-100 scale, kicks in above 30)
+    // Max raw penalty = 7 OVR at fatigue 100, softened by endurance
+    const fatigue = p.status?.fatigue || 0;
+    if (fatigue > 30) {
+        pen += Math.round(((fatigue - 30) / 10) * endurMod);
+    }
+
     return pen;
 }
 
@@ -5607,14 +5613,9 @@ function renderTeamStats() {
  */
 function getLiveLineOvr(line) {
     if (!line || line.length === 0) return 0;
-    
-    // Calculate average OVR of the line based on active fatigue/streaks
-    const totalOvr = line.reduce((sum, p) => {
-        const stats = getPlayerWeightedStats(p.name);
-        return sum + (stats.ovr || 0);
-    }, 0);
-    
-    return Math.round(totalOvr / line.length);
+    // Route through getLiveIceOvr so fatigue, streaks, morale, and chemistry
+    // all flow into shot chance and scoring probability in the sim loop
+    return Math.round(line.reduce((sum, p) => sum + getLiveIceOvr(p.name), 0) / line.length);
 }
 
 /**
