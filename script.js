@@ -3732,10 +3732,14 @@ function calculateDynamicIceTime(struct) {
     finalForwardLineMins[2] = Math.max(13, Math.min(15, finalForwardLineMins[2]));
     finalForwardLineMins[3] = Math.max(8, Math.min(12, finalForwardLineMins[3]));
 
-    // Normalize again if clamping caused a slight mathematical offset from 180
+    // Micro-adjust to hit exactly 180 total forward minutes, then re-clamp to prevent overshoot
     let clampedSumF = (finalForwardLineMins[0]*3) + (finalForwardLineMins[1]*3) + (finalForwardLineMins[2]*3) + (finalForwardLineMins[3]*3);
     let microAdjustF = totalForwardMinutes / clampedSumF;
     finalForwardLineMins = finalForwardLineMins.map(m => m * microAdjustF);
+    finalForwardLineMins[0] = Math.max(18, Math.min(22, finalForwardLineMins[0]));
+    finalForwardLineMins[1] = Math.max(16, Math.min(18, finalForwardLineMins[1]));
+    finalForwardLineMins[2] = Math.max(13, Math.min(15, finalForwardLineMins[2]));
+    finalForwardLineMins[3] = Math.max(8,  Math.min(12, finalForwardLineMins[3]));
 
 
     // ==========================================
@@ -3766,10 +3770,13 @@ function calculateDynamicIceTime(struct) {
     finalDefensePairMins[1] = Math.max(18, Math.min(21, finalDefensePairMins[1]));
     finalDefensePairMins[2] = Math.max(14, Math.min(17, finalDefensePairMins[2]));
 
-    // Normalize again if clamping caused a offset from 120
+    // Micro-adjust to hit exactly 120 total defense minutes, then re-clamp to prevent overshoot
     let clampedSumD = (finalDefensePairMins[0]*2) + (finalDefensePairMins[1]*2) + (finalDefensePairMins[2]*2);
     let microAdjustD = totalDefenseMinutes / clampedSumD;
     finalDefensePairMins = finalDefensePairMins.map(m => m * microAdjustD);
+    finalDefensePairMins[0] = Math.max(22, Math.min(26, finalDefensePairMins[0]));
+    finalDefensePairMins[1] = Math.max(18, Math.min(21, finalDefensePairMins[1]));
+    finalDefensePairMins[2] = Math.max(14, Math.min(17, finalDefensePairMins[2]));
 
 
     // ==========================================
