@@ -4099,17 +4099,44 @@ function simGame(idx) {
     const homeFSchedule = buildLineSchedule(homeIceData.forwardLineAverages);
     const awayFSchedule = buildLineSchedule(awayIceData.forwardLineAverages);
 
-    function getPairingForLine(fLine, matrix) {
-        let p1Weight = matrix[0][fLine]; 
-        let p2Weight = matrix[1][fLine]; 
-        let p3Weight = matrix[2][fLine]; 
-        let total = p1Weight + p2Weight + p3Weight;
-        
-        let roll = Math.random() * total;
-        if (roll < p1Weight) return 0; 
-        if (roll < p1Weight + p2Weight) return 1; 
-        return 2; 
+    // Build a D-pair schedule that respects each pair's ice time budget,
+    // distributed across forward lines using the pairing matrix.
+    // For each pair, matrix[pairIdx][fLine] = fraction of that pair's time spent with fLine.
+    // Result: 120-element array where schedule[step] = D pair index (0/1/2).
+    function buildDSchedule(pairMins, fSchedule, matrix) {
+        // Step budgets per pair
+        const pairSteps = pairMins.map(m => Math.round(m * 2));
+
+        // For each pair, allocate its steps across the 4 forward line slots
+        // slot[pairIdx][fLine] = steps that pair spends with that fLine
+        const allocation = pairSteps.map((totalSteps, pairIdx) => {
+            const row = matrix[pairIdx];
+            const rowSum = row.reduce((s, v) => s + v, 0);
+            const raw = row.map(w => (w / rowSum) * totalSteps);
+            // round, then fix rounding drift on the last slot
+            const rounded = raw.map(Math.round);
+            const drift = totalSteps - rounded.reduce((s, v) => s + v, 0);
+            rounded[rounded.length - 1] += drift;
+            return rounded; // [stepsWithL1, stepsWithL2, stepsWithL3, stepsWithL4]
+        });
+
+        // Build the schedule: for each fLine slot in fSchedule, consume from the
+        // pair that still has the most budget for that line, breaking ties by pair index.
+        const remaining = allocation.map(row => [...row]); // mutable copy
+        const sched = fSchedule.map(fLine => {
+            // Find pair with most remaining budget for this fLine
+            let best = 0, bestVal = -1;
+            for (let p = 0; p < 3; p++) {
+                if (remaining[p][fLine] > bestVal) { bestVal = remaining[p][fLine]; best = p; }
+            }
+            remaining[best][fLine] = Math.max(0, remaining[best][fLine] - 1);
+            return best;
+        });
+        return sched;
     }
+
+    const homeDSchedule = buildDSchedule(homeIceData.defensePairAverages, homeFSchedule, homeIceData.defensePairingMatrix);
+    const awayDSchedule = buildDSchedule(awayIceData.defensePairAverages, awayFSchedule, awayIceData.defensePairingMatrix);
 
     // ─── MID-GAME SUBSTITUTION SYSTEM ────────────────────────────────────
     const gameInjuredH = new Set();   // shaken-up names — out for this game
@@ -4216,8 +4243,8 @@ function simGame(idx) {
         let hFLine = homeFSchedule[step];
         let aFLine = awayFSchedule[step];
 
-        let hDPair = getPairingForLine(hFLine, homeIceData.defensePairingMatrix || [[1,0,0],[0,1,0],[0,0,1]]);
-        let aDPair = getPairingForLine(aFLine, awayIceData.defensePairingMatrix || [[1,0,0],[0,1,0],[0,0,1]]);
+        let hDPair = homeDSchedule[step];
+        let aDPair = awayDSchedule[step];
 
         // Build on-ice units: start from per-game lines, apply any mid-game subs
         let hFPlayers = _applyLineSubs(hFLines[hFLine], gameSubsH.f, hFLine, gameInjuredH);
