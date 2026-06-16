@@ -7436,62 +7436,54 @@ function pcDrawSprite(canvas, type, pri, sec) {
         for(let k=tx+2;k<tx+tw-2;k+=4) r(k,pts[0][1],2,7,GLVl);
     };
 
-    // Skater helmet: dome + visor half-shield (NO cage) + face visible below
-    const drawHelmet = (hx, hy) => {
-        // dome shell
-        arc(hx,hy,16,15,HLM);
-        arc(hx,hy-4,9,6,HLs,Math.PI,Math.PI*2);   // top shine
-        arc(hx,hy,16,15,HLd,0,Math.PI);            // underside shadow
-        // side ear panels (extend below dome)
-        r(hx-16,hy-2,5,18,HLd); r(hx+11,hy-2,5,18,HLd);
-        arc(hx-13,hy+8,4,5,HLd); arc(hx+13,hy+8,4,5,HLd); // ear cup
-        // half-shield visor (covers upper face, tinted blue)
-        r(hx-11,hy+1,22,10,'rgba(90,175,255,0.52)');
-        r(hx-11,hy+1,22,2,'rgba(220,245,255,0.40)');  // visor top glare
-        r(hx-11,hy+9,22,2,'rgba(50,130,220,0.28)');   // visor bottom edge
-        // visor frame (thin dark border)
-        r(hx-11,hy+1,1,10,HLd); r(hx+10,hy+1,1,10,HLd);
-        // face skin below visor
-        r(hx-10,hy+11,20,10,SKN); r(hx-10,hy+11,3,10,SKl); r(hx+7,hy+11,3,10,SKd);
-        // eyes (visible through tinted visor)
-        r(hx-7,hy+4,4,3,'rgba(30,30,30,0.65)'); r(hx+3,hy+4,4,3,'rgba(30,30,30,0.65)');
-        // nose + mouth below visor
-        r(hx-2,hy+13,4,3,SKd);
-        r(hx-6,hy+17,12,3,SKd); r(hx-3,hy+18,6,2,SKdd);
-        // chin strap
-        r(hx-11,hy+20,22,3,HLM); r(hx-11,hy+20,22,1,HLl);
-        // dome shine arc
-        arc(hx,hy-3,9,6,HLs,Math.PI,Math.PI*2);
+    // ── Shared draw helpers ───────────────────────────────────────────────────
+
+    // Skater helmet: round dome + tinted full visor (no cage) + chin pad
+    const drawHelmet = (hx, hy, sz=1) => {
+        const s=sz; // scale factor lets goalie call with sz=1.4
+        // dome — rounded top, darker bottom half
+        arc(hx,hy,14*s,13*s,HLM);
+        arc(hx,hy,14*s,13*s,HLd,0,Math.PI);
+        // ventilation ridge lines on dome
+        r(hx-4,hy-11*s,2,6*s,HLl); r(hx+2,hy-11*s,2,6*s,HLl);
+        // side ear/jaw pads — follow dome edge
+        r(hx-14*s,hy-4,4*s,16*s,HLd); r(hx+10*s,hy-4,4*s,16*s,HLd);
+        arc(hx-12*s,hy+8,3*s,5*s,HLd); arc(hx+12*s,hy+8,3*s,5*s,HLd);
+        // full visor — tinted, covers full face opening
+        const vx=hx-10*s, vw=20*s;
+        r(vx,hy+1,vw,14,'rgba(80,165,255,0.38)');
+        r(vx,hy+1,vw,2,'rgba(230,248,255,0.55)');   // top glare
+        r(vx,hy+12,vw,2,'rgba(40,110,210,0.30)');   // bottom tint edge
+        r(vx,hy+1,1,14,HLd); r(vx+vw-1,hy+1,1,14,HLd); // side frame
+        // eyes barely visible through visor
+        r(hx-7,hy+5,4,2,'rgba(20,20,20,0.50)'); r(hx+3,hy+5,4,2,'rgba(20,20,20,0.50)');
+        // chin pad below visor
+        r(hx-9*s,hy+15,18*s,5,HLd); r(hx-9*s,hy+15,18*s,1,HLl);
+        // dome shine
+        arc(hx,hy-4,8*s,5*s,HLs,Math.PI,Math.PI*2);
+        r(hx-4,hy-12*s,8,3,HLs); // top stripe
     };
 
-    // Arm helper — draws upper arm + elbow joint + forearm as one clean unit
-    // p0=shoulder-attach, p1=elbow-center, p2=wrist-end, w=arm width
-    const drawArm = (p0,p1,p2,w,stripeY) => {
-        const hw=w/2;
-        // upper arm (shoulder to elbow)
-        const ua0=[p0[0]-hw,p0[1]], ua1=[p0[0]+hw,p0[1]];
-        const ux=p1[0]-p0[0], uy=p1[1]-p0[1], ul=Math.sqrt(ux*ux+uy*uy)||1;
-        const upx=-uy/ul*hw, upy=ux/ul*hw;
-        poly([[p0[0]+upx,p0[1]+upy],[p0[0]-upx,p0[1]-upy],
-              [p1[0]-upx,p1[1]-upy],[p1[0]+upx,p1[1]+upy]],P);
-        poly([[p0[0]+upx,p0[1]+upy],[p0[0]+upx-1,p0[1]+upy],
-              [p1[0]+upx-1,p1[1]+upy],[p1[0]+upx,p1[1]+upy]],Pl2);
-        // sleeve stripe
-        if(stripeY!==null){
-            const t=(stripeY-p0[1])/(p1[1]-p0[1]+0.001);
-            const sx=p0[0]+(p1[0]-p0[0])*t, sy=stripeY;
-            r(sx-hw,sy,w,5,S); r(sx-hw,sy,2,5,Sl);
-        }
-        // elbow cap
-        arc(p1[0],p1[1],w*0.7,w*0.55,SHNl);
-        arc(p1[0],p1[1],w*0.45,w*0.35,SHN);
-        // forearm (elbow to wrist)
-        const fx=p2[0]-p1[0], fy=p2[1]-p1[1], fl=Math.sqrt(fx*fx+fy*fy)||1;
-        const fpx=-fy/fl*(hw*0.85), fpy=fx/fl*(hw*0.85); // slightly tapered
-        poly([[p1[0]+fpx,p1[1]+fpy],[p1[0]-fpx,p1[1]-fpy],
-              [p2[0]-fpx,p2[1]-fpy],[p2[0]+fpx,p2[1]+fpy]],P);
-        poly([[p1[0]+fpx,p1[1]+fpy],[p1[0]+fpx-1,p1[1]+fpy],
-              [p2[0]+fpx-1,p2[1]+fpy],[p2[0]+fpx,p2[1]+fpy]],Pl2);
+    // Arm: upper-arm quad → elbow arc cap → forearm quad, all vector-aligned
+    // p0=shoulder, p1=elbow, p2=wrist, w=half-width
+    const drawArm = (p0,p1,p2,w) => {
+        const seg = (a,b,hw,col,lit) => {
+            const dx=b[0]-a[0], dy=b[1]-a[1], l=Math.sqrt(dx*dx+dy*dy)||1;
+            const px=-dy/l*hw, py=dx/l*hw;
+            poly([[a[0]+px,a[1]+py],[a[0]-px,a[1]-py],[b[0]-px,b[1]-py],[b[0]+px,b[1]+py]],col);
+            if(lit) poly([[a[0]+px,a[1]+py],[a[0]+px-1,a[1]+py],[b[0]+px-1,b[1]+py],[b[0]+px,b[1]+py]],Pl2);
+        };
+        seg(p0,p1,w,P,true);   // upper arm
+        arc(p1[0],p1[1],w*0.75,w*0.6,SHNl); arc(p1[0],p1[1],w*0.5,w*0.4,SHN); // elbow pad
+        seg(p1,p2,w*0.88,P,true); // forearm (slightly narrower)
+    };
+
+    // Glove: main poly + lit edge + dark edge + knuckle bumps
+    const drawGlove = (pts,lit,dk) => {
+        poly(pts,GLV); poly(lit,GLVl); poly(dk,GLVd);
+        const x0=Math.min(pts[0][0],pts[1][0]), x1=Math.max(pts[0][0],pts[1][0]);
+        for(let k=x0+2;k<x1-2;k+=4) r(k,pts[0][1],2,5,GLVl);
+        r(x0,pts[0][1],x1-x0,2,Pl2); // cuff highlight
     };
 
     // ════════════════════════════════════════════════════════════════════════
@@ -7558,24 +7550,50 @@ function pcDrawSprite(canvas, type, pri, sec) {
         r(78,94,24,8,Pd); r(78,94,3,8,P); r(98,94,4,8,Pdd);
         r(80,102,22,4,S); r(80,108,22,4,S);
 
-        // NECK
-        r(59,64,10,10,SKN); r(59,64,3,10,SKl); r(66,64,3,10,SKd);
+        // TRAPPER ARM — use drawArm for clean joint
+        drawArm([42,76],[32,102],[22,120], 7);
+        // trapper mitt
+        poly([[4,116],[26,120],[20,142],[2,138]],BRN);
+        poly([[4,116],[8,117],[4,139],[2,138]],BRNl);
+        poly([[22,120],[26,120],[20,142],[16,142]],BRNd);
+        for(let wy=0;wy<5;wy++) r(6,120+wy*5,18,3,BRNl);
+        r(8,116,14,24,'rgba(200,140,60,0.20)');
 
-        // GOALIE MASK — wide, dramatic, full cage
-        arc(64,44,24,22,HLM);
-        arc(64,40,14,9,HLs,Math.PI,Math.PI*2);
-        arc(64,44,24,22,HLd,0,Math.PI);
-        arc(64,44,20,18,Pdd,0,Math.PI); // chin pad in team color
-        r(40,34,14,30,HLd); r(74,34,14,30,HLd); // side wings
-        r(44,56,6,26,BLK); r(63,56,6,26,BLK); r(82,56,6,26,BLK); // cage verticals
-        r(42,56,48,3,BLK); r(42,63,48,3,BLK); r(42,70,48,3,BLK); r(42,78,48,2,BLK);
-        r(48,26,32,16,'rgba(100,185,255,0.48)'); r(48,26,32,2,'rgba(215,242,255,0.30)');
-        r(50,58,28,22,SKN); r(50,58,4,22,SKl); r(74,58,4,22,SKd);
-        r(53,62,7,4,BLK); r(54,63,5,2,DRK); r(70,62,7,4,BLK); r(71,63,5,2,DRK);
-        r(62,68,6,4,SKd);
-        r(54,75,20,4,Pdd); r(54,75,20,1,Pd); // mouth guard
-        r(42,82,48,5,HLM); r(42,82,48,1,HLl); // chin strap
-        arc(64,28,16,9,HLs,Math.PI,Math.PI*2);
+        // BLOCKER ARM — use drawArm
+        drawArm([82,74],[90,96],[96,112], 7);
+        // blocker pad
+        poly([[78,108],[104,102],[108,124],[78,128]],GLV);
+        poly([[78,108],[84,107],[88,126],[78,128]],GLVl);
+        poly([[100,102],[104,102],[108,124],[104,124]],GLVd);
+        r(80,110,26,8,Pd); r(80,110,3,8,P); r(102,110,4,8,Pdd);
+        r(82,119,24,4,S); r(82,125,24,3,S);
+
+        // NECK
+        r(60,66,8,8,SKN); r(60,66,2,8,SKl); r(66,66,2,8,SKd);
+
+        // GOALIE MASK — wide dome, prominent cage, full chin shield
+        // outer dome
+        arc(64,46,22,20,HLM);
+        arc(64,42,13,8,HLs,Math.PI,Math.PI*2);    // shine
+        arc(64,46,22,20,HLd,0,Math.PI);            // underside
+        // wide side wings
+        r(42,36,12,28,HLd); r(74,36,12,28,HLd);
+        // inner mask face (team color chin/lower)
+        arc(64,46,18,16,Pdd,0,Math.PI);
+        // visor band across top
+        r(48,28,32,14,'rgba(100,185,255,0.46)');
+        r(48,28,32,2,'rgba(225,246,255,0.36)');
+        // cage: 3 vertical bars + 4 horizontal bars
+        r(44,54,5,26,BLK); r(62,54,5,26,BLK); r(79,54,5,26,BLK);
+        r(42,54,46,3,BLK); r(42,61,46,3,BLK); r(42,68,46,3,BLK); r(42,76,46,2,BLK);
+        // face through cage openings
+        r(50,57,10,6,SKN); r(70,57,8,6,SKN);    // cheek patches
+        r(55,64,18,5,SKN);                         // nose bridge
+        // eyes
+        r(51,58,5,3,BLK); r(52,59,3,2,DRK); r(72,58,5,3,BLK); r(73,59,3,2,DRK);
+        // chin strap
+        r(44,80,36,5,HLM); r(44,80,36,1,HLl);
+        arc(64,30,14,8,HLs,Math.PI,Math.PI*2);     // top dome shine
 
     } else if (type === 'defense') {
         // POSE: hard poke-check lunge left — body angled, one arm punching forward
@@ -7614,29 +7632,26 @@ function pcDrawSprite(canvas, type, pri, sec) {
         r(30,66,36,2,Sl); // yoke underline
 
         // LEFT ARM — punching forward low (shoulder→elbow→wrist)
-        drawArm([28,62],[16,88],[6,114], 11, 70);
-        poly([[0,110],[18,114],[14,132],[0,128]],GLV);
-        poly([[0,110],[4,111],[2,129],[0,128]],GLVl);
-        poly([[14,114],[18,114],[14,132],[10,132]],GLVd);
-        r(2,112,14,7,Pl2); r(2,120,12,3,S);
-        for(let k=2;k<14;k+=4) r(k,112,2,12,GLVl);
+        drawArm([28,62],[14,90],[4,116], 8);
+        drawGlove([[0,112],[18,116],[14,134],[0,130]],
+                  [[0,112],[4,113],[2,131],[0,130]],
+                  [[14,116],[18,116],[14,134],[10,134]]);
 
         // RIGHT ARM — raised high and back (shoulder→elbow→wrist)
-        drawArm([64,56],[74,80],[70,106], 11, 64);
-        poly([[62,102],[82,106],[78,124],[60,120]],GLV);
-        poly([[62,102],[66,103],[64,121],[60,120]],GLVl);
-        poly([[78,106],[82,106],[78,124],[74,124]],GLVd);
-        r(64,104,16,7,Pl2); r(64,112,14,3,S);
-        for(let k=64;k<78;k+=4) r(k,104,2,12,GLVl);
+        drawArm([62,58],[72,82],[68,108], 8);
+        drawGlove([[60,104],[80,108],[76,126],[58,122]],
+                  [[60,104],[64,105],[62,123],[58,122]],
+                  [[76,108],[80,108],[76,126],[72,126]]);
 
-        // SHOULDER PADS — left (near, bigger), right (far, smaller)
-        arc(32,60,16,13,Pl); arc(32,60,11,9,Pl2); arc(32,60,6,4,S);
-        arc(68,57,12,10,Pl); arc(68,57,8,7,Pl2); arc(68,57,4,3,S);
-        r(18,56,28,6,S); r(62,53,20,6,S);
+        // SHOULDER PADS — layered: base arc + highlight arc + stripe
+        arc(30,62,15,12,Pl); arc(30,62,10,8,Pl2); arc(30,62,5,4,S);
+        r(17,58,26,5,S); r(17,58,3,5,Sl);
+        arc(66,59,11,9,Pl); arc(66,59,7,6,Pl2); arc(66,59,4,3,S);
+        r(58,55,18,4,S);
 
-        // NECK — head turned left in direction of lunge
-        r(46,44,10,14,SKN); r(46,44,3,14,SKl); r(53,44,3,14,SKd);
-        drawHelmet(51,30);
+        // NECK
+        r(46,46,8,12,SKN); r(46,46,2,12,SKl); r(52,46,2,12,SKd);
+        drawHelmet(50,32);
 
     } else {
         // POSE: explosive full-stride wrist shot — leg kicked back, body tipped
@@ -7687,33 +7702,30 @@ function pcDrawSprite(canvas, type, pri, sec) {
         r(34,44,36,12,S); r(34,44,3,12,Sl); r(67,43,3,12,Sd); // yoke
         r(34,56,36,2,Sl); // yoke underline
 
-        // LEFT ARM — bottom hand, reaching down to puck (shoulder→elbow→wrist)
-        drawArm([32,52],[20,81],[10,110], 11, 62);
-        poly([[2,106],[20,110],[16,130],[0,126]],GLV);
-        poly([[2,106],[6,107],[4,127],[0,126]],GLVl);
-        poly([[16,110],[20,110],[16,130],[12,130]],GLVd);
-        r(4,108,14,7,Pl2); r(4,116,12,3,S);
-        for(let k=4;k<16;k+=4) r(k,108,2,14,GLVl);
+        // LEFT ARM — bottom hand, reaching down to puck
+        drawArm([32,52],[18,82],[8,112], 8);
+        drawGlove([[0,108],[18,112],[14,132],[0,128]],
+                  [[0,108],[4,109],[2,129],[0,128]],
+                  [[14,112],[18,112],[14,132],[10,132]]);
 
-        // RIGHT ARM — top hand way up and behind (shoulder→elbow→wrist)
-        drawArm([68,44],[80,72],[76,100], 11, 54);
-        poly([[66,96],[88,100],[84,120],[64,116]],GLV);
-        poly([[66,96],[70,97],[68,117],[64,116]],GLVl);
-        poly([[84,100],[88,100],[84,120],[80,120]],GLVd);
-        r(68,98,18,7,Pl2); r(68,106,16,3,S);
-        for(let k=68;k<84;k+=4) r(k,98,2,14,GLVl);
+        // RIGHT ARM — top hand high and behind
+        drawArm([66,46],[78,74],[74,102], 8);
+        drawGlove([[64,98],[86,102],[82,122],[62,118]],
+                  [[64,98],[68,99],[66,119],[62,118]],
+                  [[82,102],[86,102],[82,122],[78,122]]);
 
         // PUCK at blade
-        arc(12,168,10,4,BLK); arc(12,168,7,3,DRK); r(6,167,12,2,'#2a2a2a');
+        arc(10,170,9,4,BLK); arc(10,170,6,3,DRK); r(4,169,12,2,'#2a2a2a');
 
-        // SHOULDER PADS — left (near) bigger
-        arc(36,50,16,13,Pl); arc(36,50,11,9,Pl2); arc(36,50,6,4,S);
-        arc(72,45,12,10,Pl); arc(72,45,8,7,Pl2); arc(72,45,4,3,S);
-        r(22,46,28,6,S); r(66,41,20,6,S);
+        // SHOULDER PADS
+        arc(34,52,15,12,Pl); arc(34,52,10,8,Pl2); arc(34,52,5,4,S);
+        r(20,48,28,5,S); r(20,48,3,5,Sl);
+        arc(70,47,11,9,Pl); arc(70,47,7,6,Pl2); arc(70,47,4,3,S);
+        r(62,43,18,4,S);
 
-        // NECK — head leading into shot
-        r(50,32,10,14,SKN); r(50,32,3,14,SKl); r(57,32,3,14,SKd);
-        drawHelmet(56,18);
+        // NECK
+        r(50,34,8,12,SKN); r(50,34,2,12,SKl); r(56,34,2,12,SKd);
+        drawHelmet(56,20);
     }
 }
 
