@@ -10,9 +10,9 @@
     // =========================================================
     const archMods = {
     // --- FORWARDS (Balanced for higher goal/assist totals) ---
-    "SUPERSTAR":      { shotRate: 1.40, penaltyRate: 0.70,  assistRate: 1.40 }, // Increased assistRate to reflect their well-rounded dominance
-    "SNIPER":         { shotRate: 1.50, penaltyRate: 0.85,  assistRate: 0.90 }, // Higher shotRate, lower assistRate to specialize them
-    "PLAYMAKER":      { shotRate: 0.89, penaltyRate: 0.80,  assistRate: 1.65 }, // Lower shotRate, significantly higher assistRate
+    "SUPERSTAR":      { shotRate: 1.40, penaltyRate: 0.70,  assistRate: 1.40 },
+    "SNIPER":         { shotRate: 1.50, penaltyRate: 0.85,  assistRate: 0.90 },
+    "PLAYMAKER":      { shotRate: 0.89, penaltyRate: 0.80,  assistRate: 1.65 },
     "SPEEDSTER":      { shotRate: 1.19, penaltyRate: 0.80,  assistRate: 1.15 },
     "DANGLER":        { shotRate: 1.14, penaltyRate: 0.80,  assistRate: 1.30 },
     "POWER FORWARD":  { shotRate: 1.20, penaltyRate: 1.20,  assistRate: 0.97 },
@@ -26,10 +26,10 @@
     "DEFENSIVE FWD":  { shotRate: 0.75, penaltyRate: 1.00,  assistRate: 0.95 },
 
     // --- DEFENSEMEN ---
-    "FRANCHISE D":    { shotRate: 1.15, penaltyRate: 0.80,  assistRate: 1.45 }, // High assistRate to reflect their role in starting plays and quarterbacking from the blueline
-    "QUARTERBACK":    { shotRate: 0.99, penaltyRate: 0.85,  assistRate: 1.60 }, // Maximize playmaking from the blueline
-    "BOOMER":         { shotRate: 1.20, penaltyRate: 1.00,  assistRate: 1.11 }, // Higher shotRate, slightly lower assistRate to reflect their focus on powerful shots
-    "SHUTDOWN":       { shotRate: 0.80, penaltyRate: 1.00,  assistRate: 1.00 }, // Lower shotRate, balanced assistRate to reflect their defensive focus
+    "FRANCHISE D":    { shotRate: 1.15, penaltyRate: 0.80,  assistRate: 1.45 },
+    "QUARTERBACK":    { shotRate: 0.99, penaltyRate: 0.85,  assistRate: 1.60 },
+    "BOOMER":         { shotRate: 1.20, penaltyRate: 1.00,  assistRate: 1.11 },
+    "SHUTDOWN":       { shotRate: 0.80, penaltyRate: 1.00,  assistRate: 1.00 },
     "TWO-WAY STAR":   { shotRate: 1.09, penaltyRate: 0.90,  assistRate: 1.25 },
     "TWO-WAY D":      { shotRate: 0.97, penaltyRate: 1.00,  assistRate: 1.05 },
     "PRO OFFENSIVE D":{ shotRate: 1.05, penaltyRate: 0.70,  assistRate: 1.15 },
@@ -3666,9 +3666,16 @@ function calculateDynamicIceTime(struct) {
     const f3Ovr = getUnitAverageOvr(struct.f[2]);
     const f4Ovr = getUnitAverageOvr(struct.f[3]);
 
-    const d1Ovr = getUnitAverageOvr(struct.d[0]);
-    const d2Ovr = getUnitAverageOvr(struct.d[1]);
-    const d3Ovr = getUnitAverageOvr(struct.d[2]);
+    // Sort D pairs by best individual player OVR so the pair containing the
+    // highest-rated D-man always gets pair-1 ice time regardless of pair average
+    const _pairStarOvr = pair => Math.max(0, ...(pair || []).filter(Boolean).map(p => getPlayerWeightedStats(p.name)?.ovr || 0));
+    const _pairStarName = pair => (pair || []).filter(Boolean).reduce((best, p) => { const o = getPlayerWeightedStats(p.name)?.ovr || 0; return o > (getPlayerWeightedStats(best)?.ovr || 0) ? p.name : best; }, '');
+    const _dPairCmp = (a, b) => { const d = _pairStarOvr(b) - _pairStarOvr(a); return d !== 0 ? d : _pairStarName(a).localeCompare(_pairStarName(b)); };
+    const sortedD = [...struct.d].sort(_dPairCmp);
+
+    const d1Ovr = getUnitAverageOvr(sortedD[0]);
+    const d2Ovr = getUnitAverageOvr(sortedD[1]);
+    const d3Ovr = getUnitAverageOvr(sortedD[2]);
 
     // Total regulation game minutes to fill per position group (3 skaters on ice for F * 60 = 180, 2 for D * 60 = 120)
     const totalForwardMinutes = 180;
@@ -3749,14 +3756,15 @@ function calculateDynamicIceTime(struct) {
     // Baseline Targets (Per Player Average)
     let dShares = [24, 19.5, 16.5];
 
-    // Closeness adjustments for defense lines within 3 rating points
-    if (Math.abs(d1Ovr - d2Ovr) <= ratingClosenessThreshold) {
-        let avg = (dShares[0] + dShares[1]) / 2;
-        dShares[0] = avg; dShares[1] = avg;
-    }
-    if (Math.abs(d2Ovr - d3Ovr) <= ratingClosenessThreshold) {
-        let avg = (dShares[1] + dShares[2]) / 2;
-        dShares[1] = avg; dShares[2] = avg;
+    // Cluster-average closeness for D pairs (same logic as forward lines)
+    const closeD12 = Math.abs(d1Ovr - d2Ovr) <= ratingClosenessThreshold;
+    const closeD23 = Math.abs(d2Ovr - d3Ovr) <= ratingClosenessThreshold;
+    if (closeD12 && closeD23) {
+        const avg = (dShares[0] + dShares[1] + dShares[2]) / 3;
+        dShares[0] = avg; dShares[1] = avg; dShares[2] = avg;
+    } else {
+        if (closeD12) { const avg = (dShares[0] + dShares[1]) / 2; dShares[0] = avg; dShares[1] = avg; }
+        if (closeD23) { const avg = (dShares[1] + dShares[2]) / 2; dShares[1] = avg; dShares[2] = avg; }
     }
 
     // Scale Defense Shares to exactly fit 120 total blueline minutes (2 players per pairing)
@@ -3969,6 +3977,14 @@ function simGame(idx) {
     const aFLines = _aBase.f.map(line => [...line]);
     const aDPairs = _aBase.d.map(pair => [...pair]);
     const aGPool  = [...(_aBase.g || [])];
+
+    // Sort D pairs so the pair with the highest-rated individual player gets pair-1
+    // ice time — must match the sort order used in calculateDynamicIceTime
+    const _simPairStarOvr = pair => Math.max(0, ...(pair || []).filter(Boolean).map(p => getPlayerWeightedStats(p.name)?.ovr || 0));
+    const _simPairStarName = pair => (pair || []).filter(Boolean).reduce((best, p) => { const o = getPlayerWeightedStats(p.name)?.ovr || 0; return o > (getPlayerWeightedStats(best)?.ovr || 0) ? p.name : best; }, '');
+    const _simDPairCmp = (a, b) => { const d = _simPairStarOvr(b) - _simPairStarOvr(a); return d !== 0 ? d : _simPairStarName(a).localeCompare(_simPairStarName(b)); };
+    hDPairs.sort(_simDPairCmp);
+    aDPairs.sort(_simDPairCmp);
 
     // Keep hStruct/aStruct aliases for downstream code that reads .f/.d/.g
     const hStruct = { f: hFLines, d: hDPairs, g: hGPool };
@@ -4577,7 +4593,7 @@ function selectShooter(unit) {
         // Archetype multiplier
         weight *= (arch.shotRate || 1.0);
 
-        // Position modifier — ALL forwards equal base (1.0), D penalized less than before
+        // Position modifier — forwards base 1.0, D penalized (they do score but less often)
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
         weight *= isD ? 0.80 : 1.0;  // D ~20% less likely to score than a forward
@@ -4631,10 +4647,10 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         // Archetype modifier
         weight *= (arch.assistRate || 1.0);
 
-        // Position modifier — all forwards equal base, D penalized ~30%
+        // Position modifier — all forwards equal base, D penalized 18%
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
-        weight *= isD ? 0.70 : 1.0;
+        weight *= isD ? 0.82 : 1.0;
 
         // Hot/cold streak modifier
         if (ps.isHot)  weight *= 1.15;
