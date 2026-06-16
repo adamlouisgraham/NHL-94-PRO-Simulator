@@ -3920,6 +3920,27 @@ function simGame(idx) {
     let asgBoost = isASG ? 1.8 : 1.0;
     let homeCrowdEnergy = 1.03;
 
+    // Pre-game team penalty tendency: avg (rough + aggr) across starting skaters
+    // Used to scale per-step penalty rate — rough/aggressive teams draw more penalties
+    const _skaterRoughAvg = (tkNrm) => {
+        const sk = (rosters[tkNrm] || []).filter(p => p.pos !== 'G' && (playerStats[p.name]?.injury?.daysRemaining || 0) === 0);
+        if (!sk.length) return 50;
+        return sk.reduce((s,p) => s + ((playerStats[p.name]?.attr?.rough || 50) + (playerStats[p.name]?.attr?.aggr || 50)) / 2, 0) / sk.length;
+    };
+    const hTeamRough = _skaterRoughAvg(g.h.nrm);
+    const aTeamRough = _skaterRoughAvg(g.a.nrm);
+    // Scale base 0.075 penalty rate by combined roughness (50+50=1.0x, 80+80=1.6x → clamped)
+    const basePenRate = 0.075 * Math.max(0.7, Math.min(1.35, (hTeamRough + aTeamRough) / 100));
+
+    // Pre-game team OVR (skaters + goalie weighted) for OT resolution
+    const _teamCombinedOvr = (tkNrm, gOvr) => {
+        const sk = (rosters[tkNrm] || []).filter(p => p.pos !== 'G');
+        const skOvr = sk.length > 0 ? sk.reduce((s,p) => s + (getPlayerWeightedStats(p.name)?.ovr || 70), 0) / sk.length : 70;
+        return skOvr * 0.65 + gOvr * 0.35;
+    };
+    const hTeamCombOvr = _teamCombinedOvr(g.h.nrm, hGOvr);
+    const aTeamCombOvr = _teamCombinedOvr(g.a.nrm, aGOvr);
+
     // ⏱️ 4. THE TIME-TICK ENGINE SETUP
     let hG = 0, aG = 0;
     let hShots = 0, aShots = 0;
@@ -4277,9 +4298,8 @@ function simGame(idx) {
             }
         }
 
-        // Quick Penalty Roll — triggers a real powerplay opportunity
-        // 0.075 per 30-sec step → ~9 penalties/game (realistic NHL rate)
-        if (Math.random() < 0.075) {
+        // Penalty roll — rate scales with teams' roughness/aggression (basePenRate pre-computed)
+        if (Math.random() < basePenRate) {
             let penTeam = Math.random() > 0.5 ? g.h : g.a;
             let advTeam = penTeam.nrm === g.h.nrm ? g.a : g.h;
             let activeSkaters = penTeam.nrm === g.h.nrm ? hOnIce : aOnIce;
@@ -4296,12 +4316,23 @@ function simGame(idx) {
                 const advTeamObj = league.find(t => t.nrm === advTeam.nrm);
                 if (advTeamObj) advTeamObj.season.ppo = (advTeamObj.season.ppo || 0) + 1;
 
-                // Resolve the powerplay: ~20% PP conversion rate
+                // Resolve the powerplay — rating-driven conversion
                 const ppRoll = Math.random();
                 const ppUnit = advTeam.nrm === g.h.nrm ? hOnIce : aOnIce;
                 const pkUnit = advTeam.nrm === g.h.nrm ? aOnIce : hOnIce;
+                const pkGoalieOvr = advTeam.nrm === g.h.nrm ? aGOvr : hGOvr;
 
-                if (ppRoll < 0.20 && ppUnit.length > 0) {
+                // PP unit avg OVR vs (PK skaters 70% + PK goalie 30%)
+                const ppOvr = ppUnit.reduce((s,p) => s + (getPlayerWeightedStats(p.name)?.ovr || 70), 0) / Math.max(1, ppUnit.length);
+                const pkSkOvr = pkUnit.reduce((s,p) => s + (getPlayerWeightedStats(p.name)?.ovr || 70), 0) / Math.max(1, pkUnit.length);
+                const pkTotalOvr = pkSkOvr * 0.70 + pkGoalieOvr * 0.30;
+
+                // Base 20%, +0.25% per OVR advantage, clamped 10%–30%
+                const ppConvRate = Math.max(0.10, Math.min(0.30, 0.20 + (ppOvr - pkTotalOvr) * 0.0025));
+                // SHG: base 4%, stronger PK unit raises chance, clamped 1%–8%
+                const shgRate = Math.max(0.01, Math.min(0.08, 0.04 + (pkOvr - ppOvr) * 0.0015));
+
+                if (ppRoll < ppConvRate && ppUnit.length > 0) {
                     // POWERPLAY GOAL
                     const ppShooter = selectShooter(ppUnit);
                     const ppShooterName = (ppShooter && typeof ppShooter === 'object') ? ppShooter.name : ppShooter;
@@ -4322,8 +4353,8 @@ function simGame(idx) {
                         if (ppEv.sAssist && playerStats[ppEv.sAssist]) { playerStats[ppEv.sAssist][kk].ppa = (playerStats[ppEv.sAssist][kk].ppa||0)+1; }
                         if (advTeamObj) advTeamObj.season.ppg = (advTeamObj.season.ppg || 0) + 1;
                     }
-                } else if (ppRoll < 0.24 && pkUnit.length > 0) {
-                    // SHORTHANDED GOAL (~4% of PP opp result in SHG)
+                } else if (ppRoll < ppConvRate + shgRate && pkUnit.length > 0) {
+                    // SHORTHANDED GOAL — rate driven by PK unit strength advantage
                     const shShooter = selectShooter(pkUnit);
                     const shEv = processSingleGoal(penTeam.nrm, penTeam.code, shShooter, pkUnit, timeStr, period, (minute % 20 || 20), sec);
                     if (shEv) {
@@ -4346,11 +4377,14 @@ function simGame(idx) {
 
     // 🥅 5. OVERTIME RESOLUTION
     let otPeriods = 0;
-    if(isPlayoffs && hG === aG) { 
-        while (hG === aG && otPeriods < 7) { 
-            otPeriods++; 
-            if (Math.random() < 0.52) { hG++; hShots++; trk(aG_name,'sa',1); trk(aG_name,'ga',1); } 
-            else { aG++; aShots++; trk(hG_name,'sa',1); trk(hG_name,'ga',1); } 
+    if(isPlayoffs && hG === aG) {
+        // OT win chance: home base 52% adjusted by pre-game combined OVR (skaters+goalie)
+        const otDiff = hTeamCombOvr - aTeamCombOvr;
+        const hOtWinChance = Math.max(0.35, Math.min(0.65, 0.52 + otDiff * 0.004));
+        while (hG === aG && otPeriods < 7) {
+            otPeriods++;
+            if (Math.random() < hOtWinChance) { hG++; hShots++; trk(aG_name,'sa',1); trk(aG_name,'ga',1); }
+            else { aG++; aShots++; trk(hG_name,'sa',1); trk(hG_name,'ga',1); }
         }
     }
 
