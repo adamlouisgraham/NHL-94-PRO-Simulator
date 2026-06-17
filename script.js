@@ -7564,80 +7564,91 @@ function pcDrawSprite(canvas, type, pri, sec) {
         arc(80,32,16,9,HLs,Math.PI,Math.PI*2);
 
     } else {
-        // ── SKATER HERO POSE — arms raised, stick up, 160×240 canvas ─────────
-        // Defense: stick in left hand, right glove raised
-        // Forward:  stick in right hand, left glove raised
-        // Both use same upright figure; stick side differs by type.
+        // ── SKATER — arms-raised hero, Genesis-reference proportions ──────────
+        // Blocky, thick-limbed, clean silhouette matching grid reference.
+        // D = stick in left hand (upper-left); F = stick in right (upper-right).
 
         const isD = (type === 'defense');
 
-        // STICK — diagonal from upper corner to lower opposite corner
-        // D: stick goes upper-LEFT; F: upper-RIGHT
-        if (isD) {
-            ln(44,10,102,108,STKd,3.5); ln(44,10,102,108,STK,2.5); ln(44,10,102,108,STKl,1.5);
-            // blade — lower-right
-            poly([[96,102],[110,108],[108,120],[94,114]],STK);
-            poly([[96,102],[100,104],[98,116],[94,114]],STKl);
-            r(96,114,16,4,BLD); r(96,114,16,1,BLDl); r(106,108,8,6,STKd);
-        } else {
-            ln(118,10,56,108,STKd,3.5); ln(118,10,56,108,STK,2.5); ln(118,10,56,108,STKl,1.5);
-            // blade — lower-left
-            poly([[48,102],[64,108],[62,120],[46,114]],STK);
-            poly([[48,102],[52,104],[50,116],[46,114]],STKl);
-            r(48,114,16,4,BLD); r(48,114,16,1,BLDl); r(48,108,8,6,STKd);
+        // helper: thick arm — two plain seg quads, subtle elbow cap
+        const thickArm = (sh, el, wr) => {
+            seg(sh, el, 11, P);
+            arc(el[0],el[1], 9, 8, Pl2); arc(el[0],el[1], 6, 5, P); // elbow cap
+            seg(el, wr, 10, P);
+            // highlight edge (same side as Pl2 in seg)
+        };
+
+        // STICK — full-canvas diagonal through the glove that holds it
+        if (isD) {  // upper-left ↔ lower-right
+            ln(14,12, 116,148, STKd, 4); ln(14,12, 116,148, STK, 2.5); ln(14,12, 116,148, STKl, 1.5);
+            r(108,142,14,4,BLD); r(108,142,14,1,BLDl);   // blade
+        } else {     // upper-right ↔ lower-left
+            ln(146,12, 44,148, STKd, 4); ln(146,12, 44,148, STK, 2.5); ln(146,12, 44,148, STKl, 1.5);
+            r(38,142,14,4,BLD); r(38,142,14,1,BLDl);
         }
 
-        // SKATES — both feet planted slightly apart
-        drawSkate(56,76,188); drawSkate(86,106,188);
+        // SKATES
+        drawSkate(56,78,194); drawSkate(84,106,194);
 
-        // SHINS — 18px × 32px, standing upright
-        drawShin(56,74,156,188, 64,158); drawShin(86,104,156,188, 94,158);
+        // SHINS — 20px wide × 34px tall
+        drawShin(56,76,160,194, 65,162); drawShin(84,104,160,194, 93,162);
 
-        // PANTS — 50px wide, upright stance
-        poly([[54,130],[106,130],[106,158],[54,158]],Pd);
-        poly([[54,130],[60,130],[60,158],[54,158]],Pl2);
-        poly([[100,130],[106,130],[106,158],[100,158]],Pdd);
-        r(54,131,52,4,WHT); r(54,135,52,4,S); // pantsStripe1+2
-        r(78,130,4,28,Pdd); // leg seam
+        // PANTS — 56px wide dark breezer
+        poly([[52,134],[108,134],[108,162],[52,162]],Pd);
+        poly([[52,134],[58,134],[58,162],[52,162]],Pl2);
+        poly([[102,134],[108,134],[108,162],[102,162]],Pdd);
+        r(52,135,56,4,WHT); r(52,139,56,4,S);  // pantsStripe1+2
+        r(78,134,4,28,Pdd);                     // centre seam
 
-        // JERSEY — 38px wide, upright centred
-        jsy([[61,72],[99,72],[99,132],[61,132]], [[100,4],[104,4,S,Sl,Sd],[108,4]]);
+        // JERSEY — 40px wide, body stripes
+        jsy([[60,72],[100,72],[100,136],[60,136]], [[106,4],[110,4,S,Sl,Sd],[114,4]]);
 
-        // SHOULDER PADS
-        drawShoulder(64,70,-1); drawShoulder(96,70,1);
+        // SHOULDER WEDGES — simple angular extension, no 3D pad art
+        poly([[42,78],[60,72],[60,88],[42,88]],Pl2);    // left shoulder
+        r(42,78,18,2,Pl);                               // top lit edge
+        poly([[100,72],[118,78],[118,88],[100,88]],Pd);  // right shoulder
+        r(100,78,18,2,Pd);
 
-        // ARMS — both raised; stick side goes higher and diagonal
+        // ARMS — both raised wide in V; thick hw=11 quads
         if (isD) {
-            // LEFT ARM — high diagonal, holding stick (D)
-            drawArm([63,76],[38,50],[26,28], 9);
-            stripe3(34,52,60,3);
-            drawGlove([[14,22],[36,28],[32,50],[12,44]],
-                      [[14,22],[18,23],[16,47],[12,44]],
-                      [[32,28],[36,28],[32,50],[28,50]]);
-            // RIGHT ARM — raised up-right, glove high
-            drawArm([97,74],[122,52],[142,32], 8);
-            stripe3(108,126,60,3);
-            drawGlove([[136,24],[158,30],[154,50],[132,44]],
-                      [[136,24],[140,25],[138,47],[132,44]],
-                      [[154,30],[158,30],[154,50],[150,50]]);
+            thickArm([58,82],[28,52],[12,30]);          // left (stick hand)
+            stripe3(20,42,58,3);
+            // Left glove — solid dark block
+            poly([[2,22],[20,28],[16,48],[0,42]],GLV);
+            poly([[2,22],[6,23],[4,45],[0,42]],GLVl);
+            poly([[16,28],[20,28],[16,48],[12,48]],GLVd);
+            for(let k=4;k<16;k+=4) r(k,22,2,6,GLVl);
+            r(2,22,18,3,Pl2);
+
+            thickArm([102,82],[132,52],[148,30]);        // right (free hand)
+            stripe3(118,142,58,3);
+            // Right glove
+            poly([[140,22],[158,28],[154,48],[138,42]],GLV);
+            poly([[140,22],[144,23],[142,45],[138,42]],GLVl);
+            poly([[154,28],[158,28],[154,48],[150,48]],GLVd);
+            for(let k=142;k<158;k+=4) r(k,22,2,6,GLVl);
+            r(140,22,18,3,Pl2);
         } else {
-            // LEFT ARM — raised up-left, glove high (F)
-            drawArm([63,76],[38,52],[18,30], 8);
-            stripe3(32,52,60,3);
-            drawGlove([[6,22],[30,28],[26,50],[4,44]],
-                      [[6,22],[10,23],[8,47],[4,44]],
-                      [[26,28],[30,28],[26,50],[22,50]]);
-            // RIGHT ARM — high diagonal, holding stick (F)
-            drawArm([97,74],[122,50],[138,28], 9);
-            stripe3(108,128,58,3);
-            drawGlove([[128,20],[152,28],[148,50],[126,42]],
-                      [[128,20],[132,21],[130,45],[126,42]],
-                      [[148,28],[152,28],[148,50],[144,50]]);
+            thickArm([58,82],[28,52],[12,30]);          // left (free hand)
+            stripe3(20,42,58,3);
+            poly([[2,22],[20,28],[16,48],[0,42]],GLV);
+            poly([[2,22],[6,23],[4,45],[0,42]],GLVl);
+            poly([[16,28],[20,28],[16,48],[12,48]],GLVd);
+            for(let k=4;k<16;k+=4) r(k,22,2,6,GLVl);
+            r(2,22,18,3,Pl2);
+
+            thickArm([102,82],[132,52],[148,30]);        // right (stick hand)
+            stripe3(118,142,58,3);
+            poly([[140,22],[158,28],[154,48],[138,42]],GLV);
+            poly([[140,22],[144,23],[142,45],[138,42]],GLVl);
+            poly([[154,28],[158,28],[154,48],[150,48]],GLVd);
+            for(let k=142;k<158;k+=4) r(k,22,2,6,GLVl);
+            r(140,22,18,3,Pl2);
         }
 
-        // NECK + HELMET — centred, upright
+        // NECK
         r(75,60,12,14,SKN); r(75,60,2,14,SKl); r(85,60,2,14,SKd);
-        drawHelmet(81, 40);
+        drawHelmet(80,42);
     }
 }
 
