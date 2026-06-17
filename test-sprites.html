@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NHL '94 Sprite Test</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background: #1a1a1a;
+            color: #fff;
+            font-family: 'Press Start 2P', cursive;
+            padding: 20px;
+            margin: 0;
+        }
+        h1 { text-align: center; color: #00FFFF; }
+        .sprite-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .sprite-card {
+            background: #0a0a0a;
+            border: 2px solid #333;
+            padding: 10px;
+            text-align: center;
+        }
+        .sprite-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 10px;
+            color: #00FFFF;
+        }
+        canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            display: block;
+            margin: 0 auto;
+            border: 1px solid #333;
+        }
+        .sprite-label {
+            font-size: 8px;
+            color: #888;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>NHL '94 PRO SIMULATOR — SPRITE TEST</h1>
+
+<div class="sprite-grid" id="spriteContainer"></div>
+
+<script src="script.js"></script>
+<script>
+    // Test colors for different teams
+    const testTeams = [
+        { name: 'NEW YORK RANGERS', code: 'NYR', pri: '#0035AA', sec: '#FFFFFF' },
+        { name: 'BOSTON BRUINS', code: 'BOS', pri: '#FFB81C', sec: '#000000' },
+        { name: 'DETROIT RED WINGS', code: 'DET', pri: '#CE1126', sec: '#FFFFFF' },
+        { name: 'TORONTO MAPLE LEAFS', code: 'TOR', pri: '#00205B', sec: '#FFFFFF' },
+        { name: 'CALGARY FLAMES', code: 'CGY', pri: '#CE1126', sec: '#FFFF00' },
+        { name: 'EDMONTON OILERS', code: 'EDM', pri: '#041E42', sec: '#FF6600' },
+    ];
+
+    const container = document.getElementById('spriteContainer');
+
+    testTeams.forEach(team => {
+        ['goalie', 'defense', 'forward'].forEach(spriteType => {
+            const card = document.createElement('div');
+            card.className = 'sprite-card';
+            card.innerHTML = `
+                <h3>${team.code} — ${spriteType.toUpperCase()}</h3>
+                <canvas style="width:160px; height:240px;"></canvas>
+                <div class="sprite-label">${team.name}</div>
+            `;
+            container.appendChild(card);
+
+            const canvas = card.querySelector('canvas');
+            pcDrawSprite(canvas, spriteType, team.pri, team.sec);
+        });
+    });
+</script>
+
+</body>
+</html>
