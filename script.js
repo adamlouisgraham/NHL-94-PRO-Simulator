@@ -7597,11 +7597,13 @@ function pcDrawSprite(canvas, type, pri, sec) {
         poly([[52,134],[108,134],[108,162],[52,162]],Pd);
         poly([[52,134],[58,134],[58,162],[52,162]],Pl2);
         poly([[102,134],[108,134],[108,162],[102,162]],Pdd);
-        r(52,135,56,4,WHT); r(52,139,56,4,S);  // pantsStripe1+2
-        r(78,134,4,28,Pdd);                     // centre seam
+        // pantsStripe: vertical bands down each leg (WHT then S)
+        r(60,136,4,26,WHT); r(64,136,4,26,S);   // left leg
+        r(92,136,4,26,WHT); r(96,136,4,26,S);   // right leg
+        r(78,134,4,28,Pdd);                      // centre seam
 
-        // JERSEY — 40px wide, body stripes
-        jsy([[60,72],[100,72],[100,136],[60,136]], [[106,4],[110,4,S,Sl,Sd],[114,4]]);
+        // JERSEY — 40px wide; waist stripes sit at hem (bottom 16px of jersey)
+        jsy([[60,72],[100,72],[100,136],[60,136]], [[118,4],[122,4,S,Sl,Sd],[126,4]]);
 
         // SHOULDER WEDGES — simple angular extension, no 3D pad art
         poly([[42,78],[60,72],[60,88],[42,88]],Pl2);    // left shoulder
