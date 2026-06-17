@@ -7564,92 +7564,79 @@ function pcDrawSprite(canvas, type, pri, sec) {
         arc(80,32,16,9,HLs,Math.PI,Math.PI*2);
 
     } else {
-        // ── SKATER — arms-raised hero, Genesis-reference proportions ──────────
-        // Blocky, thick-limbed, clean silhouette matching grid reference.
-        // D = stick in left hand (upper-left); F = stick in right (upper-right).
-
+        // ── SKATER — arms-raised hero, layered Z-order ────────────────────────
+        // D = stick upper-left / F = stick upper-right. Arms identical both types.
         const isD = (type === 'defense');
 
-        // helper: thick arm — two plain seg quads, subtle elbow cap
-        const thickArm = (sh, el, wr) => {
-            seg(sh, el, 11, P);
-            arc(el[0],el[1], 9, 8, Pl2); arc(el[0],el[1], 6, 5, P); // elbow cap
-            seg(el, wr, 10, P);
-            // highlight edge (same side as Pl2 in seg)
-        };
-
-        // STICK — full-canvas diagonal through the glove that holds it
-        if (isD) {  // upper-left ↔ lower-right
-            ln(14,12, 116,148, STKd, 4); ln(14,12, 116,148, STK, 2.5); ln(14,12, 116,148, STKl, 1.5);
-            r(108,142,14,4,BLD); r(108,142,14,1,BLDl);   // blade
-        } else {     // upper-right ↔ lower-left
-            ln(146,12, 44,148, STKd, 4); ln(146,12, 44,148, STK, 2.5); ln(146,12, 44,148, STKl, 1.5);
-            r(38,142,14,4,BLD); r(38,142,14,1,BLDl);
-        }
-
-        // SKATES
-        drawSkate(56,78,194); drawSkate(84,106,194);
-
-        // SHINS — 20px wide × 34px tall
-        drawShin(56,76,160,194, 65,162); drawShin(84,104,160,194, 93,162);
-
-        // PANTS — 56px wide dark breezer
-        poly([[52,134],[108,134],[108,162],[52,162]],Pd);
-        poly([[52,134],[58,134],[58,162],[52,162]],Pl2);
-        poly([[102,134],[108,134],[108,162],[102,162]],Pdd);
-        // pantsStripe: vertical bands down each leg (WHT then S)
-        r(60,136,4,26,WHT); r(64,136,4,26,S);   // left leg
-        r(92,136,4,26,WHT); r(96,136,4,26,S);   // right leg
-        r(78,134,4,28,Pdd);                      // centre seam
-
-        // JERSEY — 40px wide; waist stripes sit at hem (bottom 16px of jersey)
-        jsy([[60,72],[100,72],[100,136],[60,136]], [[118,4],[122,4,S,Sl,Sd],[126,4]]);
-
-        // SHOULDER WEDGES — simple angular extension, no 3D pad art
-        poly([[42,78],[60,72],[60,88],[42,88]],Pl2);    // left shoulder
-        r(42,78,18,2,Pl);                               // top lit edge
-        poly([[100,72],[118,78],[118,88],[100,88]],Pd);  // right shoulder
-        r(100,78,18,2,Pd);
-
-        // ARMS — both raised wide in V; thick hw=11 quads
+        // ── 1. STICK (lowest layer — behind body) ─────────────────────────────
         if (isD) {
-            thickArm([58,82],[28,52],[12,30]);          // left (stick hand)
-            stripe3(20,42,58,3);
-            // Left glove — solid dark block
-            poly([[2,22],[20,28],[16,48],[0,42]],GLV);
-            poly([[2,22],[6,23],[4,45],[0,42]],GLVl);
-            poly([[16,28],[20,28],[16,48],[12,48]],GLVd);
-            for(let k=4;k<16;k+=4) r(k,22,2,6,GLVl);
-            r(2,22,18,3,Pl2);
-
-            thickArm([102,82],[132,52],[148,30]);        // right (free hand)
-            stripe3(118,142,58,3);
-            // Right glove
-            poly([[140,22],[158,28],[154,48],[138,42]],GLV);
-            poly([[140,22],[144,23],[142,45],[138,42]],GLVl);
-            poly([[154,28],[158,28],[154,48],[150,48]],GLVd);
-            for(let k=142;k<158;k+=4) r(k,22,2,6,GLVl);
-            r(140,22,18,3,Pl2);
+            ln(14,14, 116,152, STKd,5); ln(14,14, 116,152, STK,3); ln(14,14, 116,152, STKl,1.5);
+            poly([[108,144],[122,152],[120,164],[106,156]],STK);
+            poly([[108,144],[112,146],[110,158],[106,156]],STKl);
+            r(104,156,22,4,BLD); r(104,156,22,1,BLDl);
         } else {
-            thickArm([58,82],[28,52],[12,30]);          // left (free hand)
-            stripe3(20,42,58,3);
-            poly([[2,22],[20,28],[16,48],[0,42]],GLV);
-            poly([[2,22],[6,23],[4,45],[0,42]],GLVl);
-            poly([[16,28],[20,28],[16,48],[12,48]],GLVd);
-            for(let k=4;k<16;k+=4) r(k,22,2,6,GLVl);
-            r(2,22,18,3,Pl2);
-
-            thickArm([102,82],[132,52],[148,30]);        // right (stick hand)
-            stripe3(118,142,58,3);
-            poly([[140,22],[158,28],[154,48],[138,42]],GLV);
-            poly([[140,22],[144,23],[142,45],[138,42]],GLVl);
-            poly([[154,28],[158,28],[154,48],[150,48]],GLVd);
-            for(let k=142;k<158;k+=4) r(k,22,2,6,GLVl);
-            r(140,22,18,3,Pl2);
+            ln(146,14, 44,152, STKd,5); ln(146,14, 44,152, STK,3); ln(146,14, 44,152, STKl,1.5);
+            poly([[36,144],[50,152],[48,164],[34,156]],STK);
+            poly([[36,144],[40,146],[38,158],[34,156]],STKl);
+            r(32,156,22,4,BLD); r(32,156,22,1,BLDl);
         }
 
-        // NECK — short stub below helmet chin
-        r(76,60,8,6,SKN); r(76,60,2,6,SKl); r(82,60,2,6,SKd);
+        // ── 2. SKATES ─────────────────────────────────────────────────────────
+        drawSkate(56,76,200); drawSkate(84,104,200);
+
+        // ── 3. SHINS — 18px wide × 36px tall ─────────────────────────────────
+        drawShin(56,74,164,200, 64,166); drawShin(84,102,164,200, 92,166);
+
+        // ── 4. PANTS — wide breezer, waistband + leg stripes ──────────────────
+        poly([[52,132],[108,132],[108,166],[52,166]],Pd);
+        poly([[52,132],[58,132],[58,166],[52,166]],Pl2);
+        poly([[102,132],[108,132],[108,166],[102,166]],Pdd);
+        r(52,133,56,5,WHT); r(52,138,56,5,S);   // waistband WHT→S
+        r(79,132,3,34,Pdd);                       // leg seam
+        r(61,144,4,20,WHT); r(65,144,4,20,S);   // left leg vertical stripe
+        r(91,144,4,20,WHT); r(95,144,4,20,S);   // right leg vertical stripe
+
+        // ── 5. JERSEY — 36px wide, hem sandwich stripes ───────────────────────
+        jsy([[62,68],[98,68],[98,134],[62,134]], [[112,4],[116,4,S,Sl,Sd],[120,4]]);
+
+        // ── 6. SHOULDER CAPS — bridge jersey to arm; secondary trim stripe ─────
+        poly([[40,72],[62,68],[62,88],[40,88]],Pl);    // left cap
+        r(40,72,22,2,Pl2);   // lit top
+        r(40,74,22,4,S);     // coloured trim
+        r(40,86,22,3,Pd);    // shadow bottom
+        poly([[98,68],[120,72],[120,88],[98,88]],Pl);  // right cap
+        r(98,72,22,2,Pl2);
+        r(98,74,22,4,S);
+        r(98,86,22,3,Pd);
+
+        // ── 7. ARMS — thick V-pose, shoulder cap edge to wrist ────────────────
+        // left: (42,82)→elbow(18,54)→wrist(6,28)
+        seg([42,82],[18,54],11,P);
+        arc(18,54,8,7,Pl2); arc(18,54,5,4,P);
+        seg([18,54],[6,28],10,P);
+        // right: (118,82)→elbow(142,54)→wrist(154,28)
+        seg([118,82],[142,54],11,P);
+        arc(142,54,8,7,Pl2); arc(142,54,5,4,P);
+        seg([142,54],[154,28],10,P);
+
+        // ── 8. GLOVES — cuffed hockey gloves at arm tips ──────────────────────
+        // Left glove
+        poly([[0,22],[18,30],[14,52],[0,44]],GLV);
+        poly([[0,22],[4,23],[2,45],[0,44]],GLVl);
+        poly([[14,30],[18,30],[14,52],[10,52]],GLVd);
+        r(0,22,18,7,GLVl);    // cuff band
+        r(0,22,18,2,Pl2);     // cuff top gleam
+        r(2,30,12,2,Pdd);     // knuckle shadow line
+        // Right glove
+        poly([[142,30],[160,22],[160,44],[142,52]],GLV);
+        poly([[156,22],[160,22],[160,44],[156,44]],GLVl);
+        poly([[142,30],[146,30],[144,52],[142,52]],GLVd);
+        r(142,22,18,7,GLVl);
+        r(142,22,18,2,Pl2);
+        r(146,30,12,2,Pdd);
+
+        // ── 9. NECK + HELMET ──────────────────────────────────────────────────
+        r(76,58,8,12,SKN); r(76,58,2,12,SKl); r(82,58,2,12,SKd);
         drawHelmet(80,42);
     }
 }
