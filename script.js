@@ -7587,17 +7587,28 @@ function pcDrawSprite(canvas, type, pri, sec) {
         // ── 3. SHINS — 18px wide × 36px tall ─────────────────────────────────
         drawShin(56,74,164,200, 64,166); drawShin(84,102,164,200, 92,166);
 
-        // ── 4. PANTS — wide breezer, waistband + leg stripes ──────────────────
-        poly([[52,132],[108,132],[108,166],[52,166]],Pd);
-        poly([[52,132],[58,132],[58,166],[52,166]],Pl2);
-        poly([[102,132],[108,132],[108,166],[102,166]],Pdd);
-        r(52,133,56,5,WHT); r(52,138,56,5,S);   // waistband WHT→S
-        r(79,132,3,34,Pdd);                       // leg seam
-        r(61,144,4,20,WHT); r(65,144,4,20,S);   // left leg vertical stripe
-        r(91,144,4,20,WHT); r(95,144,4,20,S);   // right leg vertical stripe
+        // ── 4. PANTS — hip-flared breezer, thigh pads, rounded leg openings ─────
+        // Slightly wider at bottom for authentic silhouette; overlaps jersey 4px
+        poly([[54,128],[106,128],[110,168],[50,168]],Pd);
+        poly([[54,128],[60,128],[58,168],[52,168]],Pl2);
+        poly([[100,128],[106,128],[110,168],[104,168]],Pdd);
+        // thigh pad arcs on each leg (3D bump)
+        arc(71,148,14,10,_pcShade(pri,-18),Math.PI,Math.PI*2);
+        arc(71,148,9,7,Pd,Math.PI,Math.PI*2);
+        arc(89,148,14,10,_pcShade(pri,-18),Math.PI,Math.PI*2);
+        arc(89,148,9,7,Pd,Math.PI,Math.PI*2);
+        // leg seam
+        r(79,128,3,40,Pdd);
+        // vertical leg stripes (below thigh pad)
+        r(61,142,4,24,WHT); r(65,142,4,24,S);
+        r(91,142,4,24,WHT); r(95,142,4,24,S);
+        // leg opening: darker strip + rounded arcs at each leg hole
+        r(50,160,60,8,_pcShade(pri,-60));
+        arc(67,167,13,5,Pdd,0,Math.PI);
+        arc(93,167,13,5,Pdd,0,Math.PI);
 
-        // ── 5. JERSEY — 36px wide, hem sandwich stripes ───────────────────────
-        jsy([[62,68],[98,68],[98,134],[62,134]], [[112,4],[116,4,S,Sl,Sd],[120,4]]);
+        // ── 5. JERSEY — overlaps pants top; hem sandwich at waist ─────────────
+        jsy([[62,68],[98,68],[98,132],[62,132]], [[110,4],[114,4,S,Sl,Sd],[118,4]]);
 
         // ── 6. SHOULDER CAPS — bridge jersey to arm; secondary trim stripe ─────
         poly([[40,72],[62,68],[62,88],[40,88]],Pl);    // left cap
@@ -7619,21 +7630,30 @@ function pcDrawSprite(canvas, type, pri, sec) {
         arc(142,54,8,7,Pl2); arc(142,54,5,4,P);
         seg([142,54],[154,28],10,P);
 
-        // ── 8. GLOVES — cuffed hockey gloves at arm tips ──────────────────────
-        // Left glove
-        poly([[0,22],[18,30],[14,52],[0,44]],GLV);
-        poly([[0,22],[4,23],[2,45],[0,44]],GLVl);
-        poly([[14,30],[18,30],[14,52],[10,52]],GLVd);
-        r(0,22,18,7,GLVl);    // cuff band
-        r(0,22,18,2,Pl2);     // cuff top gleam
-        r(2,30,12,2,Pdd);     // knuckle shadow line
-        // Right glove
-        poly([[142,30],[160,22],[160,44],[142,52]],GLV);
-        poly([[156,22],[160,22],[160,44],[156,44]],GLVl);
-        poly([[142,30],[146,30],[144,52],[142,52]],GLVd);
-        r(142,22,18,7,GLVl);
-        r(142,22,18,2,Pl2);
-        r(146,30,12,2,Pdd);
+        // ── 8. GLOVES — wide cuff tapers to hand; secondary trim; knuckle ridge ─
+        // Left glove: cuff at top, fingers below; arm arrives from lower-right
+        poly([[0,16],[22,24],[18,52],[0,46]],GLV);       // body
+        poly([[0,16],[4,17],[2,47],[0,46]],GLVl);        // lit left edge
+        poly([[18,24],[22,24],[18,52],[14,52]],GLVd);    // dark right edge
+        r(0,16,22,9,GLVl);    // wide cuff band
+        r(0,16,22,2,Pl2);     // cuff top gleam
+        r(0,22,22,4,S);       // secondary-color cuff trim stripe
+        r(0,26,22,1,Sl);      // trim highlight
+        r(2,34,16,3,Pdd);     // knuckle ridge
+        r(2,37,16,1,Pl2);     // knuckle lit line below ridge
+        arc(10,46,8,5,GLVd,0,Math.PI);  // finger-tip curve
+
+        // Right glove: mirror — cuff top-right, fingers lower-left
+        poly([[138,24],[160,16],[160,46],[140,52]],GLV);
+        poly([[156,16],[160,16],[160,46],[156,46]],GLVl);
+        poly([[138,24],[142,24],[140,52],[138,52]],GLVd);
+        r(138,16,22,9,GLVl);
+        r(138,16,22,2,Pl2);
+        r(138,22,22,4,S);
+        r(138,26,22,1,Sl);
+        r(142,34,16,3,Pdd);
+        r(142,37,16,1,Pl2);
+        arc(150,46,8,5,GLVd,0,Math.PI);
 
         // ── 9. NECK + HELMET ──────────────────────────────────────────────────
         r(76,58,8,12,SKN); r(76,58,2,12,SKl); r(82,58,2,12,SKd);
