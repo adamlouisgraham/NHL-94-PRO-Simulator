@@ -7451,6 +7451,32 @@ function pcDrawSprite(canvas, type, pri, sec) {
         r(x0+2,yb-5, w-4,4,Pdd); // ankle
         arc(kx, ky, 9, 7, SHNl); arc(kx, ky, 6, 4, SHN); arc(kx, ky, 3, 2, WHT);
     };
+    // Shoulder pad — 3D hockey pad: lit top cap + front face + outer side wall
+    // cx,cy = centre of pad-to-jersey junction; side = -1 (left) or +1 (right)
+    const drawShoulder = (cx, cy, side) => {
+        const pw=20, ph=10, fh=10; // pad width, cap height, front face height
+        const x0=cx-pw/2, x1=cx+pw/2;
+        const capT=cy-ph, capB=cy, frontB=cy+fh;
+        // Top cap — lit face seen from above
+        poly([[x0-2,capT],[x1+2,capT],[x1,capB],[x0,capB]], Pl2);
+        r(x0-2,capT,pw+4,2,WHTl);      // top gleam
+        r(x0-2,capT+2,pw+4,2,Pl);      // sub-gleam
+        // Coloured trim stripe across cap (team secondary)
+        r(x0,capT+4,pw,3,S); r(x0,capT+4,pw,1,Sl);
+        // Front face — primary colour
+        poly([[x0,capB],[x1,capB],[x1-2,frontB],[x0+2,frontB]], P);
+        poly([[x0,capB],[x0+3,capB],[x0+3,frontB],[x0,frontB]], Pl2); // inner lit edge
+        poly([[x1-3,capB],[x1,capB],[x1,frontB],[x1-3,frontB]], Pd);  // inner dark edge
+        // Outer side wall (on the arm side)
+        if (side < 0) { // left pad: outer wall on left
+            poly([[x0-2,capT],[x0,capT],[x0,frontB],[x0-2,frontB]], Pd);
+        } else {         // right pad: outer wall on right
+            poly([[x1,capT],[x1+2,capT],[x1+2,frontB],[x1,frontB]], Pd);
+        }
+        // Bottom shadow under pad
+        r(x0+2,frontB,pw-4,3,Pdd);
+    };
+
     // Skate boot + blade
     const drawSkate = (x0, x1, yt) => {
         const w=x1-x0;
@@ -7517,8 +7543,7 @@ function pcDrawSprite(canvas, type, pri, sec) {
         stripe3(100,128,132,3);
 
         // SHOULDER PADS
-        arc(61,76,16,13,Pl); arc(61,76,11,9,Pl2); arc(61,76,5,3,S);
-        arc(99,76,16,13,Pl); arc(99,76,11,9,Pl2); arc(99,76,5,3,S);
+        drawShoulder(62,72,-1); drawShoulder(98,72,1);
 
         // NECK
         r(75,67,12,9,SKN); r(75,67,2,9,SKl); r(85,67,2,9,SKd);
@@ -7579,8 +7604,7 @@ function pcDrawSprite(canvas, type, pri, sec) {
         jsy([[61,72],[99,72],[99,132],[61,132]], [[100,4],[104,4,S,Sl,Sd],[108,4]]);
 
         // SHOULDER PADS
-        arc(63,74,16,13,Pl); arc(63,74,11,9,Pl2); arc(63,74,5,3,S);
-        arc(97,74,16,13,Pl); arc(97,74,11,9,Pl2); arc(97,74,5,3,S);
+        drawShoulder(64,70,-1); drawShoulder(96,70,1);
 
         // ARMS — both raised; stick side goes higher and diagonal
         if (isD) {
