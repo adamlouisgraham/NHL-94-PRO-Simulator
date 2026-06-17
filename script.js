@@ -7488,80 +7488,118 @@ function pcDrawSprite(canvas, type, pri, sec) {
 
     // ════════════════════════════════════════════════════════════════════════
     if (type === 'goalie') {
-        // ── GOALIE — butterfly save, 160×240 canvas ──────────────────────────
+        // ── GOALIE — butterfly stance, 160×240 canvas ────────────────────────
 
-        // NET — full width of canvas
+        // NET background
         r(4,4,8,168,GRY); r(148,4,8,168,GRY);
         r(4,4,152,6,LGY); r(4,4,152,3,BLD);
         for(let ny=10;ny<164;ny+=8)  r(12,ny,136,2,NET);
         for(let nx=12;nx<150;nx+=8) r(nx,10,2,154,NET);
         r(12,10,136,154,'rgba(25,55,105,0.05)');
-        r(20,178,120,2,'rgba(210,50,50,0.85)'); // crease
+        r(20,178,120,2,'rgba(210,50,50,0.85)');
 
-        // LEFT LEG PAD — splayed wide to lower-left
-        poly([[0,124],[56,112],[58,196],[0,196]],Pd);
-        poly([[0,124],[7,122],[7,196],[0,196]],Pl2);
-        poly([[51,112],[56,112],[58,196],[53,196]],Pdd);
-        arc(28,118,20,10,Pl2,Math.PI,Math.PI*2); arc(28,118,13,7,P,Math.PI,Math.PI*2);
-        arc(28,122,14,10,_pcShade(pri,-28)); arc(28,122,9,7,Pl2); arc(28,122,5,3,S);
-        for(let i=0;i<5;i++){ const sy=128+i*13; r(2,sy,52,8,WHT); r(2,sy,52,1,WHTl); r(2,sy+7,52,1,WHTd); }
-        r(0,188,56,10,BLK); r(0,188,5,10,'#2a2a2a');
-        r(0,197,60,3,BLD); r(0,197,60,1,BLDl);
+        // LEFT LEG PAD — wide butterfly splay; sandwich WHT→S→WHT stripes
+        poly([[0,120],[54,108],[56,196],[0,200]],Pd);
+        poly([[0,120],[8,118],[8,200],[0,200]],Pl2);
+        poly([[48,108],[54,108],[56,196],[50,196]],Pdd);
+        arc(27,114,22,12,Pl2,Math.PI,Math.PI*2);
+        arc(27,114,15,8,P,Math.PI,Math.PI*2);
+        arc(27,118,10,7,_pcShade(pri,-30));
+        arc(27,118,6,4,Pl2); arc(27,118,3,2,S);
+        for(let i=0;i<4;i++){
+            const sy=128+i*16;
+            r(2,sy,50,5,WHT); r(2,sy,50,1,WHTl); r(2,sy+4,50,1,WHTd);
+            r(2,sy+5,50,5,S);   r(2,sy+5,50,1,Sl);  r(2,sy+9,50,1,Sd);
+            r(2,sy+10,50,5,WHT); r(2,sy+10,50,1,WHTl); r(2,sy+14,50,1,WHTd);
+        }
+        r(0,188,54,12,BLK); r(0,188,5,12,'#2a2a2a');
+        r(0,199,58,3,BLD); r(0,199,58,1,BLDl);
 
-        // RIGHT LEG PAD
-        poly([[102,112],[160,124],[160,196],[100,196]],Pd);
-        poly([[153,122],[160,124],[160,196],[153,196]],Pdd);
-        poly([[100,112],[107,112],[109,196],[100,196]],Pl2);
-        arc(132,118,20,10,Pl2,Math.PI,Math.PI*2); arc(132,118,13,7,P,Math.PI,Math.PI*2);
-        arc(132,122,14,10,_pcShade(pri,-28)); arc(132,122,9,7,Pl2); arc(132,122,5,3,S);
-        for(let i=0;i<5;i++){ const sy=128+i*13; r(106,sy,52,8,WHT); r(106,sy,52,1,WHTl); r(106,sy+7,52,1,WHTd); }
-        r(104,188,56,10,BLK); r(104,188,5,10,'#2a2a2a');
-        r(100,197,60,3,BLD); r(100,197,60,1,BLDl);
+        // RIGHT LEG PAD — mirror
+        poly([[106,108],[160,120],[160,200],[104,196]],Pd);
+        poly([[152,118],[160,120],[160,200],[152,200]],Pdd);
+        poly([[106,108],[112,108],[114,200],[106,200]],Pl2);
+        arc(133,114,22,12,Pl2,Math.PI,Math.PI*2);
+        arc(133,114,15,8,P,Math.PI,Math.PI*2);
+        arc(133,118,10,7,_pcShade(pri,-30));
+        arc(133,118,6,4,Pl2); arc(133,118,3,2,S);
+        for(let i=0;i<4;i++){
+            const sy=128+i*16;
+            r(108,sy,50,5,WHT); r(108,sy,50,1,WHTl); r(108,sy+4,50,1,WHTd);
+            r(108,sy+5,50,5,S);   r(108,sy+5,50,1,Sl);  r(108,sy+9,50,1,Sd);
+            r(108,sy+10,50,5,WHT); r(108,sy+10,50,1,WHTl); r(108,sy+14,50,1,WHTd);
+        }
+        r(106,188,54,12,BLK); r(106,188,5,12,'#2a2a2a');
+        r(102,199,58,3,BLD); r(102,199,58,1,BLDl);
 
-        // BODY — 38px torso centred at x=80
-        const gBodyPts = [[61,74],[99,74],[101,118],[59,118]];
-        jsy(gBodyPts, [[86,4],[90,4,S,Sl,Sd],[94,4]]);
-        arc(80,82,17,11,Pl2,Math.PI,Math.PI*2); arc(80,82,11,7,P,Math.PI,Math.PI*2);
-        r(59,110,42,10,Pd); r(59,110,3,10,Pl2);
+        // BODY — wider jersey (54-106) + white chest protector overlay
+        jsy([[54,68],[106,68],[108,122],[52,122]], [[96,4],[100,4,S,Sl,Sd],[104,4]]);
+        // chest protector shell (white padded front)
+        r(60,70,40,36,WHT);
+        r(60,70,3,36,WHTl); r(97,70,3,36,WHTd); r(60,70,40,2,WHTl);
+        r(60,76,40,4,_pcShade('#E8E8E8',-12)); r(60,80,40,1,WHTl);
+        r(60,84,40,4,_pcShade('#E8E8E8',-12)); r(60,88,40,1,WHTl);
+        r(60,92,40,4,_pcShade('#E8E8E8',-12)); r(60,96,40,1,WHTl);
+        // team color chest logo bump
+        arc(80,84,11,8,P,Math.PI,Math.PI*2);
+        arc(80,84,7,5,Pl2,Math.PI,Math.PI*2);
+        arc(80,84,3,2,S,Math.PI,Math.PI*2);
+        r(60,104,40,4,WHTd);
+        // belly jersey strip + waist stripe
+        r(52,108,56,14,P); r(52,108,3,14,Pl2); r(105,108,3,14,Pd);
+        stripe3(52,108,110,3);
 
-        // TRAPPER ARM (left)
-        drawArm([60,80],[46,108],[32,128], 8);
-        stripe3(44,60,84,3);
-        poly([[10,122],[34,128],[28,152],[6,146]],BRN);
-        poly([[10,122],[14,123],[10,149],[6,146]],BRNl);
-        poly([[30,128],[34,128],[28,152],[24,152]],BRNd);
-        for(let i=0;i<5;i++) r(12,126+i*5,20,3,BRNl);
-        r(14,122,16,26,'rgba(200,140,60,0.18)');
+        // TRAPPER ARM (left) — sleeve + large fan mitt
+        drawArm([56,80],[40,106],[26,126], 8);
+        stripe3(26,56,86,3);
+        poly([[0,120],[30,128],[24,162],[0,158]],BRN);
+        poly([[0,120],[6,122],[2,159],[0,158]],BRNl);
+        poly([[26,128],[30,128],[24,162],[20,162]],BRNd);
+        r(4,124,22,5,BRNl); r(4,129,22,2,_pcShade('#7A3B00',30));
+        for(let i=0;i<4;i++) r(5,133+i*6,20,4,BRNl);
+        r(2,120,24,6,'rgba(200,140,60,0.22)');
+        arc(14,160,12,5,BRNd,0,Math.PI);
 
-        // BLOCKER ARM (right)
-        drawArm([100,78],[112,106],[120,124], 8);
-        stripe3(100,118,82,3);
-        poly([[96,120],[126,112],[130,138],[96,144]],GLV);
-        poly([[96,120],[102,119],[106,142],[96,144]],GLVl);
-        poly([[122,112],[126,112],[130,138],[126,138]],GLVd);
-        r(98,122,30,10,Pd); r(98,122,3,10,P); r(122,122,5,10,Pdd);
-        stripe3(100,128,132,3);
+        // BLOCKER ARM (right) — sleeve + rectangular hard pad
+        drawArm([104,78],[118,106],[132,122], 8);
+        stripe3(104,130,84,3);
+        poly([[108,114],[150,120],[148,152],[106,148]],GLV);
+        poly([[108,114],[114,115],[112,146],[106,148]],GLVl);
+        poly([[146,120],[150,120],[148,152],[144,152]],GLVd);
+        r(110,118,36,14,P); r(110,118,3,14,Pl2); r(143,118,3,14,Pd); r(110,118,36,2,Pl2);
+        for(let bx=112;bx<144;bx+=6) r(bx,121,4,9,Pl2);
+        r(110,130,36,5,S); r(110,130,36,1,Sl);
+        r(112,136,32,12,GLVd); r(112,144,32,4,GLV);
 
         // SHOULDER PADS
-        drawShoulder(62,72,-1); drawShoulder(98,72,1);
+        drawShoulder(58,68,-1); drawShoulder(102,68,1);
 
         // NECK
-        r(75,67,12,9,SKN); r(75,67,2,9,SKl); r(85,67,2,9,SKd);
+        r(75,60,10,10,SKN); r(75,60,2,10,SKl); r(83,60,2,10,SKd);
 
-        // GOALIE MASK — centred at cx=80, rx=24
-        arc(80,48,24,22,HLM);
-        arc(80,43,14,9,HLs,Math.PI,Math.PI*2);
-        arc(80,48,24,22,HLd,0,Math.PI);
-        arc(80,48,20,17,Pdd,0,Math.PI);
-        r(56,36,16,32,HLd); r(90,36,16,32,HLd);
-        r(60,28,42,15,'rgba(100,185,255,0.46)'); r(60,28,42,2,'rgba(225,246,255,0.38)');
-        // cage (3v + 4h)
-        r(56,58,6,28,BLK); r(77,58,6,28,BLK); r(99,58,6,28,BLK);
-        r(54,58,54,3,BLK); r(54,65,54,3,BLK); r(54,73,54,3,BLK); r(54,81,54,2,BLK);
-        r(63,61,12,6,SKN); r(86,61,10,6,SKN);
-        r(64,62,5,2,BLK); r(88,62,5,2,BLK);
-        r(56,83,50,6,HLM); r(56,83,50,1,HLl);
-        arc(80,32,16,9,HLs,Math.PI,Math.PI*2);
+        // GOALIE MASK — rx=20, team color forehead band + cage; centred (80,44)
+        const mx=80, my=44;
+        arc(mx,my, 20,18, HLM);
+        arc(mx,my-3, 13,8, HLs, Math.PI,Math.PI*2);
+        arc(mx,my, 20,18, HLd, 0,Math.PI);
+        // team color forehead band
+        r(mx-16,my-12, 32,7, P); r(mx-16,my-12,32,1,Pl2); r(mx-16,my-6,32,1,Pd);
+        // cheek panels
+        r(mx-20,my, 6,22, HLd); r(mx+14,my, 6,22, HLd);
+        // visor
+        r(mx-12,my+4, 24,11,'rgba(80,170,255,0.50)');
+        r(mx-12,my+4, 24,2, 'rgba(220,244,255,0.55)');
+        r(mx-12,my+13,24,1, 'rgba(20,80,200,0.35)');
+        // cage — 3 vertical + 3 horizontal bars
+        r(mx-14,my+15,4,16,BLK); r(mx-2,my+15,4,16,BLK); r(mx+10,my+15,4,16,BLK);
+        r(mx-14,my+15,32,3,BLK); r(mx-14,my+20,32,3,BLK); r(mx-14,my+26,32,2,BLK);
+        r(mx-9,my+17,6,12,SKN); r(mx+3,my+17,6,12,SKN);
+        // chin cup in team color
+        arc(mx,my+14, 16,12, Pdd, 0,Math.PI);
+        r(mx-14,my+28, 28,5, P); r(mx-14,my+28,28,1,Pl2);
+        // dome gleam
+        arc(mx,my-5, 9,5, HLs, Math.PI,Math.PI*2);
+        r(mx-4,my-14, 8,2, HLl);
 
     } else {
         // ── SKATER — arms-raised hero, layered Z-order ────────────────────────
