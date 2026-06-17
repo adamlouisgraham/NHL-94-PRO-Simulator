@@ -7332,7 +7332,7 @@ function _pcShade(hex, amt) {
 }
 
 // ─── 16-BIT GENESIS-STYLE SPRITE ENGINE ──────────────────────────────────────
-// 128×192 logical px at 2× scale → 256×384 canvas displayed at 128×192 CSS px.
+// 160×240 logical px at 2× scale → 320×480 canvas displayed at 160×240 CSS px.
 
 function _spr(ctx, sc, x, y, w, h, col) {
     ctx.fillStyle = col; ctx.fillRect(x*sc, y*sc, w*sc, h*sc);
@@ -7340,8 +7340,8 @@ function _spr(ctx, sc, x, y, w, h, col) {
 
 function pcDrawSprite(canvas, type, pri, sec) {
     const sc = 2;
-    canvas.width  = 128 * sc;
-    canvas.height = 192 * sc;
+    canvas.width  = 160 * sc;
+    canvas.height = 240 * sc;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -7367,11 +7367,11 @@ function pcDrawSprite(canvas, type, pri, sec) {
     const ln  = (x1,y1,x2,y2,c,w=1.5)          => { ctx.strokeStyle=c; ctx.lineWidth=w*sc; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(x1*sc,y1*sc); ctx.lineTo(x2*sc,y2*sc); ctx.stroke(); };
 
     // ── ICE + shadow ──────────────────────────────────────────────────────────
-    const iceG = ctx.createLinearGradient(0,140*sc,0,192*sc);
+    const iceG = ctx.createLinearGradient(0,182*sc,0,240*sc);
     iceG.addColorStop(0,ICl); iceG.addColorStop(1,ICd);
-    ctx.fillStyle=iceG; ctx.fillRect(0,140*sc,canvas.width,52*sc);
-    for(let lx=0;lx<128;lx+=10){ ctx.fillStyle='rgba(160,210,255,0.09)'; ctx.fillRect(lx*sc,142*sc,sc,50*sc); }
-    ctx.fillStyle='rgba(0,20,70,0.18)'; ctx.beginPath(); ctx.ellipse(64*sc,182*sc,28*sc,5*sc,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=iceG; ctx.fillRect(0,182*sc,canvas.width,58*sc);
+    for(let lx=0;lx<160;lx+=10){ ctx.fillStyle='rgba(160,210,255,0.09)'; ctx.fillRect(lx*sc,184*sc,sc,56*sc); }
+    ctx.fillStyle='rgba(0,20,70,0.18)'; ctx.beginPath(); ctx.ellipse(80*sc,228*sc,36*sc,6*sc,0,0,Math.PI*2); ctx.fill();
 
     // ════════════════════════════════════════════════════════════════════════
     // ── Shared helpers (reference-style) ────────────────────────────────────
@@ -7462,200 +7462,158 @@ function pcDrawSprite(canvas, type, pri, sec) {
 
     // ════════════════════════════════════════════════════════════════════════
     if (type === 'goalie') {
-        // ── GOALIE — butterfly save, crouched centre, pads spread wide ──────
+        // ── GOALIE — butterfly save, 160×240 canvas ──────────────────────────
 
-        // NET behind
-        r(4,4,6,150,GRY); r(118,4,6,150,GRY);
-        r(4,4,120,5,LGY); r(4,4,120,2,BLD);
-        for(let ny=9;ny<144;ny+=8)  r(10,ny,108,2,NET);
-        for(let nx=10;nx<118;nx+=8) r(nx,9,2,135,NET);
-        r(10,9,108,135,'rgba(25,55,105,0.06)');
-        r(18,172,92,2,'rgba(210,50,50,0.8)'); // crease
+        // NET — full width of canvas
+        r(4,4,8,168,GRY); r(148,4,8,168,GRY);
+        r(4,4,152,6,LGY); r(4,4,152,3,BLD);
+        for(let ny=10;ny<164;ny+=8)  r(12,ny,136,2,NET);
+        for(let nx=12;nx<150;nx+=8) r(nx,10,2,154,NET);
+        r(12,10,136,154,'rgba(25,55,105,0.05)');
+        r(20,178,120,2,'rgba(210,50,50,0.85)'); // crease
 
-        // LEFT LEG PAD — splayed out to lower-left
-        poly([[0,118],[44,108],[46,182],[0,184]],Pd);
-        poly([[0,118],[6,116],[6,184],[0,184]],Pl2);
-        poly([[40,108],[44,108],[46,182],[42,182]],Pdd);
-        // pad top curve
-        arc(22,112,18,9,Pl2,Math.PI,Math.PI*2); arc(22,112,12,6,P,Math.PI,Math.PI*2);
-        // knee roll
-        arc(22,116,12,9,_pcShade(pri,-28)); arc(22,116,8,6,Pl2); arc(22,116,4,3,S);
-        // 4 horizontal stripes on pad
-        for(let i=0;i<4;i++){ const sy=120+i*14; r(2,sy,40,9,WHT); r(2,sy,40,1,WHTl); r(2,sy+8,40,1,WHTd); }
-        // skate
-        r(0,174,46,10,BLK); r(0,174,4,10,'#2e2e2e');
-        r(0,183,48,3,BLD); r(0,183,48,1,BLDl);
+        // LEFT LEG PAD — splayed wide to lower-left
+        poly([[0,124],[56,112],[58,196],[0,196]],Pd);
+        poly([[0,124],[7,122],[7,196],[0,196]],Pl2);
+        poly([[51,112],[56,112],[58,196],[53,196]],Pdd);
+        arc(28,118,20,10,Pl2,Math.PI,Math.PI*2); arc(28,118,13,7,P,Math.PI,Math.PI*2);
+        arc(28,122,14,10,_pcShade(pri,-28)); arc(28,122,9,7,Pl2); arc(28,122,5,3,S);
+        for(let i=0;i<5;i++){ const sy=128+i*13; r(2,sy,52,8,WHT); r(2,sy,52,1,WHTl); r(2,sy+7,52,1,WHTd); }
+        r(0,188,56,10,BLK); r(0,188,5,10,'#2a2a2a');
+        r(0,197,60,3,BLD); r(0,197,60,1,BLDl);
 
         // RIGHT LEG PAD
-        poly([[84,108],[128,118],[128,184],[82,182]],Pd);
-        poly([[122,116],[128,118],[128,184],[122,184]],Pdd);
-        poly([[82,108],[88,108],[90,182],[82,182]],Pl2);
-        arc(106,112,18,9,Pl2,Math.PI,Math.PI*2); arc(106,112,12,6,P,Math.PI,Math.PI*2);
-        arc(106,116,12,9,_pcShade(pri,-28)); arc(106,116,8,6,Pl2); arc(106,116,4,3,S);
-        for(let i=0;i<4;i++){ const sy=120+i*14; r(86,sy,40,9,WHT); r(86,sy,40,1,WHTl); r(86,sy+8,40,1,WHTd); }
-        r(82,174,46,10,BLK); r(82,174,4,10,'#2e2e2e');
-        r(80,183,48,3,BLD); r(80,183,48,1,BLDl);
+        poly([[102,112],[160,124],[160,196],[100,196]],Pd);
+        poly([[153,122],[160,124],[160,196],[153,196]],Pdd);
+        poly([[100,112],[107,112],[109,196],[100,196]],Pl2);
+        arc(132,118,20,10,Pl2,Math.PI,Math.PI*2); arc(132,118,13,7,P,Math.PI,Math.PI*2);
+        arc(132,122,14,10,_pcShade(pri,-28)); arc(132,122,9,7,Pl2); arc(132,122,5,3,S);
+        for(let i=0;i<5;i++){ const sy=128+i*13; r(106,sy,52,8,WHT); r(106,sy,52,1,WHTl); r(106,sy+7,52,1,WHTd); }
+        r(104,188,56,10,BLK); r(104,188,5,10,'#2a2a2a');
+        r(100,197,60,3,BLD); r(100,197,60,1,BLDl);
 
-        // BODY — narrower torso 34px wide (grid-calibrated)
-        const gBodyPts = [[48,70],[82,70],[84,112],[46,112]];
-        jsy(gBodyPts, [[82,4],[86,4,S,Sl,Sd],[90,4]]);
-        arc(65,78,16,10,Pl2,Math.PI,Math.PI*2); arc(65,78,11,7,P,Math.PI,Math.PI*2);
-        r(46,104,38,10,Pd); r(46,104,3,10,Pl2); // belly pad
+        // BODY — 38px torso centred at x=80
+        const gBodyPts = [[61,74],[99,74],[101,118],[59,118]];
+        jsy(gBodyPts, [[86,4],[90,4,S,Sl,Sd],[94,4]]);
+        arc(80,82,17,11,Pl2,Math.PI,Math.PI*2); arc(80,82,11,7,P,Math.PI,Math.PI*2);
+        r(59,110,42,10,Pd); r(59,110,3,10,Pl2);
 
-        // TRAPPER ARM — armStripe sandwich
-        drawArm([44,78],[34,102],[24,118], 7);
-        stripe3(38,52,80,3); // armStripe1/2/3 on upper arm
-        poly([[4,114],[26,118],[20,140],[2,136]],BRN);
-        poly([[4,114],[8,115],[4,137],[2,136]],BRNl);
-        poly([[22,118],[26,118],[20,140],[16,140]],BRNd);
-        for(let i=0;i<4;i++) r(6,118+i*5,18,3,BRNl);
-        r(8,114,14,22,'rgba(200,140,60,0.20)');
+        // TRAPPER ARM (left)
+        drawArm([60,80],[46,108],[32,128], 8);
+        stripe3(44,60,84,3);
+        poly([[10,122],[34,128],[28,152],[6,146]],BRN);
+        poly([[10,122],[14,123],[10,149],[6,146]],BRNl);
+        poly([[30,128],[34,128],[28,152],[24,152]],BRNd);
+        for(let i=0;i<5;i++) r(12,126+i*5,20,3,BRNl);
+        r(14,122,16,26,'rgba(200,140,60,0.18)');
 
-        // BLOCKER ARM — armStripe sandwich
-        drawArm([82,76],[90,98],[96,114], 7);
-        stripe3(80,96,79,3);
-        poly([[78,110],[104,104],[108,126],[78,130]],GLV);
-        poly([[78,110],[84,109],[88,128],[78,130]],GLVl);
-        poly([[100,104],[104,104],[108,126],[104,126]],GLVd);
-        r(80,112,26,8,Pd); r(80,112,3,8,P); r(100,112,4,8,Pdd);
-        stripe3(82,104,120,3); // blocker face stripes
+        // BLOCKER ARM (right)
+        drawArm([100,78],[112,106],[120,124], 8);
+        stripe3(100,118,82,3);
+        poly([[96,120],[126,112],[130,138],[96,144]],GLV);
+        poly([[96,120],[102,119],[106,142],[96,144]],GLVl);
+        poly([[122,112],[126,112],[130,138],[126,138]],GLVd);
+        r(98,122,30,10,Pd); r(98,122,3,10,P); r(122,122,5,10,Pdd);
+        stripe3(100,128,132,3);
 
         // SHOULDER PADS
-        arc(48,72,15,12,Pl); arc(48,72,10,8,Pl2); arc(48,72,5,3,S);
-        arc(82,72,15,12,Pl); arc(82,72,10,8,Pl2); arc(82,72,5,3,S);
+        arc(61,76,16,13,Pl); arc(61,76,11,9,Pl2); arc(61,76,5,3,S);
+        arc(99,76,16,13,Pl); arc(99,76,11,9,Pl2); arc(99,76,5,3,S);
 
         // NECK
-        r(60,63,10,9,SKN); r(60,63,2,9,SKl); r(68,63,2,9,SKd);
+        r(75,67,12,9,SKN); r(75,67,2,9,SKl); r(85,67,2,9,SKd);
 
-        // GOALIE MASK — bigger dome (rx=22) to match grid head size
-        arc(65,44,22,21,HLM);
-        arc(65,40,13,8,HLs,Math.PI,Math.PI*2);
-        arc(65,44,22,21,HLd,0,Math.PI);
-        arc(65,44,18,16,Pdd,0,Math.PI);
-        r(43,34,13,30,HLd); r(76,34,13,30,HLd); // side wings
-        r(48,25,34,15,'rgba(100,185,255,0.46)'); r(48,25,34,2,'rgba(225,246,255,0.38)');
-        // cage bars
-        r(44,53,5,26,BLK); r(62,53,5,26,BLK); r(80,53,5,26,BLK);
-        r(42,53,47,3,BLK); r(42,60,47,3,BLK); r(42,67,47,3,BLK); r(42,74,47,2,BLK);
-        r(50,56,10,5,SKN); r(71,56,8,5,SKN);
-        r(51,57,4,2,BLK); r(73,57,4,2,BLK);
-        r(44,78,38,5,HLM); r(44,78,38,1,HLl);
-        arc(65,28,14,8,HLs,Math.PI,Math.PI*2);
-
-    } else if (type === 'defense') {
-        // ── DEFENSE — poke-check lunge left ──────────────────────────────────
-        // Grid-calibrated: head=28px, jersey=34px wide, pants=44px wide
-        // Figure y=20→165. Body leans left ~15°.
-
-        // STICK — nearly horizontal, upper-right to lower-left
-        ln(108,82,2,152,STKd,3); ln(108,82,2,152,STK,2); ln(108,82,2,152,STKl,1);
-        poly([[0,148],[14,154],[12,162],[0,156]],STK);
-        poly([[0,148],[4,150],[2,158],[0,156]],STKl);
-        r(0,156,16,4,BLD); r(0,156,16,1,BLDl); r(10,152,6,6,STKd);
-        for(let t=0;t<5;t++) r(16+t*18,151-t*12,7,4,STKd);
-
-        // SKATES (left lunged fwd, right planted back)
-        drawSkate(30,50,158); drawSkate(76,96,156);
-
-        // SHINS — 16px wide × 28px tall each
-        drawShin(30,46,130,158, 37,132); drawShin(76,92,128,156, 83,130);
-
-        // PANTS — 44px wide, pantsStripe1+2 on each leg
-        poly([[30,108],[74,102],[76,130],[28,132]],Pd);
-        poly([[30,108],[35,107],[33,131],[28,132]],Pl2);
-        poly([[69,102],[74,102],[76,130],[71,130]],Pdd);
-        r(34,113,18,3,WHT); r(34,116,18,3,S);   // left leg
-        r(56,111,16,3,WHT); r(56,114,16,3,S);   // right leg
-        r(52,110,3,20,Pdd); // seam
-
-        // JERSEY — 34px wide, lean left (top right of bottom)
-        jsy([[34,52],[68,48],[70,108],[30,110]], [[76,4],[80,4,S,Sl,Sd],[84,4]]);
-
-        // LEFT ARM — punch lunge hard left (wide reach to canvas edge)
-        drawArm([34,60],[12,88],[2,118], 8);
-        stripe3(18,36,63,3);
-        drawGlove([[0,114],[16,118],[12,136],[0,132]],
-                  [[0,114],[3,115],[1,133],[0,132]],
-                  [[12,118],[16,118],[12,136],[8,136]]);
-
-        // RIGHT ARM — raised back/high
-        drawArm([62,56],[76,80],[72,108], 8);
-        stripe3(62,78,59,3);
-        drawGlove([[62,104],[84,108],[80,126],[60,122]],
-                  [[62,104],[66,105],[64,123],[60,122]],
-                  [[80,108],[84,108],[80,126],[76,126]]);
-
-        // SHOULDER PADS
-        arc(34,60,15,12,Pl); arc(34,60,10,8,Pl2); arc(34,60,5,3,S);
-        arc(66,57,12,10,Pl); arc(66,57,8,7,Pl2); arc(66,57,4,3,S);
-
-        // NECK + HELMET (head center x=48, y=24)
-        r(44,42,10,12,SKN); r(44,42,2,12,SKl); r(52,42,2,12,SKd);
-        drawHelmet(49,26);
+        // GOALIE MASK — centred at cx=80, rx=24
+        arc(80,48,24,22,HLM);
+        arc(80,43,14,9,HLs,Math.PI,Math.PI*2);
+        arc(80,48,24,22,HLd,0,Math.PI);
+        arc(80,48,20,17,Pdd,0,Math.PI);
+        r(56,36,16,32,HLd); r(90,36,16,32,HLd);
+        r(60,28,42,15,'rgba(100,185,255,0.46)'); r(60,28,42,2,'rgba(225,246,255,0.38)');
+        // cage (3v + 4h)
+        r(56,58,6,28,BLK); r(77,58,6,28,BLK); r(99,58,6,28,BLK);
+        r(54,58,54,3,BLK); r(54,65,54,3,BLK); r(54,73,54,3,BLK); r(54,81,54,2,BLK);
+        r(63,61,12,6,SKN); r(86,61,10,6,SKN);
+        r(64,62,5,2,BLK); r(88,62,5,2,BLK);
+        r(56,83,50,6,HLM); r(56,83,50,1,HLl);
+        arc(80,32,16,9,HLs,Math.PI,Math.PI*2);
 
     } else {
-        // ── FORWARD — full skating stride, wrist shot release ─────────────────
-        // Grid-calibrated: head=28px, jersey=34px wide, pants=46px wide
-        // Figure y=18→165. Body tipped forward ~25°.
+        // ── SKATER HERO POSE — arms raised, stick up, 160×240 canvas ─────────
+        // Defense: stick in left hand, right glove raised
+        // Forward:  stick in right hand, left glove raised
+        // Both use same upright figure; stick side differs by type.
 
-        // STICK — steep diagonal, top-right to bottom-left blade
-        ln(96,46,8,162,STKd,3); ln(96,46,8,162,STK,2); ln(96,46,8,162,STKl,1);
-        poly([[2,158],[18,164],[16,172],[2,166]],STK);
-        poly([[2,158],[6,160],[4,168],[2,166]],STKl);
-        r(1,166,20,4,BLD); r(1,166,20,1,BLDl); r(14,162,6,6,STKd);
-        for(let t=0;t<5;t++) r(20+t*14,159-t*18,6,4,STKd);
+        const isD = (type === 'defense');
 
-        // SKATES — left planted, right stride back
-        drawSkate(28,46,160); // left planted
-        poly([[78,154],[100,160],[102,172],[76,174]],BLK); // right angled
-        r(76,158,24,10,DRK); r(76,154,4,14,'#282828');
-        for(let lx=81;lx<100;lx+=4) r(lx,156,2,10,'#383838');
-        r(74,172,30,3,BLD); r(74,172,30,1,BLDl);
+        // STICK — diagonal from upper corner to lower opposite corner
+        // D: stick goes upper-LEFT; F: upper-RIGHT
+        if (isD) {
+            ln(44,10,102,108,STKd,3.5); ln(44,10,102,108,STK,2.5); ln(44,10,102,108,STKl,1.5);
+            // blade — lower-right
+            poly([[96,102],[110,108],[108,120],[94,114]],STK);
+            poly([[96,102],[100,104],[98,116],[94,114]],STKl);
+            r(96,114,16,4,BLD); r(96,114,16,1,BLDl); r(106,108,8,6,STKd);
+        } else {
+            ln(118,10,56,108,STKd,3.5); ln(118,10,56,108,STK,2.5); ln(118,10,56,108,STKl,1.5);
+            // blade — lower-left
+            poly([[48,102],[64,108],[62,120],[46,114]],STK);
+            poly([[48,102],[52,104],[50,116],[46,114]],STKl);
+            r(48,114,16,4,BLD); r(48,114,16,1,BLDl); r(48,108,8,6,STKd);
+        }
 
-        // SHINS — left full 16×30px, right foreshortened
-        drawShin(28,44,128,160, 35,130);
-        poly([[76,126],[96,130],[94,156],[74,154]],SHN); // right shin
-        poly([[76,126],[80,127],[78,155],[74,154]],SHNl);
-        poly([[92,130],[96,130],[94,156],[90,156]],SHNd);
-        r(78,134,14,3,WHT); r(78,137,14,3,S); r(78,140,14,3,WHT); // sock1
-        r(78,146,14,3,WHT); r(78,149,14,3,S); r(78,152,14,3,WHT); // sock2
-        arc(86,129,9,6,SHNl); arc(86,129,6,4,SHN);
+        // SKATES — both feet planted slightly apart
+        drawSkate(56,76,188); drawSkate(86,106,188);
 
-        // PANTS — 46px wide forward-lean split, pantsStripe1+2
-        poly([[28,98],[88,90],[90,124],[26,128]],Pd);
-        poly([[28,98],[33,97],[31,127],[26,128]],Pl2);
-        poly([[83,90],[88,90],[90,124],[85,124]],Pdd);
-        r(30,104,18,3,WHT); r(30,107,18,3,S);  // left leg
-        r(62,101,18,3,WHT); r(62,104,18,3,S);  // right leg
-        r(54,102,3,24,Pdd); // seam
+        // SHINS — 18px × 32px, standing upright
+        drawShin(56,74,156,188, 64,158); drawShin(86,104,156,188, 94,158);
 
-        // JERSEY — 34px wide, forward lean (top shifted right vs bottom)
-        jsy([[36,44],[70,38],[74,98],[30,102]], [[64,4],[68,4,S,Sl,Sd],[72,4]]);
+        // PANTS — 50px wide, upright stance
+        poly([[54,130],[106,130],[106,158],[54,158]],Pd);
+        poly([[54,130],[60,130],[60,158],[54,158]],Pl2);
+        poly([[100,130],[106,130],[106,158],[100,158]],Pdd);
+        r(54,131,52,4,WHT); r(54,135,52,4,S); // pantsStripe1+2
+        r(78,130,4,28,Pdd); // leg seam
 
-        // LEFT ARM — bottom hand reaching far down-left to stick
-        drawArm([36,52],[16,80],[4,112], 9);
-        stripe3(18,38,55,3);
-        drawGlove([[0,108],[18,112],[14,132],[0,128]],
-                  [[0,108],[3,109],[1,129],[0,128]],
-                  [[14,112],[18,112],[14,132],[10,132]]);
-
-        // RIGHT ARM — top hand raised high+back, wide right
-        drawArm([66,42],[82,68],[80,98], 8);
-        stripe3(66,84,45,3);
-        drawGlove([[66,94],[92,98],[88,118],[64,114]],
-                  [[66,94],[70,95],[68,115],[64,114]],
-                  [[88,98],[92,98],[88,118],[84,118]]);
-
-        // PUCK at blade
-        arc(10,170,8,4,BLK); arc(10,170,5,3,DRK);
+        // JERSEY — 38px wide, upright centred
+        jsy([[61,72],[99,72],[99,132],[61,132]], [[100,4],[104,4,S,Sl,Sd],[108,4]]);
 
         // SHOULDER PADS
-        arc(38,52,15,12,Pl); arc(38,52,10,8,Pl2); arc(38,52,5,3,S);
-        arc(68,46,12,10,Pl); arc(68,46,8,7,Pl2); arc(68,46,4,3,S);
+        arc(63,74,16,13,Pl); arc(63,74,11,9,Pl2); arc(63,74,5,3,S);
+        arc(97,74,16,13,Pl); arc(97,74,11,9,Pl2); arc(97,74,5,3,S);
 
-        // NECK + HELMET — head at x=58,y=20 (forward lean)
-        r(54,32,10,14,SKN); r(54,32,2,14,SKl); r(62,32,2,14,SKd);
-        drawHelmet(59,20);
+        // ARMS — both raised; stick side goes higher and diagonal
+        if (isD) {
+            // LEFT ARM — high diagonal, holding stick (D)
+            drawArm([63,76],[38,50],[26,28], 9);
+            stripe3(34,52,60,3);
+            drawGlove([[14,22],[36,28],[32,50],[12,44]],
+                      [[14,22],[18,23],[16,47],[12,44]],
+                      [[32,28],[36,28],[32,50],[28,50]]);
+            // RIGHT ARM — raised up-right, glove high
+            drawArm([97,74],[122,52],[142,32], 8);
+            stripe3(108,126,60,3);
+            drawGlove([[136,24],[158,30],[154,50],[132,44]],
+                      [[136,24],[140,25],[138,47],[132,44]],
+                      [[154,30],[158,30],[154,50],[150,50]]);
+        } else {
+            // LEFT ARM — raised up-left, glove high (F)
+            drawArm([63,76],[38,52],[18,30], 8);
+            stripe3(32,52,60,3);
+            drawGlove([[6,22],[30,28],[26,50],[4,44]],
+                      [[6,22],[10,23],[8,47],[4,44]],
+                      [[26,28],[30,28],[26,50],[22,50]]);
+            // RIGHT ARM — high diagonal, holding stick (F)
+            drawArm([97,74],[122,50],[138,28], 9);
+            stripe3(108,128,58,3);
+            drawGlove([[128,20],[152,28],[148,50],[126,42]],
+                      [[128,20],[132,21],[130,45],[126,42]],
+                      [[148,28],[152,28],[148,50],[144,50]]);
+        }
+
+        // NECK + HELMET — centred, upright
+        r(75,60,12,14,SKN); r(75,60,2,14,SKl); r(85,60,2,14,SKd);
+        drawHelmet(81, 40);
     }
 }
 
@@ -7833,8 +7791,8 @@ function showPlayerCard(pName) {
     <div style="font-size:8px;color:#fff;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fullName}</div>
     <div style="font-size:6px;color:rgba(255,255,255,.5);margin-top:2px;letter-spacing:1px;">${confName}</div>
   </div>
-  <div style="background:#06060e;position:relative;display:flex;align-items:center;justify-content:center;height:160px;overflow:hidden;">
-    <canvas id="pc-sprite" style="image-rendering:pixelated;image-rendering:crisp-edges;width:128px;height:192px;display:block;"></canvas>
+  <div style="background:#06060e;position:relative;display:flex;align-items:center;justify-content:center;height:200px;overflow:hidden;">
+    <canvas id="pc-sprite" style="image-rendering:pixelated;image-rendering:crisp-edges;width:160px;height:240px;display:block;margin-top:24px;"></canvas>
     <div style="position:absolute;bottom:0;left:0;right:0;height:18px;background:linear-gradient(transparent,rgba(0,0,0,.75));"></div>
   </div>
   <div style="background:${sec};padding:5px 10px;display:flex;justify-content:space-between;align-items:center;">
