@@ -7646,8 +7646,8 @@ function pcDrawSprite(canvas, type, pri, sec) {
             r(140,22,18,3,Pl2);
         }
 
-        // NECK
-        r(75,60,12,14,SKN); r(75,60,2,14,SKl); r(85,60,2,14,SKd);
+        // NECK — short stub below helmet chin
+        r(76,60,8,6,SKN); r(76,60,2,6,SKl); r(82,60,2,6,SKd);
         drawHelmet(80,42);
     }
 }
