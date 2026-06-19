@@ -1,4 +1,4 @@
-// =========================================================
+﻿// =========================================================
 // NHL '94 PRO SIMULATOR - MASTER JAVASCRIPT ENGINE
 // =========================================================
 // =========================================================
@@ -6,18 +6,18 @@
 // =========================================================
 
     // =========================================================
-    // 🧠 ARCHETYPE BEHAVIOR MULTIPLIERS (Complete Master List)
+    // ðŸ§  ARCHETYPE BEHAVIOR MULTIPLIERS (Complete Master List)
     // =========================================================
     const archMods = {
     // --- FORWARDS (Balanced for higher goal/assist totals) ---
-    "SUPERSTAR":      { shotRate: 1.40, penaltyRate: 0.70,  assistRate: 1.40 },
-    "SNIPER":         { shotRate: 1.50, penaltyRate: 0.85,  assistRate: 0.90 },
-    "PLAYMAKER":      { shotRate: 0.89, penaltyRate: 0.80,  assistRate: 1.65 },
+    "SUPERSTAR":      { shotRate: 1.40, penaltyRate: 0.70,  assistRate: 1.40 }, // Increased assistRate to reflect their well-rounded dominance
+    "SNIPER":         { shotRate: 1.50, penaltyRate: 0.85,  assistRate: 0.90 }, // Higher shotRate, lower assistRate to specialize them
+    "PLAYMAKER":      { shotRate: 0.89, penaltyRate: 0.80,  assistRate: 1.65 }, // Lower shotRate, significantly higher assistRate
     "SPEEDSTER":      { shotRate: 1.19, penaltyRate: 0.80,  assistRate: 1.15 },
     "DANGLER":        { shotRate: 1.14, penaltyRate: 0.80,  assistRate: 1.30 },
     "POWER FORWARD":  { shotRate: 1.20, penaltyRate: 1.20,  assistRate: 0.97 },
     "TWO-WAY STAR F": { shotRate: 1.12, penaltyRate: 0.95,  assistRate: 1.15 },
-    "TWO-WAY FWD":    { shotRate: 0.95, penaltyRate: 0.95,  assistRate: 1.05 },
+    "TWO-WAY FWD":    { shotRate: 0.99, penaltyRate: 0.95,  assistRate: 1.05 },
     "GRINDER":        { shotRate: 0.98, penaltyRate: 1.30,  assistRate: 0.90 },
     "ENFORCER F":     { shotRate: 0.50, penaltyRate: 1.60,  assistRate: 0.50 },
     "PRO OFFENSIVE FWD": { shotRate: 1.14, penaltyRate: 0.75,  assistRate: 1.14 },
@@ -26,10 +26,11 @@
     "DEFENSIVE FWD":  { shotRate: 0.75, penaltyRate: 1.00,  assistRate: 0.95 },
 
     // --- DEFENSEMEN ---
-    "FRANCHISE D":    { shotRate: 1.15, penaltyRate: 0.80,  assistRate: 1.45 },
-    "QUARTERBACK":    { shotRate: 0.99, penaltyRate: 0.85,  assistRate: 1.60 },
-    "BOOMER":         { shotRate: 1.20, penaltyRate: 1.00,  assistRate: 1.11 },
-    "SHUTDOWN":       { shotRate: 0.80, penaltyRate: 1.00,  assistRate: 1.00 },
+    "FRANCHISE D":    { shotRate: 1.15, penaltyRate: 0.80,  assistRate: 1.45 }, // High assistRate to reflect their role in starting plays and quarterbacking from the blueline
+    "QUARTERBACK":    { shotRate: 0.99, penaltyRate: 0.85,  assistRate: 1.60 }, // Maximize playmaking from the blueline
+    "BOOMER":         { shotRate: 1.20, penaltyRate: 1.00,  assistRate: 1.11 }, // Higher shotRate, slightly lower assistRate to reflect their focus on powerful shots
+    "BIG HITTER":     { shotRate: 1.00, penaltyRate: 1.40,  assistRate: 1.00 }, // Lower shotRate, higher penaltyRate to reflect their physical style
+    "SHUTDOWN":       { shotRate: 0.80, penaltyRate: 1.00,  assistRate: 1.00 }, // Lower shotRate, balanced assistRate to reflect their defensive focus
     "TWO-WAY STAR":   { shotRate: 1.09, penaltyRate: 0.90,  assistRate: 1.25 },
     "TWO-WAY D":      { shotRate: 0.97, penaltyRate: 1.00,  assistRate: 1.05 },
     "PRO OFFENSIVE D":{ shotRate: 1.05, penaltyRate: 0.70,  assistRate: 1.15 },
@@ -63,14 +64,14 @@ function getPlayerBadges(pName) {
     const ps = playerStats[pName];
     if (!ps) return '';
     let badges = '';
-    if (ps.injury && ps.injury.daysRemaining > 0) badges += '🚑';
-    if (ps.suspended && ps.suspended.days > 0) badges += '⛔';
+    if (ps.injury && ps.injury.daysRemaining > 0) badges += 'ðŸš‘';
+    if (ps.suspended && ps.suspended.days > 0) badges += 'â›”';
     let isHot = ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT' || ps.streakType === 'hot';
     let isCold = ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD' || ps.streakType === 'cold';
-    if (isHot) badges += '🔥';
-    else if (isCold) badges += '❄️';
-    if (ps.asgMvp) badges += '⭐';
-    if (ps.career && ps.career.awards > 0) badges += '🏆';
+    if (isHot) badges += 'ðŸ”¥';
+    else if (isCold) badges += 'â„ï¸';
+    if (ps.asgMvp) badges += 'â­';
+    if (ps.career && ps.career.awards > 0) badges += 'ðŸ†';
     return badges ? `<span class="player-badge" style="font-size:10px; margin-left:4px;">${badges}</span>` : '';
 }
 
@@ -88,31 +89,31 @@ function buildStatusBadges(pName) {
     let out = '';
 
     if (ps.injury && ps.injury.daysRemaining > 0)
-        out += badge('🚑', `INJURED ${ps.injury.daysRemaining}d`, '#FF5555', '#2a0000');
+        out += badge('ðŸš‘', `INJURED ${ps.injury.daysRemaining}d`, '#FF5555', '#2a0000');
     if (ps.suspended && ps.suspended.days > 0)
-        out += badge('⛔', `SUSPENDED ${ps.suspended.days}d`, '#FF8800', '#2a1400');
+        out += badge('â›”', `SUSPENDED ${ps.suspended.days}d`, '#FF8800', '#2a1400');
     if (isHot)
-        out += badge('🔥', streakLen >= 5 ? `HOT ${streakLen}G` : 'HOT', '#FFAA00', '#1a1000');
+        out += badge('ðŸ”¥', streakLen >= 5 ? `HOT ${streakLen}G` : 'HOT', '#FFAA00', '#1a1000');
     else if (isCold)
-        out += badge('❄️', 'COLD', '#55FFFF', '#001a1a');
+        out += badge('â„ï¸', 'COLD', '#55FFFF', '#001a1a');
     if (!isHot && !isCold && ps.consPointless >= 3)
-        out += badge('📉', `SLUMP ${ps.consPointless}G`, '#FF6666', '#1a0000');
+        out += badge('ðŸ“‰', `SLUMP ${ps.consPointless}G`, '#FF6666', '#1a0000');
     if (fatigue >= 6)
-        out += badge('😴', `FATIGUED -${fatigue}`, '#FFAA44', '#1a1000');
+        out += badge('ðŸ˜´', `FATIGUED -${fatigue}`, '#FFAA44', '#1a1000');
     if (ps.asgMvp)
-        out += badge('⭐', 'ASG MVP', '#FFD700', '#1a1400');
+        out += badge('â­', 'ASG MVP', '#FFD700', '#1a1400');
     if (ps.asgAppearances > 0)
-        out += badge('🌟', `ALL-STAR ${ps.asgAppearances}x`, '#00FFFF', '#001a1a');
+        out += badge('ðŸŒŸ', `ALL-STAR ${ps.asgAppearances}x`, '#00FFFF', '#001a1a');
     if (ps.career && ps.career.awards > 0)
-        out += badge('🏆', `${ps.career.awards} TROPHY`, '#FFD700', '#1a1400');
+        out += badge('ðŸ†', `${ps.career.awards} TROPHY`, '#FFD700', '#1a1400');
     if (ps.potential === 'Franchise')
-        out += badge('💎', 'FRANCHISE', '#AA88FF', '#0e0022');
+        out += badge('ðŸ’Ž', 'FRANCHISE', '#AA88FF', '#0e0022');
     if (ps.age <= 21)
-        out += badge('🐣', 'ROOKIE', '#88FF88', '#001a00');
+        out += badge('ðŸ£', 'ROOKIE', '#88FF88', '#001a00');
     else if (ps.age >= 35)
-        out += badge('🦅', 'VETERAN', '#AAAAAA', '#111111');
+        out += badge('ðŸ¦…', 'VETERAN', '#AAAAAA', '#111111');
     if (ps.milestones && ps.milestones.length > 0)
-        out += badge('🏅', `${ps.milestones.length} MILESTONE`, '#00CCFF', '#001a22');
+        out += badge('ðŸ…', `${ps.milestones.length} MILESTONE`, '#00CCFF', '#001a22');
 
     if (!out) return '';
     return `<div style="display:flex;flex-wrap:wrap;gap:5px;margin:10px 0 4px 0;">${out}</div>`;
@@ -138,21 +139,19 @@ function getWeightLbs(grade) {
 function numToGrade(n) {
     const v = parseInt(n);
     if (isNaN(v)) return n || '--';
-    if (v >= 95) return 'A+';
-    if (v >= 90) return 'A';
-    if (v >= 85) return 'A-';
-    if (v >= 80) return 'B+';
-    if (v >= 75) return 'B';
-    if (v >= 70) return 'B-';
-    if (v >= 65) return 'C+';
-    if (v >= 57) return 'C';
-    if (v >= 50) return 'C-';
-    if (v >= 40) return 'D';
-    if (v >= 30) return 'F+';
+    if (v >= 85) return 'A+';
+    if (v >= 75) return 'A';
+    if (v >= 65) return 'B+';
+    if (v >= 55) return 'B';
+    if (v >= 45) return 'C+';
+    if (v >= 40) return 'C';
+    if (v >= 35) return 'D+';
+    if (v >= 30) return 'D';
+    if (v >= 20) return 'F+';
     return 'F';
 }
 
-// Shared helper — parse a raw weight cell (grade string OR numeric string) into
+// Shared helper â€” parse a raw weight cell (grade string OR numeric string) into
 // { grade, lbs } so both CSV init paths stay in sync.
 function parseWeightCell(raw) {
     const g = String(raw || '').trim();
@@ -161,7 +160,7 @@ function parseWeightCell(raw) {
     if (!isNaN(n) && n > 100) return { grade: lbsToWeightGrade(n), lbs: n };
     return { grade: 'C', lbs: 210 };
 }
-// Reverse-map numeric lbs → weight grade
+// Reverse-map numeric lbs â†’ weight grade
 function lbsToWeightGrade(lbs) {
     if (!lbs || lbs <= 0) return 'C';
     if (lbs <= 185) return 'A+';
@@ -173,7 +172,7 @@ function lbsToWeightGrade(lbs) {
     return 'F+';
 }
 
-// Accepts numeric lbs (p.weight) — no random re-roll needed
+// Accepts numeric lbs (p.weight) â€” no random re-roll needed
 function getWeightModifier(lbs, arch) {
     const w = (typeof lbs === 'number' && lbs > 100) ? lbs : getWeightLbs(lbs); // back-compat if grade string passed
     switch (arch) {
@@ -222,9 +221,9 @@ function gradeToNum(val) {
         'B+': () => roll(80, 84), 
         'B':  () => roll(75, 79), 
         'B-': () => roll(70, 74),
-        'C+': () => roll(65, 69),
-        'C':  () => roll(57, 64),
-        'C-': () => roll(50, 56),
+        'C+': () => roll(63, 69), 
+        'C':  () => roll(56, 62), 
+        'C-': () => roll(50, 55),
         
         // All 'D' grades map to the same wide 40-49 range
         'D+': () => roll(40, 49), 
@@ -248,7 +247,7 @@ function getRandomInt(min, max) {
 
 
 // ==========================================
-// 🏒 GLOBAL ATTRIBUTE & ARCHETYPE UTILITIES
+// ðŸ’ GLOBAL ATTRIBUTE & ARCHETYPE UTILITIES
 // ==========================================
 
 // Attribute Getters: Handle potential naming inconsistencies in spreadsheet headers
@@ -273,14 +272,14 @@ function generateTeam60MinSchedule(struct) {
         return players.reduce((s, p) => s + (typeof getLiveIceOvr === 'function' ? getLiveIceOvr(p.name) : (p.ovr || 75)), 0) / players.length;
     };
 
-    // ── SHARED HELPERS ────────────────────────────────────────────────────
+    // â”€â”€ SHARED HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const OVR_CAP  = 75;  // units below this are capped at MAX_CAP minutes
     const MAX_CAP  = 20;
-    const EVEN_GAP = 4;   // OVR gap threshold → blend toward equal time
+    const EVEN_GAP = 4;   // OVR gap threshold â†’ blend toward equal time
 
     // If two adjacent units are within EVEN_GAP OVR points, blend their
     // minutes toward the midpoint. Blend strength scales linearly with
-    // how close they are (gap=0 → full average, gap=4 → no blend).
+    // how close they are (gap=0 â†’ full average, gap=4 â†’ no blend).
     function blendClose(mins, ovrs) {
         for (let i = 0; i < mins.length - 1; i++) {
             const gap = Math.abs(ovrs[i] - ovrs[i + 1]);
@@ -294,7 +293,7 @@ function generateTeam60MinSchedule(struct) {
         return mins;
     }
 
-    // ── FORWARD ICE TIME ──────────────────────────────────────────────────
+    // â”€â”€ FORWARD ICE TIME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const fOvr = struct.f.map(getUnitOvr);               // [L1, L2, L3, L4]
 
     // Start with OVR-weighted base from 60 minutes
@@ -348,7 +347,7 @@ function generateTeam60MinSchedule(struct) {
     finalFCounts.forEach((count, idx) => { for (let i = 0; i < count; i++) fSched.push(idx); });
     fSched.sort(() => Math.random() - 0.5);
 
-    // ── DEFENSE ICE TIME ──────────────────────────────────────────────────
+    // â”€â”€ DEFENSE ICE TIME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // D pairs rotate independently; Pair 1 ALWAYS leads ice time.
     // Realistic NHL clamps: P1=22-30, P2=16-24, P3=6-16 (total must = 60)
     const dClamp = [[22, 30], [16, 24], [6, 16]];
@@ -369,7 +368,7 @@ function generateTeam60MinSchedule(struct) {
     // Re-clamp after order enforcement
     dMins = dMins.map((m, i) => Math.max(dClamp[i][0], Math.min(dClamp[i][1], m)));
 
-    // Balance total to exactly 60 — trim/add from Pair 3 first, then Pair 2
+    // Balance total to exactly 60 â€” trim/add from Pair 3 first, then Pair 2
     let finalDCounts = dMins.map(m => Math.round(m));
     const dBalance = () => finalDCounts.reduce((a, b) => a + b, 0);
     while (dBalance() < 60) finalDCounts[0]++;
@@ -379,7 +378,7 @@ function generateTeam60MinSchedule(struct) {
         else finalDCounts[0]--;
     }
 
-    // Build shuffled D schedule (independent of F schedule — D pairs rotate on their own)
+    // Build shuffled D schedule (independent of F schedule â€” D pairs rotate on their own)
     let dSchedBase = [];
     finalDCounts.forEach((count, idx) => { for (let i = 0; i < count; i++) dSchedBase.push(idx); });
     dSchedBase.sort(() => Math.random() - 0.5);
@@ -391,7 +390,7 @@ function generateTeam60MinSchedule(struct) {
 }
 
 // ==========================================
-// 📋 FRANCHISE MODE: CUSTOM LINE HELPERS
+// ðŸ“‹ FRANCHISE MODE: CUSTOM LINE HELPERS
 // ==========================================
 // 1. Load any previously saved lines
 let customLines = JSON.parse(localStorage.getItem('nhl94_customLines')) || {};
@@ -444,6 +443,66 @@ function swapPlayersInStructure(struct, name1, name2) {
         return true; 
     }
     return false; 
+}
+
+// 2. The Integrated Line Builder
+function buildSpecialTeams(fullRosterArray, type) {
+    // 1. FORCE FRESH POOLS: Filter from the full roster to ignore 5v5 line assignments
+    const allForwards = fullRosterArray.filter(p => ['C', 'LW', 'RW'].includes(p.pos));
+    const allDefenders = fullRosterArray.filter(p => ['LD', 'RD', 'D'].includes(p.pos));
+
+    let teams = { 1: [], 2: [] };
+
+    if (type === 'PP') {
+        // --- POWER PLAY LOGIC ---
+        // Sort by Offensive Awareness ('offawr')
+        const sortByOffense = (a, b) => {
+            const offA = playerStats[a.name]?.attr?.offawr || 0;
+            const offB = playerStats[b.name]?.attr?.offawr || 0;
+            return offB - offA; // Descending
+        };
+
+        const sortedF = [...allForwards].sort(sortByOffense);
+        const sortedD = [...allDefenders].sort(sortByOffense);
+
+        // PP1: Top 4 Forwards (indices 0-3), Best Defender (index 0)
+        teams[1] = [
+            ...sortedF.slice(0, 4), 
+            sortedD[0] 
+        ].filter(Boolean);
+
+        // PP2: Next 4 Forwards (indices 4-7), 2nd Best Defender (index 1)
+        teams[2] = [
+            ...sortedF.slice(4, 8), 
+            sortedD[1] 
+        ].filter(Boolean);
+        
+    } else if (type === 'PK') {
+        // --- PENALTY KILL LOGIC ---
+        // Sort by Combined Defensive Utility (Defense + Checking)
+        const sortByDefense = (a, b) => {
+            const defA = (playerStats[a.name]?.attr?.def || 0) + (playerStats[a.name]?.attr?.chk || 0);
+            const defB = (playerStats[b.name]?.attr?.def || 0) + (playerStats[b.name]?.attr?.chk || 0);
+            return defB - defA; // Descending
+        };
+
+        const sortedF = [...allForwards].sort(sortByDefense);
+        const sortedD = [...allDefenders].sort(sortByDefense);
+
+        // PK1: Top 2 Forwards (indices 0-1), Top 2 Defenders (indices 0-1)
+        teams[1] = [
+            ...sortedF.slice(0, 2), 
+            ...sortedD.slice(0, 2)
+        ].filter(Boolean);
+
+        // PK2: Next 2 Forwards (indices 2-3), Next 2 Defenders (indices 2-3)
+        teams[2] = [
+            ...sortedF.slice(2, 4), 
+            ...sortedD.slice(2, 4)
+        ].filter(Boolean);
+    }
+
+    return teams;
 }
 
 // 3. Logic to find SN + PL pairings
@@ -509,10 +568,10 @@ function buildSpecialTeams(fullRosterArray, type) {
 }
 
 // =========================================================
-// 🧠 ARCHETYPE BEHAVIOR MULTIPLIERS
+// ðŸ§  ARCHETYPE BEHAVIOR MULTIPLIERS
 // =========================================================
 /**
- * 🛡️ THE ARCHETYPE FIREWALL
+ * ðŸ›¡ï¸ THE ARCHETYPE FIREWALL
  * Prevents stacking 2 Snipers or 2 Playmakers on the same unit
  */
 function canAddForward(currentLine, newPlayer, isPowerPlay) {
@@ -563,7 +622,7 @@ const LEGACY_SAVE_VERSION = 1; const CURRENT_SAVE_SCHEMA_VERSION = 2; const SUPP
 let saveGameTimer = null;
 
 // =========================================================
-// ⚙️ GAME CONFIGURATION (Centralized Magic Numbers)
+// âš™ï¸ GAME CONFIGURATION (Centralized Magic Numbers)
 // =========================================================
 const GAME_CONFIG = {
     ice_time: {
@@ -654,7 +713,7 @@ function saveGame({slot = 'AUTO', force = false} = {}) {
 function saveSlot() { const slot = getSelectedSaveSlot(); saveGame({slot, force: true}); displaySaveStateInfo(`Saved to ${getSelectedSaveSlotLabel()}.`, 'success'); }
 function displaySaveStateInfo(message, type = 'info') { const el = document.getElementById('saveStateInfo'); if (!el) return; el.innerText = message; el.className = `save-state-info ${type}`; }
 function buildSavePayload() {
-    // 🛡️ STORAGE FIX: Create a lightweight copy of the calendar to save space
+    // ðŸ›¡ï¸ STORAGE FIX: Create a lightweight copy of the calendar to save space
     // This deletes the massive HTML play-by-play strings from old games so you don't hit the 5MB limit!
     const lightweightCalendar = (Array.isArray(calendar) ? calendar : []).map((day, dIdx) => {
         const safeDay = Array.isArray(day) ? day : [];
@@ -671,7 +730,7 @@ function buildSavePayload() {
         });
     });
 
-    // 🛡️ STORAGE FIX: Keep trade logs and history trimmed so they don't grow infinitely
+    // ðŸ›¡ï¸ STORAGE FIX: Keep trade logs and history trimmed so they don't grow infinitely
     if (tradeLog.length > 200) tradeLog = tradeLog.slice(0, 200);
     if (leagueHistory.length > 25) leagueHistory = leagueHistory.slice(0, 25);
 
@@ -690,9 +749,9 @@ function isSupportedSaveVersion(version) { return SUPPORTED_SAVE_VERSIONS.includ
 function getSaveMeta(slot = 'AUTO') { try { const raw = localStorage.getItem(getSaveSlotKey(slot)); if (!raw) return null; const parsed = JSON.parse(raw); const normalized = normalizeSavePackage(parsed); return normalized ? normalized.meta : null; } catch { return null; } }
 function getAllSaveSlotHistory() { return Object.keys(SAVE_SLOT_KEYS).map(slot => { const meta = getSaveMeta(slot); return { slot, label: slot === 'AUTO' ? 'Auto Save' : slot.replace('_', ' '), savedAt: meta ? meta.savedAt : null, version: meta ? meta.version : null, valid: Boolean(meta) }; }); }
 function selectHistorySaveSlot(slot) { setSelectedSaveSlot(slot); const meta = getSaveMeta(slot); if (!meta) { displaySaveStateInfo(`${slot === 'AUTO' ? 'Auto Save' : slot.replace('_', ' ')} is empty.`, 'info'); return; } const label = slot === 'AUTO' ? 'Auto Save' : slot.replace('_', ' '); const savedAt = formatSaveTimestamp(meta.savedAt); if (!confirm(`Load ${label} saved at ${savedAt}? This will replace current progress.`)) return; loadSlot(); }
-function renderSaveSlotHistory() { const container = document.getElementById('saveSlotHistory'); if (!container) return; const history = getAllSaveSlotHistory(); container.innerHTML = history.map(item => { const timestamp = item.savedAt ? formatSaveTimestamp(item.savedAt) : 'empty'; const version = item.version ? `v${item.version}` : '--'; const activeClass = item.slot === getSelectedSaveSlot() ? ' save-slot-history-active' : ''; return `<div class="save-slot-history-item${activeClass}" onclick="selectHistorySaveSlot('${item.slot}')"><span>${item.label}</span><span>${timestamp} • ${version}</span></div>`; }).join(''); }
+function renderSaveSlotHistory() { const container = document.getElementById('saveSlotHistory'); if (!container) return; const history = getAllSaveSlotHistory(); container.innerHTML = history.map(item => { const timestamp = item.savedAt ? formatSaveTimestamp(item.savedAt) : 'empty'; const version = item.version ? `v${item.version}` : '--'; const activeClass = item.slot === getSelectedSaveSlot() ? ' save-slot-history-active' : ''; return `<div class="save-slot-history-item${activeClass}" onclick="selectHistorySaveSlot('${item.slot}')"><span>${item.label}</span><span>${timestamp} â€¢ ${version}</span></div>`; }).join(''); }
 function formatSaveTimestamp(value) { if (!value) return 'unknown'; const date = new Date(value); if (Number.isNaN(date.getTime())) return value; return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
-function updateSaveMetadataDisplay(slot = 'AUTO') { const el = document.getElementById('saveMetadata'); if (!el) return; const meta = getSaveMeta(slot); const label = slot === 'AUTO' ? 'Auto Save' : slot.replace('_', ' '); if (!meta) { el.innerText = `SAVE: no backup yet (${label})`; return; } el.innerText = `SAVE ${label} v${meta.version} • ${formatSaveTimestamp(meta.savedAt)}`; }
+function updateSaveMetadataDisplay(slot = 'AUTO') { const el = document.getElementById('saveMetadata'); if (!el) return; const meta = getSaveMeta(slot); const label = slot === 'AUTO' ? 'Auto Save' : slot.replace('_', ' '); if (!meta) { el.innerText = `SAVE: no backup yet (${label})`; return; } el.innerText = `SAVE ${label} v${meta.version} â€¢ ${formatSaveTimestamp(meta.savedAt)}`; }
 function isValidSaveData(data) {
     if (!data || typeof data !== 'object') return false;
     const core = data.meta && data.data ? data.data : data;
@@ -727,7 +786,7 @@ function applyLoadedSave(data) {
     if (currentDay < 0) currentDay = 0;
     if (currentDay > calendar.length) currentDay = calendar.length;
 
-    // 🛡️ STANDINGS FIX: Re-link the schedule calendar back to the master league array
+    // ðŸ›¡ï¸ STANDINGS FIX: Re-link the schedule calendar back to the master league array
     calendar.forEach(day => {
         day.forEach(g => {
             if (g.h && g.h.nrm) g.h = league.find(t => t.nrm === g.h.nrm) || g.h;
@@ -843,7 +902,7 @@ function syncArenaScoreboardUI() {
                 bsIdx = dl.indexOf(g);
                 if (bsIdx < 0) bsIdx = 0;
             }
-            // Build goal scorer ticker — one line per goal
+            // Build goal scorer ticker â€” one line per goal
             const goalEvents = (g.result.boxLog || []).filter(ev => !ev.isPenalty && ev.scorer);
             const aCode = g.a.code, hCode = g.h.code;
             const aCl = teamColors[g.a.nrm] ? teamColors[g.a.nrm][0] : '#fff';
@@ -853,11 +912,11 @@ function syncArenaScoreboardUI() {
                 const tag = ev.isPP ? ' <span style="color:#FFD700;font-size:6px;">PP</span>' : ev.isSH ? ' <span style="color:#00FFFF;font-size:6px;">SH</span>' : '';
                 return `<div style="font-size:7px;color:${cl};line-height:1.8;">[${ev.tm}]${tag} ${ev.scorer}${ev.pAssist ? ` (${ev.pAssist})` : ''} <span style="color:#666">${ev.time||''}</span></div>`;
             }).join('');
-            jumbo.innerHTML = `<span style="color:var(--ea-yellow);font-size:9px;">FINAL${ot} — ${winTeam} WIN</span>`
+            jumbo.innerHTML = `<span style="color:var(--ea-yellow);font-size:9px;">FINAL${ot} â€” ${winTeam} WIN</span>`
                 + (scorerLines ? `<div style="max-height:80px;overflow-y:auto;margin:6px 0;text-align:left;">${scorerLines}</div>` : '<br>')
                 + `<button onclick="openBoxScore(${bsDay},${bsIdx})" style="font-family:'Press Start 2P',cursive;font-size:7px;padding:6px 10px;background:#000;border:2px solid var(--neon-cyan);color:var(--neon-cyan);cursor:pointer;">&#x1F4CB; VIEW BOX SCORE</button>`;
         } else {
-            jumbo.innerText = isAsgMatchup ? 'ALL-STAR GAME — PUCK DROP PENDING...' : 'PUCK DROP PENDING...';
+            jumbo.innerText = isAsgMatchup ? 'ALL-STAR GAME â€” PUCK DROP PENDING...' : 'PUCK DROP PENDING...';
         }
         return;
     }
@@ -911,7 +970,7 @@ function renderScheduleDashboard() {
     const meta = getSaveMeta(slot) || {}; 
     const currentDate = realDatesMap && realDatesMap[currentDay] ? realDatesMap[currentDay] : ''; 
     const slotLabel = getSelectedSaveSlotLabel(); 
-    const versionLabel = meta.version ? `Save ${slotLabel} • v${meta.version}` : `Save ${slotLabel} • n/a`; 
+    const versionLabel = meta.version ? `Save ${slotLabel} â€¢ v${meta.version}` : `Save ${slotLabel} â€¢ n/a`; 
     const isAsgDay = isASG && calendar[currentDay] && calendar[currentDay].some(g => g.isASG_game);
     const statusText = totalDays === 0 ? 'Schedule not loaded' : currentDay >= totalDays ? 'Season complete' : `${isAsgDay ? 'ALL-STAR DAY' : `Day ${currentDay + 1} / ${totalDays}`}`;
 
@@ -1108,7 +1167,7 @@ function loadCustomRoster(event) {
                     let val = row[i] !== undefined ? String(row[i]).trim() : '';
                     obj[h] = val; 
                     
-                    // 🛡️ AUTO-DETECT: Look for the column named "Position" or "Pos" regardless of where it is
+                    // ðŸ›¡ï¸ AUTO-DETECT: Look for the column named "Position" or "Pos" regardless of where it is
                     let upperHeader = String(h).toUpperCase().trim();
                     if (upperHeader === 'POSITION' || upperHeader === 'POS' || upperHeader === 'ROLE') { 
                         obj.pos = val.toUpperCase().replace(/\u00A0/g, ' ').trim();
@@ -1120,7 +1179,7 @@ function loadCustomRoster(event) {
 
                 // Print just the first 5 players to prove it found the right column
                 if (rowIdx < 5) {
-                    console.log(`✅ DEBUG DATA PULL: ${obj.Name || 'Unknown'} | Mapped Pos: "${obj.pos}"`);
+                    console.log(`âœ… DEBUG DATA PULL: ${obj.Name || 'Unknown'} | Mapped Pos: "${obj.pos}"`);
                 }
                 
                 return obj;
@@ -1330,7 +1389,7 @@ let momentum = {
     bufferedFloor: 0
 };
 // =========================================================
-// 🌊 UNIFIED MOMENTUM & CHAOS SYSTEM
+// ðŸŒŠ UNIFIED MOMENTUM & CHAOS SYSTEM
 // =========================================================
 
 // Make sure your global object looks like this
@@ -1345,7 +1404,7 @@ let gameStatus = {
     }
 };
 
-// ⏱️ 1. THE TICK ENGINE (Runs every game second/frame to decay momentum)
+// â±ï¸ 1. THE TICK ENGINE (Runs every game second/frame to decay momentum)
 function updateMomentumDecay(deltaSeconds, timeRemaining, scoreDiff) {
     let m = gameStatus.momentum;
 
@@ -1374,7 +1433,7 @@ function updateMomentumDecay(deltaSeconds, timeRemaining, scoreDiff) {
     }
 }
 
-// 💥 2. THE EVENT SHOCK ENGINE (Run this when a big play happens)
+// ðŸ’¥ 2. THE EVENT SHOCK ENGINE (Run this when a big play happens)
 // Example usage: applyMomentumShock('GOAL', 'BOS', true)
 function applyMomentumShock(eventType, teamCode, isHomeTeam, customValue = null) {
     let m = gameStatus.momentum;
@@ -1416,7 +1475,7 @@ let specialTeams = {
 };
 
 // =========================================================
-// ⚖️ UNIFIED PENALTY SYSTEM
+// âš–ï¸ UNIFIED PENALTY SYSTEM
 // =========================================================
 
 // Global Referee Strictness (Bell Curve 0.5 - 1.5)
@@ -1425,7 +1484,7 @@ const REF_STRICTNESS = (() => {
     return parseFloat((0.5 + (roll * 1.0)).toFixed(2)); 
 })();
 
-// 🥊 1. THE HIT PENALTY ENGINE (Call this immediately after a hit is calculated)
+// ðŸ¥Š 1. THE HIT PENALTY ENGINE (Call this immediately after a hit is calculated)
 function checkHitPenalty(attacker, severity) {
     let roughness = 50;
     if (attacker.stats && attacker.stats.RGH) roughness = attacker.stats.RGH;
@@ -1443,7 +1502,7 @@ function checkHitPenalty(attacker, severity) {
     else if (severity === 2) penaltyChance = (roughness / 100) * 0.60 * REF_STRICTNESS;
     else if (severity === 1) penaltyChance = (roughness / 100) * 0.25 * REF_STRICTNESS;
 
-    // 🚨 THE BIG GUY BIAS: Referees penalize big hits from heavy players more frequently
+    // ðŸš¨ THE BIG GUY BIAS: Referees penalize big hits from heavy players more frequently
     if (aWeight >= 215 && severity >= 2) {
         penaltyChance *= 1.30; // 30% higher chance of being called for a penalty
     }
@@ -1455,6 +1514,45 @@ function checkHitPenalty(attacker, severity) {
     return false;
 }
 
+// ðŸŽ² 2. THE BACKGROUND PENALTY ROLLER (Call this randomly during standard play)
+// Example usage: let penResult = rollGeneralPenalty(playerStats['Cam Neely']);
+function rollGeneralPenalty(playerStatsObj) {
+    // Safely extract roughness
+    let roughness = playerStatsObj.roughness || (playerStatsObj.attr ? playerStatsObj.attr.rough : 50); 
+    
+    // If your stats are still letter grades (e.g., 'B+'), convert it to a number roughly 0-99
+    if (typeof roughness === 'string') {
+        roughness = getGradeMod(roughness) * 60; // Helper to turn grades into numerical weight
+    }
+
+    // Base chance for a penalty during a standard time tick (Adjust this up/down to tune gameplay)
+    let basePenaltyChance = 0.05; 
+
+    // Roughness Modifier: 50 = 1.0x, 99 = ~2.0x chance to take a penalty
+    let roughnessModifier = (roughness / 50); 
+    
+    // Calculate final probability including Ref Strictness
+    let finalPenaltyChance = basePenaltyChance * roughnessModifier * REF_STRICTNESS;
+
+    // Roll the dice!
+    if (Math.random() < finalPenaltyChance) {
+        // 85% chance of a Minor (2 min), 15% chance of a Major (5 min)
+        let isMajor = Math.random() < 0.15; 
+        
+        return {
+            penaltyCalled: true,
+            minutes: isMajor ? 5 : 2,
+            type: isMajor ? "Major" : "Minor"
+        };
+    }
+
+    // No penalty occurred
+    return {
+        penaltyCalled: false,
+        minutes: 0,
+        type: "None"
+    };
+}
 
 // Example of how to trigger it:
 function startPowerplay(advantageTeam, minutes) {
@@ -1630,7 +1728,7 @@ function updateEngine(delta) {
     players.forEach(p => {
         let shockMult = p.isShocked ? (100 / 20) : 1.0; // 5x Drain during shock
         
-        // 🚨 WEIGHT TAX: Heavy players carry more mass and drain energy slightly faster
+        // ðŸš¨ WEIGHT TAX: Heavy players carry more mass and drain energy slightly faster
         let pWeight = p.weight || (p.stats ? p.stats.WGT : 180) || 180;
         let weightTax = 1.0;
         if (pWeight > 220) weightTax = 1.15; // 15% faster drain for heavyweights
@@ -1643,7 +1741,7 @@ function updateEngine(delta) {
 }
 
 // =========================================================
-// 🏭 FACTORY FUNCTIONS FOR PLAYER STATS CREATION
+// ðŸ­ FACTORY FUNCTIONS FOR PLAYER STATS CREATION
 // =========================================================
 /**
  * Creates a standardized skater stats object
@@ -1712,7 +1810,7 @@ function createGoalieStats(firstName, lastName, teamCode, attributes) {
         suspended: { days: 0, reason: "" },
         goalieDays: 0,
         lastStart: -1,
-        career: { gp: 0, g: 0, a: 0, pts: 0, pm: 0, pim: 0, ppg: 0, w: 0, l: 0, t: 0, so: 0, sv: 0, sa: 0, asg: 0 },
+        career: { gp: 0, g: 0, a: 0, pts: 0, pm: 0, pim: 0, ppg: 0, w: 0, l: 0, t: 0, so: 0, sv: 0, sa: 0 },
         careerPlayoff: { gp: 0, w: 0, l: 0, t: 0, so: 0, sv: 0, sa: 0, toi: 0, svg: 0 },
         season: { gp: 0, g: 0, a: 0, pm: 0, so: 0, sv: 0, sa: 0, w: 0, l: 0, t: 0, pim: 0, ppg: 0, lastGAA: 0, lastSV: 0, consStarts: 0, toi: 0, svg: 0 },
         playoff: { gp: 0, g: 0, a: 0, pm: 0, so: 0, sv: 0, sa: 0, w: 0, l: 0, pim: 0, ppg: 0, lastGAA: 0, lastSV: 0, consStarts: 0, toi: 0, svg: 0 }
@@ -1720,7 +1818,7 @@ function createGoalieStats(firstName, lastName, teamCode, attributes) {
 }
 
 // =========================================================
-// 🛡️ DEFENSIVE NULL CHECKS & SAFE ACCESSORS
+// ðŸ›¡ï¸ DEFENSIVE NULL CHECKS & SAFE ACCESSORS
 // =========================================================
 /**
  * Safely retrieve a nested stat value with default fallback
@@ -1772,7 +1870,7 @@ async function startNewGame(useCustomRoster = false) {
     const btn = document.querySelector('button[onclick="startNewGame()"]'); 
     const origText = btn ? btn.innerText : "LOADING..."; 
     if (btn) { btn.innerText = "VALIDATING SATELLITE FEED..."; btn.disabled = true; }
-    // 🛡️ FIX: Only check the roster length if we are actually using a custom roster!
+    // ðŸ›¡ï¸ FIX: Only check the roster length if we are actually using a custom roster!
     if (useCustomRoster && customRosterData && customRosterData.length < 50) {
         alert("Warning: Custom roster appears too small. Check your CSV format.");
         if (btn) { btn.innerText = origText; btn.disabled = false; }
@@ -1815,7 +1913,7 @@ async function startNewGame(useCustomRoster = false) {
         
         rosters = {}; playerStats = {};
         const pHeaders = pData[0].map(h => String(h).trim().toUpperCase());
-        // 🛡️ THE ULTIMATE COLUMN FINDER (Blocks "G DEF" from hijacking "DEF")
+        // ðŸ›¡ï¸ THE ULTIMATE COLUMN FINDER (Blocks "G DEF" from hijacking "DEF")
         const getCol = (row, keywords, fallbackIdx, excludeList = []) => {
         // 1. Try for an exact match first
         let idx = pHeaders.findIndex(h => keywords.some(k => h === k));
@@ -1844,7 +1942,7 @@ async function startNewGame(useCustomRoster = false) {
             const pN = firstName ? `${firstName} ${lastName}` : lastName;
             const rawPos = getCol(r, ["POS", "POSITION"], 5).toUpperCase();
             
-            // 🛡️ THE FIX: Trust the CSV! Don't force them to 'F'!
+            // ðŸ›¡ï¸ THE FIX: Trust the CSV! Don't force them to 'F'!
             let pos = rawPos === 'LD' || rawPos === 'RD' || rawPos.startsWith('DEF') ? 'D' : rawPos;
             
             // Emergency fallback ONLY if the cell is completely empty or weird
@@ -1978,9 +2076,9 @@ async function startNewGame(useCustomRoster = false) {
                 suspended: { days: 0, reason: "" },
                 goalieDays: 0,
                 lastStart: -1,
-                asgAppearances: parseInt(getCol(r, ["ASG", "ALL STAR", "APP"], 20)) || 0,
-
-                // 🚨 INJECT THE CALCULATED STATS DIRECTLY 🚨
+                asgAppearances: 0,
+                
+                // ðŸš¨ INJECT THE CALCULATED STATS DIRECTLY ðŸš¨
                 attr: { 
                     off: gradeToNum(getCol(r, ["GOALIE OFFENSE AWARENESS", "OFFENSE"], 10)) || 20, 
                     def: gDefAware || 20, 
@@ -1994,20 +2092,19 @@ async function startNewGame(useCustomRoster = false) {
                 
                 potential: 'Depth',
                 career: {
-                    gp: parseInt(getCol(r, ["Goalie CAREER GP", "CAREER GP"], -1)) || 0,
+                    gp: parseInt(getCol(r, ["CAREER GP", "C_GP", "CAR GP"], -1)) || 0,
                     g: 0, a: 0, pts: 0, pm: 0, pim: 0, ppg: 0,
-                    w:  parseInt(getCol(r, ["CAREER W"],  -1)) || 0,
-                    l:  parseInt(getCol(r, ["CAREER L"],  -1)) || 0,
-                    t:  parseInt(getCol(r, ["CAREER T"],  -1)) || 0,
-                    so: parseInt(getCol(r, ["CAREER SO"], -1)) || 0,
-                    sv: parseInt(getCol(r, ["CAREER SV"], -1)) || 0,
-                    sa: parseInt(getCol(r, ["CAREER SA"], -1)) || 0,
-                    asg: parseInt(getCol(r, ["Goalie Career Allstar Games", "CAREER ASG"], -1)) || 0
+                    w: parseInt(getCol(r, ["CAREER W", "C_W", "CAR W"], -1)) || 0,
+                    l: parseInt(getCol(r, ["CAREER L", "C_L", "CAR L"], -1)) || 0,
+                    t: parseInt(getCol(r, ["CAREER T", "C_T", "CAR T"], -1)) || 0,
+                    so: parseInt(getCol(r, ["CAREER SO", "C_SO", "CAR SO"], -1)) || 0,
+                    sv: parseInt(getCol(r, ["CAREER SV", "C_SV", "CAR SV"], -1)) || 0,
+                    sa: parseInt(getCol(r, ["CAREER SA", "C_SA", "CAR SA"], -1)) || 0
                 },
                 careerPlayoff: {
-                    gp: parseInt(getCol(r, ["Goalie CAREER PLAYOFF GP", "CAREER PLAYOFF GP"], -1)) || 0,
-                    w:  parseInt(getCol(r, ["CAREER PLAYOFF W"],  -1)) || 0,
-                    l:  parseInt(getCol(r, ["CAREER PLAYOFF L"],  -1)) || 0,
+                    gp: parseInt(getCol(r, ["CAREER PLAYOFF GP"], -1)) || 0,
+                    w: parseInt(getCol(r, ["CAREER PLAYOFF W"], -1)) || 0,
+                    l: parseInt(getCol(r, ["CAREER PLAYOFF L"], -1)) || 0,
                     t: 0,
                     so: parseInt(getCol(r, ["CAREER PLAYOFF SO"], -1)) || 0,
                     sv: parseInt(getCol(r, ["CAREER PLAYOFF SV"], -1)) || 0,
@@ -2029,7 +2126,7 @@ async function startNewGame(useCustomRoster = false) {
 }
 
 // --- RATING ENGINE (WITH LIVE OVR + FATIGUE MATH) ---
-// Per-game cache — cleared at the top of simGame() each game tick
+// Per-game cache â€” cleared at the top of simGame() each game tick
 let _wpCache = {};
 let _structCache = {};
 function clearWpCache() { _wpCache = {}; _structCache = {}; }
@@ -2038,7 +2135,7 @@ function getPlayerWeightedStats(pName) {
     if (_wpCache[pName]) return _wpCache[pName];
     const p = playerStats[pName];
 
-    // 🚨 FALLBACK UPDATE: If player doesn't exist, return a 57
+    // ðŸš¨ FALLBACK UPDATE: If player doesn't exist, return a 57
     if (!p) return { ovr: 57, tag: 'NONE' };
 
     let baseOvr = 57;
@@ -2046,7 +2143,7 @@ function getPlayerWeightedStats(pName) {
 
     // --- GOALIES ---
     if (p.pos === 'G') {
-        // 🚨 FALLBACK UPDATE: Default goalie rating is now 53
+        // ðŸš¨ FALLBACK UPDATE: Default goalie rating is now 53
         let gDef = parseInt(p.attr.gDef || p.attr.def) || 53;
         baseOvr = gDef; 
         if (gDef > 84) tag = 'WALL';
@@ -2072,7 +2169,7 @@ function getPlayerWeightedStats(pName) {
         let wgt = parseInt(p.attr.wgt || p.weight) || 180;
 
         // =========================================================
-        // 🚨 CUSTOM OVR FORMULAS
+        // ðŸš¨ CUSTOM OVR FORMULAS
         // =========================================================
         let calcOvr = 0;
         if (p.pos === 'D') {
@@ -2115,12 +2212,12 @@ function getPlayerWeightedStats(pName) {
             if (off >= 80 && def >= 80) tag = "FRANCHISE D";
             else if (off >= 75 && pass >= 80) tag = "QUARTERBACK";
             else if (pwr >= 85 && off >= 75) tag = "BOOMER"; 
-            else if (def >= 75 && def > off) tag = "SHUTDOWN"; 
+            else if (def >= 75 && def > off && check >= 65 && aggr >= 65) tag = "SHUTDOWN"; 
             else if (rough >= 75 && aggr >= 75) tag = "ENFORCER D"; 
             else if (def >= 70 && off >= 70) tag = "TWO-WAY STAR D";
-                
+            else if (check >= 75) tag = "BIG HITTER";    
             // ==========================================
-            // 🚨 THE NEW PRO TIERS (DEFENSE)
+            // ðŸš¨ THE NEW PRO TIERS (DEFENSE)
             // ==========================================
             else if (off > def) {
                 tag = (off >= 70) ? "PRO OFFENSIVE D" : tag;
@@ -2142,16 +2239,16 @@ function getPlayerWeightedStats(pName) {
             else if (shotAcc >= 80 && pwr >= 75 && off >= 80) tag = "SNIPER"; 
             else if (pass >= 80 && off >= 80) tag = "PLAYMAKER";
             else if (rough >= 80 && aggr >= 80) tag = "ENFORCER F";
-            else if ((off >= 75 && def >= 80 && check >= 75) || (aggr >= 75 && pass >= 75 && off >= 70)) tag = "TWO-WAY STAR F";
+            else if (off >= 75 && def >= 75 && check >= 75 || aggr >= 75 && pass >= 75 && pwr >= 75 || shotAcc >= 75 ) tag = "TWO-WAY STAR F";
             else if (off >= 75 && agl >= 75 && spd >= 80) tag = "SPEEDSTER"; 
             else if (off >= 75 && agl >= 80 && stkHnd >= 80) tag = "DANGLER";
-            else if (off >= 70 && check >= 65 && pwr >= 70 && aggr >= 65 && rough >= 65 && weight >= 215) tag = "POWER FORWARD";
-            else if (weight >= 205 && def >= 65 && check >= 65 && aggr >= 65 && rough >= 65) tag = "GRINDER";
+            else if (off >= 70 && check >= 65 && pwr >= 70 && aggr >= 65 && rough >= 65 && weight >= 215) tag = "POWER FORWARD"; 
+            else if (def >= 65 && off >= 65 && check >= 60 && aggr >= 65 && rough >= 65 && weight <= 215) tag = "GRINDER";
             else if (off >= 70) tag = "PRO OFFENSIVE FWD";
             else if (def >= 70) tag = "PRO DEFENSIVE FWD";
             
             // ==========================================
-            // 🚨 THE NEW PRO TIERS (FORWARDS)
+            // ðŸš¨ THE NEW PRO TIERS (FORWARDS)
             // ==========================================
             else if (off > def) {
                 tag = (off <= 70) ? "OFFENSIVE FWD" : tag;
@@ -2167,9 +2264,13 @@ function getPlayerWeightedStats(pName) {
     }
         
     // =========================================================
-    // 🚨 WEIGHT MODIFIER INJECTION ZONE 🚨
+    // ðŸš¨ WEIGHT MODIFIER INJECTION ZONE ðŸš¨
     // =========================================================
-    // Use stored numeric lbs — no random re-roll
+    let baseMod = (typeof archMods !== 'undefined' && archMods[tag]) ? archMods[tag].shotRate : 1.0;
+    // =========================================================
+    // ðŸš¨ WEIGHT MODIFIER INJECTION ZONE (FIXED) ðŸš¨
+    // =========================================================
+    // Use stored numeric lbs â€” no random re-roll
     let weightMod = getWeightModifier(p.weight || getWeightLbs(p.attr.weight || 'C'), tag);
     
     // Instead of massively multiplying the rating, we apply a balanced flat adjustment
@@ -2184,7 +2285,7 @@ function getPlayerWeightedStats(pName) {
     // Notice we completely removed the archMods.shotRate calculation from here!
 
     // =========================================================
-    // 🚨 LIVE OVR MATH (FATIGUE, ENDURANCE & MORALE) 🚨
+    // ðŸš¨ LIVE OVR MATH (FATIGUE, ENDURANCE & MORALE) ðŸš¨
     // =========================================================
     let finalOvr = baseOvr;
     
@@ -2398,7 +2499,7 @@ function processPostGameStreaks(skaters, goalies) {
 }
 
 
-// 🏷️ UI BADGE GENERATOR (2-Letter Abbreviation Version)
+// ðŸ·ï¸ UI BADGE GENERATOR (2-Letter Abbreviation Version)
 function getArchetypeBadge(pName) {
     const tag = getPlayerWeightedStats(pName).tag;
     if (!tag || tag === 'NONE' || tag === 'GOALTENDER') return ''; 
@@ -2419,6 +2520,7 @@ function getArchetypeBadge(pName) {
         'FRANCHISE D': 'FD',
         'QUARTERBACK': 'QB',
         'SHUTDOWN': 'SD',
+        'BIG HITTER': 'KO',
         'DEFENSIVE D': 'DD',
         'OFFENSIVE D': 'OD',
         'TWO-WAY D': 'TD',
@@ -2536,36 +2638,30 @@ function getDynamicTeamOvr(tk) {
 
 function playedYesterday(tk) { if (currentDay === 0 || !calendar[currentDay - 1]) return false; return calendar[currentDay - 1].some(g => (g.h && g.h.nrm === tk) || (g.a && g.a.nrm === tk)); }
 
-function getPlayerFatigueAmount(pName) {
+function getPlayerFatigueAmount(pName) { 
     const p = playerStats[pName]; if (!p) return 0;
-    let pen = 0;
-    const endur = p.attr?.endur || 70;
-    // Endurance modifier: elite endurance resists fatigue better
-    const endurMod = endur >= 88 ? 0.4 : endur >= 75 ? 0.7 : 1.0;
+    let pen = 0; 
+    let endur = p.attr.endur || 70; // Fallback is now a number
 
-    // 📅 Back-to-Back Schedule Penalty
+    // ðŸ“… Back-to-Back Schedule Penalty
     if (playedYesterday(p.teamCode || p.team)) {
-        pen += endur >= 88 ? 1 : endur >= 75 ? 4 : 8;
+        if (endur >= 88) pen += 1;          // 'A' tier endurance
+        else if (endur >= 75) pen += 4;     // 'B' tier endurance
+        else pen += 8;                      // Low endurance crashes on back-to-backs
     }
 
-    // 🥵 In-Game Exhaustion (covering for injured teammates)
+    // ðŸ¥µ In-Game Exhaustion (Covering for injured teammates)
     if (p.extra_shifts && p.extra_shifts > 0) {
-        pen += endur >= 88 ? 2 : endur >= 75 ? 5 : 10;
+        if (endur >= 88) pen += 2;
+        else if (endur >= 75) pen += 5;
+        else pen += 10; // Hitting the "3rd Period Wall"
     }
-
-    // 🏃 Accumulated season fatigue (0-100 scale, kicks in above 30)
-    // Max raw penalty = 7 OVR at fatigue 100, softened by endurance
-    const fatigue = p.status?.fatigue || 0;
-    if (fatigue > 30) {
-        pen += Math.round(((fatigue - 30) / 10) * endurMod);
-    }
-
     return pen;
 }
 
 // --- LINES & SPECIAL TEAMS ---
-// 🏒 5v5 TACTICAL AUTO-COACH ENGINE
-// 🤝 DYNAMIC DUO REGISTRY
+// ðŸ’ 5v5 TACTICAL AUTO-COACH ENGINE
+// ðŸ¤ DYNAMIC DUO REGISTRY
 // Forces the auto-coach to draft these players onto the same line if both are healthy
 const dynamicDuos = [
     ['Adam Oates', 'Cam Neely', 'Glen Murray'],
@@ -2612,7 +2708,7 @@ function getTag(name) {
 }
 
 // =========================================================
-// 🏒 POSITION-AWARE LINE BUILDER HELPERS
+// ðŸ’ POSITION-AWARE LINE BUILDER HELPERS
 // =========================================================
 /**
  * Normalize and extract player position (C, LW, RW, D, G)
@@ -2627,7 +2723,7 @@ function getPlayerPosition(player) {
     
     // 2. Debug: If you see F, check the console
     if (p !== 'C' && p !== 'LW' && p !== 'RW' && p !== 'D' && p !== 'G') {
-        console.log(`⚠️ POSITION WARNING: Player "${player.name}" has unmapped pos: "${p}"`);
+        console.log(`âš ï¸ POSITION WARNING: Player "${player.name}" has unmapped pos: "${p}"`);
     }
 
     // 3. Strict Map
@@ -2715,7 +2811,7 @@ function renderTeamDirectory(tk) {
     
     // Render Forward Lines (1-4) with position labels
     h += `<div style="margin-bottom:24px;">`;
-    h += `<div style="color:var(--ea-yellow); font-weight:bold; margin-bottom:12px; text-transform:uppercase; font-size:11px; letter-spacing:2px;">⚔️ FORWARD LINES</div>`;
+    h += `<div style="color:var(--ea-yellow); font-weight:bold; margin-bottom:12px; text-transform:uppercase; font-size:11px; letter-spacing:2px;">âš”ï¸ FORWARD LINES</div>`;
     struct.f.forEach((line, idx) => {
         h += `<div style="background:#1a1a1a; padding:12px; margin-bottom:8px; border-left:4px solid var(--neon-cyan); border-radius:4px;">`;
         h += `<strong style="color:var(--neon-cyan); display:block; margin-bottom:8px;">LINE ${idx + 1}</strong>`;
@@ -2735,7 +2831,7 @@ function renderTeamDirectory(tk) {
 
     // Render Defense Pairs (1-3) 
     h += `<div style="margin-bottom:24px;">`;
-    h += `<div style="color:var(--line-red); font-weight:bold; margin-bottom:12px; text-transform:uppercase; font-size:11px; letter-spacing:2px;">🛡️ DEFENSE PAIRS</div>`;
+    h += `<div style="color:var(--line-red); font-weight:bold; margin-bottom:12px; text-transform:uppercase; font-size:11px; letter-spacing:2px;">ðŸ›¡ï¸ DEFENSE PAIRS</div>`;
     struct.d.forEach((pair, idx) => {
         h += `<div style="background:#1a1a1a; padding:12px; margin-bottom:8px; border-left:4px solid var(--line-red); border-radius:4px;">`;
         h += `<strong style="color:var(--line-red); display:block; margin-bottom:8px;">PAIR ${idx + 1}</strong>`;
@@ -2753,7 +2849,7 @@ function renderTeamDirectory(tk) {
 
     // Render Goalies
     h += `<div>`;
-    h += `<div style="color:#FFD700; font-weight:bold; margin-bottom:12px; text-transform:uppercase; font-size:11px; letter-spacing:2px;">🥅 GOALIES</div>`;
+    h += `<div style="color:#FFD700; font-weight:bold; margin-bottom:12px; text-transform:uppercase; font-size:11px; letter-spacing:2px;">ðŸ¥… GOALIES</div>`;
     let goalies = struct.g || [];
     h += `<div style="background:#1a1a1a; padding:12px; margin-bottom:8px; border-left:4px solid #FFD700; border-radius:4px;">`;
     h += `<strong style="color:#FFD700; display:block; margin-bottom:8px;">STARTER</strong>`;
@@ -2780,7 +2876,7 @@ const getRosterStructure = (tk) => {
     if (_structCache[tk]) return _structCache[tk];
     let r = rosters[tk] || [];
 
-    // ── Honor custom lines if the coach saved them ────────────────────────
+    // â”€â”€ Honor custom lines if the coach saved them â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (customLines[tk]) {
         const cl = customLines[tk];
         const byName = n => r.find(p => p.name === n);
@@ -2871,7 +2967,7 @@ const getRosterStructure = (tk) => {
         while(allCenters.length < 4 && nonCenters.length > 0) allCenters.push(nonCenters.shift());
     }
 
-    // 🛡️ PLATOON LOGIC: Position-Shifting for Center Depth
+    // ðŸ›¡ï¸ PLATOON LOGIC: Position-Shifting for Center Depth
     let startingCenters = [null, null, null, null];
     
     if (allCenters.length > 4) {
@@ -2946,7 +3042,7 @@ const getRosterStructure = (tk) => {
     };
 
     // ==========================================
-    // 🌊 5. WINGER DRAFT (TOP 6 SNAKE SEQUENCE)
+    // ðŸŒŠ 5. WINGER DRAFT (TOP 6 SNAKE SEQUENCE)
     // ==========================================
     let sortOff = (a, b) => (getOvr(b) - getOvr(a)) || (getOff(b) - getOff(a));
     let sortDef = (a, b) => (getDef(b) - getDef(a)) || (getOvr(b) - getOvr(a));
@@ -2968,7 +3064,7 @@ const getRosterStructure = (tk) => {
         return false;
     };
 
-    // 🐍 The Snake Draft: Line 1, Line 2, Line 2, Line 1
+    // ðŸ The Snake Draft: Line 1, Line 2, Line 2, Line 1
     // We add a few extra turns at the end (0, 1) just in case a chemistry lockout 
     // forces a skip and we need to make sure the top 6 gets completely filled.
     const snakeTurns = [0, 1, 1, 0, 0, 1]; 
@@ -2982,14 +3078,14 @@ const getRosterStructure = (tk) => {
     safeDraft(1, sortOff); 
 
     // ==========================================
-    // 🛡️ BOTTOM 6 WINGER DRAFT
+    // ðŸ›¡ï¸ BOTTOM 6 WINGER DRAFT
     // ==========================================
     // Line 3 prioritizes Defense/Two-Way. Line 4 takes the best remaining.
     safeDraft(2, sortDef); 
     safeDraft(3, sortOvrDesc);
 
     // ==========================================
-    // ⚖️ 5b. POST-DRAFT SYNERGY REBALANCER
+    // âš–ï¸ 5b. POST-DRAFT SYNERGY REBALANCER
     // ==========================================
     const hasAnySynergy = (p, line) => {
         let mates = getLineMates(p.name);
@@ -3023,7 +3119,7 @@ const getRosterStructure = (tk) => {
                 // If mate is found on L3 or L4, move them down!
                 if (mateLineIdx !== -1) {
                     let targetLine = fLines[mateLineIdx];
-                    let isCenter = getPos(p) === 'C'; // 🛡️ Remember their position!
+                    let isCenter = getPos(p) === 'C'; // ðŸ›¡ï¸ Remember their position!
                     
                     // 1. If target line is full, bounce the lowest-rated non-center back to free agency
                     if (targetLine.length >= 3) {
@@ -3031,7 +3127,7 @@ const getRosterStructure = (tk) => {
                         if (bounceCandidates.length > 0) {
                             let bounceVictim = bounceCandidates[0];
                             targetLine.splice(targetLine.indexOf(bounceVictim), 1);
-                            usedNames.delete(bounceVictim.name); // 🛡️ Releases them to be drafted by the top line!
+                            usedNames.delete(bounceVictim.name); // ðŸ›¡ï¸ Releases them to be drafted by the top line!
                         }
                     }
 
@@ -3069,7 +3165,7 @@ const getRosterStructure = (tk) => {
     }
 
     // ===========================================================
-    // 🛡️ 6. DEFENSE PAIRS - DYNAMIC DRAFTING & SYNERGY SEQUENCE
+    // ðŸ›¡ï¸ 6. DEFENSE PAIRS - DYNAMIC DRAFTING & SYNERGY SEQUENCE
     // ===========================================================
     let dPairs = [[], [], []];
     let dUsed = new Set(); // <--- This tracks who has been drafted so they don't get cloned!
@@ -3092,34 +3188,34 @@ const getRosterStructure = (tk) => {
 
     // 1. Draft Pair 1 Anchor (Highest OVR)
     let p1Anchor = getNextAvailable();
-    draftD(p1Anchor, 0); // 🛡️ FIX: Actually draft them!
+    draftD(p1Anchor, 0); // ðŸ›¡ï¸ FIX: Actually draft them!
 
     // 2. If Pair 1 did NOT find a synergy partner, pause Pair 1 and build Pair 2
     if (dPairs[0].length === 1) {
         
         // Draft Pair 2 Anchor (Next Highest OVR)
         let p2Anchor = getNextAvailable();
-        draftD(p2Anchor, 1); // 🛡️ FIX
+        draftD(p2Anchor, 1); // ðŸ›¡ï¸ FIX
         
         // If Pair 2 ALSO didn't find a synergy partner, finish Pair 2 with the next highest OVR
         if (dPairs[1].length === 1) {
             let p2Filler = getNextAvailable();
-            draftD(p2Filler, 1); // 🛡️ FIX
+            draftD(p2Filler, 1); // ðŸ›¡ï¸ FIX
         }
         
         // Now return to Pair 1 and finish it with the highest remaining OVR (usually the 4th best)
         if (dPairs[0].length === 1) {
             let p1Filler = getNextAvailable();
-            draftD(p1Filler, 0); // 🛡️ FIX
+            draftD(p1Filler, 0); // ðŸ›¡ï¸ FIX
         }
     } else {
         // If Pair 1 DID find a synergy and filled up, just build Pair 2 normally
         let p2Anchor = getNextAvailable();
-        draftD(p2Anchor, 1); // 🛡️ FIX
+        draftD(p2Anchor, 1); // ðŸ›¡ï¸ FIX
         
         if (dPairs[1].length === 1) {
             let p2Filler = getNextAvailable();
-            draftD(p2Filler, 1); // 🛡️ FIX
+            draftD(p2Filler, 1); // ðŸ›¡ï¸ FIX
         }
     }
 
@@ -3128,11 +3224,11 @@ const getRosterStructure = (tk) => {
         let p3Filler = getNextAvailable();
         if (!p3Filler) break; // Failsafe if the team has less than 6 healthy defensemen
         
-        draftD(p3Filler, 2); // 🛡️ FIX: This updates the pair length and breaks the infinite loop!
+        draftD(p3Filler, 2); // ðŸ›¡ï¸ FIX: This updates the pair length and breaks the infinite loop!
     }
 
     // ==========================================
-    // 🛡️ POST-DRAFT SYNERGY SWAP CHECK
+    // ðŸ›¡ï¸ POST-DRAFT SYNERGY SWAP CHECK
     // ==========================================
     
     // Helper to check if two specific players have chemistry
@@ -3172,7 +3268,7 @@ const getRosterStructure = (tk) => {
     }
 
     // ==========================================
-    // 🥅 7. GOALIES
+    // ðŸ¥… 7. GOALIES
     // ==========================================
     let gPool = r.filter(p => {
         let ps = playerStats[p.name];
@@ -3184,7 +3280,7 @@ const getRosterStructure = (tk) => {
     return struct;
 }
 
-// 🛡️ SPECIAL TEAMS AUTO-COACH ENGINE
+// ðŸ›¡ï¸ SPECIAL TEAMS AUTO-COACH ENGINE
 function getSpecialTeamsUnit(tk, type, unitNum, isEN = false) {
     const struct = getRosterStructure(tk);
     
@@ -3324,7 +3420,7 @@ function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpeci
 
 // Find this function in script.js and update the return:
 function getDefenseAndGoalieModifiers(defRating, goalie) {
-    // 🚨 SHIFTED BASELINE
+    // ðŸš¨ SHIFTED BASELINE
     const shot = Math.max(0.75, Math.min(1.25, 1 - (defRating - 70) * 0.004));
 
     if (!goalie || !playerStats[goalie.name]) return { shot, goal: 1.0 };
@@ -3420,7 +3516,7 @@ function creditStats(tk, oppTk, goals, k, baseOff, hPPG, teamSHG, teamEXA, activ
                 let weights = ovrs.map(o => Math.pow(o, 2)); 
                 let total = weights.reduce((a, b) => a + b, 0);
 
-                // 🛡️ MODIFIED: ICE TIME CAP FOR TOP LINE
+                // ðŸ›¡ï¸ MODIFIED: ICE TIME CAP FOR TOP LINE
                 // Regular Season: ~23 mins (38.3%), Playoffs: ~26 mins (43.3%)
                 let maxPercent = (k === 'playoff') ? 0.433 : 0.383;
                 
@@ -3466,7 +3562,7 @@ function creditStats(tk, oppTk, goals, k, baseOff, hPPG, teamSHG, teamEXA, activ
 
         if (eligible.length === 0) eligible = u;
 
-       // 1. Goal Weights — equal base for all forwards; D-men penalized; driven by attributes + archetype
+       // 1. Goal Weights â€” equal base for all forwards; D-men penalized; driven by attributes + archetype
 const gWeights = eligible.map(p => {
     let pA = playerStats[p.name].attr;
     let tag = getPlayerWeightedStats(p.name).tag || 'GENERIC';
@@ -3490,7 +3586,7 @@ const gWeights = eligible.map(p => {
     if (playerStats[p.name].isCold) modifier *= 0.80;
 
     // Position modifier: ALL forwards equal base (1.0), D-men penalized (~31% less)
-    // No center bonus — C/LW/RW are identical base; difference comes only from attrs/archetype
+    // No center bonus â€” C/LW/RW are identical base; difference comes only from attrs/archetype
     const isD = (p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD');
     let compMod = isD ? 0.80 : 1.0;
     // Extra accuracy penalty for D on non-Far shots
@@ -3502,7 +3598,7 @@ const gWeights = eligible.map(p => {
         ppMod = (p.team === specialTeams.teamAdvantage) ? 1.40 : 0.35;
     }
 
-    // Underperformance penalty: skilled shooter (B+ shotPwr or shotAcc) with ≤1.0 SOG/GP
+    // Underperformance penalty: skilled shooter (B+ shotPwr or shotAcc) with â‰¤1.0 SOG/GP
     let usageMod = 1.0;
     const _ps = playerStats[p.name]?.season;
     if (_ps && _ps.gp >= 5) {
@@ -3524,9 +3620,9 @@ const gWeights = eligible.map(p => {
                 specialTeams.teamAdvantage = null;
                 specialTeams.timeRemaining = 0;
                 specialTeams.strength = '5v5';
-                console.log(`🚨 POWERPLAY GOAL by ${scr.name}! Penalty expires, back to 5-on-5.`);
+                console.log(`ðŸš¨ POWERPLAY GOAL by ${scr.name}! Penalty expires, back to 5-on-5.`);
             } else {
-                console.log(`🚨 SHORTHANDED GOAL by ${scr.name}! The Powerplay continues.`);
+                console.log(`ðŸš¨ SHORTHANDED GOAL by ${scr.name}! The Powerplay continues.`);
             }
         }
 
@@ -3562,7 +3658,7 @@ const getAWeight = (p, isSec) => {
     const isD = (p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD');
     if (isD) mod *= 0.90; // Defensemen assist penalty, applies to both primary and secondary assists
 
-    // Underperformance penalty: skilled passer (B+ pass) with ≤0.35 A/GP
+    // Underperformance penalty: skilled passer (B+ pass) with â‰¤0.35 A/GP
     let passUsageMod = 1.0;
     const _aps = playerStats[p.name]?.season;
     if (_aps && _aps.gp >= 5 && pass >= 65) {
@@ -3586,14 +3682,14 @@ const getAWeight = (p, isSec) => {
 
         if (numAssists > 0 && pPassers.length > 0) {
             
-          // Slight bonus for defensemen assists — D-men are active in the rush and transition
+          // Slight bonus for defensemen assists â€” D-men are active in the rush and transition
             const getModAWeight = (p, isSecondary) => {
                 let weight = getAWeight(p, isSecondary);
                 const isD = p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD';
                 return isD ? weight * 1.18 : weight;
             };
 
-            // 🛡️ MODIFIED: Replaced 'getAWeight' with 'getModAWeight' below
+            // ðŸ›¡ï¸ MODIFIED: Replaced 'getAWeight' with 'getModAWeight' below
             let tA1 = pPassers.reduce((s, p) => s + getModAWeight(p, false), 0);
             let rA1 = Math.random()*tA1, cA1 = 0, a1 = pPassers[0];
             for(let p of pPassers){ cA1 += getModAWeight(p, false); if(rA1 <= cA1){ a1 = p; break; }}
@@ -3604,7 +3700,7 @@ const getAWeight = (p, isSec) => {
             if (numAssists === 2) {
                 let sPassers = pPassers.filter(p => p.name !== a1N);
                 if (sPassers.length > 0) {
-                    // 🛡️ MODIFIED: Replaced 'getAWeight' with 'getModAWeight' below
+                    // ðŸ›¡ï¸ MODIFIED: Replaced 'getAWeight' with 'getModAWeight' below
                     let tA2 = sPassers.reduce((s, p) => s + getModAWeight(p, true), 0);
                     let rA2 = Math.random()*tA2, cA2 = 0, a2 = sPassers[0];
                     for(let p of sPassers){ cA2 += getModAWeight(p, true); if(rA2 <= cA2){ a2 = p; break; }}
@@ -3615,7 +3711,7 @@ const getAWeight = (p, isSec) => {
             }
         }
         // ==========================================
-        // 🛡️ PLUS/MINUS (+/-) TRACKER
+        // ðŸ›¡ï¸ PLUS/MINUS (+/-) TRACKER
         // ==========================================
         // Only apply +/- if it is NOT a power play goal (pG).
         // Even strength and shorthanded goals count!
@@ -3637,7 +3733,7 @@ const getAWeight = (p, isSec) => {
             });
         }
 
-        // 🛡️ MODIFIED: Added `isSH: sH` so the engine knows it was a shorthanded goal
+        // ðŸ›¡ï¸ MODIFIED: Added `isSH: sH` so the engine knows it was a shorthanded goal
         ev.push({scorer: scr.name, a1: a1N, a2: a2N, onIce: u.map(p=>p.name), oppOnIce: dUnit.map(p=>p.name), isPP: pG, isSH: sH, isEN: isEN});        
     }
     return ev;
@@ -3666,23 +3762,16 @@ function calculateDynamicIceTime(struct) {
     const f3Ovr = getUnitAverageOvr(struct.f[2]);
     const f4Ovr = getUnitAverageOvr(struct.f[3]);
 
-    // Sort D pairs by best individual player OVR so the pair containing the
-    // highest-rated D-man always gets pair-1 ice time regardless of pair average
-    const _pairStarOvr = pair => Math.max(0, ...(pair || []).filter(Boolean).map(p => getPlayerWeightedStats(p.name)?.ovr || 0));
-    const _pairStarName = pair => (pair || []).filter(Boolean).reduce((best, p) => { const o = getPlayerWeightedStats(p.name)?.ovr || 0; return o > (getPlayerWeightedStats(best)?.ovr || 0) ? p.name : best; }, '');
-    const _dPairCmp = (a, b) => { const d = _pairStarOvr(b) - _pairStarOvr(a); return d !== 0 ? d : _pairStarName(a).localeCompare(_pairStarName(b)); };
-    const sortedD = [...struct.d].sort(_dPairCmp);
-
-    const d1Ovr = getUnitAverageOvr(sortedD[0]);
-    const d2Ovr = getUnitAverageOvr(sortedD[1]);
-    const d3Ovr = getUnitAverageOvr(sortedD[2]);
+    const d1Ovr = getUnitAverageOvr(struct.d[0]);
+    const d2Ovr = getUnitAverageOvr(struct.d[1]);
+    const d3Ovr = getUnitAverageOvr(struct.d[2]);
 
     // Total regulation game minutes to fill per position group (3 skaters on ice for F * 60 = 180, 2 for D * 60 = 120)
     const totalForwardMinutes = 180;
     const totalDefenseMinutes = 120;
 
     // ==========================================
-    // 🏒 1. FORWARDS DYNAMIC LOGIC
+    // ðŸ’ 1. FORWARDS DYNAMIC LOGIC
     // ==========================================
     
     // Base Baseline Targets (Per Player Average)
@@ -3702,28 +3791,19 @@ function calculateDynamicIceTime(struct) {
         fShares[2] = Math.max(fShares[2], fShares[3] + 2);
     }
 
-    // RULE C: If adjacent lines are within 3 OVR, average ice time across the cluster.
-    // Evaluate all adjacent gaps first, then average the full cluster in one pass
-    // so no line gets averaged twice (e.g. line 2 between two close pairs).
-    const T = 3;
-    const close12 = Math.abs(f1Ovr - f2Ovr) <= T;
-    const close23 = Math.abs(f2Ovr - f3Ovr) <= T;
-    const close34 = Math.abs(f3Ovr - f4Ovr) <= T;
-
-    if (close12 && close23) {
-        // Lines 1, 2, 3 all close — average all three
-        const avg = (fShares[0] + fShares[1] + fShares[2]) / 3;
-        fShares[0] = avg; fShares[1] = avg; fShares[2] = avg;
-    } else {
-        if (close12) { const avg = (fShares[0] + fShares[1]) / 2; fShares[0] = avg; fShares[1] = avg; }
-        if (close23) { const avg = (fShares[1] + fShares[2]) / 2; fShares[1] = avg; fShares[2] = avg; }
+    // RULE C: If lines OVR are within 3 rating points, give similar ice time to lines
+    const ratingClosenessThreshold = 3;
+    if (Math.abs(f1Ovr - f2Ovr) <= ratingClosenessThreshold) {
+        let avg = (fShares[0] + fShares[1]) / 2;
+        fShares[0] = avg; fShares[1] = avg;
     }
-    if (close23 && close34) {
-        // Lines 2, 3, 4 all close — average all three
-        const avg = (fShares[1] + fShares[2] + fShares[3]) / 3;
-        fShares[1] = avg; fShares[2] = avg; fShares[3] = avg;
-    } else if (close34) {
-        const avg = (fShares[2] + fShares[3]) / 2; fShares[2] = avg; fShares[3] = avg;
+    if (Math.abs(f2Ovr - f3Ovr) <= ratingClosenessThreshold) {
+        let avg = (fShares[1] + fShares[2]) / 2;
+        fShares[1] = avg; fShares[2] = avg;
+    }
+    if (Math.abs(f3Ovr - f4Ovr) <= ratingClosenessThreshold) {
+        let avg = (fShares[2] + fShares[3]) / 2;
+        fShares[2] = avg; fShares[3] = avg;
     }
 
     // Scale Forward Shares to exactly fit 180 total skater minutes
@@ -3739,33 +3819,27 @@ function calculateDynamicIceTime(struct) {
     finalForwardLineMins[2] = Math.max(13, Math.min(15, finalForwardLineMins[2]));
     finalForwardLineMins[3] = Math.max(8, Math.min(12, finalForwardLineMins[3]));
 
-    // Micro-adjust to hit exactly 180 total forward minutes, then re-clamp to prevent overshoot
+    // Normalize again if clamping caused a slight mathematical offset from 180
     let clampedSumF = (finalForwardLineMins[0]*3) + (finalForwardLineMins[1]*3) + (finalForwardLineMins[2]*3) + (finalForwardLineMins[3]*3);
     let microAdjustF = totalForwardMinutes / clampedSumF;
     finalForwardLineMins = finalForwardLineMins.map(m => m * microAdjustF);
-    finalForwardLineMins[0] = Math.max(18, Math.min(22, finalForwardLineMins[0]));
-    finalForwardLineMins[1] = Math.max(16, Math.min(18, finalForwardLineMins[1]));
-    finalForwardLineMins[2] = Math.max(13, Math.min(15, finalForwardLineMins[2]));
-    finalForwardLineMins[3] = Math.max(8,  Math.min(12, finalForwardLineMins[3]));
 
 
     // ==========================================
-    // 🛡️ 2. DEFENSIVE PAIRINGS DYNAMIC LOGIC
+    // ðŸ›¡ï¸ 2. DEFENSIVE PAIRINGS DYNAMIC LOGIC
     // ==========================================
     
     // Baseline Targets (Per Player Average)
     let dShares = [24, 19.5, 16.5];
 
-    // Cluster-average closeness for D pairs (same logic as forward lines)
-    const ratingClosenessThreshold = 3;
-    const closeD12 = Math.abs(d1Ovr - d2Ovr) <= ratingClosenessThreshold;
-    const closeD23 = Math.abs(d2Ovr - d3Ovr) <= ratingClosenessThreshold;
-    if (closeD12 && closeD23) {
-        const avg = (dShares[0] + dShares[1] + dShares[2]) / 3;
-        dShares[0] = avg; dShares[1] = avg; dShares[2] = avg;
-    } else {
-        if (closeD12) { const avg = (dShares[0] + dShares[1]) / 2; dShares[0] = avg; dShares[1] = avg; }
-        if (closeD23) { const avg = (dShares[1] + dShares[2]) / 2; dShares[1] = avg; dShares[2] = avg; }
+    // Closeness adjustments for defense lines within 3 rating points
+    if (Math.abs(d1Ovr - d2Ovr) <= ratingClosenessThreshold) {
+        let avg = (dShares[0] + dShares[1]) / 2;
+        dShares[0] = avg; dShares[1] = avg;
+    }
+    if (Math.abs(d2Ovr - d3Ovr) <= ratingClosenessThreshold) {
+        let avg = (dShares[1] + dShares[2]) / 2;
+        dShares[1] = avg; dShares[2] = avg;
     }
 
     // Scale Defense Shares to exactly fit 120 total blueline minutes (2 players per pairing)
@@ -3779,17 +3853,14 @@ function calculateDynamicIceTime(struct) {
     finalDefensePairMins[1] = Math.max(18, Math.min(21, finalDefensePairMins[1]));
     finalDefensePairMins[2] = Math.max(14, Math.min(17, finalDefensePairMins[2]));
 
-    // Micro-adjust to hit exactly 120 total defense minutes, then re-clamp to prevent overshoot
+    // Normalize again if clamping caused a offset from 120
     let clampedSumD = (finalDefensePairMins[0]*2) + (finalDefensePairMins[1]*2) + (finalDefensePairMins[2]*2);
     let microAdjustD = totalDefenseMinutes / clampedSumD;
     finalDefensePairMins = finalDefensePairMins.map(m => m * microAdjustD);
-    finalDefensePairMins[0] = Math.max(22, Math.min(26, finalDefensePairMins[0]));
-    finalDefensePairMins[1] = Math.max(18, Math.min(21, finalDefensePairMins[1]));
-    finalDefensePairMins[2] = Math.max(14, Math.min(17, finalDefensePairMins[2]));
 
 
     // ==========================================
-    // 📊 3. DEFENSE MATRIX PERCENTAGE DISTRIBUTION
+    // ðŸ“Š 3. DEFENSE MATRIX PERCENTAGE DISTRIBUTION
     // ==========================================
     // Breakdown of how each Pairing's total ice time is divided alongside Forward Lines
     // Matrix distribution setup: [Pair 1, Pair 2, Pair 3] mapping to [Line 1, Line 2, Line 3, Line 4]
@@ -3866,7 +3937,7 @@ function simGame(idx) {
     gameMilestones = [];
     const k = (isPlayoffs || isASG) ? 'playoff' : 'season';
     
-    // 📊 Centralized Match Stats object to handle all metrics precisely
+    // ðŸ“Š Centralized Match Stats object to handle all metrics precisely
     let matchStats = {}; 
     const trk = (pN, st, v=1) => { 
         if(pN){ 
@@ -3875,23 +3946,21 @@ function simGame(idx) {
         } 
     };
     
-    // 🩹 1. HEALING & PRE-GAME SETUP
-    const heal = tk => {
-        if(rosters[tk]) rosters[tk].forEach(p => {
+    // ðŸ©¹ 1. HEALING & PRE-GAME SETUP
+    const heal = tk => { 
+        if(rosters[tk]) rosters[tk].forEach(p => { 
             if(playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining > 0) {
                 playerStats[p.name].injury.daysRemaining--;
-                if (p.status) p.status.injuryDays = playerStats[p.name].injury.daysRemaining;
                 if(playerStats[p.name].injury.daysRemaining === 0) {
                     if (!playerStats[p.name].injuryHistory) playerStats[p.name].injuryHistory = [];
                     playerStats[p.name].injuryHistory.push({
                         date: currentDay,
-                        daysMissed: playerStats[p.name].injury.severity || 0
+                        daysMissed: playerStats[p.name].injury.severity || 0 
                     });
                     playerStats[p.name].injury = { severity: 0, daysRemaining: 0 };
-                    if (p.status) p.status.injuryDays = 0;
                 }
             }
-        });
+        }); 
     };
 
     heal(g.h.nrm); 
@@ -3900,7 +3969,7 @@ function simGame(idx) {
     if (rosters[g.h.nrm]) assignMicroStreaks(rosters[g.h.nrm]);
     if (rosters[g.a.nrm]) assignMicroStreaks(rosters[g.a.nrm]);
 
-    // 🥅 2. GOALIE SELECTION
+    // ðŸ¥… 2. GOALIE SELECTION
     const selG = (tk) => { 
         const gs = rosters[tk] ? rosters[tk].filter(p => p.pos === 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0).sort((a, b) => getPlayerWeightedStats(b.name).ovr - getPlayerWeightedStats(a.name).ovr) : [];
         if (!gs.length) { const allG = (rosters[tk] || []).filter(p => p.pos === 'G'); return allG.length ? allG[0] : null; }
@@ -3924,17 +3993,13 @@ function simGame(idx) {
     };
 
     const hG_obj = selG(g.h.nrm), aG_obj = selG(g.a.nrm);
-    let hG_name = hG_obj ? hG_obj.name : null;
-    let aG_name = aG_obj ? aG_obj.name : null;
-    let hG_starterName = hG_name;  // original starter — may differ from hG_name if backup entered
-    let aG_starterName = aG_name;
-    let hG_swapStep = -1;          // step at which backup entered (-1 = no swap)
-    let aG_swapStep = -1;
+    const hG_name = hG_obj ? hG_obj.name : null;
+    const aG_name = aG_obj ? aG_obj.name : null;
 
-    // 🧱 3. MACRO AURAS & MODIFIER MATH
+    // ðŸ§± 3. MACRO AURAS & MODIFIER MATH
     let hAuraMod = (getTeamSystemAura(g.h.nrm) === 'OFFENSIVE TEAM' ? 1.15 : (getTeamSystemAura(g.h.nrm) === 'DEFENSIVE TEAM' ? 0.85 : 1.0));
     let aAuraMod = (getTeamSystemAura(g.a.nrm) === 'OFFENSIVE TEAM' ? 1.15 : (getTeamSystemAura(g.a.nrm) === 'DEFENSIVE TEAM' ? 0.85 : 1.0));
-    // Sliding goalie save modifier — centered at OVR 75: bad goalie=1.12, avg=1.0, elite=0.88
+    // Sliding goalie save modifier â€” centered at OVR 75: bad goalie=1.12, avg=1.0, elite=0.88
     const hGOvr = hG_obj ? (getPlayerWeightedStats(hG_obj.name).ovr || 75) : 75;
     const aGOvr = aG_obj ? (getPlayerWeightedStats(aG_obj.name).ovr || 75) : 75;
     let hWallMod = Math.max(0.86, Math.min(1.14, 1.0 + (75 - hGOvr) * 0.013));
@@ -3942,104 +4007,13 @@ function simGame(idx) {
     let asgBoost = isASG ? 1.8 : 1.0;
     let homeCrowdEnergy = 1.03;
 
-    // Pre-game team penalty tendency: avg (rough + aggr) across starting skaters
-    // Used to scale per-step penalty rate — rough/aggressive teams draw more penalties
-    const _skaterRoughAvg = (tkNrm) => {
-        const sk = (rosters[tkNrm] || []).filter(p => p.pos !== 'G' && (playerStats[p.name]?.injury?.daysRemaining || 0) === 0);
-        if (!sk.length) return 50;
-        return sk.reduce((s,p) => s + ((playerStats[p.name]?.attr?.rough || 50) + (playerStats[p.name]?.attr?.aggr || 50)) / 2, 0) / sk.length;
-    };
-    const hTeamRough = _skaterRoughAvg(g.h.nrm);
-    const aTeamRough = _skaterRoughAvg(g.a.nrm);
-    // Scale base 0.075 penalty rate by combined roughness (50+50=1.0x, 80+80=1.6x → clamped)
-    const basePenRate = 0.075 * Math.max(0.7, Math.min(1.35, (hTeamRough + aTeamRough) / 100));
-
-    // Pre-game team OVR (skaters + goalie weighted) for OT resolution
-    const _teamCombinedOvr = (tkNrm, gOvr) => {
-        const sk = (rosters[tkNrm] || []).filter(p => p.pos !== 'G');
-        const skOvr = sk.length > 0 ? sk.reduce((s,p) => s + (getPlayerWeightedStats(p.name)?.ovr || 70), 0) / sk.length : 70;
-        return skOvr * 0.65 + gOvr * 0.35;
-    };
-    const hTeamCombOvr = _teamCombinedOvr(g.h.nrm, hGOvr);
-    const aTeamCombOvr = _teamCombinedOvr(g.a.nrm, aGOvr);
-
-    // ⏱️ 4. THE TIME-TICK ENGINE SETUP
+    // â±ï¸ 4. THE TIME-TICK ENGINE SETUP
     let hG = 0, aG = 0;
     let hShots = 0, aShots = 0;
     let allGoals = [];
     let penaltyEvents = [];
-    const _hBase = getRosterStructure(g.h.nrm);
-    const _aBase = getRosterStructure(g.a.nrm);
-
-    // Mutable per-game copies — don't pollute the struct cache
-    const hFLines = _hBase.f.map(line => [...line]);
-    const hDPairs = _hBase.d.map(pair => [...pair]);
-    const hGPool  = [...(_hBase.g || [])];
-    const aFLines = _aBase.f.map(line => [...line]);
-    const aDPairs = _aBase.d.map(pair => [...pair]);
-    const aGPool  = [...(_aBase.g || [])];
-
-    // Sort D pairs so the pair with the highest-rated individual player gets pair-1
-    // ice time — must match the sort order used in calculateDynamicIceTime
-    const _simPairStarOvr = pair => Math.max(0, ...(pair || []).filter(Boolean).map(p => getPlayerWeightedStats(p.name)?.ovr || 0));
-    const _simPairStarName = pair => (pair || []).filter(Boolean).reduce((best, p) => { const o = getPlayerWeightedStats(p.name)?.ovr || 0; return o > (getPlayerWeightedStats(best)?.ovr || 0) ? p.name : best; }, '');
-    const _simDPairCmp = (a, b) => { const d = _simPairStarOvr(b) - _simPairStarOvr(a); return d !== 0 ? d : _simPairStarName(a).localeCompare(_simPairStarName(b)); };
-    hDPairs.sort(_simDPairCmp);
-    aDPairs.sort(_simDPairCmp);
-
-    // Keep hStruct/aStruct aliases for downstream code that reads .f/.d/.g
-    const hStruct = { f: hFLines, d: hDPairs, g: hGPool };
-    const aStruct = { f: aFLines, d: aDPairs, g: aGPool };
-
-    // ─── PRE-GAME INJURY FILL ─────────────────────────────────────────────
-    // If a player is injured before puck drop, fill their spot with the
-    // highest-OVR healthy player at the same position; fall back to any pos.
-    const _fillPreGame = (fLines, dPairs, tk) => {
-        const roster = rosters[tk] || [];
-        const inLineup = new Set([
-            ...fLines.flat().filter(Boolean).map(p => p.name),
-            ...dPairs.flat().filter(Boolean).map(p => p.name)
-        ]);
-        const isFwd = (p) => ['C','LW','RW'].includes(getPlayerPosition(p));
-        const isD   = (p) => getPlayerPosition(p) === 'D';
-        const isG   = (p) => getPlayerPosition(p) === 'G';
-        const healthy = roster.filter(p => !inLineup.has(p.name) && (playerStats[p.name]?.injury?.daysRemaining || 0) === 0);
-        // Forwards only fill forward slots (prefer exact pos then any fwd); D only fills D; G only fills G
-        const bench = (slotGroup) => {
-            let pool;
-            if (slotGroup === 'F') pool = healthy.filter(isFwd);
-            else if (slotGroup === 'D') pool = healthy.filter(isD);
-            else pool = healthy.filter(isG);
-            return pool.sort((a, b) => (getPlayerWeightedStats(b.name).ovr || 0) - (getPlayerWeightedStats(a.name).ovr || 0));
-        };
-        // Forward lines: all slots are 'F' group; prefer exact pos within that pool handled by pos sort
-        fLines.forEach(line => {
-            line.forEach((p, idx) => {
-                if (p && (playerStats[p.name]?.injury?.daysRemaining || 0) > 0) {
-                    inLineup.delete(p.name);
-                    const preferPos = ['C','LW','RW'][idx] || 'LW';
-                    const pool = bench('F').filter(s => !inLineup.has(s.name));
-                    // Exact position first, then any forward
-                    const sub = pool.find(s => getPlayerPosition(s) === preferPos) || pool[0] || null;
-                    line[idx] = sub;
-                    if (sub) inLineup.add(sub.name);
-                }
-            });
-        });
-        dPairs.forEach(pair => {
-            pair.forEach((p, idx) => {
-                if (p && (playerStats[p.name]?.injury?.daysRemaining || 0) > 0) {
-                    inLineup.delete(p.name);
-                    const pool = bench('D').filter(s => !inLineup.has(s.name));
-                    const sub = pool[0] || null;
-                    pair[idx] = sub;
-                    if (sub) inLineup.add(sub.name);
-                }
-            });
-        });
-    };
-    _fillPreGame(hFLines, hDPairs, g.h.nrm);
-    _fillPreGame(aFLines, aDPairs, g.a.nrm);
+    let hStruct = getRosterStructure(g.h.nrm);
+    let aStruct = getRosterStructure(g.a.nrm);
 
     function buildLineSchedule(minsArray) {
         let sched = [];
@@ -4060,194 +4034,32 @@ function simGame(idx) {
     const homeFSchedule = buildLineSchedule(homeIceData.forwardLineAverages);
     const awayFSchedule = buildLineSchedule(awayIceData.forwardLineAverages);
 
-    // Build a D-pair schedule that respects each pair's ice time budget,
-    // distributed across forward lines using the pairing matrix.
-    // For each pair, matrix[pairIdx][fLine] = fraction of that pair's time spent with fLine.
-    // Result: 120-element array where schedule[step] = D pair index (0/1/2).
-    function buildDSchedule(pairMins, fSchedule, matrix) {
-        // Step budgets per pair
-        const pairSteps = pairMins.map(m => Math.round(m * 2));
-
-        // For each pair, allocate its steps across the 4 forward line slots
-        // slot[pairIdx][fLine] = steps that pair spends with that fLine
-        const allocation = pairSteps.map((totalSteps, pairIdx) => {
-            const row = matrix[pairIdx];
-            const rowSum = row.reduce((s, v) => s + v, 0);
-            const raw = row.map(w => (w / rowSum) * totalSteps);
-            // round, then fix rounding drift on the last slot
-            const rounded = raw.map(Math.round);
-            const drift = totalSteps - rounded.reduce((s, v) => s + v, 0);
-            rounded[rounded.length - 1] += drift;
-            return rounded; // [stepsWithL1, stepsWithL2, stepsWithL3, stepsWithL4]
-        });
-
-        // Build the schedule: for each fLine slot in fSchedule, consume from the
-        // pair that still has the most budget for that line, breaking ties by pair index.
-        const remaining = allocation.map(row => [...row]); // mutable copy
-        const sched = fSchedule.map(fLine => {
-            // Find pair with most remaining budget for this fLine
-            let best = 0, bestVal = -1;
-            for (let p = 0; p < 3; p++) {
-                if (remaining[p][fLine] > bestVal) { bestVal = remaining[p][fLine]; best = p; }
-            }
-            remaining[best][fLine] = Math.max(0, remaining[best][fLine] - 1);
-            return best;
-        });
-        return sched;
+    function getPairingForLine(fLine, matrix) {
+        let p1Weight = matrix[0][fLine]; 
+        let p2Weight = matrix[1][fLine]; 
+        let p3Weight = matrix[2][fLine]; 
+        let total = p1Weight + p2Weight + p3Weight;
+        
+        let roll = Math.random() * total;
+        if (roll < p1Weight) return 0; 
+        if (roll < p1Weight + p2Weight) return 1; 
+        return 2; 
     }
 
-    const homeDSchedule = buildDSchedule(homeIceData.defensePairAverages, homeFSchedule, homeIceData.defensePairingMatrix);
-    const awayDSchedule = buildDSchedule(awayIceData.defensePairAverages, awayFSchedule, awayIceData.defensePairingMatrix);
-
-    // ─── MID-GAME SUBSTITUTION SYSTEM ────────────────────────────────────
-    const gameInjuredH = new Set();   // shaken-up names — out for this game
-    const gameInjuredA = new Set();
-    const gameSubsH = { f: {}, d: {} }; // {f: {lineIdx: {slot: player}}, d: ...}
-    const gameSubsA = { f: {}, d: {} };
-
-    const _getFatigue = (pName) => playerStats[pName]?.status?.fatigue || 0;
-
-    const _swapGoalie = (tk, injuredName) => {
-        const backups = (rosters[tk] || []).filter(p =>
-            p.pos === 'G' && p.name !== injuredName &&
-            (playerStats[p.name]?.injury?.daysRemaining || 0) === 0
-        );
-        return backups.length ? backups[0].name : injuredName;
-    };
-
-    // Find the freshest available forward for a shaken-up slot
-    const _findFwdSub = (fLines, slotIdx, excludeName, gameInj) => {
-        const FATIGUE_CAP = 65;
-        const candidates = [];
-        fLines.forEach((line, lIdx) => {
-            line.forEach((p, sIdx) => {
-                if (!p || p.name === excludeName || gameInj.has(p.name)) return;
-                const fat = _getFatigue(p.name);
-                const sameSlot  = sIdx === slotIdx;
-                const naturalC  = getPlayerPosition(p) === 'C';
-                candidates.push({ p, fat, sameSlot, naturalC });
-            });
-        });
-        if (!candidates.length) return null;
-        // C slot (0): prefer natural Cs from same slot, then natural Cs on wing, then freshest anyone
-        if (slotIdx === 0) {
-            const natCs = candidates.filter(c => c.sameSlot).sort((a, b) => a.fat - b.fat);
-            if (natCs.length) return natCs[0].p;
-            const wingCs = candidates.filter(c => !c.sameSlot && c.naturalC).sort((a, b) => a.fat - b.fat);
-            if (wingCs.length) return wingCs[0].p;
-        } else {
-            // Wing: prefer same wing slot first
-            const sameWing = candidates.filter(c => c.sameSlot).sort((a, b) => a.fat - b.fat);
-            if (sameWing.length) return sameWing[0].p;
-        }
-        // Fallback: freshest player under fatigue cap, else absolute freshest
-        const fresh = candidates.filter(c => c.fat <= FATIGUE_CAP).sort((a, b) => a.fat - b.fat);
-        return (fresh.length ? fresh : candidates.sort((a, b) => a.fat - b.fat))[0].p;
-    };
-
-    const _findDSub = (dPairs, excludeName, gameInj) => {
-        const candidates = [];
-        dPairs.forEach(pair => {
-            pair.forEach(p => {
-                if (!p || p.name === excludeName || gameInj.has(p.name)) return;
-                candidates.push({ p, fat: _getFatigue(p.name) });
-            });
-        });
-        return candidates.sort((a, b) => a.fat - b.fat)[0]?.p || null;
-    };
-
-    // Register a shaken-up event: find sub, store in gameSubs, log to boxlog
-    const _shakenUp = (fLines, dPairs, gameSubs, gameInj, victim, teamName, teamCode, step) => {
-        gameInj.add(victim.name);
-        const isD  = getPlayerPosition(victim) === 'D';
-        const t    = Math.floor(step / 2) % 20 || 20;
-        const per  = Math.ceil((step + 1) / 40);
-        let subMsg = '';
-
-        if (isD) {
-            const pairIdx = dPairs.findIndex(pair => pair.some(p => p?.name === victim.name));
-            const slotIdx = pairIdx >= 0 ? dPairs[pairIdx].findIndex(p => p?.name === victim.name) : -1;
-            const sub = _findDSub(dPairs, victim.name, gameInj);
-            if (sub && pairIdx >= 0 && slotIdx >= 0) {
-                if (!gameSubs.d[pairIdx]) gameSubs.d[pairIdx] = {};
-                gameSubs.d[pairIdx][slotIdx] = sub;
-                subMsg = ` — ${sub.name} double-shifts in`;
-            }
-        } else {
-            const lineIdx = fLines.findIndex(line => line.some(p => p?.name === victim.name));
-            const slotIdx = lineIdx >= 0 ? fLines[lineIdx].findIndex(p => p?.name === victim.name) : -1;
-            const sub = lineIdx >= 0 ? _findFwdSub(fLines, slotIdx, victim.name, gameInj) : null;
-            if (sub && lineIdx >= 0 && slotIdx >= 0) {
-                if (!gameSubs.f[lineIdx]) gameSubs.f[lineIdx] = {};
-                gameSubs.f[lineIdx][slotIdx] = sub;
-                subMsg = ` — ${sub.name} double-shifts in`;
-            } else if (!sub) {
-                subMsg = ' — no available replacement';
-            }
-        }
-        allGoals.push({ p: per, m: t, s: 0, str: `${t}:00`, tm: teamCode, cl: '#fff',
-            txt: `🚑 ${victim.name} (${teamCode.toUpperCase()}) shaken up — out for the game${subMsg}`, isPenalty: false });
-    };
-
     // ==========================================
-    // ⏱️ THE 60-MINUTE SIMULATION LOOP (120 steps)
+    // â±ï¸ THE 60-MINUTE SIMULATION LOOP (120 steps)
     // ==========================================
-    const _applyLineSubs = (baseLine, lineSubs, lineIdx, gameInj) => {
-        const out = [...baseLine];
-        const slotSubs = lineSubs[lineIdx] || {};
-        Object.entries(slotSubs).forEach(([slot, sub]) => { out[parseInt(slot)] = sub; });
-        return out.filter(p => p && !gameInj.has(p.name));
-    };
     for (let step = 0; step < 120; step++) {
         let minute = Math.floor(step / 2) + 1;
 
         let hFLine = homeFSchedule[step];
         let aFLine = awayFSchedule[step];
 
-        let hDPair = homeDSchedule[step];
-        let aDPair = awayDSchedule[step];
+        let hDPair = getPairingForLine(hFLine, homeIceData.defensePairingMatrix || [[1,0,0],[0,1,0],[0,0,1]]);
+        let aDPair = getPairingForLine(aFLine, awayIceData.defensePairingMatrix || [[1,0,0],[0,1,0],[0,0,1]]);
 
-        // Build on-ice units: start from per-game lines, apply any mid-game subs
-        let hFPlayers = _applyLineSubs(hFLines[hFLine], gameSubsH.f, hFLine, gameInjuredH);
-        let hDPlayers = _applyLineSubs(hDPairs[hDPair], gameSubsH.d, hDPair, gameInjuredH);
-        let aFPlayers = _applyLineSubs(aFLines[aFLine], gameSubsA.f, aFLine, gameInjuredA);
-        let aDPlayers = _applyLineSubs(aDPairs[aDPair], gameSubsA.d, aDPair, gameInjuredA);
-        let hOnIce = [...hFPlayers, ...hDPlayers];
-        let aOnIce = [...aFPlayers, ...aDPlayers];
-
-        // Mid-game shaken-up check (~1.2% per step per team ≈ 1-2 events/game)
-        if (Math.random() < 0.012) {
-            const candidates = hOnIce.filter(p => p && p.name && !gameInjuredH.has(p.name));
-            if (candidates.length) {
-                const victim = candidates[Math.floor(Math.random() * candidates.length)];
-                if (getPlayerPosition(victim) === 'G') {
-                    const newG = _swapGoalie(g.h.nrm, victim.name);
-                    if (newG !== victim.name) { hG_name = newG; hG_swapStep = step; allGoals.push({ p: Math.ceil((step+1)/40), m: Math.floor(step/2)%20||20, s:0, str:`${Math.floor(step/2)%20||20}:00`, tm:g.h.code, cl:'#fff', txt:`🚑 GOALIE INJURY: ${victim.name} (${g.h.code.toUpperCase()}) — ${newG} enters`, isPenalty:false }); }
-                } else {
-                    _shakenUp(hFLines, hDPairs, gameSubsH, gameInjuredH, victim, g.h.nrm, g.h.code, step);
-                }
-            }
-        }
-        if (Math.random() < 0.012) {
-            const candidates = aOnIce.filter(p => p && p.name && !gameInjuredA.has(p.name));
-            if (candidates.length) {
-                const victim = candidates[Math.floor(Math.random() * candidates.length)];
-                if (getPlayerPosition(victim) === 'G') {
-                    const newG = _swapGoalie(g.a.nrm, victim.name);
-                    if (newG !== victim.name) { aG_name = newG; aG_swapStep = step; allGoals.push({ p: Math.ceil((step+1)/40), m: Math.floor(step/2)%20||20, s:0, str:`${Math.floor(step/2)%20||20}:00`, tm:g.a.code, cl:'#fff', txt:`🚑 GOALIE INJURY: ${victim.name} (${g.a.code.toUpperCase()}) — ${newG} enters`, isPenalty:false }); }
-                } else {
-                    _shakenUp(aFLines, aDPairs, gameSubsA, gameInjuredA, victim, g.a.nrm, g.a.code, step);
-                }
-            }
-        }
-
-        // Re-build on-ice after any new shaken-up events this step
-        hFPlayers = _applyLineSubs(hFLines[hFLine], gameSubsH.f, hFLine, gameInjuredH);
-        hDPlayers = _applyLineSubs(hDPairs[hDPair], gameSubsH.d, hDPair, gameInjuredH);
-        aFPlayers = _applyLineSubs(aFLines[aFLine], gameSubsA.f, aFLine, gameInjuredA);
-        aDPlayers = _applyLineSubs(aDPairs[aDPair], gameSubsA.d, aDPair, gameInjuredA);
-        hOnIce = [...hFPlayers, ...hDPlayers];
-        aOnIce = [...aFPlayers, ...aDPlayers];
+        let hOnIce = [...hStruct.f[hFLine], ...hStruct.d[hDPair]];
+        let aOnIce = [...aStruct.f[aFLine], ...aStruct.d[aDPair]];
 
         // Track skater ATOI values securely (0.5 mins per step)
         hOnIce.forEach(p => trk(p.name, 'toi', 0.5));
@@ -4259,7 +4071,7 @@ function simGame(idx) {
         
         let diff = hLiveOvr - aLiveOvr;
         
-        // Shot generation — softer diff multiplier balances shots across lines
+        // Shot generation â€” softer diff multiplier balances shots across lines
         let hShotChance = 0.26 + (diff * 0.0014) * asgBoost;
         let aShotChance = 0.26 - (diff * 0.0014) * asgBoost;
         
@@ -4274,7 +4086,7 @@ function simGame(idx) {
             trk(shooter.name, 's', 1); // Record Skater Shot
             trk(aG_name, 'sa', 1);     // Record Goalie Shot Against
 
-            // Conversion Roll — base 10.5%, sniper gets +14% multiplier, softer diff scaling
+            // Conversion Roll â€” base 10.5%, sniper gets +14% multiplier, softer diff scaling
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const hSniperMod = hShooterTag === 'SNIPER' ? 1.14 : hShooterTag === 'SUPERSTAR' ? 1.05 : 1.0;
             let scoringProb = (0.105 + (diff * 0.0018)) * aWallMod * hSniperMod;
@@ -4328,17 +4140,14 @@ function simGame(idx) {
             }
         }
 
-        // Penalty roll — rate scales with teams' roughness/aggression (basePenRate pre-computed)
-        if (Math.random() < basePenRate) {
+        // Quick Penalty Roll â€” triggers a real powerplay opportunity
+        // 0.075 per 30-sec step â†’ ~9 penalties/game (realistic NHL rate)
+        if (Math.random() < 0.075) {
             let penTeam = Math.random() > 0.5 ? g.h : g.a;
             let advTeam = penTeam.nrm === g.h.nrm ? g.a : g.h;
             let activeSkaters = penTeam.nrm === g.h.nrm ? hOnIce : aOnIce;
             if (activeSkaters.length > 0) {
-                const penWeights = activeSkaters.map(p => archMods[getPlayerWeightedStats(p.name)?.tag]?.penaltyRate || 1.0);
-                const penTotal = penWeights.reduce((s, w) => s + w, 0);
-                let penRnd = Math.random() * penTotal, penIdx = 0;
-                for (let i = 0; i < penWeights.length; i++) { penRnd -= penWeights[i]; if (penRnd <= 0) { penIdx = i; break; } }
-                let offender = activeSkaters[penIdx].name;
+                let offender = activeSkaters[Math.floor(Math.random() * activeSkaters.length)].name;
                 trk(offender, 'pim', 2);
                 penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: penTeam.code, cl: teamColors[penTeam.nrm] ? teamColors[penTeam.nrm][0] : '#fff', txt: `PENALTY: ${offender} (2 min minor)`, isPenalty: true });
                 
@@ -4346,23 +4155,12 @@ function simGame(idx) {
                 const advTeamObj = league.find(t => t.nrm === advTeam.nrm);
                 if (advTeamObj) advTeamObj.season.ppo = (advTeamObj.season.ppo || 0) + 1;
 
-                // Resolve the powerplay — rating-driven conversion
+                // Resolve the powerplay: ~20% PP conversion rate
                 const ppRoll = Math.random();
                 const ppUnit = advTeam.nrm === g.h.nrm ? hOnIce : aOnIce;
                 const pkUnit = advTeam.nrm === g.h.nrm ? aOnIce : hOnIce;
-                const pkGoalieOvr = advTeam.nrm === g.h.nrm ? aGOvr : hGOvr;
 
-                // PP unit avg OVR vs (PK skaters 70% + PK goalie 30%)
-                const ppOvr = ppUnit.reduce((s,p) => s + (getPlayerWeightedStats(p.name)?.ovr || 70), 0) / Math.max(1, ppUnit.length);
-                const pkSkOvr = pkUnit.reduce((s,p) => s + (getPlayerWeightedStats(p.name)?.ovr || 70), 0) / Math.max(1, pkUnit.length);
-                const pkTotalOvr = pkSkOvr * 0.70 + pkGoalieOvr * 0.30;
-
-                // Base 20%, +0.25% per OVR advantage, clamped 10%–30%
-                const ppConvRate = Math.max(0.10, Math.min(0.30, 0.20 + (ppOvr - pkTotalOvr) * 0.0025));
-                // SHG: base 4%, stronger PK unit raises chance, clamped 1%–8%
-                const shgRate = Math.max(0.01, Math.min(0.08, 0.04 + (pkTotalOvr - ppOvr) * 0.0015));
-
-                if (ppRoll < ppConvRate && ppUnit.length > 0) {
+                if (ppRoll < 0.20 && ppUnit.length > 0) {
                     // POWERPLAY GOAL
                     const ppShooter = selectShooter(ppUnit);
                     const ppShooterName = (ppShooter && typeof ppShooter === 'object') ? ppShooter.name : ppShooter;
@@ -4383,8 +4181,8 @@ function simGame(idx) {
                         if (ppEv.sAssist && playerStats[ppEv.sAssist]) { playerStats[ppEv.sAssist][kk].ppa = (playerStats[ppEv.sAssist][kk].ppa||0)+1; }
                         if (advTeamObj) advTeamObj.season.ppg = (advTeamObj.season.ppg || 0) + 1;
                     }
-                } else if (ppRoll < ppConvRate + shgRate && pkUnit.length > 0) {
-                    // SHORTHANDED GOAL — rate driven by PK unit strength advantage
+                } else if (ppRoll < 0.24 && pkUnit.length > 0) {
+                    // SHORTHANDED GOAL (~4% of PP opp result in SHG)
                     const shShooter = selectShooter(pkUnit);
                     const shEv = processSingleGoal(penTeam.nrm, penTeam.code, shShooter, pkUnit, timeStr, period, (minute % 20 || 20), sec);
                     if (shEv) {
@@ -4405,24 +4203,21 @@ function simGame(idx) {
         }
     }
 
-    // 🥅 5. OVERTIME RESOLUTION
+    // ðŸ¥… 5. OVERTIME RESOLUTION
     let otPeriods = 0;
-    if(isPlayoffs && hG === aG) {
-        // OT win chance: home base 52% adjusted by pre-game combined OVR (skaters+goalie)
-        const otDiff = hTeamCombOvr - aTeamCombOvr;
-        const hOtWinChance = Math.max(0.35, Math.min(0.65, 0.52 + otDiff * 0.004));
-        while (hG === aG && otPeriods < 7) {
-            otPeriods++;
-            if (Math.random() < hOtWinChance) { hG++; hShots++; trk(aG_name,'sa',1); trk(aG_name,'ga',1); }
-            else { aG++; aShots++; trk(hG_name,'sa',1); trk(hG_name,'ga',1); }
+    if(isPlayoffs && hG === aG) { 
+        while (hG === aG && otPeriods < 7) { 
+            otPeriods++; 
+            if (Math.random() < 0.52) { hG++; hShots++; trk(aG_name,'sa',1); trk(aG_name,'ga',1); } 
+            else { aG++; aShots++; trk(hG_name,'sa',1); trk(hG_name,'ga',1); } 
         }
     }
 
-    // 📊 6. COMPILE BOX SCORE
+    // ðŸ“Š 6. COMPILE BOX SCORE
     allGoals.push(...penaltyEvents); 
     allGoals.sort((a,b) => a.p !== b.p ? a.p - b.p : (a.m !== b.m ? a.m - b.m : a.s - b.s));
 
-    // 🏆 GAME WINNING GOAL — credit the scorer of the winning team's lead-clinching goal
+    // ðŸ† GAME WINNING GOAL â€” credit the scorer of the winning team's lead-clinching goal
     if (hG !== aG) {
         const winnerCode = hG > aG ? g.h.code : g.a.code;
         const loserFinalScore = hG > aG ? aG : hG;
@@ -4442,47 +4237,27 @@ function simGame(idx) {
         }
     }
 
-    // 🤕 7. INJURIES
+    // ðŸ¤• 7. INJURIES
     if (typeof rollInGameInjuries === 'function') {
         rollInGameInjuries(g.h.nrm, g.a.nrm);
     }
     
-    // 🥅 8. GOALIE POSITION RECORDING
+    // ðŸ¥… 8. GOALIE POSITION RECORDING
     let hStatus = hG > aG ? 'win' : (hG < aG ? 'loss' : 'tie'); 
     let aStatus = aG > hG ? 'win' : (aG < hG ? 'loss' : 'tie');
     let totalGameMinutes = 60 + (otPeriods * 5);
     
     if (hG_obj) {
-        if (hG_swapStep >= 0 && hG_name !== hG_starterName) {
-            // Starter played up to swap; backup played remainder — split TOI, both get GP
-            const starterMins = Math.round(hG_swapStep * 0.5 * 10) / 10;
-            const backupMins  = Math.round((totalGameMinutes - starterMins) * 10) / 10;
-            if (playerStats[hG_starterName]) { playerStats[hG_starterName][k].gp++; trk(hG_starterName, 'toi', starterMins); }
-            if (playerStats[hG_name])        { playerStats[hG_name][k].gp++; trk(hG_name, 'toi', backupMins); }
-            // Decision goes to goalie who played more; no shutout possible
-            const decisionG = starterMins >= backupMins ? hG_starterName : hG_name;
-            if (playerStats[decisionG]) { if (hStatus === 'win') playerStats[decisionG][k].w++; else if (hStatus === 'loss') playerStats[decisionG][k].l++; else playerStats[decisionG][k].t++; }
-        } else {
-            playerStats[hG_name][k].gp++;
-            if (aG === 0) playerStats[hG_name][k].so++;
-            if (hStatus === 'win') playerStats[hG_name][k].w++; else if (hStatus === 'loss') playerStats[hG_name][k].l++; else playerStats[hG_name][k].t++;
-            trk(hG_name, 'toi', totalGameMinutes);
-        }
+        playerStats[hG_name][k].gp++;
+        if (aG === 0) playerStats[hG_name][k].so++;
+        if (hStatus === 'win') playerStats[hG_name][k].w++; else if (hStatus === 'loss') playerStats[hG_name][k].l++; else playerStats[hG_name][k].t++;
+        trk(hG_name, 'toi', totalGameMinutes);
     }
     if (aG_obj) {
-        if (aG_swapStep >= 0 && aG_name !== aG_starterName) {
-            const starterMins = Math.round(aG_swapStep * 0.5 * 10) / 10;
-            const backupMins  = Math.round((totalGameMinutes - starterMins) * 10) / 10;
-            if (playerStats[aG_starterName]) { playerStats[aG_starterName][k].gp++; trk(aG_starterName, 'toi', starterMins); }
-            if (playerStats[aG_name])        { playerStats[aG_name][k].gp++; trk(aG_name, 'toi', backupMins); }
-            const decisionG = starterMins >= backupMins ? aG_starterName : aG_name;
-            if (playerStats[decisionG]) { if (aStatus === 'win') playerStats[decisionG][k].w++; else if (aStatus === 'loss') playerStats[decisionG][k].l++; else playerStats[decisionG][k].t++; }
-        } else {
-            playerStats[aG_name][k].gp++;
-            if (hG === 0) playerStats[aG_name][k].so++;
-            if (aStatus === 'win') playerStats[aG_name][k].w++; else if (aStatus === 'loss') playerStats[aG_name][k].l++; else playerStats[aG_name][k].t++;
-            trk(aG_name, 'toi', totalGameMinutes);
-        }
+        playerStats[aG_name][k].gp++;
+        if (hG === 0) playerStats[aG_name][k].so++;
+        if (aStatus === 'win') playerStats[aG_name][k].w++; else if (aStatus === 'loss') playerStats[aG_name][k].l++; else playerStats[aG_name][k].t++;
+        trk(aG_name, 'toi', totalGameMinutes);
     }
 
     g.result = { 
@@ -4492,7 +4267,7 @@ function simGame(idx) {
         hGoalie: hG_name, aGoalie: aG_name, hShots, aShots 
     }; 
 
-    // 📈 9. CENTRALIZED SINGLE-WRITE STAT APPLICATION
+    // ðŸ“ˆ 9. CENTRALIZED SINGLE-WRITE STAT APPLICATION
     if (!isASG) {
         // Skater game participation tracking
         [...hStruct.f.flat(), ...hStruct.d.flat(), ...aStruct.f.flat(), ...aStruct.d.flat()].forEach(p => {
@@ -4529,7 +4304,7 @@ function simGame(idx) {
         } else if(g.series) { if(hG > aG) g.series.hW++; else g.series.aW++; }
     }
 
-    // 🧹 10. MORALE & POST-GAME CLEANUP
+    // ðŸ§¹ 10. MORALE & POST-GAME CLEANUP
     let isHomeWin = (hG > aG);
     const winningTeamRoster = isHomeWin ? [...hStruct.f.flat(), ...hStruct.d.flat()] : [...aStruct.f.flat(), ...aStruct.d.flat()];
     const losingTeamRoster = isHomeWin ? [...aStruct.f.flat(), ...aStruct.d.flat()] : [...hStruct.f.flat(), ...hStruct.d.flat()];
@@ -4550,16 +4325,6 @@ function simGame(idx) {
 
     let activeGoalies = [hG_obj, aG_obj].filter(g => g !== null);
     if (typeof processPostGameStreaks === 'function') processPostGameStreaks(winningTeamRoster.concat(losingTeamRoster), activeGoalies);
-    // Extra fatigue for players who double-shifted due to mid-game injury
-    const _doubleShifters = new Set([
-        ...Object.values(gameSubsH.f).flatMap(s => Object.values(s).map(p => p?.name)),
-        ...Object.values(gameSubsH.d).flatMap(s => Object.values(s).map(p => p?.name)),
-        ...Object.values(gameSubsA.f).flatMap(s => Object.values(s).map(p => p?.name)),
-        ...Object.values(gameSubsA.d).flatMap(s => Object.values(s).map(p => p?.name))
-    ].filter(Boolean));
-    _doubleShifters.forEach(pName => {
-        if (playerStats[pName]?.status) playerStats[pName].status.fatigue = Math.min(100, (playerStats[pName].status.fatigue || 0) + 12);
-    });
     if (typeof applyPostGameFatigue === 'function' && awayGoalie && homeGoalie) applyPostGameFatigue(g.a.nrm, g.h.nrm, awayGoalie.name, homeGoalie.name);
     if (typeof reviewGameForSuspensions === 'function') reviewGameForSuspensions(matchStats, g.h.nrm, g.a.nrm);
     if (typeof triggerGameInjuries === 'function') triggerGameInjuries(matchStats, g.h.nrm, g.a.nrm);
@@ -4588,13 +4353,13 @@ function selectShooter(unit) {
         const pwr = pA.shotPwr || 70;
         const acc = pA.shotAcc || 70;
 
-        // Base weight from attributes — same formula for all positions
+        // Base weight from attributes â€” same formula for all positions
         let weight = (off * 0.40) + (pwr * 0.30) + (acc * 0.30);
 
         // Archetype multiplier
         weight *= (arch.shotRate || 1.0);
 
-        // Position modifier — forwards base 1.0, D penalized (they do score but less often)
+        // Position modifier â€” ALL forwards equal base (1.0), D penalized less than before
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
         weight *= isD ? 0.80 : 1.0;  // D ~20% less likely to score than a forward
@@ -4619,13 +4384,13 @@ function selectShooter(unit) {
 
 function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr, period, minute, sec) {
     // --- Normalize inputs ---
-    // scorerName and onIcePlayers may be objects {name,pos,...} or strings — normalize all to name strings
+    // scorerName and onIcePlayers may be objects {name,pos,...} or strings â€” normalize all to name strings
     const scorerStr = (scorerName && typeof scorerName === 'object') ? scorerName.name : scorerName;
     const onIceNames = onIcePlayers
         .map(p => (p && typeof p === 'object') ? p.name : p)
         .filter(Boolean);
 
-    // STRICT: only the 5-man unit on ice can be credited — scorer already chosen, assisters from same unit only
+    // STRICT: only the 5-man unit on ice can be credited â€” scorer already chosen, assisters from same unit only
     const eligiblePool = onIceNames.filter(name => name && name !== scorerStr);
 
     // --- Attribute + Archetype + Position weight for assists ---
@@ -4648,10 +4413,10 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         // Archetype modifier
         weight *= (arch.assistRate || 1.0);
 
-        // Position modifier — all forwards equal base, D penalized 18%
+        // Position modifier â€” all forwards equal base, D penalized ~30%
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
-        weight *= isD ? 0.82 : 1.0;
+        weight *= isD ? 0.70 : 1.0;
 
         // Hot/cold streak modifier
         if (ps.isHot)  weight *= 1.15;
@@ -4733,7 +4498,7 @@ function applyDailyRandomSwing(tk, gameObj) {
 }
 
 // =========================================================
-// 📊 POST-GAME STAT TRACKING (Unified Ice Time & SVG)
+// ðŸ“Š POST-GAME STAT TRACKING (Unified Ice Time & SVG)
 // =========================================================
 /**
  * Track ice time and SVG (Shots vs Goals) for entire roster post-game
@@ -4767,7 +4532,7 @@ function trackPostGameStats(roster, teamCode, scoringPlayers, isGoalieStart = fa
 }
 
 // =========================================================
-// 💪 POST-GAME MORALE SYSTEM (Refactored)
+// ðŸ’ª POST-GAME MORALE SYSTEM (Refactored)
 // =========================================================
 /**
  * Apply post-game morale swings based on game result and scoring
@@ -4814,7 +4579,7 @@ function applyPostGameMorale(winnerRoster, loserRoster, scoringPlayers, isHomeWi
     }
 }
 
-// 🎲 2. THE BACKGROUND PENALTY ROLLER (Renamed and Upgraded)
+// ðŸŽ² 2. THE BACKGROUND PENALTY ROLLER (Renamed and Upgraded)
 // Call this randomly during standard play: let penResult = rollGeneralPenalty(attacker);
 function rollGeneralPenalty(attacker) {
     // 1. Safely extract attributes (0-99 scale, defaulting to 50 if missing)
@@ -4997,7 +4762,7 @@ function handleRoundEnd() {
         if(w[0]) currentCupChamp = w[0].name; 
         runEndOfSeasonAwards(); 
         
-        // 🚨 Spawn the button to jump straight into the next year!
+        // ðŸš¨ Spawn the button to jump straight into the next year!
         if (!document.getElementById('btnStartNextSeason')) {
             const btnStartNextSeason = document.createElement('button'); 
             btnStartNextSeason.id = 'btnStartNextSeason'; 
@@ -5040,8 +4805,8 @@ function processOffseasonGrowth() {
         }
         else { p.attr.off = Math.max(20, Math.min(99, p.attr.off + oChg)); p.attr.def = Math.max(20, Math.min(99, p.attr.def + dChg)); p.attr.ovr = getPlayerWeightedStats(p.name).ovr; }
         if (awardConfig.headlines) {
-            if (oChg >= 4 && p.age <= 22) logs.push(`📈 BREAKOUT: ${p.name} (${p.teamCode}) gained +${oChg} OVR this summer!`);
-            if (pChg <= -2 && p.age >= 34 && Math.random() < 0.3) logs.push(`📉 FATHER TIME: ${p.name} (${p.teamCode}) lost a step over the summer.`);
+            if (oChg >= 4 && p.age <= 22) logs.push(`ðŸ“ˆ BREAKOUT: ${p.name} (${p.teamCode}) gained +${oChg} OVR this summer!`);
+            if (pChg <= -2 && p.age >= 34 && Math.random() < 0.3) logs.push(`ðŸ“‰ FATHER TIME: ${p.name} (${p.teamCode}) lost a step over the summer.`);
         }
     });
     if (logs.length > 0 && awardConfig.headlines) { logs.sort(() => 0.5 - Math.random()).slice(0, 5).forEach(msg => { tradeLog.unshift({ day: 'OFFSEASON', details: msg }); }); }
@@ -5077,14 +4842,14 @@ async function beginNewYear() {
             p.playoff = {gp:0, w:0, l:0, so:0, sv:0, sa:0, consStarts:0};
         } else {
             // Archive Regular Season to Career Regular Season
-            p.career.gp += p.season.gp; p.career.g += p.season.g; p.career.a += p.season.a; p.career.pts += (p.season.g + p.season.a); p.career.pm += (p.season.pm || 0); p.career.pim += (p.season.pim || 0); p.career.ppg += (p.season.ppg || 0); p.career.shg += (p.season.shg || 0); p.career.gwg += (p.season.gwg || 0); p.career.s += (p.season.s || 0); p.career.toi = (p.career.toi || 0) + (p.season.toi || 0);
-
+            p.career.gp += p.season.gp; p.career.g += p.season.g; p.career.a += p.season.a; p.career.pts += (p.season.g + p.season.a); p.career.pm += (p.season.pm || 0); p.career.pim += (p.season.pim || 0); p.career.ppg += (p.season.ppg || 0); p.career.shg += (p.season.shg || 0); p.career.gwg += (p.season.gwg || 0); p.career.s += (p.season.s || 0); 
+            
             // Archive Playoff to Career Playoff
-            p.careerPlayoff.gp += p.playoff.gp; p.careerPlayoff.g += p.playoff.g; p.careerPlayoff.a += p.playoff.a; p.careerPlayoff.pts += (p.playoff.g + p.playoff.a); p.careerPlayoff.pm += (p.playoff.pm || 0); p.careerPlayoff.pim += (p.playoff.pim || 0); p.careerPlayoff.ppg += (p.playoff.ppg || 0); p.careerPlayoff.shg += (p.playoff.shg || 0); p.careerPlayoff.gwg += (p.playoff.gwg || 0); p.careerPlayoff.s += (p.playoff.s || 0); p.careerPlayoff.toi = (p.careerPlayoff.toi || 0) + (p.playoff.toi || 0);
-
+            p.careerPlayoff.gp += p.playoff.gp; p.careerPlayoff.g += p.playoff.g; p.careerPlayoff.a += p.playoff.a; p.careerPlayoff.pts += (p.playoff.g + p.playoff.a); p.careerPlayoff.pm += (p.playoff.pm || 0); p.careerPlayoff.pim += (p.playoff.pim || 0); p.careerPlayoff.ppg += (p.playoff.ppg || 0); p.careerPlayoff.shg += (p.playoff.shg || 0); p.careerPlayoff.gwg += (p.playoff.gwg || 0); p.careerPlayoff.s += (p.playoff.s || 0);
+            
             // Wipe clean for the new year
-            p.season = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0};
-            p.playoff = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0};
+            p.season = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0}; 
+            p.playoff = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0};
         }
         p.streakType = 'stable'; p.hasScored = false; 
     });
@@ -5095,7 +4860,7 @@ async function beginNewYear() {
     
     const sBtn = document.getElementById('btnStartNextSeason'); if (sBtn) sBtn.remove();
     
-    // 🚨 Turn all simulation tools back ON (including your new simNextGame button)
+    // ðŸš¨ Turn all simulation tools back ON (including your new simNextGame button)
     document.querySelectorAll('#officeControls button, #btnSimGame').forEach(b => { 
         const act = b.getAttribute('onclick') || ''; 
         if(['simDay()', 'simNextGame()', 'simWeek()', 'simMonth()', 'simSeason()', 'advanceCalendar()'].includes(act)) {
@@ -5140,7 +4905,7 @@ async function simDay(slowMode = true, bypassLock = false) {
     } finally { if (!bypassLock) isSimulating = false; updateUI(); }
 }
 
-// 🏒 GAME-BY-GAME SIMULATION ENGINE
+// ðŸ’ GAME-BY-GAME SIMULATION ENGINE
 function simNextGame() {
     const games = Array.isArray(calendar[currentDay]) ? calendar[currentDay] : [];
     
@@ -5151,7 +4916,7 @@ function simNextGame() {
         // 1. Simulate just this one specific game
         simGame(nextIdx);
         
-        // 2. 🚨 MAGIC TRICK: Set it as the active game so the Jumbotron immediately displays its box score!
+        // 2. ðŸš¨ MAGIC TRICK: Set it as the active game so the Jumbotron immediately displays its box score!
         activeIdx = nextIdx;
         
         // 3. Refresh the screens and save the game state
@@ -5180,7 +4945,7 @@ function advanceCalendar() {
         if (btn) btn.innerText = 'ARENA';
     }
     
-    // 🏆 PLAYOFF FIX: Automatically spawn the next games OR end the round and show the Advance button!
+    // ðŸ† PLAYOFF FIX: Automatically spawn the next games OR end the round and show the Advance button!
     if (isPlayoffs && currentDay >= calendar.length) {
         if (playoffBracket.series.some(s => s.hW < 4 && s.aW < 4)) {
             genPlayoffSlate(); // Keep generating games until a team reaches 4 wins
@@ -5238,7 +5003,7 @@ async function simSeason(useTurbo = false) {
     while (isSimulating && isSimSeason && currentDay < calendar.length) {
         await simDay(false, true); updateUI();
         let percent = Math.floor((currentDay / calendar.length) * 100);
-        document.getElementById('tickerScroll').innerText = `${useTurbo ? '⚡ TURBO SIMULATING' : '⚙️ CALCULATING SEASON ALGORITHMS'}: DAY ${currentDay} OF ${calendar.length} (${percent}% COMPLETE)...`;
+        document.getElementById('tickerScroll').innerText = `${useTurbo ? 'âš¡ TURBO SIMULATING' : 'âš™ï¸ CALCULATING SEASON ALGORITHMS'}: DAY ${currentDay} OF ${calendar.length} (${percent}% COMPLETE)...`;
         if (!useTurbo) { await sleep(20); } else if (currentDay % 15 === 0) { await sleep(0); }
         let keepGoing = advanceCalendar();
         if (!keepGoing) break;
@@ -5319,7 +5084,7 @@ function updateUIDisplay() {
     container.innerHTML = ''; // Wipe the slate clean
 
     // ==========================================
-    // 🏒 DRAW FORWARDS (Enforces LW, C, RW layout)
+    // ðŸ’ DRAW FORWARDS (Enforces LW, C, RW layout)
     // ==========================================
     let fHtml = `<h3>Forwards</h3>`;
     currentEditableLines.f.forEach((line, index) => {
@@ -5344,7 +5109,7 @@ function updateUIDisplay() {
     container.innerHTML += fHtml;
 
     // ==========================================
-    // 🛡️ DRAW DEFENSE (Enforces LD, RD layout)
+    // ðŸ›¡ï¸ DRAW DEFENSE (Enforces LD, RD layout)
     // ==========================================
     let dHtml = `<h3>Defense</h3>`;
     currentEditableLines.d.forEach((line, index) => {
@@ -5366,7 +5131,7 @@ function updateUIDisplay() {
     container.innerHTML += dHtml;
 
     // ==========================================
-    // 🥅 DRAW GOALIES (Enforces Starter, Backup)
+    // ðŸ¥… DRAW GOALIES (Enforces Starter, Backup)
     // ==========================================
     let gHtml = `<h3>Goalies</h3><div class="hockey-line"><strong>G: </strong>`;
     currentEditableLines.g.forEach((player, index) => {
@@ -5388,20 +5153,20 @@ function renderTeamStats() {
         const struct = getRosterStructure(tk); 
     const tD = league.find(t => t.nrm === tk);
     const dynOvr = getDynamicTeamOvr(tk);
-    const getEmoji = (pName) => { let st = playerStats[pName] ? playerStats[pName].streakType : ''; return st === 'hot' ? '🔥' : (st === 'cold' ? '❄️' : ''); };
+    const getEmoji = (pName) => { let st = playerStats[pName] ? playerStats[pName].streakType : ''; return st === 'hot' ? 'ðŸ”¥' : (st === 'cold' ? 'â„ï¸' : ''); };
     // Get morale and status badges
     const getMoraleEmoji = (pName) => {
         const morale = playerStats[pName]?.morale || 100;
-        if (morale >= 125) return '😊';
-        if (morale < 75) return '😢';
-        return '😐';
+        if (morale >= 125) return 'ðŸ˜Š';
+        if (morale < 75) return 'ðŸ˜¢';
+        return 'ðŸ˜';
     };
     const getStatusBadge = (pName) => {
         const ps = playerStats[pName];
         if (!ps) return '';
         let badges = '';
-        if (ps.injury && ps.injury.daysRemaining > 0) badges += '🚑';
-        if (ps.suspended && ps.suspended.days > 0) badges += '⛔';
+        if (ps.injury && ps.injury.daysRemaining > 0) badges += 'ðŸš‘';
+        if (ps.suspended && ps.suspended.days > 0) badges += 'â›”';
         return badges;
     };
     const getChemDisplay = (val, years) => {
@@ -5433,16 +5198,16 @@ function renderTeamStats() {
             let p = l[idx]; 
             let posLabel = '[' + positionLabels[idx] + ']'; 
             
-            // 🛡️ SAFETY NET: If the slot is empty, print a placeholder instead of crashing
+            // ðŸ›¡ï¸ SAFETY NET: If the slot is empty, print a placeholder instead of crashing
             if (!p) {
                 return `<tr><td><span style="color:var(--neon-cyan); font-weight:bold; font-size:8px;">${posLabel}</span> <span style="color:#555;">-- EMPTY SLOT --</span></td><td></td></tr>`;
             }
 
-            // ⏱️ ATOI CALCULATION
+            // â±ï¸ ATOI CALCULATION
             let psObj = playerStats[p.name];
             let toi = psObj && psObj[k] && psObj[k].gp > 0 ? Math.round(psObj[k].toi / psObj[k].gp) : 0;
 
-            return `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')"><td><span style="color:var(--neon-cyan); font-weight:bold; font-size:8px;">${posLabel}</span> <button style="${yStyle}" onclick="openSubMenu('${tk}', '${p.name}', 'F'); event.stopPropagation();">🔁</button>${getMoraleEmoji(p.name)} ${p.name} ${getArchetypeBadge(p.name)} ${getPlayerBadges(p.name)}</td><td style="text-align:right;"><span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(p.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(p.name)}</span></td></tr>`;
+            return `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')"><td><span style="color:var(--neon-cyan); font-weight:bold; font-size:8px;">${posLabel}</span> <button style="${yStyle}" onclick="openSubMenu('${tk}', '${p.name}', 'F'); event.stopPropagation();">ðŸ”</button>${getMoraleEmoji(p.name)} ${p.name} ${getArchetypeBadge(p.name)} ${getPlayerBadges(p.name)}</td><td style="text-align:right;"><span style="color:#ccc; font-size:8px; margin-right:6px; font-weight:bold;">ATOI: ${toi}</span> <span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(p.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(p.name)}</span></td></tr>`; 
         }).join('');
 
         h += `</table>`;
@@ -5458,16 +5223,16 @@ function renderTeamStats() {
         h += l.map((d, idx) => { 
             let posLabel = '[D]'; 
             
-            // 🛡️ SAFETY NET
+            // ðŸ›¡ï¸ SAFETY NET
             if (!d) {
                 return `<tr><td><span style="color:var(--line-red); font-weight:bold; font-size:8px;">${posLabel}</span> <span style="color:#555;">-- EMPTY SLOT --</span></td><td></td></tr>`;
             }
 
-            // ⏱️ ATOI CALCULATION
+            // â±ï¸ ATOI CALCULATION
             let psObj = playerStats[d.name];
             let toi = psObj && psObj[k] && psObj[k].gp > 0 ? Math.round(psObj[k].toi / psObj[k].gp) : 0;
 
-            return `<tr style="cursor:pointer;" onclick="showPlayerCard('${d.name}')"><td><span style="color:var(--line-red); font-weight:bold; font-size:8px;">${posLabel}</span> <button style="${yStyle}" onclick="openSubMenu('${tk}', '${d.name}', 'D'); event.stopPropagation();">🔁</button>${getStatusBadge(d.name)}${getMoraleEmoji(d.name)}${d.name} ${getArchetypeBadge(d.name)} ${getEmoji(d.name)}</td><td style="text-align:right;"><span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(d.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(d.name)}</span></td></tr>`;
+            return `<tr style="cursor:pointer;" onclick="showPlayerCard('${d.name}')"><td><span style="color:var(--line-red); font-weight:bold; font-size:8px;">${posLabel}</span> <button style="${yStyle}" onclick="openSubMenu('${tk}', '${d.name}', 'D'); event.stopPropagation();">ðŸ”</button>${getStatusBadge(d.name)}${getMoraleEmoji(d.name)}${d.name} ${getArchetypeBadge(d.name)} ${getEmoji(d.name)}</td><td style="text-align:right;"><span style="color:#ccc; font-size:8px; margin-right:6px; font-weight:bold;">ATOI: ${toi}</span> <span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(d.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(d.name)}</span></td></tr>`; 
         }).join('');
         
         h += `</table>`;
@@ -5476,17 +5241,17 @@ function renderTeamStats() {
     if(struct.g && struct.g.length > 0) {
         h += `<div class="unit-header">GOALTENDERS</div><table style="width:100%;">`;
         h += struct.g.map((g,i) => {
-            if (!g) return ''; // 🛡️ SAFETY NET
-            return `<tr><td style="cursor:pointer;" onclick="showPlayerCard('${g.name}')"><span style="color:#FFD700; font-weight:bold; font-size:8px;">[G]</span> <button style="${yStyle}" onclick="openSubMenu('${tk}', '${g.name}', 'G'); event.stopPropagation();">🔁</button>${getStatusBadge(g.name)}${getMoraleEmoji(g.name)}${g.name} ${getArchetypeBadge(g.name)} ${getEmoji(g.name)} (${i===0?'STARTER':'BACKUP'})</td><td style="text-align:right;"><span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(g.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(g.name)}</span></td></tr>`;
+            if (!g) return ''; // ðŸ›¡ï¸ SAFETY NET
+            return `<tr><td style="cursor:pointer;" onclick="showPlayerCard('${g.name}')"><span style="color:#FFD700; font-weight:bold; font-size:8px;">[G]</span> <button style="${yStyle}" onclick="openSubMenu('${tk}', '${g.name}', 'G'); event.stopPropagation();">ðŸ”</button>${getStatusBadge(g.name)}${getMoraleEmoji(g.name)}${g.name} ${getArchetypeBadge(g.name)} ${getEmoji(g.name)} (${i===0?'STARTER':'BACKUP'})</td><td style="text-align:right;"><span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(g.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(g.name)}</span></td></tr>`;
         }).join('');
         h += `</table>`;
     }
    
-   // 🛡️ SPECIAL TEAMS EDITOR INTEGRATION 
+   // ðŸ›¡ï¸ SPECIAL TEAMS EDITOR INTEGRATION 
     h += `</div></div><div class="grid-2" style="margin-top:20px; border-top:2px solid #333; padding-top:15px;">`;
     
     // ==========================================
-    // 🏒 POWER PLAY
+    // ðŸ’ POWER PLAY
     // ==========================================
     h += `<div><div class="unit-header" style="background:#550000; color:var(--ea-yellow);">POWER PLAY UNITS</div>`;
     ['PP1', 'PP2'].forEach((unitName, i) => {
@@ -5503,7 +5268,7 @@ function renderTeamStats() {
         
         // Map the players into the grid slots
         h += ppU.map((p, index) => {
-            if (!p) return `<div class="player-slot" style="color:#555; text-align:center;">-- EMPTY --</div>`; // 🛡️ SAFETY NET
+            if (!p) return `<div class="player-slot" style="color:#555; text-align:center;">-- EMPTY --</div>`; // ðŸ›¡ï¸ SAFETY NET
             
             let label = index < 4 ? '[F]' : '[D]'; // First 4 slots are Forward, 5th is Point Defense
             
@@ -5521,7 +5286,7 @@ function renderTeamStats() {
     h += `</div>`;
 
     // ==========================================
-    // 🛡️ PENALTY KILL
+    // ðŸ›¡ï¸ PENALTY KILL
     // ==========================================
     h += `<div><div class="unit-header" style="background:#003366; color:#00FFFF;">PENALTY KILL UNITS</div>`;
     ['PK1', 'PK2'].forEach((unitName, i) => {
@@ -5557,7 +5322,7 @@ function renderTeamStats() {
     h += `<div style="font-size:7px; color:#aaa; margin-top:5px; display:flex; justify-content:space-between; align-items:center;"><span>PULLED GOALIE UNIT</span> <button onclick="openSpecialTeamsMenu('${tk}', 'EXA', 1)" style="background:#222; color:#fff; border:1px solid #666; padding:2px 6px; cursor:pointer; font-size:7px;">EDIT</button></div>`;
     h += `<div style="display:flex; justify-content:space-around; flex-wrap:wrap; padding:10px 0;">`;
     h += exaU.map(p => `<div style="cursor:pointer; background:#111; padding:5px 10px; border:1px solid #333; border-radius:4px; text-align:center; min-width:80px; margin-bottom:5px;" onclick="showPlayerCard('${p.name}')">
-        <div style="font-size:10px; color:#fff;">${playerStats[p.name].injury>0?'🚑':''}${p.name} ${getArchetypeBadge(p.name)}</div>
+        <div style="font-size:10px; color:#fff;">${playerStats[p.name].injury>0?'ðŸš‘':''}${p.name} ${getArchetypeBadge(p.name)}</div>
         <div style="font-size:8px; color:#FF55FF; margin-top:3px;">OVR: ${getPlayerWeightedStats(p.name).ovr}</div>
         </div>`).join('');
     h += `</div></div><div class="grid-2" style="margin-top:20px;"><div>`; 
@@ -5566,7 +5331,7 @@ function renderTeamStats() {
     const bench = (rosters[tk] || []).filter(p => !activeNames.includes(p.name));
     if (bench.length > 0) {
         h += `<div class="unit-header" style="color:var(--silver-mid);">BENCH / SCRATCHES</div><table style="width:100%;">`;
-        h += bench.map(b => `<tr><td style="cursor:pointer;" onclick="showPlayerCard('${b.name}')"><button style="${yStyle}" onclick="openSubMenu('${tk}', '${b.name}', '${b.pos}'); event.stopPropagation();">🔁</button>${playerStats[b.name].injury>0?'🚑':''}${b.name} ${getArchetypeBadge(b.name)} (${b.pos}) ${getEmoji(b.name)}</td><td style="text-align:right;"><span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(b.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(b.name)}</span></td></tr>`).join('');
+        h += bench.map(b => `<tr><td style="cursor:pointer;" onclick="showPlayerCard('${b.name}')"><button style="${yStyle}" onclick="openSubMenu('${tk}', '${b.name}', '${b.pos}'); event.stopPropagation();">ðŸ”</button>${playerStats[b.name].injury>0?'ðŸš‘':''}${b.name} ${getArchetypeBadge(b.name)} (${b.pos}) ${getEmoji(b.name)}</td><td style="text-align:right;"><span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(b.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(b.name)}</span></td></tr>`).join('');
         h += `</table>`;
     }
 
@@ -5600,20 +5365,21 @@ function renderTeamStats() {
         
         h += sk.map(p => { 
             const st = playerStats[p.name]; 
-            // 🛡️ DATA SAFETY: Ensure the current 'k' (season/playoff) object exists
+            // ðŸ›¡ï¸ DATA SAFETY: Ensure the current 'k' (season/playoff) object exists
             if (!st[k]) st[k] = { toi: 0, gp: 0, g: 0, a: 0, s: 0, pm: 0 }; 
 
             const sPct = st[k].s > 0 ? ((st[k].g / st[k].s) * 100).toFixed(1) + '%' : '0.0%'; 
             const pmVal = st[k].pm || 0;
             const pmColor = pmVal > 0 ? '#0F0' : (pmVal < 0 ? '#F55' : '#888');
             
-            // ⏱️ CALCULATE ATOI
+            // â±ï¸ CALCULATE ATOI
             // We use st[k].toi because 'k' is your dynamic key (season or playoff)
             const totalToi = st[k].toi || 0;
             const gamesPlayed = st[k].gp || 0;
-            const avgToiMin = gamesPlayed > 0 ? totalToi / gamesPlayed : 0;
-            const avgToiM = Math.floor(avgToiMin), avgToiS = Math.round((avgToiMin - avgToiM) * 60);
-            const avgToi = gamesPlayed > 0 ? `${avgToiM}:${String(avgToiS).padStart(2,'0')}` : '--';
+            const avgToi = gamesPlayed > 0 ? Math.round(totalToi / gamesPlayed) : 0;
+            
+            // DEBUG: Uncomment the next line to check if TOI is actually being captured in console
+            // console.log(`ATOI Debug for ${p.name}: TotalTOI=${totalToi}, GP=${gamesPlayed}, Result=${avgToi}`);
 
             return `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')">
                 <td style="text-align:left;">${p.name} ${getArchetypeBadge(p.name)} ${getEmoji(p.name)}</td>
@@ -5637,9 +5403,14 @@ function renderTeamStats() {
  */
 function getLiveLineOvr(line) {
     if (!line || line.length === 0) return 0;
-    // Route through getLiveIceOvr so fatigue, streaks, morale, and chemistry
-    // all flow into shot chance and scoring probability in the sim loop
-    return Math.round(line.reduce((sum, p) => sum + getLiveIceOvr(p.name), 0) / line.length);
+    
+    // Calculate average OVR of the line based on active fatigue/streaks
+    const totalOvr = line.reduce((sum, p) => {
+        const stats = getPlayerWeightedStats(p.name);
+        return sum + (stats.ovr || 0);
+    }, 0);
+    
+    return Math.round(totalOvr / line.length);
 }
 
 /**
@@ -5682,7 +5453,7 @@ function calculateLineIceTime(ovrs, totalMins, isPlayoff) {
 
     let totalWeight = weights.reduce((a, b) => a + b, 0);
 
-    // 2. 🛡️ THE MISSING CAP: Apply your throttle to the stat sheet!
+    // 2. ðŸ›¡ï¸ THE MISSING CAP: Apply your throttle to the stat sheet!
     let maxPercent = isPlayoff ? 0.433 : 0.383;
     
     if (weights.length > 0 && (weights[0] / totalWeight) > maxPercent) {
@@ -5843,7 +5614,7 @@ function openBoxScore(day, idx) {
 
     if (g.result.stars && g.result.stars.length > 0) {
         h += `<div class="unit-header">THREE STARS</div><div style="background:#111; padding:15px; text-align:center; font-size:9px;">`;
-        g.result.stars.forEach((s, i) => { h += `<div style="margin-bottom:10px; cursor:pointer;" onclick="showPlayerCard('${s}')"><span style="color:var(--ea-yellow);">⭐${i===0?'⭐⭐':(i===1?'⭐':'')}</span> ${s}</div>`; });
+        g.result.stars.forEach((s, i) => { h += `<div style="margin-bottom:10px; cursor:pointer;" onclick="showPlayerCard('${s}')"><span style="color:var(--ea-yellow);">â­${i===0?'â­â­':(i===1?'â­':'')}</span> ${s}</div>`; });
         h += `</div>`;
     }
     
@@ -6110,7 +5881,7 @@ function startWatchLive() {
         if (watchQueue.length === 0) {
             clearInterval(watchInterval);
             document.getElementById('wgClock').innerText = `FINAL${g.result.ot > 0 ? ' (OT)' : ''}`;
-            document.getElementById('wgTicker').innerHTML += `<div style="color:var(--ea-yellow); text-align:center; margin-top:20px; font-size:12px;">🚨 FINAL HORN 🚨</div>`;
+            document.getElementById('wgTicker').innerHTML += `<div style="color:var(--ea-yellow); text-align:center; margin-top:20px; font-size:12px;">ðŸš¨ FINAL HORN ðŸš¨</div>`;
             document.getElementById('btnWgSkip').style.display = 'none'; document.getElementById('btnWgClose').style.display = 'block';
             let t = document.getElementById('wgTicker'); t.scrollTop = t.scrollHeight; return;
         }
@@ -6125,7 +5896,7 @@ function startWatchLive() {
                 if (ev.tm === g.a.code) { watchCurrentScore.a++; document.getElementById('wgAwayScore').innerText = watchCurrentScore.a; }
                 if (ev.tm === g.h.code) { watchCurrentScore.h++; document.getElementById('wgHomeScore').innerText = watchCurrentScore.h; }
             }
-            const evDisplay = ev.isPenalty ? `⛔ ${ev.txt}` : `🚨 GOAL! ${ev.txt || (ev.scorer ? ev.scorer : '')}`;
+            const evDisplay = ev.isPenalty ? `â›” ${ev.txt}` : `ðŸš¨ GOAL! ${ev.txt || (ev.scorer ? ev.scorer : '')}`;
             document.getElementById('wgTicker').innerHTML += `<div style="background:#111; border:2px solid ${ev.cl||'#555'}; padding:8px; margin:5px 0;"><span style="color:${ev.cl||'#fff'}; font-weight:bold; margin-right:10px;">[${ev.tm||''}]</span> <span style="color:#fff;">${evDisplay}</span></div>`;
         }
         let t = document.getElementById('wgTicker'); t.scrollTop = t.scrollHeight;
@@ -6138,11 +5909,11 @@ function skipWatchGame() {
     document.getElementById('wgClock').innerText = `FINAL${watchGameObj.result.ot > 0 ? ' (OT)' : ''}`;
     let h = '<div style="color:var(--ea-yellow); text-align:center; margin-bottom:15px;">--- FAST FORWARDED TO END ---</div>';
     watchGameObj.result.boxLog.forEach(ev => {
-        if (ev.isPenalty) { h += `<div style="background:#111; border:1px solid ${ev.cl}; padding:4px; margin:4px 0;"><span style="color:${ev.cl}; font-weight:bold; margin-right:10px;">[${ev.tm}]</span> <span style="color:#fff;">⛔ ${ev.txt}</span></div>`; } 
+        if (ev.isPenalty) { h += `<div style="background:#111; border:1px solid ${ev.cl}; padding:4px; margin:4px 0;"><span style="color:${ev.cl}; font-weight:bold; margin-right:10px;">[${ev.tm}]</span> <span style="color:#fff;">â›” ${ev.txt}</span></div>`; } 
         else {
-            h += `<div style="background:#111; border:1px solid ${ev.cl||'#555'}; padding:4px; margin:4px 0;"><span style="color:${ev.cl||'#fff'}; font-weight:bold; margin-right:10px;">[${ev.tm||''}]</span> <span style="color:#fff;">🚨 GOAL! ${ev.txt || ev.scorer || ''}</span></div>`; }
+            h += `<div style="background:#111; border:1px solid ${ev.cl||'#555'}; padding:4px; margin:4px 0;"><span style="color:${ev.cl||'#fff'}; font-weight:bold; margin-right:10px;">[${ev.tm||''}]</span> <span style="color:#fff;">ðŸš¨ GOAL! ${ev.txt || ev.scorer || ''}</span></div>`; }
     });
-    h += `<div style="color:var(--ea-yellow); text-align:center; margin-top:20px; font-size:12px;">🚨 FINAL HORN 🚨</div>`;
+    h += `<div style="color:var(--ea-yellow); text-align:center; margin-top:20px; font-size:12px;">ðŸš¨ FINAL HORN ðŸš¨</div>`;
     document.getElementById('wgTicker').innerHTML = h; let t = document.getElementById('wgTicker'); t.scrollTop = t.scrollHeight;
     document.getElementById('btnWgSkip').style.display = 'none'; document.getElementById('btnWgClose').style.display = 'block';
 }
@@ -6160,11 +5931,11 @@ function closeWatchGame() {
 
 // --- LINE EDITORS & SPECIAL TEAMS MENUS ---
 
-// ─── renderLineEditor ────────────────────────────────────────────────────────
+// â”€â”€â”€ renderLineEditor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Draws the interactive line/pairing editor inside #lineEditorContent.
 // Click any player slot to open a dropdown swap. Preset pairs (Dynamic Duos)
 // are highlighted in gold. Save writes to tObj.customLines which overrides AI.
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderLineEditor(tk) {
     const container = document.getElementById('lineEditorContent');
     if (!container) return;
@@ -6183,7 +5954,7 @@ function renderLineEditor(tk) {
     const inj  = n => { const ps = playerStats[n]; return ps && ps.injury && ps.injury.daysRemaining > 0; };
     const lineAvg = arr => arr.length ? Math.round(arr.reduce((s,p)=>s+ovr(p.name),0)/arr.length) : 0;
 
-    // ── Slot renderer (click opens swap dropdown) ──────────────────────────
+    // â”€â”€ Slot renderer (click opens swap dropdown) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const slotHTML = (p, slotId, posHint, accentColor) => {
         if (!p) return `<div class="le-slot empty" style="color:#444; border:1px dashed #333; padding:6px 4px; text-align:center; font-size:8px; border-radius:3px;">-- EMPTY --</div>`;
         const isDuo  = mates(p.name).length > 0;
@@ -6193,14 +5964,14 @@ function renderLineEditor(tk) {
         return `
         <div class="le-slot" id="slot_${slotId}" style="border:${border}; background:#111; border-radius:3px; padding:5px 4px; cursor:pointer; position:relative;"
              onclick="leOpenSwap('${tk}','${slotId}','${posHint}')"${duoTip}>
-            <div style="font-size:8px; color:#888; margin-bottom:1px;">${posHint}${isDuo?'<span style="color:var(--ea-yellow);margin-left:3px;">★</span>':''}</div>
-            <div style="font-size:9px; color:#fff; font-weight:bold;">${isInj?'🚑 ':''}${p.name}</div>
+            <div style="font-size:8px; color:#888; margin-bottom:1px;">${posHint}${isDuo?'<span style="color:var(--ea-yellow);margin-left:3px;">â˜…</span>':''}</div>
+            <div style="font-size:9px; color:#fff; font-weight:bold;">${isInj?'ðŸš‘ ':''}${p.name}</div>
             <div style="font-size:7px; color:${accentColor}; margin-top:1px;">${tag(p.name)} ${ovr(p.name)} OVR</div>
         </div>`;
     };
 
-    // ── Forward lines (4 × LW-C-RW) ───────────────────────────────────────
-    let fHTML = `<div style="color:var(--ea-yellow); font-size:9px; font-weight:bold; margin-bottom:8px; letter-spacing:2px;">⚔️ FORWARD LINES</div>`;
+    // â”€â”€ Forward lines (4 Ã— LW-C-RW) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    let fHTML = `<div style="color:var(--ea-yellow); font-size:9px; font-weight:bold; margin-bottom:8px; letter-spacing:2px;">âš”ï¸ FORWARD LINES</div>`;
     struct.f.forEach((line, li) => {
         const [lw, c, rw] = line; // getRosterStructure already arranges LW,C,RW
         const avg = lineAvg(line);
@@ -6219,8 +5990,8 @@ function renderLineEditor(tk) {
         </div>`;
     });
 
-    // ── Defense pairings (3 × LD-RD) ──────────────────────────────────────
-    let dHTML = `<div style="color:#00FFFF; font-size:9px; font-weight:bold; margin-bottom:8px; letter-spacing:2px; margin-top:12px;">🛡️ DEFENSE PAIRINGS</div>`;
+    // â”€â”€ Defense pairings (3 Ã— LD-RD) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    let dHTML = `<div style="color:#00FFFF; font-size:9px; font-weight:bold; margin-bottom:8px; letter-spacing:2px; margin-top:12px;">ðŸ›¡ï¸ DEFENSE PAIRINGS</div>`;
     struct.d.forEach((pair, pi) => {
         const [ld, rd] = pair;
         const avg = lineAvg(pair);
@@ -6238,28 +6009,28 @@ function renderLineEditor(tk) {
         </div>`;
     });
 
-    // ── Goalies ────────────────────────────────────────────────────────────
-    let gHTML = `<div style="color:#FF55FF; font-size:9px; font-weight:bold; margin-bottom:8px; letter-spacing:2px; margin-top:12px;">🥅 GOALIES</div>`;
+    // â”€â”€ Goalies â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    let gHTML = `<div style="color:#FF55FF; font-size:9px; font-weight:bold; margin-bottom:8px; letter-spacing:2px; margin-top:12px;">ðŸ¥… GOALIES</div>`;
     gHTML += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">`;
     const goalies = roster.filter(p=>p.pos==='G').sort((a,b)=>ovr(b.name)-ovr(a.name)).slice(0,2);
     goalies.forEach((g, gi) => {
         const isInj = inj(g.name);
         gHTML += `<div style="background:#111; border:1px solid #333; border-radius:3px; padding:6px; cursor:pointer;" onclick="showPlayerCard('${g.name}')">
             <div style="font-size:7px; color:#FF55FF;">${gi===0?'STARTER':'BACKUP'}</div>
-            <div style="font-size:9px; color:#fff; font-weight:bold;">${isInj?'🚑 ':''}${g.name}</div>
+            <div style="font-size:9px; color:#fff; font-weight:bold;">${isInj?'ðŸš‘ ':''}${g.name}</div>
             <div style="font-size:7px; color:#aaa;">${ovr(g.name)} OVR</div>
         </div>`;
     });
     gHTML += `</div>`;
 
-    // ── Legend & action buttons ────────────────────────────────────────────
+    // â”€â”€ Legend & action buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const legendHTML = `
     <div style="margin-top:10px; padding:6px 8px; background:#0a0a0a; border:1px solid #222; border-radius:3px; font-size:7px; color:#666;">
-        <span style="color:var(--ea-yellow);">★</span> Dynamic Duo pairing &nbsp;|&nbsp; Click any slot to swap &nbsp;|&nbsp; OVR = live weighted rating
+        <span style="color:var(--ea-yellow);">â˜…</span> Dynamic Duo pairing &nbsp;|&nbsp; Click any slot to swap &nbsp;|&nbsp; OVR = live weighted rating
     </div>`;
 
     const modeLabel = isCustom
-        ? `<span style="color:#0f0; font-size:7px;">✔ CUSTOM LINES ACTIVE</span>`
+        ? `<span style="color:#0f0; font-size:7px;">âœ” CUSTOM LINES ACTIVE</span>`
         : `<span style="color:#aaa; font-size:7px;">AUTO-COACH (AI) ACTIVE</span>`;
 
     const btnRow = `
@@ -6273,7 +6044,7 @@ function renderLineEditor(tk) {
     container.innerHTML = fHTML + dHTML + gHTML + legendHTML + btnRow;
 }
 
-// ── Swap dropdown ─────────────────────────────────────────────────────────────
+// â”€â”€ Swap dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function leOpenSwap(tk, slotId, posHint) {
     const existing = document.getElementById('le-swap-overlay');
     if (existing) existing.remove();
@@ -6288,11 +6059,11 @@ function leOpenSwap(tk, slotId, posHint) {
     pool.forEach(p => {
         const inj = playerStats[p.name]?.injury?.daysRemaining > 0;
         const duo = getLineMates(p.name);
-        const duoLabel = duo ? `<span style="color:var(--ea-yellow); font-size:7px;"> ★</span>` : '';
+        const duoLabel = duo ? `<span style="color:var(--ea-yellow); font-size:7px;"> â˜…</span>` : '';
         h += `<div style="padding:5px 6px; cursor:pointer; border-radius:2px; margin-bottom:2px; background:#1a1a1a;"
                    onmouseover="this.style.background='#222'" onmouseout="this.style.background='#1a1a1a'"
                    onclick="leSwapSlot('${tk}','${slotId}','${p.name}')">
-            <span style="color:#fff; font-size:9px;">${inj?'🚑 ':''}${p.name}${duoLabel}</span>
+            <span style="color:#fff; font-size:9px;">${inj?'ðŸš‘ ':''}${p.name}${duoLabel}</span>
             <span style="color:#aaa; font-size:7px; float:right;">${getPlayerWeightedStats(p.name).ovr} OVR</span>
         </div>`;
     });
@@ -6307,7 +6078,7 @@ function leOpenSwap(tk, slotId, posHint) {
     document.body.appendChild(overlay);
 }
 
-// ── Apply a swap and re-render ────────────────────────────────────────────────
+// â”€â”€ Apply a swap and re-render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function leSwapSlot(tk, slotId, newPlayerName) {
     // Parse slot id: f01 = forward line 0 slot 1, d10 = defense pair 1 slot 0
     const type     = slotId[0];         // 'f' or 'd'
@@ -6336,7 +6107,7 @@ function leSwapSlot(tk, slotId, newPlayerName) {
     renderLineEditor(tk);
 }
 
-// ── Persist custom lines ──────────────────────────────────────────────────────
+// â”€â”€ Persist custom lines â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function leSaveLines(tk) {
     if (!customLines[tk]) { alert('No changes to save. Swap players first.'); return; }
     localStorage.setItem('nhl94_customLines', JSON.stringify(customLines));
@@ -6345,7 +6116,7 @@ function leSaveLines(tk) {
     renderLineEditor(tk);
 }
 
-// ── Clear custom lines (revert to AI) ────────────────────────────────────────
+// â”€â”€ Clear custom lines (revert to AI) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function leClearLines(tk) {
     delete customLines[tk];
     localStorage.setItem('nhl94_customLines', JSON.stringify(customLines));
@@ -6519,6 +6290,14 @@ function toggleBox(el) {
     const icon = header.querySelector('.toggle-icon'); if (icon) { icon.innerText = isHidden ? '[-]' : '[+]'; }
 } 
 
+function clearArchives() { 
+    if(confirm("Delete past History & HOF?")) { 
+        leagueHistory = []; hallOfFame = []; retiredPlayers = []; 
+        localStorage.removeItem(HISTORY_STORAGE_KEY); localStorage.removeItem(HOF_STORAGE_KEY); localStorage.removeItem(RETIRED_STORAGE_KEY); 
+        renderLeagueHistory(); renderHallOfFame(); renderRetiredPlayers(); 
+    } 
+}
+
 function exportCSV() { 
     let csv = "Player,Team,Pos,Age,GP,G,A,PTS,W,SO,SV%,GAA,OVR,ASG_APP\n"; 
     Object.values(playerStats).forEach(p => { 
@@ -6555,7 +6334,7 @@ function checkMonthlyAwards() {
         let eF = eastF ? eastF.name : 'N/A'; let eD = eastD ? eastD.name : 'N/A'; let eG = eastG ? eastG.name : 'N/A';
         let wF = westF ? westF.name : 'N/A'; let wD = westD ? westD.name : 'N/A'; let wG = westG ? westG.name : 'N/A';
         
-        document.getElementById('jumboMessage').innerHTML = `<span style="color:var(--ea-yellow)">🏆 MONTH ${monthNum} EAST AWARDS 🏆</span><br>F: ${eF} | D: ${eD} | G: ${eG}<br><span style="color:var(--ea-yellow)">🏆 MONTH ${monthNum} WEST AWARDS 🏆</span><br>F: ${wF} | D: ${wD} | G: ${wG}`;
+        document.getElementById('jumboMessage').innerHTML = `<span style="color:var(--ea-yellow)">ðŸ† MONTH ${monthNum} EAST AWARDS ðŸ†</span><br>F: ${eF} | D: ${eD} | G: ${eG}<br><span style="color:var(--ea-yellow)">ðŸ† MONTH ${monthNum} WEST AWARDS ðŸ†</span><br>F: ${wF} | D: ${wD} | G: ${wG}`;
         takeMonthSnapshot(); renderTradeLog();
     }
 }
@@ -6691,7 +6470,7 @@ function runEndOfSeasonAwards() {
     }
 
     // ==========================================
-    // 🏆 ADVANCED HART TROPHY (MVP) LOGIC
+    // ðŸ† ADVANCED HART TROPHY (MVP) LOGIC
     // ==========================================
     let teamTopScorers = {};
     skaters.forEach(p => {
@@ -6915,7 +6694,7 @@ function getConnSmytheScore(p) {
             if (!rosters[t.nrm]) rosters[t.nrm] = []; 
             playerStats[rN] = { 
                 name: rN, team: t.name, teamCode: t.code, pos: 'F', age: 18, streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false, injury: 0, attr: { off: 65 + Math.floor(Math.random()*15), def: 60 + Math.floor(Math.random()*15), gDef: 60 }, 
-                career: {gp:0, g:0, a:0, pts:0, w:0, so:0, sv:0, sa:0, pim:0, ppg:0, asg:0}, season: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, t:0, pim:0, ppg:0}, playoff: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, pim:0, ppg:0}
+                career: {gp:0, g:0, a:0, pts:0, w:0, so:0, sv:0, sa:0, pim:0, ppg:0}, season: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, t:0, pim:0, ppg:0}, playoff: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, pim:0, ppg:0} 
             }; 
             rosters[t.nrm].push({name: rN, pos: 'F'}); 
         }); 
@@ -6989,7 +6768,7 @@ function openProposalsModal() {
                         <div style="color:#aaa;">${t.t1Name.toUpperCase()} SENDS:</div>
                         <div style="color:#fff; margin-top:5px;">${t.p1} (OVR: ${getPlayerWeightedStats(t.p1).baseOvr}, AGE: ${playerStats[t.p1].age})</div>
                     </div>
-                    <div style="color:var(--neon-cyan); margin-top:10px;">◄ SWAP ►</div>
+                    <div style="color:var(--neon-cyan); margin-top:10px;">â—„ SWAP â–º</div>
                     <div style="text-align:right; width:45%;">
                         <div style="color:#aaa;">${t.t2Name.toUpperCase()} SENDS:</div>
                         <div style="color:#fff; margin-top:5px;">${t.p2} (OVR: ${getPlayerWeightedStats(t.p2).baseOvr}, AGE: ${playerStats[t.p2].age})</div>
@@ -7017,7 +6796,7 @@ function approveProposal(id) {
         
         let t1o = league.find(l=>l.nrm===t.t1); if(t1o) t1o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
         let t2o = league.find(l=>l.nrm===t.t2); if(t2o) t2o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
-        tradeLog.unshift({ day: currentDay, details: `🤝 BLOCKBUSTER: ${t.p1} traded to ${t.t2Name} for ${t.p2}!` });
+        tradeLog.unshift({ day: currentDay, details: `ðŸ¤ BLOCKBUSTER: ${t.p1} traded to ${t.t2Name} for ${t.p2}!` });
     }
     pendingTrades = pendingTrades.filter(x => x.id !== id); openProposalsModal(); updateUI(); saveGame();
 }
@@ -7040,8 +6819,8 @@ function renderLeagueHistory() {
 
 function renderHallOfFame() { 
     let el = document.getElementById('hofTable'); if (!el) return;
-    let h = `<tr><th>YR</th><th>PLAYER</th><th>POS</th><th>TEAM</th><th>GP</th><th>G/W</th><th>A/SO</th><th>PTS</th><th>🏆</th></tr>`; 
-    hallOfFame.forEach(p => { h += `<tr><td>${p.year}</td><td class="hof-hl">${p.name}</td><td>${p.pos}</td><td>${p.team}</td><td>${p.gp}</td><td>${p.g || p.w}</td><td>${p.a || p.so}</td><td>${p.pts || p.w}</td><td>${p.mvp?'⭐':''}</td></tr>`; }); 
+    let h = `<tr><th>YR</th><th>PLAYER</th><th>POS</th><th>TEAM</th><th>GP</th><th>G/W</th><th>A/SO</th><th>PTS</th><th>ðŸ†</th></tr>`; 
+    hallOfFame.forEach(p => { h += `<tr><td>${p.year}</td><td class="hof-hl">${p.name}</td><td>${p.pos}</td><td>${p.team}</td><td>${p.gp}</td><td>${p.g || p.w}</td><td>${p.a || p.so}</td><td>${p.pts || p.w}</td><td>${p.mvp?'â­':''}</td></tr>`; }); 
     el.innerHTML = h; 
 }
 
@@ -7121,7 +6900,7 @@ function trackIceTime(playersOnIce, minutes) {
     });
 }
 
-// 🚨 NEW HELPER: Syncs individual rounds back to the master Playoff bucket
+// ðŸš¨ NEW HELPER: Syncs individual rounds back to the master Playoff bucket
 function syncAggregatePlayoffs(pName) {
     let p = playerStats[pName];
     if (!p) return;
@@ -7216,79 +6995,48 @@ function initPlayoffsUI() {
     showBracket();
 }
 
-let _bracketViewRound = 1;
-
-function _bracketAllRounds() {
-    const rounds = [];
-    const rdLabel = r => r === 1 ? 'DIVISION SEMIS' : r === 2 ? 'DIVISION FINALS' : r === 3 ? 'CONF FINALS' : 'STANLEY CUP FINALS';
-    if (playoffBracket.history) {
-        playoffBracket.history.forEach(rnd => rounds.push({
-            round: rnd.round, label: rnd.label || rdLabel(rnd.round),
-            series: rnd.series, isCurrent: false
-        }));
-    }
-    if (playoffBracket.series && playoffBracket.series.length > 0) {
-        rounds.push({
-            round: playoffBracket.round, label: rdLabel(playoffBracket.round),
-            series: playoffBracket.series.map(s => ({
-                hCode: s.h.code, hName: s.h.name, aCode: s.a.code, aName: s.a.name,
-                hW: s.hW, aW: s.aW, conf: s.conf
-            })),
-            isCurrent: true
-        });
-    }
-    return rounds.sort((a, b) => a.round - b.round);
-}
-
-function _bracketNav(dir) {
-    const rounds = _bracketAllRounds();
-    const idx = rounds.findIndex(r => r.round === _bracketViewRound);
-    const next = Math.max(0, Math.min(rounds.length - 1, idx + dir));
-    _bracketViewRound = rounds[next].round;
-    _renderBracket();
-}
-
-function _renderBracket() {
-    const rounds = _bracketAllRounds();
-    if (!rounds.length) { document.getElementById('bracketContent').innerHTML = ''; return; }
-
-    const idx = rounds.findIndex(r => r.round === _bracketViewRound);
-    const viewRnd = rounds[idx] || rounds[rounds.length - 1];
-    const hasPrev = idx > 0;
-    const hasNext = idx < rounds.length - 1;
-
+function showBracket() {
     let h = '';
-
-    // Round navigation header
-    h += `<div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:14px; width:100%;">`;
-    h += `<button onclick="_bracketNav(-1)" ${hasPrev ? '' : 'disabled'} style="font-family:'Press Start 2P',cursive; font-size:7px; background:#000; border:2px solid ${hasPrev ? '#fff' : '#333'}; color:${hasPrev ? '#fff' : '#444'}; padding:5px 10px; cursor:${hasPrev ? 'pointer' : 'default'};">&#9664; PREV</button>`;
-    h += `<span style="font-size:8px; color:var(--ea-yellow); min-width:180px; text-align:center; letter-spacing:1px;">RD ${viewRnd.round} &mdash; ${viewRnd.label}${viewRnd.isCurrent ? ' &#9679;' : ''}</span>`;
-    h += `<button onclick="_bracketNav(1)" ${hasNext ? '' : 'disabled'} style="font-family:'Press Start 2P',cursive; font-size:7px; background:#000; border:2px solid ${hasNext ? '#fff' : '#333'}; color:${hasNext ? '#fff' : '#444'}; padding:5px 10px; cursor:${hasNext ? 'pointer' : 'default'};">NEXT &#9654;</button>`;
-    h += `</div>`;
-
-    // Series cards for the selected round
-    viewRnd.series.forEach(s => {
-        const winH = s.hW === 4; const winA = s.aW === 4;
+    playoffBracket.series.forEach(s => {
+        let winH = s.hW === 4; let winA = s.aW === 4;
         h += `<div style="background:#111; border:2px solid ${winH||winA ? 'var(--ea-yellow)' : '#333'}; padding:10px; width:200px; text-align:center;">`;
         h += `<div style="font-size:8px; color:#aaa; margin-bottom:5px;">${s.conf || ''}</div>`;
+        
+        // HOME TEAM (Logo + 3-Letter Code)
         h += `<div style="display:flex; justify-content:space-between; align-items:center; color:${winH ? 'var(--ea-yellow)' : '#fff'};">
-                <span style="display:flex; align-items:center; gap:5px;">${getTeamLogoHtml(s.hName || s.hCode)} ${s.hCode}</span>
+                <span style="display:flex; align-items:center; gap:5px;">${getTeamLogoHtml(s.h.name)} ${s.h.code}</span>
                 <span style="font-size:14px; font-weight:bold;">${s.hW}</span>
               </div>`;
+              
+        // AWAY TEAM (Logo + 3-Letter Code)
         h += `<div style="display:flex; justify-content:space-between; align-items:center; color:${winA ? 'var(--ea-yellow)' : '#fff'}; margin-top:5px;">
-                <span style="display:flex; align-items:center; gap:5px;">${getTeamLogoHtml(s.aName || s.aCode)} ${s.aCode}</span>
+                <span style="display:flex; align-items:center; gap:5px;">${getTeamLogoHtml(s.a.name)} ${s.a.code}</span>
                 <span style="font-size:14px; font-weight:bold;">${s.aW}</span>
               </div>`;
+              
         h += `</div>`;
     });
+    // Past rounds accordion
+    if (playoffBracket.history && playoffBracket.history.length > 0) {
+        h += `<div style="margin-top:15px; border-top:1px solid #333; padding-top:10px;">`;
+        h += `<div style="font-size:7px; color:#aaa; margin-bottom:8px; cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">&#x25BC; PAST ROUNDS</div>`;
+        h += `<div style="display:none;">`;
+        [...playoffBracket.history].reverse().forEach(rnd => {
+            h += `<div style="margin-bottom:8px;"><div style="font-size:7px; color:var(--ea-yellow); margin-bottom:4px;">RD ${rnd.round} â€” ${rnd.label}</div>`;
+            rnd.series.forEach(s => {
+                const winH = s.hW === 4; const winA = s.aW === 4;
+                h += `<div style="font-size:7px; background:#111; border:1px solid #333; padding:5px; margin-bottom:3px;">`;
+                h += `<span style="color:${winH?'var(--ea-yellow)':'#aaa'}">${s.hCode} <b>${s.hW}</b></span>`;
+                h += ` <span style="color:#555">vs</span> `;
+                h += `<span style="color:${winA?'var(--ea-yellow)':'#aaa'}"><b>${s.aW}</b> ${s.aCode}</span>`;
+                h += `</div>`;
+            });
+            h += `</div>`;
+        });
+        h += `</div></div>`;
+    }
 
     document.getElementById('bracketContent').innerHTML = h;
-}
-
-function showBracket() {
-    // Always jump to the current active round when called from game flow
-    _bracketViewRound = playoffBracket.round;
-    _renderBracket();
 
     if(playoffBracket.series.some(s => s.hW === 4 || s.aW === 4) && !playoffBracket.series.some(s => s.hW < 4 && s.aW < 4)) {
         if(!document.getElementById('btnNextRound')) {
@@ -7297,7 +7045,7 @@ function showBracket() {
     }
 }
 
-// ─── PRO SET CARD SYSTEM ──────────────────────────────────────────────────────
+// â”€â”€â”€ PRO SET CARD SYSTEM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const PC_WALES = ['BOS','BUF','HFD','MTL','QUE','NJD','NYI','NYR','PIT','WSH','PHI','FLA','TBL','OTT'];
 
@@ -7331,374 +7079,404 @@ function _pcShade(hex, amt) {
     return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
 }
 
-// ─── 16-BIT GENESIS-STYLE SPRITE ENGINE ──────────────────────────────────────
-// 160×240 logical px at 2× scale → 320×480 canvas displayed at 160×240 CSS px.
-
-function _spr(ctx, sc, x, y, w, h, col) {
-    ctx.fillStyle = col; ctx.fillRect(x*sc, y*sc, w*sc, h*sc);
+function _pcR(ctx, sc, x, y, w, h, col) { // plain fill
+    ctx.fillStyle = col;
+    ctx.fillRect(x*sc, y*sc, w*sc, h*sc);
 }
 
-function pcDrawSprite(canvas, type, pri, sec) {
-    const sc = 2;
-    canvas.width  = 160 * sc;
-    canvas.height = 240 * sc;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+function _pcB(ctx, sc, x, y, w, h, col) { // bordered fill (outline technique)
+    ctx.fillStyle = '#000';
+    ctx.fillRect(x*sc, y*sc, w*sc, h*sc);
+    ctx.fillStyle = col;
+    ctx.fillRect(x*sc+1, y*sc+1, w*sc-2, h*sc-2);
+}
 
-    // ── Palette ───────────────────────────────────────────────────────────────
-    const P=pri,  Pl=_pcShade(pri,70), Pl2=_pcShade(pri,38), Pd=_pcShade(pri,-45), Pdd=_pcShade(pri,-80);
-    const S=sec,  Sl=_pcShade(sec,60), Sd=_pcShade(sec,-40);
-    const SKN='#F2C07A', SKl='#FFE4B2', SKd='#C8855A', SKdd='#9A5530';
-    const HLM='#16162A', HLl='#2E2E5A', HLd='#0A0A12', HLs='#4848A8';
-    const BLK='#0d0d0d', DRK='#1e1e1e', GRY='#666', LGY='#aaa';
-    const STK='#4A2800', STKl='#7C4800', STKd='#281400';
-    const BLD='#C4C4C4', BLDl='#E4E4E4', BLDs='#888';
-    const SHN='#263444', SHNl='#365460', SHNd='#162230';
-    const GLV=_pcShade(pri,-10), GLVl=_pcShade(pri,22), GLVd=_pcShade(pri,-46);
-    const BRN='#7A3B00', BRNl='#A05200', BRNd='#401E00';
-    const ICE='#C8E8FF', ICl='#EAF6FF', ICd='#8EBEDD';
-    const NET='rgba(130,130,130,0.38)';
-    const WHT='#E8E8E8', WHTl='#FFFFFF', WHTd='#B8B8C0';
+// â”€â”€ Player card sprite placeholder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-    const r   = (x,y,w,h,c)                    => { ctx.fillStyle=c; ctx.fillRect(x*sc,y*sc,w*sc,h*sc); };
-    const arc = (cx,cy,rx,ry,c,a0=0,a1=Math.PI*2) => { ctx.fillStyle=c; ctx.beginPath(); ctx.ellipse(cx*sc,cy*sc,rx*sc,ry*sc,0,a0,a1); ctx.fill(); };
-    const poly= (pts,c)                         => { ctx.fillStyle=c; ctx.beginPath(); ctx.moveTo(pts[0][0]*sc,pts[0][1]*sc); pts.slice(1).forEach(p=>ctx.lineTo(p[0]*sc,p[1]*sc)); ctx.closePath(); ctx.fill(); };
-    const ln  = (x1,y1,x2,y2,c,w=1.5)          => { ctx.strokeStyle=c; ctx.lineWidth=w*sc; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(x1*sc,y1*sc); ctx.lineTo(x2*sc,y2*sc); ctx.stroke(); };
+// Forward v0: BREAKAWAY CROUCH — low lean, full stride, puck on blade
+const PC_SPR_FWD_0 = [
+    '....................................',
+    '....................................',
+    '...................######...........',
+    '..................#HHhhhH##.........',
+    '..................#HhVVVhH#.........',
+    '..................#H##ss##H#........',
+    '..................#H##SS##H#........',
+    '...................#HHsSSH##........',
+    '............####JJJJJJJJJJJ####....',
+    '...........#jJJJJJJJJJJJJJJJJJd#..',
+    '..........##JJjJJJJcccccJJJJJJdJJ#.',
+    '.........#GGjJJJJccccccccJJJJJdJJJ#',
+    '........#GGgjJJJJJJcccJJJJJJJJdJJJ#',
+    '.......#KkGGgjJJJJJJJJJJJJJJJJdJJJ#',
+    '......#KkkkGgjJdddddddddddddddJJJJ##',
+    '.....#KKkkkk##dddddddddddddddddJJJ##',
+    '....#KKKkkkk#dddddddddddddddddddJ##.',
+    '...#KKKKkkk##pppppppppppppppppppp##.',
+    '..#KKKKKkk##ppppppppppppppppppppp##.',
+    '.#KKKKKKkk#pppppppppppppppppppppp##.',
+    '#KKKKKKKk##pppppppppppppppppppppp#..',
+    '#KKKKKKk##mmmmmmmmm#....#mmmmmmmmmm#',
+    '##KKKKKk#mmmmmmmmm#....#mmmmmmmmmm#.',
+    '.##KKKk#mmmmmmmmmmm#....#mmmmmmmmmm#',
+    '..##KKk#mmmmmmmmmmm#....#mmmmmmmmmm#',
+    '...##Kk#mmmmmmmmmmmm#....#mmmmmmmmm#',
+    '....##k#bbbbbbbbbbbb#....#bbbbbbbbb#',
+    '.....###bBBBBBBBBBBBb#....#bBBBBBBBBb',
+    '......##aaaaaaaaaaaaaaa#....#aaaaaaaA',
+    '.....#uuu#aaaaaaaaaaaaaaaaaaaaaaA##.',
+    '....#uuuuu#aaaaaaaaaaaaaaaaaaaaA##..',
+    '....#uuuuu##aaaaaaaaaaaaaaaaaaaA#...',
+    '.....#uuu...#aaaaaaaaaaaaaaaaaaA#...',
+    '......###....#aaaaaaaaaaaaaaaaA##...',
+    '..............#aaaaaaaaaaaaaaaA#....',
+    '...............#aaaaaaaaaaaaaaA#....',
+    '................#aaaaaaaaaaaaaA#....',
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+];
+// Forward v1: WRIST SHOT — weight transfers forward, stick releasing
+const PC_SPR_FWD_1 = [
+    '....................................',
+    '....................................',
+    '..............######................',
+    '.............#HHhhhH##..............',
+    '.............#HhVVVhH#..............',
+    '.............#H##ss##H#.............',
+    '.............#H##SS##H#.............',
+    '..............#HHsSSH##.............',
+    '..........####JJJJJJJJJJ####........',
+    '.........#jJJJJJJJJJJJJJJJJJd#.....',
+    '.......##JJjJJJJcccccJJJJJJJdJJ##..',
+    '......#GGjJJJJccccccccJJJJJJdJJJJ#.',
+    '.....#GGgjJJJJJJcccJJJJJJJJJdJJJJ#.',
+    '....#GGggkjJJJJJJJJJJJJJJJJJJJJJ##.',
+    '...#KkkkkkjJdddddddddddddddddddJJJ#.',
+    '..#KkkkkkjJdddddddddddddddddddddJ##.',
+    '.#Kkkkkk##dddddddddddddddddddddJ##..',
+    '#Kkkkkk#ddddddddddddddddddddddJ##...',
+    '#KKkkkk#ppppppppppppppppppppppp##...',
+    '.#KKkkk#pppppppppppppppppppppppp#...',
+    '..#KKkk#ppppppppppppppppppppppp##...',
+    '...#Kkk##mmmmmmmmm#....#mmmmmmmmm#..',
+    '....#kk#mmmmmmmmmm#....#mmmmmmmmmm#.',
+    '...#Kkkmmmmmmmmmmm#....#mmmmmmmmmmm#',
+    '..#KKkk#mmmmmmmmm#.....#mmmmmmmmmmm#',
+    '.#KKKkk#mmmmmmmmmm#....#mmmmmmmmmm#.',
+    '#KKKKkk#bbbbbbbbbb#....#bbbbbbbbbb#.',
+    '#KKKKkk##bBBBBBBBBb#....#bBBBBBBBBb',
+    '##KKKkk##aaaaaaaaaaaa#....#aaaaaaA##',
+    '.##KKKk###aaaaaaaaaaaaaaaaaaaaaaA##.',
+    '...#KKk#..#aaaaaaaaaaaaaaaaaaaaA##..',
+    '...#uuu#...#aaaaaaaaaaaaaaaaaaaA#...',
+    '..#uuuuu....#aaaaaaaaaaaaaaaaaaA#...',
+    '...#uuu......#aaaaaaaaaaaaaaaaaA#...',
+    '....###.......#aaaaaaaaaaaaaaaaA#...',
+    '...............#aaaaaaaaaaaaaaaA#...',
+    '................#aaaaaaaaaaaaaaA#...',
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+];
+// Forward v2: BACKHAND SWEEP — weight back, stick reaching behind body
+const PC_SPR_FWD_2 = [
+    '....................................',
+    '....................................',
+    '.............######.................',
+    '............#HHhhhH##...............',
+    '............#HhVVVhH#...............',
+    '............#H##ss##H#..............',
+    '............#H##SS##H#..............',
+    '.............#HHsSSH##..............',
+    '.........####JJJJJJJJJJ####.........',
+    '........#jJJJJJJJJJJJJJJJJJJd#.....',
+    '.......##JJJJJJcccccccJJJJJJJdJJJ#.',
+    '......#gGJJJJJccccccccJJJJJJJJdJJJ#',
+    '.....#gGGjJJJJJJcccJJJJJJJJJJdJJJ##',
+    '....#gGGGkjJJJJJJJJJJJJJJJJJdJJJJ##',
+    '...#gGGggkkJdddddddddddddddddJJJJJ##',
+    '..#KkkkkkkkJdddddddddddddddddddJJJ##',
+    '.#KKkkkkkk#dddddddddddddddddddddJ##.',
+    '#KKKkkkk##dddddddddddddddddddddd##..',
+    '#KKKKkkk#ppppppppppppppppppppppp##..',
+    '.#KKKkk##pppppppppppppppppppppppp#..',
+    '..#KKkk#ppppppppppppppppppppppppp#..',
+    '...#Kkk##mmmmmmmmm#....#mmmmmmmmmmm#',
+    '....#kk#mmmmmmmmmm#....#mmmmmmmmmm#.',
+    '...#Kkkk#mmmmmmmmm#....#mmmmmmmmmm#.',
+    '..#KKkkk#mmmmmmmmm#....#mmmmmmmmmmm#',
+    '.#KKKkkk#mmmmmmmmmm#....#mmmmmmmmmm#',
+    '#KKKKkkk#bbbbbbbbbb#....#bbbbbbbbbb#',
+    '#KKKKkkkk#bBBBBBBBBb#....#bBBBBBBBBb',
+    '##KKKKkkk##aaaaaaaaaaa#....#aaaaaaAA#',
+    '.##KKKkk##..#aaaaaaaaaaaaaaaaaaaaA##.',
+    '...##KKk#....#aaaaaaaaaaaaaaaaaaaA#..',
+    '.....#Kk#.....#aaaaaaaaaaaaaaaaaaA#..',
+    '......#k#......#aaaaaaaaaaaaaaaaaA#..',
+    '.......##.......#aaaaaaaaaaaaaaaaA#..',
+    '#uuu............#aaaaaaaaaaaaaaaA##..',
+    '##uu.............#aaaaaaaaaaaaaaA#...',
+    '###...............#aaaaaaaaaaaaaA#...',
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+];
+// Defense v0: POKE CHECK — lunging wide, stick extended to left
+const PC_SPR_DEF_0 = [
+    '....................................',
+    '....................................',
+    '................######..............',
+    '...............#HHhhhH##............',
+    '...............#HhVVVhH#............',
+    '...............#H##ss##H#...........',
+    '...............#H##SS##H#...........',
+    '................#HHsSSH##...........',
+    '..........#####JJJJJJJJJJJ#####....',
+    '.........#jJJJJJJJJJJJJJJJJJJJd#..',
+    '.......##JJJJJJJJJJJcccccJJJJJJdJJ#',
+    '......#GGjJJJJJJcccccccccJJJJJJdJJJ',
+    '.....#GGGjJJJJJJcccccccJJJJJJJJdJJJ',
+    '....#GGGgkjJJJJJJJJJJJJJJJJJJJJJJJ#',
+    '...#KkGGggkJJdddddddddddddddddJJJJJ#',
+    '..#KkkkGGgkJdddddddddddddddddddJJJJ#',
+    '.#KKkkkk##ddddddddddddddddddddddJJ##',
+    '#KKKkkkk#pppppppppppppppppppppppp##.',
+    '#KKKKkkk#ppppppppppppppppppppppppp#.',
+    '.#KKKkk##pppppppppppppppppppppppp##.',
+    '..#KKkk#pppppppppppppppppppppppppp#.',
+    '...#Kkk##mmmmmmmmm#....#mmmmmmmmmmm#',
+    '....#kk#mmmmmmmmmm#....#mmmmmmmmmm##',
+    '...#Kkkmmmmmmmmmmm#....#mmmmmmmmmmmm',
+    '..#KKkk#mmmmmmmmm#.....#mmmmmmmmmmm#',
+    '.#KKKkk#mmmmmmmmmm#....#mmmmmmmmmmm#',
+    '#KKKKkk#bbbbbbbbbb#....#bbbbbbbbbbb#',
+    '#KKKKkk##bBBBBBBBBb#....#bBBBBBBBBBb',
+    '##KKKk###aaaaaaaaaaaa#....#aaaaaaaA#',
+    '.##KKk#...#aaaaaaaaaaaaaaaaaaaaaA##.',
+    '...#Kk#....#aaaaaaaaaaaaaaaaaaaaA#..',
+    '....#k#.....#aaaaaaaaaaaaaaaaaaaA#..',
+    '.....##......#aaaaaaaaaaaaaaaaaaA#..',
+    '............#aaaaaaaaaaaaaaaaaA##...',
+    '...#uuu......#aaaaaaaaaaaaaaaaA#....',
+    '..#uuuuu......#aaaaaaaaaaaaaaaA#....',
+    '...#uuu........#aaaaaaaaaaaaaA##....',
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+];
+// Defense v1: DEFENSIVE GAP — upright backskate, stick angled across body
+const PC_SPR_DEF_1 = [
+    '....................................',
+    '....................................',
+    '...............######...............',
+    '..............#HHhhhH##.............',
+    '..............#HhVVVhH#.............',
+    '..............#H##ss##H#............',
+    '..............#H##SS##H#............',
+    '...............#HHsSSH##............',
+    '.........#####JJJJJJJJJJJ#####.....',
+    '........#jJJJJJJJJJJJJJJJJJJJJd#..',
+    '.......##JJJjJJJJcccccJJJJJJJJdJJ##',
+    '......#GGJJjJJJJccccccccJJJJJJdJJJJ',
+    '.....#GGGjJJJJJJJcccccJJJJJJJJdJJJJ',
+    '....#GGGgkjJJJJJJJJJJJJJJJJJJJdJJJJ',
+    '...#KkGGGgkJJdddddddddddddddddJdJJJ#',
+    '..#KkkkGGgkJdddddddddddddddddddddJJ#',
+    '.#KKkkkk##pppppppppppppppppppppppJ##',
+    '#KKKkkkk#ppppppppppppppppppppppppp##',
+    '#KKKKkk##pppppppppppppppppppppppp##.',
+    '.#KKKkk#ppppppppppppppppppppppppp#..',
+    '..#KKkk##mmmmmmmmm#....#mmmmmmmmmm#.',
+    '...#Kkk#mmmmmmmmmm#....#mmmmmmmmmm##',
+    '...#kkkmmmmmmmmmmm#....#mmmmmmmmmmm#',
+    '..#Kkkkmmmmmmmmmmm#....#mmmmmmmmmmm#',
+    '.#KKkkkmmmmmmmmmmm#....#mmmmmmmmmmm#',
+    '#KKKkkk#mmmmmmmmmm#....#mmmmmmmmmm##',
+    '#KKKKkk#bbbbbbbbbb#....#bbbbbbbbbbb#',
+    '#KKKKkk##bBBBBBBBBb#....#bBBBBBBBBBb',
+    '##KKKkk###aaaaaaaaaaa#....#aaaaaaAA#',
+    '.##KKk##...#aaaaaaaaaaaaaaaaaaaaA##.',
+    '...#Kk#.....#aaaaaaaaaaaaaaaaaaaA#..',
+    '....#k#......#aaaaaaaaaaaaaaaaaaA#..',
+    '.....##.......#aaaaaaaaaaaaaaaaaA#..',
+    '...............#aaaaaaaaaaaaaaaaA#..',
+    '#uuu............#aaaaaaaaaaaaaaaA#..',
+    '##uu.............#aaaaaaaaaaaaaA##..',
+    '###...............#aaaaaaaaaaaaA##..',
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+];
+// Goalie v0: BUTTERFLY SAVE — front-facing, pads fanned, cage mask, net behind
+const PC_SPR_GTL_0 = [
+    '#G.G.G.G.G.G.G.G.G.G.G.G.G.G.G.G.#',
+    '#B.B.B.B.B.B.B.B.B.B.B.B.B.B.B.B.#',
+    '#B.B.B.B.B.B....######..B.B.B.B.B.#',
+    '#B.B.B.B.B.B...#mmmmmm#.B.B.B.B.B.#',
+    '#B.B.B.B.B.B..#mm#mmm#mm#.B.B.B.B.#',
+    '#B.B.B.B.B.B..#mmVmssmVm#.B.B.B.B.#',
+    '#B.B.B.B.B.B..#mm##SS##mm#.B.B.B.B#',
+    '#B.B.B.B.B.B..#mmSSSSSSm#.B.B.B.B.#',
+    '#B.B.B.B.B.B...#mmSSSSm#..B.B.B.B.#',
+    '#B.B.B.B.B.B....#SSSSSS#..B.B.B.B.#',
+    '#B....####JJJJJJJJJJJJJJJJ####....#',
+    '#B...#JJJJJJJJJJJJJJJJJJJJJJJd#..#',
+    '#B..#JJJJJJJJcccccccccJJJJJJJJJd#.#',
+    '#B.#JJJJJJJJcccccccccccJJJJJJJJJd##',
+    '#gGGJJJJJJJJJJJJJJJJJJJJJJJJJJJdGg#',
+    '#gGGGJJJJJJJJJJJJJJJJJJJJJJJJJdGGg#',
+    '#gGGGGJJJJJJJJJJJJJJJJJJJJJJJdGGGg#',
+    '##gGGGGGJJJJJJJJJJJJJJJJJJJJdGGGGg#',
+    '.#gGGGGG##pppppppppppppppppp##GGGGg#',
+    '.#ppppppp#ppppppppppppppppppp#ppppp#',
+    '.#pJJJJpp#pppJJJJppppJJJJppp#ppJJp#',
+    '.#pJJJJpp#pppppppppppppppppp#ppJJp#',
+    '.#ccccccp#pppppppppppppppppp#pcccp#',
+    '.#ppppppp#pppppppppppppppppp#ppppp#',
+    '.#pJJJJpp#pppJJJJppppJJJJppp#ppJJp#',
+    '.#pJJJJpp#pppppppppppppppppp#ppJJp#',
+    '.#ccccccp#pppppppppppppppppp#pcccp#',
+    '.#ppppppp#pppppppppppppppppp#ppppp#',
+    '.#ppppppp#pppppppppppppppppp#ppppp#',
+    '.#ppppbbb##bbbbbbbbbbbbbbbbb##bbbp#',
+    '.#ppppbBBb#bBBBBBBBBBBBBBBBb#bBBp#',
+    '.########.#aaaaaaaaaaaaaaaaaa#.####',
+    '..........#aaaaaaaaaaaaaaaaaa#......',
+    '..........##aaaaaaaaaaaaaaaaaA#.....',
+    '...........wwwwwwwwwwwwwwwwww.......',
+    '............wwwwwwwwwwwwwwwww.......',
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+];
+// Goalie v1: STAND-UP BLOCKER — upright ready stance, blocker raised high right
+const PC_SPR_GTL_1 = [
+    '#G.G.G.G.G.G.G.G.G.G.G.G.G.G.G.G.#',
+    '#B.B.B.B.B.B.B.B.B.B.B.B.B.B.B.B.#',
+    '#B.B.B.B.B.B....######..B.B.B.B.B.#',
+    '#B.B.B.B.B.B...#mmmmmm#.B.B.B.B.B.#',
+    '#B.B.B.B.B.B..#mm#mmm#mm#.B.B.B.B.#',
+    '#B.B.B.B.B.B..#mmVmssmVm#.B.B.B.B.#',
+    '#B.B.B.B.B.B..#mm##SS##mm#.B.B.B.B#',
+    '#B.B.B.B.B.B..#mmSSSSSSm#.B.B.B.B.#',
+    '#B.B.B.B.B.B...#mmSSSSm#..B.B.B.B.#',
+    '#B.B.B.B.B.B....#SSSSSS#..B.B.B.B.#',
+    '#B....####JJJJJJJJJJJJJJJJ####....#',
+    '#B...#jJJJJJJJJJJJJJJJJJJJJJJd#..#',
+    '#B..#jJJJJJJcccccccccJJJJJJJJJJd#.#',
+    '#B.#jJJJJJJcccccccccccJJJJJJJJJJd##',
+    '#gGGJJJJJJJJJJJJJJJJJJJJJJJJJJJdGg#',
+    '#gGGJJJJJJJJJJJJJJJJJJJJJJJJJJGGGg#',
+    '#gGGGgJJJJJJJJJJJJJJJJJJJJJJJGGGGg#',
+    '##gGGgGGJJJJJJJJJJJJJJJJJJJJJGGGGg#',
+    '.##gGGGG#pppppppppppppppppp##GGGGg##',
+    '..#pppppp#ppppppppppppppppp#pppppp#.',
+    '..#pJJJpp#pppJJJJpppJJJJpp#ppJJpp#.',
+    '..#pJJJpp#pppppppppppppppp#ppJJpp#.',
+    '..#ccccp##pppppppppppppppp##pcccp#.',
+    '..#pppppp#pppppppppppppppp#pppppp#.',
+    '..#pJJJpp#pppJJJJpppJJJJpp#ppJJpp#.',
+    '..#pJJJpp#pppppppppppppppp#ppJJpp#.',
+    '..#ccccp##pppppppppppppppp##pcccp#.',
+    '..#pppppp#pppppppppppppppp#pppppp#.',
+    '..#pppppp#pppppppppppppppp#pppppp#.',
+    '..#pppbbb##bbbbbbbbbbbbbbb##bbbpp#.',
+    '..#pppbBBb#bBBBBBBBBBBBBBb#bBBpp#.',
+    '..######..#aaaaaaaaaaaaaaaa#.#####.',
+    '.........#aaaaaaaaaaaaaaaaaaa#......',
+    '..........#aaaaaaaaaaaaaaaaaA#......',
+    '...........wwwwwwwwwwwwwwwwww.......',
+    '............wwwwwwwwwwwwwwwww.......',
+    'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+    '....................................',
+];
 
-    // ── ICE + shadow ──────────────────────────────────────────────────────────
-    const iceG = ctx.createLinearGradient(0,182*sc,0,240*sc);
-    iceG.addColorStop(0,ICl); iceG.addColorStop(1,ICd);
-    ctx.fillStyle=iceG; ctx.fillRect(0,182*sc,canvas.width,58*sc);
-    for(let lx=0;lx<160;lx+=10){ ctx.fillStyle='rgba(160,210,255,0.09)'; ctx.fillRect(lx*sc,184*sc,sc,56*sc); }
-    ctx.fillStyle='rgba(0,20,70,0.18)'; ctx.beginPath(); ctx.ellipse(80*sc,228*sc,36*sc,6*sc,0,0,Math.PI*2); ctx.fill();
-
-    // ════════════════════════════════════════════════════════════════════════
-    // ── Shared helpers (reference-style) ────────────────────────────────────
-
-    // Jersey with classic horizontal stripe bands (like reference sprite)
-    // body=primary color quad, stripes=[y,h,col?,litCol?,dkCol?] horizontal bands
-    // default col=WHT — pass S/Sl/Sd for secondary-color bands
-    const jsy = (pts, stripes) => {
-        poly(pts, P);
-        const x0=pts[0][0], x1=pts[1][0];
-        poly([[x0,pts[0][1]],[x0+3,pts[0][1]],[x0+3,pts[3][1]],[x0,pts[3][1]]],Pl2);
-        poly([[x1-3,pts[1][1]],[x1,pts[1][1]],[x1,pts[2][1]],[x1-3,pts[2][1]]],Pd);
-        stripes.forEach(([y,h,col=WHT,cL=WHTl,cD=WHTd])=>{
-            const tw=x1-x0;
-            r(x0,y,tw,h,col); r(x0,y,tw,1,cL); r(x0,y+h-1,tw,1,cD);
-            r(x0,y,2,h,cD); r(x1-2,y,2,h,cD);
-        });
-    };
-    // sandwich: 3-band stripe group (waist1=WHT, waist2=S, waist3=WHT)
-    const stripe3 = (x0,x1,y,bh) => {
-        const tw=x1-x0;
-        r(x0,y,tw,bh,WHT);   r(x0,y,tw,1,WHTl); r(x0,y+bh-1,tw,1,WHTd);
-        r(x0,y+bh,tw,bh,S);  r(x0,y+bh,tw,1,Sl); r(x0,y+bh*2-1,tw,1,Sd);
-        r(x0,y+bh*2,tw,bh,WHT); r(x0,y+bh*2,tw,1,WHTl); r(x0,y+bh*3-1,tw,1,WHTd);
-    };
-
-    // Helmet: bigger dome (rx=14) to match grid proportions — head ≈ 28px wide
-    const drawHelmet = (hx, hy) => {
-        arc(hx, hy, 14, 13, HLM);
-        arc(hx, hy, 14, 13, HLd, 0, Math.PI);
-        r(hx-14, hy-2, 5, 17, HLd); r(hx+9, hy-2, 5, 17, HLd); // jaw panels
-        r(hx-10, hy+2, 20, 12, 'rgba(70,150,240,0.42)'); // visor
-        r(hx-10, hy+2, 20, 2,  'rgba(220,244,255,0.50)');
-        r(hx-10, hy+12, 20, 1, 'rgba(30,90,200,0.30)');
-        r(hx-7,  hy+5, 5, 2, 'rgba(15,15,15,0.55)'); // eyes
-        r(hx+2,  hy+5, 5, 2, 'rgba(15,15,15,0.55)');
-        r(hx-10, hy+14, 20, 5, HLd); r(hx-10, hy+14, 20, 1, HLl); // chin
-        arc(hx, hy-3, 8, 6, HLs, Math.PI, Math.PI*2);
-        r(hx-4, hy-12, 8, 2, HLl);
-    };
-
-    // Limb segment — vector-perpendicular quad with highlight edge
-    const seg = (a, b, hw, col) => {
-        const dx=b[0]-a[0], dy=b[1]-a[1], l=Math.sqrt(dx*dx+dy*dy)||1;
-        const px=-dy/l*hw, py=dx/l*hw;
-        poly([[a[0]+px,a[1]+py],[a[0]-px,a[1]-py],[b[0]-px,b[1]-py],[b[0]+px,b[1]+py]], col);
-        poly([[a[0]+px,a[1]+py],[a[0]+px-1.5,a[1]+py],[b[0]+px-1.5,b[1]+py],[b[0]+px,b[1]+py]], Pl2);
-    };
-    // Full arm: upper-arm + elbow cap + forearm
-    const drawArm = (sh, el, wr, hw) => {
-        seg(sh, el, hw, P);
-        arc(el[0],el[1], hw*0.85, hw*0.7, SHNl);
-        arc(el[0],el[1], hw*0.55, hw*0.45, SHN);
-        seg(el, wr, hw*0.9, P);
-    };
-    // Glove block
-    const drawGlove = (pts, lit, dk) => {
-        poly(pts, GLV); poly(lit, GLVl); poly(dk, GLVd);
-        // knuckle ridges along top
-        for(let k=pts[0][0]+2; k<pts[1][0]-2; k+=4) r(k, pts[0][1], 2, 4, GLVl);
-        r(pts[0][0], pts[0][1], pts[1][0]-pts[0][0], 2, Pl2);
-    };
-    // Shin guard block — sandwich sock stripes: WHT → S → WHT (socksStripe1/2 model)
-    const drawShin = (x0, x1, yt, yb, kx, ky) => {
-        const w=x1-x0;
-        poly([[x0,yt],[x1,yt],[x1,yb],[x0,yb]], SHN);
-        poly([[x0,yt],[x0+3,yt],[x0+3,yb],[x0,yb]], SHNl);
-        poly([[x1-3,yt],[x1,yt],[x1,yb],[x1-3,yb]], SHNd);
-        // socksStripe band 1: WHT→S→WHT sandwich
-        r(x0+2,yt+7, w-4,3,WHT);  r(x0+2,yt+7,w-4,1,WHTl);
-        r(x0+2,yt+10,w-4,3,S);    r(x0+2,yt+10,w-4,1,Sl);
-        r(x0+2,yt+13,w-4,3,WHT);  r(x0+2,yt+13,w-4,1,WHTl);
-        // socksStripe band 2
-        r(x0+2,yt+19,w-4,3,WHT);  r(x0+2,yt+19,w-4,1,WHTl);
-        r(x0+2,yt+22,w-4,3,S);    r(x0+2,yt+22,w-4,1,Sl);
-        r(x0+2,yt+25,w-4,3,WHT);  r(x0+2,yt+25,w-4,1,WHTl);
-        r(x0+2,yb-5, w-4,4,Pdd); // ankle
-        arc(kx, ky, 9, 7, SHNl); arc(kx, ky, 6, 4, SHN); arc(kx, ky, 3, 2, WHT);
-    };
-    // Shoulder pad — 3D hockey pad: lit top cap + front face + outer side wall
-    // cx,cy = centre of pad-to-jersey junction; side = -1 (left) or +1 (right)
-    const drawShoulder = (cx, cy, side) => {
-        const pw=20, ph=10, fh=10; // pad width, cap height, front face height
-        const x0=cx-pw/2, x1=cx+pw/2;
-        const capT=cy-ph, capB=cy, frontB=cy+fh;
-        // Top cap — lit face seen from above
-        poly([[x0-2,capT],[x1+2,capT],[x1,capB],[x0,capB]], Pl2);
-        r(x0-2,capT,pw+4,2,WHTl);      // top gleam
-        r(x0-2,capT+2,pw+4,2,Pl);      // sub-gleam
-        // Coloured trim stripe across cap (team secondary)
-        r(x0,capT+4,pw,3,S); r(x0,capT+4,pw,1,Sl);
-        // Front face — primary colour
-        poly([[x0,capB],[x1,capB],[x1-2,frontB],[x0+2,frontB]], P);
-        poly([[x0,capB],[x0+3,capB],[x0+3,frontB],[x0,frontB]], Pl2); // inner lit edge
-        poly([[x1-3,capB],[x1,capB],[x1,frontB],[x1-3,frontB]], Pd);  // inner dark edge
-        // Outer side wall (on the arm side)
-        if (side < 0) { // left pad: outer wall on left
-            poly([[x0-2,capT],[x0,capT],[x0,frontB],[x0-2,frontB]], Pd);
-        } else {         // right pad: outer wall on right
-            poly([[x1,capT],[x1+2,capT],[x1+2,frontB],[x1,frontB]], Pd);
+function pcRenderSprite(ctx, rows, cm, sc) {
+    for(let y=0;y<rows.length;y++) {
+        const row = rows[y];
+        for(let x=0;x<row.length;x++) {
+            const col = cm[row[x]];
+            if(col) { ctx.fillStyle=col; ctx.fillRect(x*sc, y*sc, sc, sc); }
         }
-        // Bottom shadow under pad
-        r(x0+2,frontB,pw-4,3,Pdd);
-    };
-
-    // Skate boot + blade
-    const drawSkate = (x0, x1, yt) => {
-        const w=x1-x0;
-        r(x0, yt, w, 10, BLK); r(x0, yt, 3, 10, '#303030');
-        for(let lx=x0+4;lx<x1-1;lx+=4) r(lx,yt+2,2,6,'#3a3a3a');
-        r(x0-2, yt+10, w+4, 3, BLD); r(x0-2, yt+10, w+4, 1, BLDl);
-        r(x0-2, yt+12, 2, 2, BLDs); r(x1, yt+10, 2, 2, BLDs);
-    };
-
-    // ════════════════════════════════════════════════════════════════════════
-    if (type === 'goalie') {
-        // ── GOALIE — butterfly stance, 160×240 canvas ────────────────────────
-
-        // NET background
-        r(4,4,8,168,GRY); r(148,4,8,168,GRY);
-        r(4,4,152,6,LGY); r(4,4,152,3,BLD);
-        for(let ny=10;ny<164;ny+=8)  r(12,ny,136,2,NET);
-        for(let nx=12;nx<150;nx+=8) r(nx,10,2,154,NET);
-        r(12,10,136,154,'rgba(25,55,105,0.05)');
-        r(20,178,120,2,'rgba(210,50,50,0.85)');
-
-        // LEFT LEG PAD — wide butterfly splay; sandwich WHT→S→WHT stripes
-        poly([[0,120],[54,108],[56,196],[0,200]],Pd);
-        poly([[0,120],[8,118],[8,200],[0,200]],Pl2);
-        poly([[48,108],[54,108],[56,196],[50,196]],Pdd);
-        arc(27,114,22,12,Pl2,Math.PI,Math.PI*2);
-        arc(27,114,15,8,P,Math.PI,Math.PI*2);
-        arc(27,118,10,7,_pcShade(pri,-30));
-        arc(27,118,6,4,Pl2); arc(27,118,3,2,S);
-        for(let i=0;i<4;i++){
-            const sy=128+i*16;
-            r(2,sy,50,5,WHT); r(2,sy,50,1,WHTl); r(2,sy+4,50,1,WHTd);
-            r(2,sy+5,50,5,S);   r(2,sy+5,50,1,Sl);  r(2,sy+9,50,1,Sd);
-            r(2,sy+10,50,5,WHT); r(2,sy+10,50,1,WHTl); r(2,sy+14,50,1,WHTd);
-        }
-        r(0,188,54,12,BLK); r(0,188,5,12,'#2a2a2a');
-        r(0,199,58,3,BLD); r(0,199,58,1,BLDl);
-
-        // RIGHT LEG PAD — mirror
-        poly([[106,108],[160,120],[160,200],[104,196]],Pd);
-        poly([[152,118],[160,120],[160,200],[152,200]],Pdd);
-        poly([[106,108],[112,108],[114,200],[106,200]],Pl2);
-        arc(133,114,22,12,Pl2,Math.PI,Math.PI*2);
-        arc(133,114,15,8,P,Math.PI,Math.PI*2);
-        arc(133,118,10,7,_pcShade(pri,-30));
-        arc(133,118,6,4,Pl2); arc(133,118,3,2,S);
-        for(let i=0;i<4;i++){
-            const sy=128+i*16;
-            r(108,sy,50,5,WHT); r(108,sy,50,1,WHTl); r(108,sy+4,50,1,WHTd);
-            r(108,sy+5,50,5,S);   r(108,sy+5,50,1,Sl);  r(108,sy+9,50,1,Sd);
-            r(108,sy+10,50,5,WHT); r(108,sy+10,50,1,WHTl); r(108,sy+14,50,1,WHTd);
-        }
-        r(106,188,54,12,BLK); r(106,188,5,12,'#2a2a2a');
-        r(102,199,58,3,BLD); r(102,199,58,1,BLDl);
-
-        // BODY — wider jersey (54-106) + white chest protector overlay
-        jsy([[54,68],[106,68],[108,122],[52,122]], [[96,4],[100,4,S,Sl,Sd],[104,4]]);
-        // chest protector shell (white padded front)
-        r(60,70,40,36,WHT);
-        r(60,70,3,36,WHTl); r(97,70,3,36,WHTd); r(60,70,40,2,WHTl);
-        r(60,76,40,4,_pcShade('#E8E8E8',-12)); r(60,80,40,1,WHTl);
-        r(60,84,40,4,_pcShade('#E8E8E8',-12)); r(60,88,40,1,WHTl);
-        r(60,92,40,4,_pcShade('#E8E8E8',-12)); r(60,96,40,1,WHTl);
-        // team color chest logo bump
-        arc(80,84,11,8,P,Math.PI,Math.PI*2);
-        arc(80,84,7,5,Pl2,Math.PI,Math.PI*2);
-        arc(80,84,3,2,S,Math.PI,Math.PI*2);
-        r(60,104,40,4,WHTd);
-        // belly jersey strip + waist stripe
-        r(52,108,56,14,P); r(52,108,3,14,Pl2); r(105,108,3,14,Pd);
-        stripe3(52,108,110,3);
-
-        // TRAPPER ARM (left) — sleeve + large fan mitt
-        drawArm([56,80],[40,106],[26,126], 8);
-        stripe3(26,56,86,3);
-        poly([[0,120],[30,128],[24,162],[0,158]],BRN);
-        poly([[0,120],[6,122],[2,159],[0,158]],BRNl);
-        poly([[26,128],[30,128],[24,162],[20,162]],BRNd);
-        r(4,124,22,5,BRNl); r(4,129,22,2,_pcShade('#7A3B00',30));
-        for(let i=0;i<4;i++) r(5,133+i*6,20,4,BRNl);
-        r(2,120,24,6,'rgba(200,140,60,0.22)');
-        arc(14,160,12,5,BRNd,0,Math.PI);
-
-        // BLOCKER ARM (right) — sleeve + rectangular hard pad
-        drawArm([104,78],[118,106],[132,122], 8);
-        stripe3(104,130,84,3);
-        poly([[108,114],[150,120],[148,152],[106,148]],GLV);
-        poly([[108,114],[114,115],[112,146],[106,148]],GLVl);
-        poly([[146,120],[150,120],[148,152],[144,152]],GLVd);
-        r(110,118,36,14,P); r(110,118,3,14,Pl2); r(143,118,3,14,Pd); r(110,118,36,2,Pl2);
-        for(let bx=112;bx<144;bx+=6) r(bx,121,4,9,Pl2);
-        r(110,130,36,5,S); r(110,130,36,1,Sl);
-        r(112,136,32,12,GLVd); r(112,144,32,4,GLV);
-
-        // SHOULDER PADS
-        drawShoulder(58,68,-1); drawShoulder(102,68,1);
-
-        // NECK
-        r(75,60,10,10,SKN); r(75,60,2,10,SKl); r(83,60,2,10,SKd);
-
-        // GOALIE MASK — rx=20, team color forehead band + cage; centred (80,44)
-        const mx=80, my=44;
-        arc(mx,my, 20,18, HLM);
-        arc(mx,my-3, 13,8, HLs, Math.PI,Math.PI*2);
-        arc(mx,my, 20,18, HLd, 0,Math.PI);
-        // team color forehead band
-        r(mx-16,my-12, 32,7, P); r(mx-16,my-12,32,1,Pl2); r(mx-16,my-6,32,1,Pd);
-        // cheek panels
-        r(mx-20,my, 6,22, HLd); r(mx+14,my, 6,22, HLd);
-        // visor
-        r(mx-12,my+4, 24,11,'rgba(80,170,255,0.50)');
-        r(mx-12,my+4, 24,2, 'rgba(220,244,255,0.55)');
-        r(mx-12,my+13,24,1, 'rgba(20,80,200,0.35)');
-        // cage — 3 vertical + 3 horizontal bars
-        r(mx-14,my+15,4,16,BLK); r(mx-2,my+15,4,16,BLK); r(mx+10,my+15,4,16,BLK);
-        r(mx-14,my+15,32,3,BLK); r(mx-14,my+20,32,3,BLK); r(mx-14,my+26,32,2,BLK);
-        r(mx-9,my+17,6,12,SKN); r(mx+3,my+17,6,12,SKN);
-        // chin cup in team color
-        arc(mx,my+14, 16,12, Pdd, 0,Math.PI);
-        r(mx-14,my+28, 28,5, P); r(mx-14,my+28,28,1,Pl2);
-        // dome gleam
-        arc(mx,my-5, 9,5, HLs, Math.PI,Math.PI*2);
-        r(mx-4,my-14, 8,2, HLl);
-
-    } else {
-        // ── SKATER — arms-raised hero, layered Z-order ────────────────────────
-        // D = stick upper-left / F = stick upper-right. Arms identical both types.
-        const isD = (type === 'defense');
-
-        // ── 1. STICK (lowest layer — behind body) ─────────────────────────────
-        if (isD) {
-            ln(14,14, 116,152, STKd,5); ln(14,14, 116,152, STK,3); ln(14,14, 116,152, STKl,1.5);
-            poly([[108,144],[122,152],[120,164],[106,156]],STK);
-            poly([[108,144],[112,146],[110,158],[106,156]],STKl);
-            r(104,156,22,4,BLD); r(104,156,22,1,BLDl);
-        } else {
-            ln(146,14, 44,152, STKd,5); ln(146,14, 44,152, STK,3); ln(146,14, 44,152, STKl,1.5);
-            poly([[36,144],[50,152],[48,164],[34,156]],STK);
-            poly([[36,144],[40,146],[38,158],[34,156]],STKl);
-            r(32,156,22,4,BLD); r(32,156,22,1,BLDl);
-        }
-
-        // ── 2. SKATES ─────────────────────────────────────────────────────────
-        drawSkate(56,76,200); drawSkate(84,104,200);
-
-        // ── 3. SHINS — 18px wide × 36px tall ─────────────────────────────────
-        drawShin(56,74,164,200, 64,166); drawShin(84,102,164,200, 92,166);
-
-        // ── 4. PANTS — hip-flared breezer, thigh pads, rounded leg openings ─────
-        // Slightly wider at bottom for authentic silhouette; overlaps jersey 4px
-        poly([[54,128],[106,128],[110,168],[50,168]],Pd);
-        poly([[54,128],[60,128],[58,168],[52,168]],Pl2);
-        poly([[100,128],[106,128],[110,168],[104,168]],Pdd);
-        // thigh pad arcs on each leg (3D bump)
-        arc(71,148,14,10,_pcShade(pri,-18),Math.PI,Math.PI*2);
-        arc(71,148,9,7,Pd,Math.PI,Math.PI*2);
-        arc(89,148,14,10,_pcShade(pri,-18),Math.PI,Math.PI*2);
-        arc(89,148,9,7,Pd,Math.PI,Math.PI*2);
-        // leg seam
-        r(79,128,3,40,Pdd);
-        // vertical leg stripes (below thigh pad)
-        r(61,142,4,24,WHT); r(65,142,4,24,S);
-        r(91,142,4,24,WHT); r(95,142,4,24,S);
-        // leg opening: darker strip + rounded arcs at each leg hole
-        r(50,160,60,8,_pcShade(pri,-60));
-        arc(67,167,13,5,Pdd,0,Math.PI);
-        arc(93,167,13,5,Pdd,0,Math.PI);
-
-        // ── 5. JERSEY — overlaps pants top; hem sandwich at waist ─────────────
-        jsy([[62,68],[98,68],[98,132],[62,132]], [[110,4],[114,4,S,Sl,Sd],[118,4]]);
-
-        // ── 6. SHOULDER CAPS — bridge jersey to arm; secondary trim stripe ─────
-        poly([[40,72],[62,68],[62,88],[40,88]],Pl);    // left cap
-        r(40,72,22,2,Pl2);   // lit top
-        r(40,74,22,4,S);     // coloured trim
-        r(40,86,22,3,Pd);    // shadow bottom
-        poly([[98,68],[120,72],[120,88],[98,88]],Pl);  // right cap
-        r(98,72,22,2,Pl2);
-        r(98,74,22,4,S);
-        r(98,86,22,3,Pd);
-
-        // ── 7. ARMS — thick V-pose, shoulder cap edge to wrist ────────────────
-        // left: (42,82)→elbow(18,54)→wrist(6,28)
-        seg([42,82],[18,54],11,P);
-        arc(18,54,8,7,Pl2); arc(18,54,5,4,P);
-        seg([18,54],[6,28],10,P);
-        // right: (118,82)→elbow(142,54)→wrist(154,28)
-        seg([118,82],[142,54],11,P);
-        arc(142,54,8,7,Pl2); arc(142,54,5,4,P);
-        seg([142,54],[154,28],10,P);
-
-        // ── 8. GLOVES — wide cuff tapers to hand; secondary trim; knuckle ridge ─
-        // Left glove: cuff at top, fingers below; arm arrives from lower-right
-        poly([[0,16],[22,24],[18,52],[0,46]],GLV);       // body
-        poly([[0,16],[4,17],[2,47],[0,46]],GLVl);        // lit left edge
-        poly([[18,24],[22,24],[18,52],[14,52]],GLVd);    // dark right edge
-        r(0,16,22,9,GLVl);    // wide cuff band
-        r(0,16,22,2,Pl2);     // cuff top gleam
-        r(0,22,22,4,S);       // secondary-color cuff trim stripe
-        r(0,26,22,1,Sl);      // trim highlight
-        r(2,34,16,3,Pdd);     // knuckle ridge
-        r(2,37,16,1,Pl2);     // knuckle lit line below ridge
-        arc(10,46,8,5,GLVd,0,Math.PI);  // finger-tip curve
-
-        // Right glove: mirror — cuff top-right, fingers lower-left
-        poly([[138,24],[160,16],[160,46],[140,52]],GLV);
-        poly([[156,16],[160,16],[160,46],[156,46]],GLVl);
-        poly([[138,24],[142,24],[140,52],[138,52]],GLVd);
-        r(138,16,22,9,GLVl);
-        r(138,16,22,2,Pl2);
-        r(138,22,22,4,S);
-        r(138,26,22,1,Sl);
-        r(142,34,16,3,Pdd);
-        r(142,37,16,1,Pl2);
-        arc(150,46,8,5,GLVd,0,Math.PI);
-
-        // ── 9. NECK + HELMET ──────────────────────────────────────────────────
-        r(76,58,8,12,SKN); r(76,58,2,12,SKl); r(82,58,2,12,SKd);
-        drawHelmet(80,42);
     }
 }
 
+function pcDrawSprite(ctx, type, pri, sec, teamCode) {
+    const sc = 5;
+    const cm = {
+        '#': '#000000',
+        'H': '#222233', 'h': '#556688',
+        'V': '#AADDFF',
+        'm': '#E0E0E0',
+        's': '#F4C17A', 'S': '#C8905A',
+        'j': _pcShade(pri,55), 'J': pri, 'd': _pcShade(pri,-50),
+        'c': _pcShade(sec,30), 'C': sec,
+        'g': '#111122', 'G': '#2a3a4a',
+        'p': _pcShade(pri,-30),
+        'b': '#111111', 'B': '#446677',
+        'a': '#CCCCCC', 'A': '#888888',
+        'k': '#7B5000', 'K': '#AA7830',
+        'u': '#111111',
+        'w': 'rgba(100,180,255,0.35)',
+        'i': 'rgba(180,225,255,0.20)',
+        '.': null,
+    };
+    let hash = 0;
+    if (teamCode) { for (let i = 0; i < teamCode.length; i++) hash = (hash*31 + teamCode.charCodeAt(i)) >>> 0; }
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    let rows;
+    if (type === 'forward') {
+        rows = [PC_SPR_FWD_0, PC_SPR_FWD_1, PC_SPR_FWD_2][hash % 3];
+    } else if (type === 'defense') {
+        rows = [PC_SPR_DEF_0, PC_SPR_DEF_1][hash % 2];
+    } else {
+        rows = [PC_SPR_GTL_0, PC_SPR_GTL_1][hash % 2];
+    }
+    pcRenderSprite(ctx, rows, cm, sc);
+}
 
 
 function pcDrawLogo(ctx, size, code) {
@@ -7734,7 +7512,7 @@ function pcBuildStats(pName, tab) {
     const isG = p.pos === 'G';
     const f = (v,d) => v==null ? (d?'0.'+('0'.repeat(d)):'0') : (d?Number(v).toFixed(d):v);
     const pm = v => (v>0?'+':'')+v;
-    // Format total minutes → avg MM:SS per game
+    // Format total minutes â†’ avg MM:SS per game
     const fTOI = (toi, gp) => {
         if (!gp) return '--';
         const avg = toi / gp;
@@ -7768,7 +7546,7 @@ function pcBuildStats(pName, tab) {
             const sa=c.sa||0,sv=c.sv||0,ga=Math.max(0,sa-sv),gp=c.gp||0;
             return tbl([['GP',f(gp)],['W',f(c.w)],['L',f(c.l)],['SO',f(c.so)],
                 ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',gp>0?(ga/gp).toFixed(2):'0.00'],
-                ['SVG',f(c.svg||0)],['TOI',fTOI(c.toi,gp)],['ASG',f((c.asg||0)+(p.asgAppearances||0))]],[4,5]);
+                ['SVG',f(c.svg||0)],['TOI',fTOI(c.toi,gp)]],[4,5]);
         }
         return tbl([['GP',f(c.gp)],['G',f(c.g)],['A',f(c.a)],['PTS',c.pts||((c.g||0)+(c.a||0))],
             ['+/-',pm(c.pm||c.plusMinus||0)],['PIM',f(c.pim)],['SOG',f(c.s)],['TOI',fTOI(c.toi,c.gp)]],[2,3]);
@@ -7791,20 +7569,22 @@ function pcBuildStats(pName, tab) {
     const wGrade = p.attr.weight || lbsToWeightGrade(p.weight) || 'C';
     const wLbs = p.weight || getWeightLbs(wGrade);
     const wtRow = `<div style="text-align:center;color:#555;font-size:6px;margin-top:4px;letter-spacing:1px;">WEIGHT <span style="color:#aaa;font-size:8px;margin-left:4px;">${wLbs} LBS</span> <span style="color:#444;font-size:6px;">(${wGrade})</span></div>`;
-    const nv = (v) => v || '--';
+    // Use stored grade strings for exact display; fall back to numToGrade for old saves
+    const gr = p.attr.grades || {};
+    const gd = (key, num) => gr[key] || numToGrade(num);
     if (isG) {
         const gOvr = p.attr.gDef || p.attr.goalieDefense || p.attr.ovr || '--';
-        return tbl([['G.OVR', gOvr], ['G.OFF', nv(p.attr.gOff)],
-            ['SPD', nv(p.attr.speed)], ['AGIL', nv(p.attr.agil)],
-            ['STK', nv(p.attr.stkHnd)], ['ENDUR', nv(p.attr.endur)],
-            ['AGGR', nv(p.attr.aggr)], ['ROUGH', nv(p.attr.rough)]],[]) + wtRow;
+        return tbl([['G.OVR', gOvr], ['G.OFF', p.attr.gOff || '--'],
+            ['SPD', gd('speed', p.attr.speed)], ['AGIL', gd('agil', p.attr.agil)],
+            ['STK', gd('stkHnd', p.attr.stkHnd)], ['ENDUR', gd('endur', p.attr.endur)],
+            ['AGGR', gd('aggr', p.attr.aggr)], ['ROUGH', gd('rough', p.attr.rough)]],[]) + wtRow;
     }
-    return tbl([['OFF',nv(p.attr.off)],['DEF',nv(p.attr.def)],
-        ['SPD',nv(p.attr.speed)],['AGIL',nv(p.attr.agil)],
-        ['S.PWR',nv(p.attr.shotPwr)],['S.ACC',nv(p.attr.shotAcc)],
-        ['PASS',nv(p.attr.pass)],['STK',nv(p.attr.stkHnd)],
-        ['CHK',nv(p.attr.check)],['ROUGH',nv(p.attr.rough)],
-        ['ENDUR',nv(p.attr.endur)],['AGGR',nv(p.attr.aggr)]],[]) + wtRow;
+    return tbl([['OFF',p.attr.off||'--'],['DEF',p.attr.def||'--'],
+        ['SPD',gd('speed',p.attr.speed)],['AGIL',gd('agil',p.attr.agil)],
+        ['S.PWR',gd('shotPwr',p.attr.shotPwr)],['S.ACC',gd('shotAcc',p.attr.shotAcc)],
+        ['PASS',gd('pass',p.attr.pass)],['STK',gd('stkHnd',p.attr.stkHnd)],
+        ['CHK',gd('check',p.attr.check)],['ROUGH',gd('rough',p.attr.rough)],
+        ['ENDUR',gd('endur',p.attr.endur)],['AGGR',gd('aggr',p.attr.aggr)]],[]) + wtRow;
 }
 
 function pcBuildHonors(pName) {
@@ -7814,15 +7594,15 @@ function pcBuildHonors(pName) {
     const asg = p.asgAppearances > 0;
     if (!miles && !trophies && !asg) return '';
     let h = `<div style="padding:6px 10px 8px;background:#080808;border-top:1px solid #1a1a1a;">`;
-    if (asg) h += `<div style="font-size:7px;color:#FFD060;margin-bottom:5px">⭐ ${p.asgAppearances}× ALL-STAR</div>`;
+    if (asg) h += `<div style="font-size:7px;color:#FFD060;margin-bottom:5px">â­ ${p.asgAppearances}Ã— ALL-STAR</div>`;
     if (trophies) {
         h += `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">`;
-        p.trophies.forEach(t => { h += `<div style="font-size:6px;background:#1a1000;border:1px solid #664400;color:#FFD060;padding:2px 4px">🏆 ${t.year} ${t.name}</div>`; });
+        p.trophies.forEach(t => { h += `<div style="font-size:6px;background:#1a1000;border:1px solid #664400;color:#FFD060;padding:2px 4px">ðŸ† ${t.year} ${t.name}</div>`; });
         h += `</div>`;
     }
     if (miles) {
         h += `<div style="display:flex;flex-wrap:wrap;gap:4px">`;
-        p.milestones.forEach(m => { h += `<div style="font-size:6px;background:#001a1a;border:1px solid #004444;color:#00CCFF;padding:2px 4px">🏅 ${m}</div>`; });
+        p.milestones.forEach(m => { h += `<div style="font-size:6px;background:#001a1a;border:1px solid #004444;color:#00CCFF;padding:2px 4px">ðŸ… ${m}</div>`; });
         h += `</div>`;
     }
     return h + `</div>`;
@@ -7839,7 +7619,6 @@ function pcSwitchTab(pName, tab) {
 
 function showPlayerCard(pName) {
     if(!playerStats[pName]) return;
-    clearWpCache(); // ensure OVR/tag reflect current state, not stale game cache
     const p = playerStats[pName];
     const ovr = getLiveIceOvr(pName);
     const tag = getPlayerWeightedStats(pName).tag;
@@ -7855,9 +7634,9 @@ function showPlayerCard(pName) {
     const cardNum = String(((p.season.gp||0)*7 + (p.age||25)*3 + (ovr||70)) % 900 + 100);
     const ovrCol = ovr>=86?'#FFD060':ovr>=78?'#00CCFF':'#88FF88';
     const st = p.macro_streak || p.micro_streak || '';
-    const stBadge = st==='HOT' ? `<span style="color:#FF4400;font-size:7px"> ▲HOT</span>` :
-                    st==='COLD'? `<span style="color:#4488FF;font-size:7px"> ▼COLD</span>` : '';
-    const fatBadge = fatigue>0 ? `<span style="color:${fatigue>=8?'#FF5555':'#FFAA00'};font-size:7px"> ⚡-${fatigue}</span>` : '';
+    const stBadge = st==='HOT' ? `<span style="color:#FF4400;font-size:7px"> â–²HOT</span>` :
+                    st==='COLD'? `<span style="color:#4488FF;font-size:7px"> â–¼COLD</span>` : '';
+    const fatBadge = fatigue>0 ? `<span style="color:${fatigue>=8?'#FF5555':'#FFAA00'};font-size:7px"> âš¡-${fatigue}</span>` : '';
 
     const h = `
 <div style="font-family:'Press Start 2P',cursive;background:#000;max-width:360px;margin:0 auto;user-select:none;">
@@ -7873,8 +7652,9 @@ function showPlayerCard(pName) {
     <div style="font-size:8px;color:#fff;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fullName}</div>
     <div style="font-size:6px;color:rgba(255,255,255,.5);margin-top:2px;letter-spacing:1px;">${confName}</div>
   </div>
-  <div style="background:#06060e;position:relative;display:flex;align-items:center;justify-content:center;height:200px;overflow:hidden;">
-    <canvas id="pc-sprite" style="image-rendering:pixelated;image-rendering:crisp-edges;width:160px;height:240px;display:block;margin-top:24px;"></canvas>
+  <div style="background:#06060e;position:relative;display:flex;align-items:center;justify-content:center;height:160px;overflow:hidden;">
+    <canvas id="pc-sprite" width="180" height="230" style="image-rendering:pixelated;image-rendering:crisp-edges;display:block;width:120px;height:153px;"></canvas>
+    <canvas id="pc-logo" width="34" height="34" style="position:absolute;top:7px;right:7px;border-radius:50%;border:1px solid rgba(255,255,255,.15);image-rendering:pixelated;"></canvas>
     <div style="position:absolute;bottom:0;left:0;right:0;height:18px;background:linear-gradient(transparent,rgba(0,0,0,.75));"></div>
   </div>
   <div style="background:${sec};padding:5px 10px;display:flex;justify-content:space-between;align-items:center;">
@@ -7897,12 +7677,14 @@ function showPlayerCard(pName) {
 
     document.getElementById('playerCardContent').innerHTML = h;
     const spCanvas = document.getElementById('pc-sprite');
-    if (spCanvas) pcDrawSprite(spCanvas, sprType, pri, sec);
+    if (spCanvas) pcDrawSprite(spCanvas.getContext('2d'), sprType, pri, sec, p.teamCode);
+    const lgCanvas = document.getElementById('pc-logo');
+    if (lgCanvas) pcDrawLogo(lgCanvas.getContext('2d'), 34, p.teamCode);
     document.getElementById('playerCardOverlay').style.display = 'flex';
 }
 
-// ─── dead old body below — replaced by Pro Set card above ─────────────────────
-function _pcOldBodyPlaceholder() { // never called — keeps linter happy if needed
+// â”€â”€â”€ dead old body below â€” replaced by Pro Set card above â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function _pcOldBodyPlaceholder() { // never called â€” keeps linter happy if needed
     let h=''; const p={},c={},ovr=0,tag='',badge='',fatigue=0;
     // CORNER LOGO
     h += `<div style="position:absolute; top:10px; right:10px; font-size:10px; color:var(--ea-yellow); text-shadow:1px 1px 0 #000;">${p.teamCode}</div>`;
@@ -7910,7 +7692,7 @@ function _pcOldBodyPlaceholder() { // never called — keeps linter happy if nee
     h += `<div style="display:flex; align-items:center; gap:20px; border-bottom:2px solid #333; padding-bottom:15px; margin-bottom:15px;">`;
     
     // ICON BOX
-    h += `<div style="width:80px; height:80px; background:#222; border:2px solid #444; display:flex; align-items:center; justify-content:center; font-size:32px;">${p.pos==='G'?'🥅':'🏒'}</div>`;
+    h += `<div style="width:80px; height:80px; background:#222; border:2px solid #444; display:flex; align-items:center; justify-content:center; font-size:32px;">${p.pos==='G'?'ðŸ¥…':'ðŸ’'}</div>`;
     
     // HEADER INFO
     h += `<div>`;
@@ -8036,16 +7818,16 @@ function _pcOldBodyPlaceholder() { // never called — keeps linter happy if nee
     // --- NEW: DISPLAY MILESTONES ---
     if(p.milestones && p.milestones.length > 0) {
         h += `<div class="unit-header" style="margin-top:15px; color:var(--neon-cyan);">CAREER MILESTONES</div><div style="font-size:8px; color:#fff; display:flex; flex-wrap:wrap; gap:10px;">`;
-        p.milestones.forEach(m => { h += `<div style="background:#000; padding:5px; border:1px solid var(--neon-cyan);">🏅 ${m}</div>`; });
+        p.milestones.forEach(m => { h += `<div style="background:#000; padding:5px; border:1px solid var(--neon-cyan);">ðŸ… ${m}</div>`; });
         h += `</div>`;
     }
 
     if(p.trophies && p.trophies.length > 0) {
         h += `<div class="unit-header" style="margin-top:15px; color:var(--ea-yellow);">TROPHY CABINET</div><div style="font-size:8px; color:#fff; display:flex; flex-wrap:wrap; gap:10px;">`;
-        p.trophies.forEach(t => { h += `<div style="background:#000; padding:5px; border:1px solid var(--ea-yellow);">🏆 ${t.year} ${t.name}</div>`; });
+        p.trophies.forEach(t => { h += `<div style="background:#000; padding:5px; border:1px solid var(--ea-yellow);">ðŸ† ${t.year} ${t.name}</div>`; });
         h += `</div>`;
     }
-    if(p.asgAppearances > 0) h += `<div style="margin-top:10px; font-size:8px; color:var(--neon-cyan);">⭐ ${p.asgAppearances}x All-Star</div>`;
+    if(p.asgAppearances > 0) h += `<div style="margin-top:10px; font-size:8px; color:var(--neon-cyan);">â­ ${p.asgAppearances}x All-Star</div>`;
     h += `</div>`;
 } // end _pcOldBodyPlaceholder
 
@@ -8145,9 +7927,9 @@ function applyPostGameFatigue(awayTeamCode, homeTeamCode, awayGoalieName, homeGo
         rosters[tk].forEach(p => {
             if (!p.status) p.status = { fatigue: 0, morale: 0, injuryDays: 0, suspension: 0, consecutiveStarts: 0 };
 
-            // Skaters gain 10 fatigue per game
+            // Skaters gain 15 fatigue per game
             if (p.pos !== 'G' && p.status.injuryDays === 0) {
-                p.status.fatigue = Math.min(100, p.status.fatigue + 10);
+                p.status.fatigue = Math.min(100, p.status.fatigue + 15);
             } 
             // Goalies 
             else if (p.pos === 'G') {
@@ -8161,6 +7943,80 @@ function applyPostGameFatigue(awayTeamCode, homeTeamCode, awayGoalieName, homeGo
     });
 }
 
+// 2. THE MIDNIGHT LOOP (Runs at the end of the day)
+function processDailyUpdates() {
+    // A. Find out which teams played today
+    let teamsPlayedToday = new Set();
+    let todaysGames = calendar[currentDay] || [];
+    
+    todaysGames.forEach(g => {
+        teamsPlayedToday.add(g.a.nrm);
+        teamsPlayedToday.add(g.h.nrm);
+    });
+
+    // B. Loop through every team in the league
+    for (let tk in rosters) {
+        let playedToday = teamsPlayedToday.has(tk);
+
+        rosters[tk].forEach(p => {
+            if (!p.status) return;
+
+            // 1. INJURY RECOVERY: Heal 1 day
+            if (p.status.injuryDays > 0) p.status.injuryDays--;
+
+            // 2. SUSPENSION: Drops by 1 *only* if the team played a game today
+            if (playedToday && p.status.suspension > 0) p.status.suspension--;
+
+            // 3. FATIGUE RECOVERY: If the team had an off-day, sleep it off!
+            if (!playedToday) {
+                p.status.fatigue = Math.max(0, p.status.fatigue - 25); // Recovers 25 fatigue
+            // Check if the league needs to announce the Trade Deadline
+            checkTradeDeadlineAnnouncements();
+            // =========================================================
+    // ðŸ¤ AI TRADE GENERATOR
+    // =========================================================
+    // Grab the current multiplier (0 if deadline passed, 5 if deadline day, 1 if normal)
+    let tradeMult = getTradeProbabilityMultiplier();
+    
+    // Multiply the base trade chance by the multiplier!
+    if (awardConfig.trades && Math.random() < (0.05 * tradeMult)) {
+        
+        // 1. Pick two random teams
+        let activeTeams = Object.keys(rosters);
+        let teamA = activeTeams[Math.floor(Math.random() * activeTeams.length)];
+        let teamB = activeTeams[Math.floor(Math.random() * activeTeams.length)];
+        
+        // 2. Make sure they aren't the same team, and both have enough players
+        if (teamA !== teamB && rosters[teamA] && rosters[teamB] && rosters[teamA].length > 15 && rosters[teamB].length > 15) {
+
+            // 3. Grab a random player from each team to swap
+            let playerA = rosters[teamA][Math.floor(Math.random() * rosters[teamA].length)];
+            let playerB = rosters[teamB][Math.floor(Math.random() * rosters[teamB].length)];
+            if (!playerA || !playerB) return;
+            
+            // 4. Execute the Trade! (Swap their team tags)
+            playerA.team = teamB;
+            playerB.team = teamA;
+            
+            // 5. Swap them in the actual roster arrays
+            rosters[teamA] = rosters[teamA].filter(p => p.name !== playerA.name);
+            rosters[teamA].push(playerB);
+            
+            rosters[teamB] = rosters[teamB].filter(p => p.name !== playerB.name);
+            rosters[teamB].push(playerA);
+            
+            // 6. Broadcast the blockbuster to the news feed!
+            tradeLog.unshift({ 
+                day: currentDay, 
+                details: `ðŸ” BLOCKBUSTER: ${teamA.toUpperCase()} trades ${playerA.name} to ${teamB.toUpperCase()} in exchange for ${playerB.name}.` 
+            });
+        }
+    }
+        }
+        });
+    }
+}
+
 function processDailyUpdates() {
     let teamsPlayedToday = new Set();
     let todaysGames = calendar[currentDay] || [];
@@ -8170,12 +8026,13 @@ function processDailyUpdates() {
         let playedToday = teamsPlayedToday.has(tk);
         rosters[tk].forEach(p => {
             if (!p.status) return;
+            if (p.status.injuryDays > 0) p.status.injuryDays--;
             if (playedToday && p.status.suspension > 0) p.status.suspension--;
-            if (!playedToday) p.status.fatigue = Math.max(0, p.status.fatigue - 25);
+            if (!playedToday) p.status.fatigue = Math.max(0, p.status.fatigue - 25); 
         });
     }
 
-    // 🛡️ MOVE THESE OUTSIDE THE LOOPS!
+    // ðŸ›¡ï¸ MOVE THESE OUTSIDE THE LOOPS!
     checkTradeDeadlineAnnouncements();
 
     let tradeMult = getTradeProbabilityMultiplier();
@@ -8196,13 +8053,13 @@ function processDailyUpdates() {
             rosters[teamB] = rosters[teamB].filter(p => p.name !== playerB.name);
             rosters[teamB].push(playerA);
             
-            tradeLog.unshift({ day: currentDay, details: `🔁 BLOCKBUSTER: ${teamA.toUpperCase()} trades ${playerA.name} to ${teamB.toUpperCase()} in exchange for ${playerB.name}.` });
+            tradeLog.unshift({ day: currentDay, details: `ðŸ” BLOCKBUSTER: ${teamA.toUpperCase()} trades ${playerA.name} to ${teamB.toUpperCase()} in exchange for ${playerB.name}.` });
         }
     }
 }
 
 // =========================================================
-// ⚖️ DEPARTMENT OF PLAYER SAFETY (DOPS) - SUSPENSION ENGINE
+// âš–ï¸ DEPARTMENT OF PLAYER SAFETY (DOPS) - SUSPENSION ENGINE
 // =========================================================
 function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
     for (let pName in matchStats) {
@@ -8241,7 +8098,7 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
                 // Broadcast it to the global news feed!
                 tradeLog.unshift({ 
                     day: currentDay, 
-                    details: `🚨 DOPS SUSPENSION: ${pName} (${teamCode.toUpperCase()}) has been suspended for ${gamesOut} games following a dangerous play.` 
+                    details: `ðŸš¨ DOPS SUSPENSION: ${pName} (${teamCode.toUpperCase()}) has been suspended for ${gamesOut} games following a dangerous play.` 
                 });
             }
         }
@@ -8249,7 +8106,7 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
 }
 
 // =========================================================
-// 🩹 INJURY ENGINE
+// ðŸ©¹ INJURY ENGINE
 // =========================================================
 function triggerGameInjuries(matchStats, homeCode, awayCode) {
     if (!awardConfig.injuries) return;
@@ -8266,61 +8123,39 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
         const chance = BASE_CHANCE + fatigueBonus + physicalBonus;
 
         if (Math.random() < chance) {
-            const teamCode = (rosters[homeCode] || []).find(p => p.name === pName) ? homeCode : awayCode;
-
-            // Check if team has a healthy replacement in the same position group
-            const injPos = ps.pos;
-            const isFwdPos = ['C','LW','RW','F'].includes(injPos);
-            const isDPos   = injPos === 'D';
-            const isGPos   = injPos === 'G';
-            const roster   = rosters[teamCode] || [];
-            const hasReplacement = roster.some(p =>
-                p.name !== pName &&
-                (playerStats[p.name]?.injury?.daysRemaining || 0) === 0 &&
-                (isFwdPos ? ['C','LW','RW','F'].includes(p.pos) :
-                 isDPos   ? p.pos === 'D' :
-                 isGPos   ? p.pos === 'G' : false)
-            );
-
-            // If no replacement available, cap at shaken-up (0 days) regardless of roll
+            const roll = Math.random();
             let days, label;
-            if (!hasReplacement) {
-                days = 0; label = 'out for a period';
-            } else {
-                const roll = Math.random();
-                if      (roll < 0.20) { days = 0;                                 label = 'out for a period'; }
-                else if (roll < 0.40) { days = Math.floor(Math.random() * 2) + 1; label = `${days}-game injury`; }
-                else if (roll < 0.75) { days = Math.floor(Math.random() * 5) + 3; label = `${days}-game injury`; }
-                else if (roll < 0.95) { days = Math.floor(Math.random() * 4) + 8; label = `${days}-game injury`; }
-                else                  { days = Math.floor(Math.random() * 4) + 12; label = `${days}-game injury`; }
-                days = Math.min(days, 15);
-            }
+            // Reweighted: heavy bias toward short injuries; 12-15 rare
+            if      (roll < 0.30) { days = 0;                                   label = 'out for a period'; }
+            else if (roll < 0.58) { days = 1;                                   label = '1-game injury'; }
+            else if (roll < 0.78) { days = Math.floor(Math.random() * 4) + 2;  label = `${days}-game injury`; }
+            else if (roll < 0.93) { days = Math.floor(Math.random() * 6) + 6;  label = `${days}-game injury`; }
+            else                  { days = Math.floor(Math.random() * 4) + 12; label = `${days}-game injury`; }
+
+            days = Math.min(days, 15);
+
+            const teamCode = (rosters[homeCode] || []).find(p => p.name === pName) ? homeCode : awayCode;
             const note = days === 0
-                ? `🩹 INJURY NOTE: ${pName} (${teamCode.toUpperCase()}) was shaken up — out for a period.`
-                : `🩹 INJURY: ${pName} (${teamCode.toUpperCase()}) — ${label}, out ${days} game${days > 1 ? 's' : ''}.`;
+                ? `ðŸ©¹ INJURY NOTE: ${pName} (${teamCode.toUpperCase()}) was shaken up â€” out for a period.`
+                : `ðŸ©¹ INJURY: ${pName} (${teamCode.toUpperCase()}) â€” ${label}, out ${days} game${days > 1 ? 's' : ''}.`;
 
             // Only confirm long injuries (12-15 games)
             if (days >= 12) {
-                const accept = confirm(`INJURY — ${pName} (${teamCode.toUpperCase()})\n${label.toUpperCase()}\n\nApply this injury? (OK = yes, Cancel = skip)`);
+                const accept = confirm(`INJURY â€” ${pName} (${teamCode.toUpperCase()})\n${label.toUpperCase()}\n\nApply this injury? (OK = yes, Cancel = skip)`);
                 if (!accept) {
-                    tradeLog.unshift({ day: currentDay, details: `⚡ INJURY AVOIDED: ${pName} (${teamCode.toUpperCase()}) played through a ${label}.` });
+                    tradeLog.unshift({ day: currentDay, details: `âš¡ INJURY AVOIDED: ${pName} (${teamCode.toUpperCase()}) played through a ${label}.` });
                     continue;
                 }
             }
 
-            if (days > 0) {
-                ps.injury = { severity: days, daysRemaining: days };
-                // Sync status.injuryDays so goalie rotation + fatigue system sees the injury
-                const rosterPlayer = (rosters[teamCode] || []).find(p => p.name === pName);
-                if (rosterPlayer && rosterPlayer.status) rosterPlayer.status.injuryDays = days;
-            }
+            if (days > 0) ps.injury = { severity: days, daysRemaining: days };
             tradeLog.unshift({ day: currentDay, details: note });
         }
     }
 }
 
 // =========================================================
-// 🤝 TRADE DEADLINE SYSTEM & FRENZY MULTIPLIER
+// ðŸ¤ TRADE DEADLINE SYSTEM & FRENZY MULTIPLIER
 // =========================================================
 function getTradeProbabilityMultiplier() {
     // Calculate the deadline (75% of the way through the season)
@@ -8352,11 +8187,11 @@ function checkTradeDeadlineAnnouncements() {
     
     // Broadcast news to the global trade log so you know it's coming!
     if (currentDay === deadlineDay - 5) {
-        tradeLog.unshift({ day: currentDay, details: `🎙️ NEWS: The Trade Deadline is 5 days away. General Managers are working the phones.` });
+        tradeLog.unshift({ day: currentDay, details: `ðŸŽ™ï¸ NEWS: The Trade Deadline is 5 days away. General Managers are working the phones.` });
     } else if (currentDay === deadlineDay) {
-        tradeLog.unshift({ day: currentDay, details: `🚨 NEWS: IT IS TRADE DEADLINE DAY! The window closes at midnight.` });
+        tradeLog.unshift({ day: currentDay, details: `ðŸš¨ NEWS: IT IS TRADE DEADLINE DAY! The window closes at midnight.` });
     } else if (currentDay === deadlineDay + 1) {
-        tradeLog.unshift({ day: currentDay, details: `🔒 NEWS: The Trade Deadline has officially passed. Rosters are locked for the playoffs.` });
+        tradeLog.unshift({ day: currentDay, details: `ðŸ”’ NEWS: The Trade Deadline has officially passed. Rosters are locked for the playoffs.` });
     }
 }
 
@@ -8376,7 +8211,7 @@ function updateUI() {
     const dayGamesNow = getGamesForDay(currentDay);
     const isAsgDayNow = isASG && dayGamesNow.some(g => g && g.isASG_game);
     const tickerEl = document.getElementById('tickerScroll');
-    if (tickerEl) tickerEl.innerText = (isAsgDayNow ? '🔥 ALL-STAR GAME DAY! 🔥 | ' : '') + m + " | LATEST SCORE: " + ss;
+    if (tickerEl) tickerEl.innerText = (isAsgDayNow ? 'ðŸ”¥ ALL-STAR GAME DAY! ðŸ”¥ | ' : '') + m + " | LATEST SCORE: " + ss;
     refreshScheduleDashboardUI();
     
     const mn = document.getElementById('gameMenuList');
@@ -8404,13 +8239,13 @@ function updateUI() {
     let maxGP = k === 'season' ? Math.max(1, ...league.map(t => t.season.gp)) : Math.max(1, ...Object.values(playerStats).map(p => (p[k] && p[k].gp) ? p[k].gp : 0));
     let mskp = Math.max(1, Math.floor(maxGP * 0.25)); let mglp = Math.max((maxGP >= 4 ? 2 : 1), Math.floor(maxGP * 0.45));
     
-    // 🛡️ Added safety checks to ensure p[k] exists before filtering
+    // ðŸ›¡ï¸ Added safety checks to ensure p[k] exists before filtering
     const sks = Object.values(playerStats).filter(p => p.pos !== 'G' && p[k] && p[k].gp >= mskp); 
     const gls = Object.values(playerStats).filter(p => p.pos === 'G' && p[k] && p[k].gp >= mglp);
 
     const renderLeaderboard = (id, ti, d, sf, vf, lim) => {    
         let h = `<div style="background:#111; padding:10px; text-align:center; color:var(--ea-yellow); text-shadow:2px 2px 0px #000;">${ti}</div><table><tr style="background:#222;"><th>#</th><th>PLAYER</th><th>VAL</th></tr>`; 
-        d.sort(sf).slice(0,lim).forEach((p,idx) => { h += `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')"><td>${idx+1}</td><td>${p.injury > 0 ? '🚑 ' : ''}${p.name} <span class="team-hl">${p.teamCode}</span></td><td class="pts-hl">${vf(p)}</td></tr>`; }); h += `</table>`; document.getElementById(id).innerHTML = h; 
+        d.sort(sf).slice(0,lim).forEach((p,idx) => { h += `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')"><td>${idx+1}</td><td>${p.injury > 0 ? 'ðŸš‘ ' : ''}${p.name} <span class="team-hl">${p.teamCode}</span></td><td class="pts-hl">${vf(p)}</td></tr>`; }); h += `</table>`; document.getElementById(id).innerHTML = h; 
     };
     
     renderLeaderboard('pointsContainer', 'POINTS', [...sks], (a,b) => ((b[k].g+b[k].a) - (a[k].g+a[k].a)), x => x[k].g+x[k].a, 25); 
@@ -8497,12 +8332,38 @@ function clearSaveSlot() {
 }
 
 function loadDefaultGoogleSheets(event) {
+    // Prevent default form submission behavior if an event is passed
+    if (event) event.preventDefault();
+    
+    // Array of the URL input IDs from your HTML
+    const sheetInputs = [
+        'teamSheetUrl', 
+        'playerSheetUrl', 
+        'scheduleSheetUrl', 
+        'eventLogSheetUrl'
+    ];
+    
+    // Clear out each input field
+    sheetInputs.forEach(id => {
+        const inputElement = document.getElementById(id);
+        if (inputElement) {
+            inputElement.value = '';
+        }
+    });
+    
+    console.log("Sheet URLs reset. Engine will default to sample data.");
+    
+    // If you have a status update function, call it here
+    if (typeof resetSheetUrlsToDefault === 'function') {
+        resetSheetUrlsToDefault();
+    }
+function loadDefaultGoogleSheets(event) {
     if (event) event.preventDefault();
 
     const sheetInputs = [
-        'teamSheetUrl',
-        'playerSheetUrl',
-        'scheduleSheetUrl',
+        'teamSheetUrl', 
+        'playerSheetUrl', 
+        'scheduleSheetUrl', 
         'eventLogSheetUrl'
     ];
 
@@ -8517,5 +8378,4 @@ function loadDefaultGoogleSheets(event) {
 
     if (typeof resetSheetUrlsToDefault === 'function') {
         resetSheetUrlsToDefault();
-    }
-}
+    }}}
