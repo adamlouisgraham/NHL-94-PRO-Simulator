@@ -7097,34 +7097,34 @@ function _pcB(ctx, sc, x, y, w, h, col) { // bordered fill (outline technique)
 const PC_SPR_FWD_0 = [
     '....................................',
     '....................................',
-    '...................######...........',
-    '..................#HHhhhH##.........',
-    '..................#HhVVVhH#.........',
-    '..................#H##ss##H#........',
-    '..................#H##SS##H#........',
-    '...................#HHsSSH##........',
-    '............####JJJJJJJJJJJ####....',
-    '...........#jJJJJJJJJJJJJJJJJJd#..',
-    '..........##JJjJJJJcccccJJJJJJdJJ#.',
-    '.........#GGjJJJJccccccccJJJJJdJJJ#',
-    '........#GGgjJJJJJJcccJJJJJJJJdJJJ#',
-    '.......#KkGGgjJJJJJJJJJJJJJJJJdJJJ#',
-    '......#KkkkGgjJdddddddddddddddJJJJ##',
-    '.....#KKkkkk##dddddddddddddddddJJJ##',
-    '....#KKKkkkk#dddddddddddddddddddJ##.',
-    '...#KKKKkkk##pppppppppppppppppppp##.',
-    '..#KKKKKkk##ppppppppppppppppppppp##.',
-    '.#KKKKKKkk#pppppppppppppppppppppp##.',
+    '.......................######.......',  // helmet 4 cols right = more forward lean
+    '......................#HHhhhH##.....',
+    '......................#HhVVVhH#.....',
+    '......................#H##ss##H#....',
+    '......................#H##SS##H#....',
+    '.......................#HHsSSH##....',
+    '..........####JJJJJJJJJJJJJ####....',  // shoulders 2 wider = more horizontal body
+    '.........#jJJJJJJJJJJJJJJJJJJd#..',
+    '........##JJjJJJJcccccJJJJJJdJJ#.',
+    '.......#GGjJJJJccccccccJJJJJdJJJ#',
+    '......#GGgjJJJJJJcccJJJJJJJJdJJJ#',
+    '.....#KkGGgjJJJJJJJJJJJJJJJJdJJJ#',
+    '....#KkkkGgjJdddddddddddddddJJJJ##',
+    '...#KKkkkk##dddddddddddddddddJJJ##',
+    '..#KKKkkkk#dddddddddddddddddddJ##.',
+    '.#KKKKkkk##pppppppppppppppppppp##.',
+    '#KKKKKkk##ppppppppppppppppppppp##.',
+    '#KKKKKKkk#pppppppppppppppppppppp##.',
     '#KKKKKKKk##pppppppppppppppppppppp#..',
-    '#KKKKKKk##mmmmmmmmm#....#mmmmmmmmmm#',
-    '##KKKKKk#mmmmmmmmm#....#mmmmmmmmmm#.',
-    '.##KKKk#mmmmmmmmmmm#....#mmmmmmmmmm#',
-    '..##KKk#mmmmmmmmmmm#....#mmmmmmmmmm#',
-    '...##Kk#mmmmmmmmmmmm#....#mmmmmmmmm#',
-    '....##k#bbbbbbbbbbbb#....#bbbbbbbbb#',
-    '.....###bBBBBBBBBBBBb#....#bBBBBBBBBb',
-    '......##aaaaaaaaaaaaaaa#....#aaaaaaaA',
-    '.....#uuu#aaaaaaaaaaaaaaaaaaaaaaA##.',
+    '#KKKKKKk##mmmmmmmmm#....#mmmmmmmmmm#',  // both shins
+    '##KKKKKk#mmmmmmmmmm#....#mmmmmmmmmm#.',
+    '.##KKKk#mmmmmmmmmmm#....#mmmmmmmmm##.',  // back shin ends — stride depth
+    '..##KKk#mmmmmmmmmmm#....#bbbbbbbbb#..',  // back BOOT (back leg higher = kicking off)
+    '...##Kk#mmmmmmmmmmmm#...#bBBBBBBBBBb',  // front shin continues, back boot highlight
+    '....##k#mmmmmmmmmmmmm#..#aaaaaaaaA#.',   // front shin, back BLADE (short, angled back)
+    '.....###bbbbbbbbbbbbb#...#aaaaaaaA##',   // front BOOT, back blade fades
+    '......##bBBBBBBBBBBBBb#..............',  // front boot highlight
+    '.....#uuu#aaaaaaaaaaaaaaaaaaaaaaA##.',   // puck + main front blade
     '....#uuuuu#aaaaaaaaaaaaaaaaaaaaA##..',
     '....#uuuuu##aaaaaaaaaaaaaaaaaaaA#...',
     '.....#uuu...#aaaaaaaaaaaaaaaaaaA#...',
@@ -7165,14 +7165,14 @@ const PC_SPR_FWD_1 = [
     '#KKkkkk#ppppppppppppppppppppppp##...',
     '.#KKkkk#pppppppppppppppppppppppp#...',
     '..#KKkk#ppppppppppppppppppppppp##...',
-    '...#Kkk##mmmmmmmmm#....#mmmmmmmmm#..',
+    '...#Kkk##mmmmmmmmm#....#mmmmmmmmm#..',  // both shins
     '....#kk#mmmmmmmmmm#....#mmmmmmmmmm#.',
-    '...#Kkkmmmmmmmmmmm#....#mmmmmmmmmmm#',
-    '..#KKkk#mmmmmmmmm#.....#mmmmmmmmmmm#',
-    '.#KKKkk#mmmmmmmmmm#....#mmmmmmmmmm#.',
-    '#KKKKkk#bbbbbbbbbb#....#bbbbbbbbbb#.',
-    '#KKKKkk##bBBBBBBBBb#....#bBBBBBBBBb',
-    '##KKKkk##aaaaaaaaaaaa#....#aaaaaaA##',
+    '...#Kkkmmmmmmmmmmm#....#mmmmmmmm###.',  // back shin ends
+    '..#KKkk#mmmmmmmmm#.....#bbbbbbbbb#..',  // back BOOT
+    '.#KKKkk#mmmmmmmmmm#....#bBBBBBBBBBb',  // back boot highlight
+    '#KKKKkk#bbbbbbbbbb#....#aaaaaaaaA#.',   // front BOOT, back BLADE
+    '#KKKKkk##bBBBBBBBBb#....#aaaaaaaA##',  // front boot highlight
+    '##KKKkk##aaaaaaaaaaaaa#...#aaaaAAA#.',  // both blades
     '.##KKKk###aaaaaaaaaaaaaaaaaaaaaaA##.',
     '...#KKk#..#aaaaaaaaaaaaaaaaaaaaA##..',
     '...#uuu#...#aaaaaaaaaaaaaaaaaaaA#...',
@@ -7214,14 +7214,14 @@ const PC_SPR_FWD_2 = [
     '#KKKKkkk#ppppppppppppppppppppppp##..',
     '.#KKKkk##pppppppppppppppppppppppp#..',
     '..#KKkk#ppppppppppppppppppppppppp#..',
-    '...#Kkk##mmmmmmmmm#....#mmmmmmmmmmm#',
+    '...#Kkk##mmmmmmmmm#....#mmmmmmmmmmm#',  // both shins
     '....#kk#mmmmmmmmmm#....#mmmmmmmmmm#.',
-    '...#Kkkk#mmmmmmmmm#....#mmmmmmmmmm#.',
-    '..#KKkkk#mmmmmmmmm#....#mmmmmmmmmmm#',
-    '.#KKKkkk#mmmmmmmmmm#....#mmmmmmmmmm#',
-    '#KKKKkkk#bbbbbbbbbb#....#bbbbbbbbbb#',
-    '#KKKKkkkk#bBBBBBBBBb#....#bBBBBBBBBb',
-    '##KKKKkkk##aaaaaaaaaaa#....#aaaaaaAA#',
+    '...#Kkkk#mmmmmmmmm#....#mmmmmmmm###.',  // back shin ends
+    '..#KKkkk#mmmmmmmmm#....#bbbbbbbbb#.',   // back BOOT
+    '.#KKKkkk#mmmmmmmmmm#...#bBBBBBBBBBb.',  // back boot highlight
+    '#KKKKkkk#bbbbbbbbbb#...#aaaaaaaaA#.',   // front BOOT, back BLADE
+    '#KKKKkkkk#bBBBBBBBBb#..#aaaaaaaA##.',  // front boot highlight
+    '##KKKKkkk##aaaaaaaaaaa#...#aaaaAA##.',  // both blades
     '.##KKKkk##..#aaaaaaaaaaaaaaaaaaaaA##.',
     '...##KKk#....#aaaaaaaaaaaaaaaaaaaA#..',
     '.....#Kk#.....#aaaaaaaaaaaaaaaaaaA#..',
@@ -7263,14 +7263,14 @@ const PC_SPR_DEF_0 = [
     '#KKKKkkk#ppppppppppppppppppppppppp#.',
     '.#KKKkk##pppppppppppppppppppppppp##.',
     '..#KKkk#pppppppppppppppppppppppppp#.',
-    '...#Kkk##mmmmmmmmm#....#mmmmmmmmmmm#',
-    '....#kk#mmmmmmmmmm#....#mmmmmmmmmm##',
-    '...#Kkkmmmmmmmmmmm#....#mmmmmmmmmmmm',
-    '..#KKkk#mmmmmmmmm#.....#mmmmmmmmmmm#',
-    '.#KKKkk#mmmmmmmmmm#....#mmmmmmmmmmm#',
-    '#KKKKkk#bbbbbbbbbb#....#bbbbbbbbbbb#',
-    '#KKKKkk##bBBBBBBBBb#....#bBBBBBBBBBb',
-    '##KKKk###aaaaaaaaaaaa#....#aaaaaaaA#',
+    '...#Kkk##mmmmmmmmmm#....#mmmmmmmmmmm#',  // both shins
+    '....#kk#mmmmmmmmmmm#....#mmmmmmmmmm##',
+    '...#Kkkmmmmmmmmmmm#.....#mmmmmmmmmm#.',  // back shin ends
+    '..#KKkk#mmmmmmmmmm#.....#bbbbbbbbbb#.',  // back BOOT
+    '.#KKKkk#mmmmmmmmmmm#....#bBBBBBBBBBBb',  // back boot highlight
+    '#KKKKkk#bbbbbbbbbbb#....#aaaaaaaaA##.',  // front BOOT, back BLADE
+    '#KKKKkk##bBBBBBBBBBb#...#aaaaaaaA###',  // front boot highlight
+    '##KKKk###aaaaaaaaaaaaaa#...#aaaaA##.',   // both blades
     '.##KKk#...#aaaaaaaaaaaaaaaaaaaaaA##.',
     '...#Kk#....#aaaaaaaaaaaaaaaaaaaaA#..',
     '....#k#.....#aaaaaaaaaaaaaaaaaaaA#..',
@@ -7310,15 +7310,14 @@ const PC_SPR_DEF_1 = [
     '#KKKkkkk#ppppppppppppppppppppppppp##',
     '#KKKKkk##pppppppppppppppppppppppp##.',
     '.#KKKkk#ppppppppppppppppppppppppp#..',
-    '..#KKkk##mmmmmmmmm#....#mmmmmmmmmm#.',
-    '...#Kkk#mmmmmmmmmm#....#mmmmmmmmmm##',
-    '...#kkkmmmmmmmmmmm#....#mmmmmmmmmmm#',
-    '..#Kkkkmmmmmmmmmmm#....#mmmmmmmmmmm#',
-    '.#KKkkkmmmmmmmmmmm#....#mmmmmmmmmmm#',
-    '#KKKkkk#mmmmmmmmmm#....#mmmmmmmmmm##',
-    '#KKKKkk#bbbbbbbbbb#....#bbbbbbbbbbb#',
-    '#KKKKkk##bBBBBBBBBb#....#bBBBBBBBBBb',
-    '##KKKkk###aaaaaaaaaaa#....#aaaaaaAA#',
+    '..#KKkk##mmmmmmmmm#....#mmmmmmmmmm#.',  // both shins
+    '...#Kkk#mmmmmmmmmm#....#mmmmmmmmm##.',
+    '...#kkkmmmmmmmmmmm#....#mmmmmmmm###',   // back shin ends
+    '..#Kkkkmmmmmmmmmmm#....#bbbbbbbbbbb#',  // back BOOT
+    '.#KKkkkmmmmmmmmmmm#....#bBBBBBBBBBBb', // back boot highlight
+    '#KKKkkk#bbbbbbbbbb#....#aaaaaaaaA##.',  // front BOOT, back BLADE
+    '#KKKKkk#bBBBBBBBBBb#....#aaaaaaaA##',  // front boot highlight
+    '##KKKkk###aaaaaaaaaaa#....#aaaaaAA#.',  // both blades
     '.##KKk##...#aaaaaaaaaaaaaaaaaaaaA##.',
     '...#Kk#.....#aaaaaaaaaaaaaaaaaaaA#..',
     '....#k#......#aaaaaaaaaaaaaaaaaaA#..',
