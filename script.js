@@ -7073,6 +7073,43 @@ const PC_LOGOS = {
     VAN:'Team Logos/canucks.png',   WSH:'Team Logos/capitals.png',  WIN:'Team Logos/jets.png',
 };
 
+function pcDrawSkaterSprite(ctx, canvasW, canvasH, pri, sec) {
+    const toRGB = hex => [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+    const [pR,pG,pB] = toRGB(pri);
+    const [sR,sG,sB] = toRGB(sec);
+    const img = new Image();
+    img.onload = () => {
+        const off = document.createElement('canvas');
+        off.width = img.width; off.height = img.height;
+        const oc = off.getContext('2d');
+        oc.drawImage(img, 0, 0);
+        const id = oc.getImageData(0, 0, off.width, off.height);
+        const d = id.data;
+        for (let i = 0; i < d.length; i += 4) {
+            const r = d[i], g = d[i+1], b = d[i+2], a = d[i+3];
+            if (a < 10) continue;
+            // Teal/aqua background (170,238,238) -> transparent so card bg shows through
+            if (r > 130 && r < 210 && g > 200 && b > 200 && Math.abs(g - b) < 40) {
+                d[i+3] = 0; continue;
+            }
+            // Blue jersey (source image primary) -> team primary
+            if (b > 60 && b > r * 1.2 && b > g * 0.85 && r < 160 && g < 180) {
+                d[i]=pR; d[i+1]=pG; d[i+2]=pB; continue;
+            }
+            // Gold/yellow/warm accents (source image secondary) -> team secondary
+            if (r > 120 && g > 50 && b < 80 && r > b * 2) {
+                d[i]=sR; d[i+1]=sG; d[i+2]=sB; continue;
+            }
+        }
+        oc.putImageData(id, 0, 0);
+        ctx.clearRect(0, 0, canvasW, canvasH);
+        const scale = Math.min(canvasW / img.width, canvasH / img.height);
+        const dw = img.width * scale, dh = img.height * scale;
+        ctx.drawImage(off, (canvasW - dw) / 2, (canvasH - dh) / 2, dw, dh);
+    };
+    img.src = 'skater.png';
+}
+
 function pcDrawGoalieSprite(ctx, canvasW, canvasH, pri, sec) {
     const toRGB = hex => [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
     const [pR,pG,pB] = toRGB(pri);
@@ -7281,8 +7318,8 @@ function showPlayerCard(pName) {
     <div style="font-size:8px;color:#fff;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fullName}</div>
     <div style="font-size:6px;color:rgba(255,255,255,.5);margin-top:2px;letter-spacing:1px;">${confName}</div>
   </div>
-  <div style="background:#06060e;position:relative;display:flex;align-items:center;justify-content:center;height:160px;overflow:hidden;">
-    <canvas id="pc-logo" width="120" height="120" style="image-rendering:pixelated;${p.pos==='G'?'':'border-radius:50%;border:2px solid rgba(255,255,255,.1);'}"></canvas>
+  <div style="background:#AAEEEE;position:relative;display:flex;align-items:center;justify-content:center;height:160px;overflow:hidden;">
+    <canvas id="pc-logo" width="120" height="120" style="image-rendering:pixelated;"></canvas>
     <div style="position:absolute;bottom:0;left:0;right:0;height:18px;background:linear-gradient(transparent,rgba(0,0,0,.75));"></div>
   </div>
   <div style="background:${sec};padding:5px 10px;display:flex;justify-content:space-between;align-items:center;">
@@ -7311,7 +7348,8 @@ function showPlayerCard(pName) {
             lgCanvas.width = 280; lgCanvas.height = 152;
             pcDrawGoalieSprite(ctx2, 280, 152, pri, sec);
         } else {
-            pcDrawLogo(ctx2, 120, p.teamCode);
+            lgCanvas.width = 200; lgCanvas.height = 152;
+            pcDrawSkaterSprite(ctx2, 200, 152, pri, sec);
         }
     }
     document.getElementById('playerCardOverlay').style.display = 'flex';
