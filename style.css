@@ -82,33 +82,6 @@
     0%, 100% { border-color: #FFFFFF; color: #FFFFFF; }
     50% { border-color: #00FFFF; color: #00FFFF; } /* Flashes Cyan */
 }
-/* Option B: Power Play Styling */
-  .no-spaces-nrm {
-    display: inline-flex;
-    padding: 10px 22px;
-    border-radius: 6px; /* Sharper "pro" corners */
-    font-family: 'Inter', 'Segoe UI', sans-serif;
-    text-transform: lowercase; /* Forces the no-spaces/no-caps NRM look */
-    font-weight: 800;
-    letter-spacing: -0.01em;
-    
-    /* Power Play Palette */
-    background-color: #0f172a; /* Deep Slate */
-    color: #fbbf24;            /* Golden Yellow */
-    
-    border-left: 4px solid #fbbf24; /* Accent stripe */
-    box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.2);
-    transition: all 0.2s ease;
-  }
-
-  #profileheader {
-    white-space: nowrap; /* Ensures no wrapping/spacing issues */
-  }
-
-  .no-spaces-nrm:hover {
-    background-color: #1e293b;
-    transform: scale(1.02);
-  }
 
 /* --- 1. CSS VARIABLES (COLOR PALETTE) --- */
 :root {
@@ -642,30 +615,6 @@ body {
     border: 4px solid var(--silver-mid) !important;
 }
 
-/* --- 2. SOLID BLACK TABLES --- */
-table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-    font-size: 7px !important;
-    background: #000 !important; /* Solid Black */
-}
-
-th {
-    text-align: left !important;
-    padding: 10px 8px !important;
-    background: #000 !important; /* Solid Black */
-    color: var(--neon-cyan) !important;
-    border-bottom: 2px solid var(--silver-mid) !important;
-    text-shadow: 1px 1px 0 #000 !important;
-}
-
-td {
-    padding: 8px !important;
-    border-bottom: 1px solid #333 !important;
-    color: #fff !important;
-    cursor: pointer !important;
-    background: #000 !important; /* Solid Black */
-}
 
 .sim-controls-container {
     display: flex;
@@ -968,11 +917,10 @@ button:active:not(:disabled) {
     color: #fff;
 }
 
-#officeControls button:hover:not(:disabled), 
-#mainDisplay button:hover:not(:disabled) { 
-    background: inherit; 
-    color: #000; 
-    box-shadow: inset 0 0 0 2px #fff; 
+#officeControls button:hover:not(:disabled),
+#mainDisplay button:hover:not(:disabled) {
+    background: #fff;
+    color: #000;
 }
 
 /* Toggle Buttons (Standings vs Bracket) */
@@ -1126,11 +1074,8 @@ td {
     font-weight: bold; 
     display: none; 
 }
-.sb-footer { 
-    display: grid; 
-    grid-template-columns: 1fr 1fr; 
-    gap: 20px; 
-    padding: 0 15px; 
+.sb-footer {
+    padding: 0 15px;
 }
 
 /* --- 8. EASN TICKER --- */
@@ -1370,4 +1315,41 @@ td {
     color: #FFCC00;
     font-weight: bold;
     margin-right: 4px;
+}
+
+/* --- BUTTON COLOR VARIANTS --- */
+.btn-cyan   { border-color: #00FFFF; color: #00FFFF; }
+.btn-green  { border-color: #00FF00; color: #00FF00; }
+.btn-lime   { border-color: #7cff7c; color: #7cff7c; }
+.btn-orange { border-color: #FF8800; color: #FF8800; }
+.btn-amber  { border-color: #FFAA00; color: #FFAA00; }
+.btn-red    { border-color: #FF5555; color: #FF5555; }
+.btn-yellow { border-color: #FFFF00; color: #FFFF00; }
+.btn-purple { border-color: #E088FF; color: #E088FF; }
+.btn-violet { border-color: #8c66ff; color: #8c66ff; }
+.btn-gold   { border-color: #ffd166; color: #ffd166; }
+.btn-white  { border-color: #FFFFFF; color: #FFFFFF; }
+.btn-pink   { border-color: #ff8080; color: #ff8080; }
+.btn-teal   { border-color: #20B2AA; color: #20B2AA; }
+
+.btn-cyan:hover:not(:disabled)   { background: #00FFFF; color: #000; }
+.btn-green:hover:not(:disabled)  { background: #00FF00; color: #000; }
+.btn-lime:hover:not(:disabled)   { background: #7cff7c; color: #000; }
+.btn-orange:hover:not(:disabled) { background: #FF8800; color: #000; }
+.btn-amber:hover:not(:disabled)  { background: #FFAA00; color: #000; }
+.btn-red:hover:not(:disabled)    { background: #FF5555; color: #000; }
+.btn-yellow:hover:not(:disabled) { background: #FFFF00; color: #000; }
+.btn-purple:hover:not(:disabled) { background: #E088FF; color: #000; }
+.btn-violet:hover:not(:disabled) { background: #8c66ff; color: #000; }
+.btn-gold:hover:not(:disabled)   { background: #ffd166; color: #000; }
+.btn-white:hover:not(:disabled)  { background: #FFFFFF; color: #000; }
+.btn-pink:hover:not(:disabled)   { background: #ff8080; color: #000; }
+.btn-teal:hover:not(:disabled)   { background: #20B2AA; color: #000; }
+
+/* Award toggle buttons */
+.award-toggle-btn {
+    font-size: 7px;
+    padding: 6px 10px;
+    height: auto;
+    width: auto;
 }
