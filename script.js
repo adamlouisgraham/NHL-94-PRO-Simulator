@@ -4007,6 +4007,16 @@ function simGame(idx) {
     let asgBoost = isASG ? 1.8 : 1.0;
     let homeCrowdEnergy = 1.03;
 
+    // CHAOS — per-game variance so upsets are always possible
+    // Each team independently rolls a ±10 effective-OVR "night factor".
+    // The combined swing can flip a 15-point gap on any given night.
+    const hNight = (Math.random() - 0.5) * 20;
+    const aNight = (Math.random() - 0.5) * 20;
+    const chaosOffset = hNight - aNight;
+    // Goalie hot/cold night: shifts their wall modifier ±0.07 independently
+    hWallMod = Math.max(0.78, Math.min(1.22, hWallMod + (Math.random() - 0.5) * 0.14));
+    aWallMod = Math.max(0.78, Math.min(1.22, aWallMod + (Math.random() - 0.5) * 0.14));
+
     //  4. THE TIME-TICK ENGINE SETUP
     let hG = 0, aG = 0;
     let hShots = 0, aShots = 0;
@@ -4069,7 +4079,7 @@ function simGame(idx) {
         let hLiveOvr = getLiveLineOvr(hOnIce) * hAuraMod * homeCrowdEnergy;
         let aLiveOvr = getLiveLineOvr(aOnIce) * aAuraMod;
         
-        let diff = hLiveOvr - aLiveOvr;
+        let diff = hLiveOvr - aLiveOvr + chaosOffset;
         
         // Shot generation  -  softer diff multiplier balances shots across lines
         let hShotChance = 0.26 + (diff * 0.0014) * asgBoost;
