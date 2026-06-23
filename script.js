@@ -7082,10 +7082,23 @@ const PC_LOGOS = {
     VAN:'Team Logos/canucks.png',   WSH:'Team Logos/capitals.png',  WIN:'Team Logos/jets.png',
 };
 
-function pcDrawSkaterSprite(ctx, canvasW, canvasH, pri, sec) {
+// Pose files: 3 skater poses (blue-jersey rows from reference sheet)
+//             2 goalie poses (butterfly + standing V)
+const PC_SKATER_POSES = ['skater0.png', 'skater2.png', 'skater3.png'];
+const PC_GOALIE_POSES = ['goalie.png', 'goalie_stand.png'];
+
+// Deterministic hash of player name -> consistent pose index
+function _pcPoseIdx(name, poseCount) {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
+    return Math.abs(h) % poseCount;
+}
+
+function pcDrawSkaterSprite(ctx, canvasW, canvasH, pri, sec, pName) {
     const toRGB = hex => [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
     const [pR,pG,pB] = toRGB(pri);
     const [sR,sG,sB] = toRGB(sec);
+    const src = PC_SKATER_POSES[_pcPoseIdx(pName || '', PC_SKATER_POSES.length)];
     const img = new Image();
     img.onload = () => {
         const off = document.createElement('canvas');
@@ -7097,15 +7110,15 @@ function pcDrawSkaterSprite(ctx, canvasW, canvasH, pri, sec) {
         for (let i = 0; i < d.length; i += 4) {
             const r = d[i], g = d[i+1], b = d[i+2], a = d[i+3];
             if (a < 10) continue;
-            // Teal/aqua background (170,238,238) -> transparent so card bg shows through
+            // Teal background (170,238,238) -> transparent
             if (r > 130 && r < 210 && g > 200 && b > 200 && Math.abs(g - b) < 40) {
                 d[i+3] = 0; continue;
             }
-            // Blue jersey (source image primary) -> team primary
+            // Blue jersey -> team primary
             if (b > 60 && b > r * 1.2 && b > g * 0.85 && r < 160 && g < 180) {
                 d[i]=pR; d[i+1]=pG; d[i+2]=pB; continue;
             }
-            // Gold/yellow/warm accents (source image secondary) -> team secondary
+            // Gold/warm accents -> team secondary
             if (r > 120 && g > 50 && b < 80 && r > b * 2) {
                 d[i]=sR; d[i+1]=sG; d[i+2]=sB; continue;
             }
@@ -7116,13 +7129,15 @@ function pcDrawSkaterSprite(ctx, canvasW, canvasH, pri, sec) {
         const dw = img.width * scale, dh = img.height * scale;
         ctx.drawImage(off, (canvasW - dw) / 2, (canvasH - dh) / 2, dw, dh);
     };
-    img.src = 'skater.png';
+    img.src = src;
 }
 
-function pcDrawGoalieSprite(ctx, canvasW, canvasH, pri, sec) {
+function pcDrawGoalieSprite(ctx, canvasW, canvasH, pri, sec, pName) {
     const toRGB = hex => [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
     const [pR,pG,pB] = toRGB(pri);
     const [sR,sG,sB] = toRGB(sec);
+    const poseIdx = _pcPoseIdx(pName || '', PC_GOALIE_POSES.length);
+    const src = PC_GOALIE_POSES[poseIdx];
     const img = new Image();
     img.onload = () => {
         const off = document.createElement('canvas');
@@ -7133,17 +7148,16 @@ function pcDrawGoalieSprite(ctx, canvasW, canvasH, pri, sec) {
         const d = id.data;
         for (let i = 0; i < d.length; i += 4) {
             const r = d[i], g = d[i+1], b = d[i+2];
-            // Background: sky-blue ~(150,200,225) → transparent
-            if (r > 100 && r < 200 && g > 160 && g < 240 && b > 190 && b >= g) {
-                d[i+3] = 0; continue;
-            }
-            // White / cream jersey → team primary
-            if (r > 185 && g > 185 && b > 185) {
-                d[i]=pR; d[i+1]=pG; d[i+2]=pB; continue;
-            }
-            // Red accents → team secondary
-            if (r > 160 && g < 80 && b < 80) {
-                d[i]=sR; d[i+1]=sG; d[i+2]=sB; continue;
+            if (poseIdx === 0) {
+                // butterfly goalie.png: sky-blue bg, white jersey -> pri, red -> sec
+                if (r > 100 && r < 200 && g > 160 && g < 240 && b > 190 && b >= g) { d[i+3]=0; continue; }
+                if (r > 185 && g > 185 && b > 185) { d[i]=pR; d[i+1]=pG; d[i+2]=pB; continue; }
+                if (r > 160 && g < 80 && b < 80)  { d[i]=sR; d[i+1]=sG; d[i+2]=sB; continue; }
+            } else {
+                // goalie_stand.png: teal bg, red/maroon jersey -> pri, cream padding -> sec
+                if (r > 130 && r < 210 && g > 200 && b > 200 && Math.abs(g-b) < 40) { d[i+3]=0; continue; }
+                if (r > 100 && r > g * 1.8 && r > b * 1.8) { d[i]=pR; d[i+1]=pG; d[i+2]=pB; continue; }
+                if (r > 160 && g > 130 && b > 90 && r > b + 40) { d[i]=sR; d[i+1]=sG; d[i+2]=sB; continue; }
             }
         }
         oc.putImageData(id, 0, 0);
@@ -7152,7 +7166,7 @@ function pcDrawGoalieSprite(ctx, canvasW, canvasH, pri, sec) {
         const dw = img.width * scale, dh = img.height * scale;
         ctx.drawImage(off, (canvasW - dw) / 2, (canvasH - dh) / 2, dw, dh);
     };
-    img.src = 'goalie.png';
+    img.src = src;
 }
 
 function pcDrawLogo(ctx, size, code) {
@@ -7355,10 +7369,10 @@ function showPlayerCard(pName) {
         const ctx2 = lgCanvas.getContext('2d');
         if (p.pos === 'G') {
             lgCanvas.width = 280; lgCanvas.height = 152;
-            pcDrawGoalieSprite(ctx2, 280, 152, pri, sec);
+            pcDrawGoalieSprite(ctx2, 280, 152, pri, sec, pName);
         } else {
             lgCanvas.width = 200; lgCanvas.height = 152;
-            pcDrawSkaterSprite(ctx2, 200, 152, pri, sec);
+            pcDrawSkaterSprite(ctx2, 200, 152, pri, sec, pName);
         }
     }
     document.getElementById('playerCardOverlay').style.display = 'flex';
