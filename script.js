@@ -7084,8 +7084,8 @@ const PC_LOGOS = {
 
 // Pose files: 3 skater poses (blue-jersey rows from reference sheet)
 //             2 goalie poses (butterfly + standing V)
-const PC_SKATER_POSES = ['skater0.png', 'skater2.png', 'skater3.png'];
-const PC_GOALIE_POSES = ['goalie.png', 'goalie_stand.png'];
+const PC_SKATER_POSES = ['skater0.png', 'skater2.png', 'skater3.png', 'skater_94.png'];
+const PC_GOALIE_POSES = ['goalie.png'];
 
 // Deterministic hash of player name -> consistent pose index
 function _pcPoseIdx(name, poseCount) {
