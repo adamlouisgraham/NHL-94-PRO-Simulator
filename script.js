@@ -7084,7 +7084,7 @@ const PC_LOGOS = {
 
 // Pose files: 3 skater poses (blue-jersey rows from reference sheet)
 //             2 goalie poses (butterfly + standing V)
-const PC_SKATER_POSES = ['skater0.png', 'skater2.png', 'skater3.png', 'skater_94.png'];
+const PC_SKATER_POSES = ['skater0.png', 'skater2.png', 'skater3.png'];
 const PC_GOALIE_POSES = ['goalie.png'];
 
 // Deterministic hash of player name -> consistent pose index
@@ -7114,6 +7114,8 @@ function pcDrawSkaterSprite(ctx, canvasW, canvasH, pri, sec, pName) {
             if (r > 130 && r < 210 && g > 200 && b > 200 && Math.abs(g - b) < 40) {
                 d[i+3] = 0; continue;
             }
+            // Pale skin (255,213,170) -> keep as-is
+            if (r > 220 && g > 180 && g < 230 && b > 130 && b < 200 && r > b) continue;
             // Blue jersey -> team primary
             if (b > 60 && b > r * 1.2 && b > g * 0.85 && r < 160 && g < 180) {
                 d[i]=pR; d[i+1]=pG; d[i+2]=pB; continue;
@@ -7152,6 +7154,8 @@ function pcDrawGoalieSprite(ctx, canvasW, canvasH, pri, sec, pName) {
             if (r > 130 && r < 210 && g > 200 && b > 200 && Math.abs(g - b) < 40) {
                 d[i+3] = 0; continue;
             }
+            // Pale skin (255,213,170) -> keep as-is
+            if (r > 220 && g > 180 && g < 230 && b > 130 && b < 200 && r > b) continue;
             // Blue jersey -> team primary
             if (b > 60 && b > r * 1.2 && b > g * 0.85 && r < 160 && g < 180) {
                 d[i]=pR; d[i+1]=pG; d[i+2]=pB; continue;
