@@ -3334,8 +3334,10 @@ const getRosterStructure = (tk) => {
         }
     }
 
-    // Re-sort D-pairs by OVR after all swaps (best pair first)
-    dPairs.sort((a, b) => localLineOvr(b) - localLineOvr(a));
+    // Re-sort D-pairs: rank by best individual defenseman OVR, not pair average.
+    // A 90+60 pair beats a 78+78 pair because the elite D deserves top minutes.
+    const pairBest = (pair) => Math.max(...pair.map(p => getOvr(p)));
+    dPairs.sort((a, b) => pairBest(b) - pairBest(a));
 
     // ==========================================
     //  7. GOALIES
