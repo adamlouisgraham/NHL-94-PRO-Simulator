@@ -2876,6 +2876,9 @@ const getRosterStructure = (tk) => {
     if (_structCache[tk]) return _structCache[tk];
     let r = rosters[tk] || [];
 
+    // Local helper — avoids dependency on getLineOvr defined 2700 lines later
+    const localLineOvr = (line) => line.length === 0 ? 0 : line.reduce((s,p) => s + (getPlayerWeightedStats(p.name).ovr||70), 0) / line.length;
+
     // -- Honor custom lines if the coach saved them ------------------------
     if (customLines[tk]) {
         const cl = customLines[tk];
@@ -3023,21 +3026,20 @@ const getRosterStructure = (tk) => {
     });
 
     const safeDraft = (lineIdx, sortFn) => {
-        let maxAttempts = 10;
-        while (fLines[lineIdx].length < 3 && usedNames.size < maxForwards && maxAttempts > 0) {
-            let previousSize = fLines[lineIdx].length;
-            
+        while (fLines[lineIdx].length < 3 && usedNames.size < maxForwards) {
             let available = fPool.filter(p => !usedNames.has(p.name)).sort(sortFn);
+            let picked = false;
             for (let p of available) {
                 if (canAddPlayer(p, fLines[lineIdx], false)) {
-                    fLines[lineIdx].push(p); 
+                    fLines[lineIdx].push(p);
                     usedNames.add(p.name);
-                    triggerSynergies(p, lineIdx); 
-                    break; 
+                    triggerSynergies(p, lineIdx);
+                    picked = true;
+                    break;
                 }
             }
-            if (fLines[lineIdx].length === previousSize) break;
-            maxAttempts--;
+            // No valid candidate exists — stop rather than loop forever
+            if (!picked) break;
         }
     };
 
@@ -3160,7 +3162,37 @@ const getRosterStructure = (tk) => {
     }
 
     // Line 1 & 2 Rank Enforcement (Swap if L2 ended up stronger than L1)
-    if (getLineOvr(fLines[1]) > getLineOvr(fLines[0])) {
+    if (localLineOvr(fLines[1]) > localLineOvr(fLines[0])) {
+        let temp = fLines[0]; fLines[0] = fLines[1]; fLines[1] = temp;
+    }
+
+    // BIDIRECTIONAL SYNERGY PASS — promote players on L3/L4 who have a duo mate on L1/L2
+    for (let lowerIdx = 2; lowerIdx <= 3; lowerIdx++) {
+        let line = fLines[lowerIdx];
+        for (let j = line.length - 1; j >= 0; j--) {
+            let p = line[j];
+            let mates = getLineMates(p.name);
+            if (!mates) continue;
+            let mateList = Array.isArray(mates) ? mates : [mates];
+            for (let mateName of mateList) {
+                let upperIdx = [0,1].findIndex(i => fLines[i].some(x => x.name === mateName));
+                if (upperIdx === -1) continue;
+                let targetLine = fLines[upperIdx];
+                if (targetLine.length >= 3) {
+                    // Bounce lowest-OVR non-center from upper line to make room
+                    let bounce = targetLine.filter(x => getPos(x) !== 'C').sort((a,b) => getOvr(a)-getOvr(b))[0];
+                    if (!bounce) continue;
+                    targetLine.splice(targetLine.indexOf(bounce), 1);
+                    line.push(bounce);
+                }
+                targetLine.push(p);
+                line.splice(j, 1);
+                break;
+            }
+        }
+    }
+    // Re-enforce rank after bidirectional pass
+    if (localLineOvr(fLines[1]) > localLineOvr(fLines[0])) {
         let temp = fLines[0]; fLines[0] = fLines[1]; fLines[1] = temp;
     }
 
@@ -3266,6 +3298,44 @@ const getRosterStructure = (tk) => {
             }
         }
     }
+
+    // D-PAIR OFF/DEF BALANCE — within the drafted defensemen only
+    // Each pair ideally has one offensive D (higher OFF) and one stay-at-home (higher DEF).
+    // Only swap between drafted players (dPairs[0..2]), never pull from dPool extras.
+    const allDrafted = dPairs.flat();
+    for (let i = 0; i < 2; i++) {
+        let pair = dPairs[i];
+        if (pair.length < 2) continue;
+        let bothOff = getDef(pair[0]) < getOff(pair[0]) && getDef(pair[1]) < getOff(pair[1]);
+        let bothDef = getDef(pair[0]) > getOff(pair[0]) && getDef(pair[1]) > getOff(pair[1]);
+        if (!bothOff && !bothDef) continue; // already balanced
+        // Find a swap candidate from other pairs that has the opposite profile
+        for (let j = i + 1; j < 3; j++) {
+            let otherPair = dPairs[j];
+            for (let k = 0; k < otherPair.length; k++) {
+                let cand = otherPair[k];
+                let candOff = getOff(cand) > getDef(cand);
+                if (bothOff && !candOff) { // pair has two offensive, cand is defensive
+                    let victim = [pair[0], pair[1]].sort((a,b) => getDef(b)-getDef(a))[0]; // least defensive of pair
+                    let vi = pair.indexOf(victim);
+                    pair[vi] = cand;
+                    otherPair[k] = victim;
+                    break;
+                }
+                if (bothDef && candOff) { // pair has two defensive, cand is offensive
+                    let victim = [pair[0], pair[1]].sort((a,b) => getOff(b)-getOff(a))[0]; // least offensive of pair
+                    let vi = pair.indexOf(victim);
+                    pair[vi] = cand;
+                    otherPair[k] = victim;
+                    break;
+                }
+            }
+            if (!bothOff && !bothDef) break;
+        }
+    }
+
+    // Re-sort D-pairs by OVR after all swaps (best pair first)
+    dPairs.sort((a, b) => localLineOvr(b) - localLineOvr(a));
 
     // ==========================================
     //  7. GOALIES
@@ -4048,16 +4118,22 @@ function simGame(idx) {
     let aStruct = getRosterStructure(g.a.nrm);
 
     function buildLineSchedule(minsArray) {
-        let sched = [];
-        minsArray.forEach((mins, idx) => {
-            let steps = Math.round(mins * 2); 
-            for (let i = 0; i < steps; i++) {
-                sched.push(idx);
+        // Weighted random draw: each step picks a line proportional to its minute share.
+        // Guarantees L1 plays more than L2, L2 more than L3, etc. — never shuffled flat.
+        const weights = minsArray.map(m => Math.max(0, m));
+        const total = weights.reduce((s, w) => s + w, 0) || 1;
+        const sched = [];
+        for (let i = 0; i < 120; i++) {
+            let roll = Math.random() * total;
+            let cum = 0;
+            let chosen = 0;
+            for (let j = 0; j < weights.length; j++) {
+                cum += weights[j];
+                if (roll < cum) { chosen = j; break; }
             }
-        });
-        while (sched.length < 120) sched.push(0); 
-        while (sched.length > 120) sched.pop();    
-        return sched.sort(() => Math.random() - 0.5);
+            sched.push(chosen);
+        }
+        return sched;
     }
 
     const homeIceData = calculateDynamicIceTime(getRosterStructure(g.h.nrm));
