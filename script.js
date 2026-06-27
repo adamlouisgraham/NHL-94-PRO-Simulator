@@ -4286,6 +4286,9 @@ function simGame(idx) {
                 // Track power play opportunity on the team with the advantage
                 const advTeamObj = league.find(t => t.nrm === advTeam.nrm);
                 if (advTeamObj) advTeamObj.season.ppo = (advTeamObj.season.ppo || 0) + 1;
+                // Track penalty kill attempt on the penalised team
+                const penTeamObj = league.find(t => t.nrm === penTeam.nrm);
+                if (penTeamObj) penTeamObj.season.pka = (penTeamObj.season.pka || 0) + 1;
 
                 // Resolve the powerplay: ~20% PP conversion rate
                 const ppRoll = Math.random();
@@ -4312,6 +4315,8 @@ function simGame(idx) {
                         if (ppEv.pAssist && playerStats[ppEv.pAssist]) { playerStats[ppEv.pAssist][kk].ppa = (playerStats[ppEv.pAssist][kk].ppa||0)+1; }
                         if (ppEv.sAssist && playerStats[ppEv.sAssist]) { playerStats[ppEv.sAssist][kk].ppa = (playerStats[ppEv.sAssist][kk].ppa||0)+1; }
                         if (advTeamObj) advTeamObj.season.ppg = (advTeamObj.season.ppg || 0) + 1;
+                        // PP goal = PK goal against for the penalised team
+                        if (penTeamObj) penTeamObj.season.pkg = (penTeamObj.season.pkg || 0) + 1;
                     }
                 } else if (ppRoll < 0.24 && pkUnit.length > 0) {
                     // SHORTHANDED GOAL (~4% of PP opp result in SHG)
@@ -5353,9 +5358,9 @@ function renderLeagueTeamStats() {
     const el = document.getElementById('leagueTeamStatsTable');
     if (!el) return;
     const sorted = [...league].sort((a, b) => b.season.pts - a.season.pts || b.season.w - a.season.w);
-    const th = (t) => `<th style="background:#111;color:#aaa;padding:5px 8px;border-bottom:2px solid #333;white-space:nowrap;">${t}</th>`;
-    const td = (v, hi) => `<td style="padding:4px 8px;border-bottom:1px solid #222;${hi?'color:var(--neon-cyan);font-weight:bold;':''}">${v}</td>`;
-    let h = `<tr>${th('#')}${th('TEAM')}${th('GP')}${th('W')}${th('L')}${th('T')}${th('PTS')}${th('GF')}${th('GA')}${th('GD')}${th('GF/GP')}${th('GA/GP')}${th('SF/GP')}${th('SA/GP')}${th('PP%')}${th('SV%')}</tr>`;
+    const th = (t, tip='') => `<th title="${tip}" style="background:#111;color:#aaa;padding:5px 8px;border-bottom:2px solid #333;white-space:nowrap;cursor:default;">${t}</th>`;
+    const td = (v, hi, color='') => `<td style="padding:4px 8px;border-bottom:1px solid #222;${hi?`color:${color||'var(--neon-cyan)'};font-weight:bold;`:''}">${v}</td>`;
+    let h = `<tr>${th('#')}${th('TEAM')}${th('GP')}${th('W')}${th('L')}${th('T')}${th('PTS')}${th('GF')}${th('GA')}${th('GD','Goal differential')}${th('GF/GP','Goals for per game')}${th('GA/GP','Goals against per game')}${th('SF/GP','Shots for per game')}${th('SA/GP','Shots against per game')}${th('Sh%','Team shooting percentage')}${th('SV%','Team save percentage')}${th('PP%','Power play percentage')}${th('PK%','Penalty kill percentage')}${th('PDO','Sh% + SV% — values above 100% indicate hot streak')}${th('STRK','Current win/loss streak')}</tr>`;
     sorted.forEach((t, i) => {
         const gp  = t.season.gp || 1;
         const gf  = t.season.gf || 0;
@@ -5364,9 +5369,19 @@ function renderLeagueTeamStats() {
         const sa  = t.season.sa || 0;
         const ppg = t.season.ppg || 0;
         const ppo = t.season.ppo || 0;
+        const pka = t.season.pka || 0;
+        const pkg = t.season.pkg || 0;
         const gd  = gf - ga;
-        const pp  = ppo > 0 ? ((ppg / ppo) * 100).toFixed(1) + '%' : '-';
-        const sv  = sa > 0  ? (((sa - ga) / sa) * 100).toFixed(1) + '%' : '-';
+
+        const shPct = sf > 0 ? (gf / sf) * 100 : 0;
+        const svPct = sa > 0 ? ((sa - ga) / sa) * 100 : 0;
+        const pdo   = sf > 0 && sa > 0 ? (shPct + svPct).toFixed(1) : '-';
+        const pp    = ppo > 0 ? (ppg / ppo * 100).toFixed(1) + '%' : '-';
+        const pk    = pka > 0 ? ((pka - pkg) / pka * 100).toFixed(1) + '%' : '-';
+
+        const streak = t.winStreak > 0 ? `W${t.winStreak}` : t.loseStreak > 0 ? `L${t.loseStreak}` : '-';
+        const strkColor = t.winStreak > 0 ? '#00cc44' : t.loseStreak > 0 ? '#dd3333' : '';
+
         const rowBg = i < 8 ? 'rgba(0,180,80,0.08)' : i >= sorted.length - 3 ? 'rgba(220,40,40,0.08)' : '';
         h += `<tr style="background:${rowBg};">
             ${td(i+1)}
@@ -5374,11 +5389,15 @@ function renderLeagueTeamStats() {
             ${td(gp)} ${td(t.season.w)} ${td(t.season.l)} ${td(t.season.t)}
             ${td(t.season.pts, true)}
             ${td(gf)} ${td(ga)}
-            ${td((gd > 0 ? '+' : '') + gd, gd > 0)}
+            ${td((gd >= 0 ? '+' : '') + gd, gd !== 0, gd > 0 ? '#00cc44' : '#dd3333')}
             ${td((gf/gp).toFixed(2))} ${td((ga/gp).toFixed(2))}
             ${td(sf > 0 ? (sf/gp).toFixed(1) : '-')}
             ${td(sa > 0 ? (sa/gp).toFixed(1) : '-')}
-            ${td(pp)} ${td(sv)}
+            ${td(sf > 0 ? shPct.toFixed(1)+'%' : '-')}
+            ${td(sa > 0 ? svPct.toFixed(1)+'%' : '-')}
+            ${td(pp)} ${td(pk)}
+            ${td(pdo, pdo !== '-' && parseFloat(pdo) > 100, parseFloat(pdo) > 102 ? '#FFD700' : '')}
+            ${td(`<span style="color:${strkColor};font-weight:bold;">${streak}</span>`)}
         </tr>`;
     });
     el.innerHTML = h;
