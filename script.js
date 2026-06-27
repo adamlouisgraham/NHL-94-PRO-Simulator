@@ -4280,8 +4280,18 @@ function simGame(idx) {
             let activeSkaters = penTeam.nrm === g.h.nrm ? hOnIce : aOnIce;
             if (activeSkaters.length > 0) {
                 let offender = activeSkaters[Math.floor(Math.random() * activeSkaters.length)].name;
-                trk(offender, 'pim', 2);
-                penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: penTeam.code, cl: teamColors[penTeam.nrm] ? teamColors[penTeam.nrm][0] : '#fff', txt: `PENALTY: ${offender} (2 min minor)`, isPenalty: true });
+                // ~6% of penalties are majors (fighting/boarding) → possible suspension
+                const isMajor = Math.random() < 0.06;
+                const pimAmt = isMajor ? 5 : 2;
+                trk(offender, 'pim', pimAmt);
+                penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: penTeam.code, cl: teamColors[penTeam.nrm] ? teamColors[penTeam.nrm][0] : '#fff', txt: `PENALTY: ${offender} (${isMajor ? '5 min major' : '2 min minor'})`, isPenalty: true });
+                // Major penalty → 25% chance of 1-3 game suspension
+                if (isMajor && Math.random() < 0.25 && playerStats[offender]) {
+                    const days = Math.ceil(Math.random() * 3);
+                    playerStats[offender].suspended = { days, reason: 'Match penalty' };
+                    penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: penTeam.code,
+                        cl: '#FF8800', txt: `SUSPENSION: ${offender} — ${days} game(s) (match penalty)`, isNote: true });
+                }
                 
                 // Track power play opportunity on the team with the advantage
                 const advTeamObj = league.find(t => t.nrm === advTeam.nrm);
@@ -4290,12 +4300,13 @@ function simGame(idx) {
                 const penTeamObj = league.find(t => t.nrm === penTeam.nrm);
                 if (penTeamObj) penTeamObj.season.pka = (penTeamObj.season.pka || 0) + 1;
 
-                // Resolve the powerplay: ~20% PP conversion rate
+                // Resolve the powerplay using team PP/PK ratings (not a flat 20%)
+                const ppConvRate = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm);
                 const ppRoll = Math.random();
                 const ppUnit = advTeam.nrm === g.h.nrm ? hOnIce : aOnIce;
                 const pkUnit = advTeam.nrm === g.h.nrm ? aOnIce : hOnIce;
 
-                if (ppRoll < 0.20 && ppUnit.length > 0) {
+                if (ppRoll < ppConvRate && ppUnit.length > 0) {
                     // POWERPLAY GOAL
                     const ppShooter = selectShooter(ppUnit);
                     const ppShooterName = (ppShooter && typeof ppShooter === 'object') ? ppShooter.name : ppShooter;
@@ -4390,13 +4401,62 @@ function simGame(idx) {
         }
     }
 
+    // PATRICK ROY PROTOCOL — blowout goalie pull
+    // If down 4+ goals through 2 periods with 5+ GA, swap to backup
+    const checkBlowoutPull = (losingTeam, losingGoalie, goalsDown, goalsAllowed, struct) => {
+        if (goalsAllowed >= 5 && goalsDown >= 4) {
+            const goalies = struct.g || [];
+            const backup = goalies.find(p => p.name !== losingGoalie);
+            if (backup) {
+                const sec2 = Math.floor(Math.random()*60);
+                allGoals.push({ p:2, m:20, s:sec2, str:`P2 20:${sec2<10?'0'+sec2:sec2}`, tm:losingTeam.code,
+                    cl:'#888', txt:`GOALIE CHANGE: ${losingGoalie} pulled — ${backup.name} in net`, isNote:true });
+                return backup.name;
+            }
+        }
+        return losingGoalie;
+    };
+    if (period >= 2) {
+        if (aG - hG >= 4) hG_name = checkBlowoutPull(g.h, hG_name, aG-hG, aG, hStruct);
+        if (hG - aG >= 4) aG_name = checkBlowoutPull(g.a, aG_name, hG-aG, hG, aStruct);
+    }
+
     //  5. OVERTIME RESOLUTION
     let otPeriods = 0;
-    if(isPlayoffs && hG === aG) { 
-        while (hG === aG && otPeriods < 7) { 
-            otPeriods++; 
-            if (Math.random() < 0.52) { hG++; hShots++; trk(aG_name,'sa',1); trk(aG_name,'ga',1); } 
-            else { aG++; aShots++; trk(hG_name,'sa',1); trk(hG_name,'ga',1); } 
+    if(isPlayoffs && hG === aG) {
+        // OT uses top lines + star player modifier — not a coin flip
+        const otShooterOvr = (struct) => {
+            const line = [...(struct.f[0]||[]), ...(struct.d[0]||[])];
+            if (!line.length) return { ovr: 75, name: null };
+            const best = line.reduce((a,b) => (getPlayerWeightedStats(b.name).ovr||70) > (getPlayerWeightedStats(a.name).ovr||70) ? b : a);
+            const tag = getPlayerWeightedStats(best.name)?.tag;
+            const sniperBonus = tag === 'SNIPER' ? 3 : tag === 'SUPERSTAR' ? 5 : 0;
+            return { ovr: (getPlayerWeightedStats(best.name).ovr||70) + sniperBonus, name: best.name };
+        };
+        while (hG === aG && otPeriods < 7) {
+            otPeriods++;
+            const hStar = otShooterOvr(hStruct);
+            const aStar = otShooterOvr(aStruct);
+            // Home ice + star OVR comparison determines winner probability
+            const hWinProb = 0.52 + (hStar.ovr - aStar.ovr) * 0.005;
+            const otSec = Math.floor(Math.random()*300); // random time in OT period
+            if (Math.random() < Math.max(0.25, Math.min(0.75, hWinProb))) {
+                hG++; hShots++;
+                trk(aG_name,'sa',1); trk(aG_name,'ga',1);
+                if (hStar.name) { trk(hStar.name,'g',1); trk(hStar.name,'s',1); }
+                const otM = Math.floor(otSec/60)+1, otS = otSec%60;
+                allGoals.push({ p:3+otPeriods, m:otM, s:otS, str:`OT${otPeriods} ${otM}:${otS<10?'0'+otS:otS}`,
+                    tm:g.h.code, cl:teamColors[g.h.nrm]?.[0]||'#fff',
+                    txt:`OT GOAL: ${hStar.name||'Unknown'}`, scorer:hStar.name, code:g.h.code });
+            } else {
+                aG++; aShots++;
+                trk(hG_name,'sa',1); trk(hG_name,'ga',1);
+                if (aStar.name) { trk(aStar.name,'g',1); trk(aStar.name,'s',1); }
+                const otM = Math.floor(otSec/60)+1, otS = otSec%60;
+                allGoals.push({ p:3+otPeriods, m:otM, s:otS, str:`OT${otPeriods} ${otM}:${otS<10?'0'+otS:otS}`,
+                    tm:g.a.code, cl:teamColors[g.a.nrm]?.[0]||'#fff',
+                    txt:`OT GOAL: ${aStar.name||'Unknown'}`, scorer:aStar.name, code:g.a.code });
+            }
         }
     }
 
@@ -4488,6 +4548,13 @@ function simGame(idx) {
             g.h.season.gp++; g.a.season.gp++;
             g.h.season.gf += hG; g.h.season.ga += aG; g.h.season.sf = (g.h.season.sf||0) + hShots; g.h.season.sa = (g.h.season.sa||0) + aShots;
             g.a.season.gf += aG; g.a.season.ga += hG; g.a.season.sf = (g.a.season.sf||0) + aShots; g.a.season.sa = (g.a.season.sa||0) + hShots;
+            // Track H2H pts for tiebreaker (each team stores pts earned vs each opponent)
+            if (!g.h.season.h2h) g.h.season.h2h = {};
+            if (!g.a.season.h2h) g.a.season.h2h = {};
+            const hPts = hG > aG ? 2 : hG === aG ? 1 : 0;
+            const aPts = aG > hG ? 2 : aG === hG ? 1 : 0;
+            g.h.season.h2h[g.a.nrm] = (g.h.season.h2h[g.a.nrm] || 0) + hPts;
+            g.a.season.h2h[g.h.nrm] = (g.a.season.h2h[g.h.nrm] || 0) + aPts;
         } else if(g.series) { if(hG > aG) g.series.hW++; else g.series.aW++; }
     }
 
@@ -4910,7 +4977,16 @@ function initPlayoffs() {
         if (p.pos === 'G') p.playoff = {gp:0, g:0, a:0, pm:0, so:0, sv:0, sa:0, w:0, l:0, t:0, pim:0, ppg:0, toi:0, svg:0};
         else p.playoff = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, svg:0};
     });
-    const sortTeams = (a, b) => { if (b.season.pts !== a.season.pts) return b.season.pts - a.season.pts; if (b.season.w !== a.season.w) return b.season.w - a.season.w; return (b.season.gf - b.season.ga) - (a.season.gf - a.season.ga); };
+    const sortTeams = (a, b) => {
+        if (b.season.pts !== a.season.pts) return b.season.pts - a.season.pts;
+        if (b.season.w   !== a.season.w)   return b.season.w   - a.season.w;
+        // H2H tiebreaker: pts earned in games between just these two teams
+        const aH2H = (a.season.h2h && a.season.h2h[b.nrm]) || 0;
+        const bH2H = (b.season.h2h && b.season.h2h[a.nrm]) || 0;
+        if (bH2H !== aH2H) return bH2H - aH2H;
+        // Final tiebreaker: goal differential
+        return (b.season.gf - b.season.ga) - (a.season.gf - a.season.ga);
+    };
     const eastTeams = league.filter(t => t.conf === 'Eastern'); const westTeams = league.filter(t => t.conf === 'Western');
 
     const atlanticWinner = eastTeams.filter(t => t.div === 'Atlantic').sort(sortTeams)[0]; const northeastWinner = eastTeams.filter(t => t.div === 'Northeast').sort(sortTeams)[0];
@@ -5357,7 +5433,14 @@ function updateUIDisplay() {
 function renderLeagueTeamStats() {
     const el = document.getElementById('leagueTeamStatsTable');
     if (!el) return;
-    const sorted = [...league].sort((a, b) => b.season.pts - a.season.pts || b.season.w - a.season.w);
+    const sorted = [...league].sort((a, b) => {
+        if (b.season.pts !== a.season.pts) return b.season.pts - a.season.pts;
+        if (b.season.w   !== a.season.w)   return b.season.w   - a.season.w;
+        const aH = (a.season.h2h && a.season.h2h[b.nrm]) || 0;
+        const bH = (b.season.h2h && b.season.h2h[a.nrm]) || 0;
+        if (bH !== aH) return bH - aH;
+        return (b.season.gf - b.season.ga) - (a.season.gf - a.season.ga);
+    });
     const th = (t, tip='') => `<th title="${tip}" style="background:#111;color:#aaa;padding:5px 8px;border-bottom:2px solid #333;white-space:nowrap;cursor:default;">${t}</th>`;
     const td = (v, hi, color='') => `<td style="padding:4px 8px;border-bottom:1px solid #222;${hi?`color:${color||'var(--neon-cyan)'};font-weight:bold;`:''}">${v}</td>`;
     let h = `<tr>${th('#')}${th('TEAM')}${th('GP')}${th('W')}${th('L')}${th('T')}${th('PTS')}${th('GF')}${th('GA')}${th('GD','Goal differential')}${th('GF/GP','Goals for per game')}${th('GA/GP','Goals against per game')}${th('SF/GP','Shots for per game')}${th('SA/GP','Shots against per game')}${th('Sh%','Team shooting percentage')}${th('SV%','Team save percentage')}${th('PP%','Power play percentage')}${th('PK%','Penalty kill percentage')}${th('PDO','Sh% + SV% — values above 100% indicate hot streak')}${th('STRK','Current win/loss streak')}</tr>`;
@@ -8178,7 +8261,14 @@ function updateUI() {
     }
 
     const renderStandings = (id, c) => {
-        const ts = league.filter(x => x.conf.toLowerCase().includes(c)).sort((a,b) => b.season.pts - a.season.pts || b.season.w - a.season.w);
+        const ts = league.filter(x => x.conf.toLowerCase().includes(c)).sort((a,b) => {
+            if (b.season.pts !== a.season.pts) return b.season.pts - a.season.pts;
+            if (b.season.w   !== a.season.w)   return b.season.w   - a.season.w;
+            const aH = (a.season.h2h && a.season.h2h[b.nrm]) || 0;
+            const bH = (b.season.h2h && b.season.h2h[a.nrm]) || 0;
+            if (bH !== aH) return bH - aH;
+            return (b.season.gf - b.season.ga) - (a.season.gf - a.season.ga);
+        });
         const total = ts.length;
         let h = `<tr><th>TEAM</th><th style="color:#aaa;">DIV</th><th>OVR</th><th>GP</th><th>W</th><th>L</th><th>T</th><th>PTS</th></tr>`;
         h += ts.map((t, i) => {
