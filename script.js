@@ -5026,6 +5026,28 @@ async function simSeason(useTurbo = false) {
     if (currentDay >= calendar.length) { initPlayoffs(); }
 }
 
+async function simRestOfSeason() {
+    if (isSimulating) return;
+    if (isPlayoffs) return;
+    const remaining = calendar.slice(currentDay).filter(day => day && day.some(g => g && !g.result)).length;
+    if (remaining === 0) { alert('No remaining regular season games.'); return; }
+    if (!confirm(`Simulate all ${remaining} remaining day(s) at turbo speed?`)) return;
+    isSimulating = true;
+    const btn = document.getElementById('btnSimRest');
+    if (btn) { btn.disabled = true; btn.textContent = 'SIMULATING...'; }
+    while (isSimulating && currentDay < calendar.length) {
+        await simDay(false, true);
+        updateUI();
+        if (currentDay % 10 === 0) await sleep(0);
+        const keepGoing = advanceCalendar();
+        if (!keepGoing) break;
+    }
+    isSimulating = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'SIM REST OF SEASON ⚡'; }
+    updateUI(); saveGame();
+    if (currentDay >= calendar.length) initPlayoffs();
+}
+
 async function simRound() {
     if (isSimulating) return;
     isSimulating = true; 
@@ -6992,6 +7014,7 @@ function initPlayoffsUI() {
     document.querySelectorAll('#officeControls button, #btnSimGame').forEach(b => {
         const a = b.getAttribute('onclick')||'';
         if(['simWeek()','simMonth()','simSeason()','advanceCalendar()'].includes(a)) b.style.display = 'none';
+        if(b.id === 'btnSimRest') b.style.display = 'none';
     });
     
     // Unhide the existing static buttons instead of creating new ones
@@ -7929,8 +7952,15 @@ function updateUI() {
 
     const renderStandings = (id, c) => {
         const ts = league.filter(x => x.conf.toLowerCase().includes(c)).sort((a,b) => b.season.pts - a.season.pts || b.season.w - a.season.w);
+        const total = ts.length;
         let h = `<tr><th>TEAM</th><th style="color:#aaa;">DIV</th><th>OVR</th><th>GP</th><th>W</th><th>L</th><th>T</th><th>PTS</th></tr>`;
-        h += ts.map(t => `<tr><td style="display:flex; align-items:center;">${getTeamLogoHtml(t.name)} <span style="margin-top:2px;">${t.name}</span></td><td style="color:#888; font-size:6px;">${t.div ? t.div.slice(0,3).toUpperCase() : '-'}</td><td style="color:var(--neon-cyan);">${getDynamicTeamOvr(t.nrm)}</td><td>${t.season.gp}</td><td>${t.season.w}</td><td>${t.season.l}</td><td>${t.season.t}</td><td class="pts-hl">${t.season.pts}</td></tr>`).join('');
+        h += ts.map((t, i) => {
+            // Top 8 = playoff spots (green), bottom 3 = lottery (red), rest neutral
+            const rowBg = i < 8 ? 'rgba(0,180,80,0.13)' : i >= total - 3 ? 'rgba(220,40,40,0.13)' : '';
+            const indicator = i === 7 ? ' style="border-bottom:1px dashed #00b450;"' : '';
+            const rankDot = i < 8 ? '<span style="color:#00b450;font-size:9px;">●</span> ' : i >= total - 3 ? '<span style="color:#dd2222;font-size:9px;">●</span> ' : '<span style="color:transparent;font-size:9px;">●</span> ';
+            return `<tr style="background:${rowBg};"${indicator}><td style="display:flex;align-items:center;">${rankDot}${getTeamLogoHtml(t.name)} <span style="margin-top:2px;">${t.name}</span></td><td style="color:#888;font-size:6px;">${t.div ? t.div.slice(0,3).toUpperCase() : '-'}</td><td style="color:var(--neon-cyan);">${getDynamicTeamOvr(t.nrm)}</td><td>${t.season.gp}</td><td>${t.season.w}</td><td>${t.season.l}</td><td>${t.season.t}</td><td class="pts-hl">${t.season.pts}</td></tr>`;
+        }).join('');
         document.getElementById(id).innerHTML = h;
     };   
     renderStandings('eastStand', 'east'); renderStandings('westStand', 'west');
