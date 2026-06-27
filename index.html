@@ -411,6 +411,13 @@
         </div>
     </div>
 
+    <div id="recapOverlay" class="modal">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:24px; max-width:660px; width:95%; max-height:90vh; overflow-y:auto;">
+            <div id="recapContent"></div>
+            <button onclick="document.getElementById('recapOverlay').style.display='none'; showBracket(); document.getElementById('bracketContainer').style.display='block';" class="btn-cyan" style="width:100%;margin-top:20px;">VIEW PLAYOFF BRACKET →</button>
+        </div>
+    </div>
+
     <div id="awardOverlay" class="modal" onclick="this.style.display='none'">
         <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:24px; max-width:680px; width:95%; max-height:90vh; overflow-y:auto;">
             <div id="awardWinnerContent" style="font-size:10px; line-height:1.6;"></div>
