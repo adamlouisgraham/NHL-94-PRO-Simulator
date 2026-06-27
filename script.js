@@ -2336,6 +2336,15 @@ function getPlayerWeightedStats(pName) {
         finalOvr += morale;
     }
 
+    // HOT/COLD streaks modify the player's own OVR (+10% / -10%)
+    // macro_streak (3-game trend) takes priority over micro_streak (1-game form)
+    const ps = playerStats[pName];
+    if (ps) {
+        const streak = ps.macro_streak || ps.micro_streak;
+        if (streak === 'HOT')  finalOvr = Math.round(finalOvr * 1.10);
+        if (streak === 'COLD') finalOvr = Math.round(finalOvr * 0.90);
+    }
+
     const result = { ovr: finalOvr, tag: tag, baseOvr: baseOvr };
     _wpCache[pName] = result;
     return result;
@@ -5812,13 +5821,7 @@ function getLiveLineOvr(line) {
 
     const totalOvr = line.reduce((sum, p) => {
         const stats = getPlayerWeightedStats(p.name);
-        let ovr = stats.ovr || 0;
-        // Apply both macro and micro streaks to live OVR (+10% HOT, -10% COLD)
-        const ps = playerStats[p.name];
-        const streak = ps ? (ps.macro_streak || ps.micro_streak) : null;
-        if (streak === 'HOT')  ovr *= 1.10;
-        if (streak === 'COLD') ovr *= 0.90;
-        return sum + ovr;
+        return sum + (stats.ovr || 0);
     }, 0);
 
     return Math.round(totalOvr / line.length);
