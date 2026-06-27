@@ -6870,17 +6870,17 @@ function runEndOfSeasonAwards() {
     const skaters = allPlayers.filter(p => p.pos !== 'G' && p.season.gp >= minSkaterGP);
     const goalies = allPlayers.filter(p => p.pos === 'G' && p.season.gp >= minGoalieGP);
     
-    let res = `<div class="menu-header" style="color:var(--gold-leaf); justify-content:center;">SEASON ${currentSeason} AWARDS</div>`;
-    res += `<div style="text-align:center; padding:15px; background:#111; color:var(--ea-yellow); margin-bottom:15px; border:2px solid #333;">STANLEY CUP CHAMPION: <br><span style="font-size:18px;">${currentCupChamp}</span></div><table style="width:100%; font-size:8px; text-align:left;">`;
-    
-    // We will store the runners up strings here to use in the UI later
+    let res = '';
+    // We will store the runners up strings and key stats here to use in the UI later
     let runnersUp = {};
+    let winnerStats = {};
 
     // 1. ROCKET RICHARD
     const rocketSorted = [...skaters].sort((a, b) => b.season.g - a.season.g);
     if (rocketSorted.length > 0) {
         awardTrophy(rocketSorted[0].name, currentSeason, "Rocket Richard");
         runnersUp["Rocket Richard"] = rocketSorted.slice(1, 4).map(p => p.name).join(', ');
+        winnerStats["Rocket Richard"] = `${rocketSorted[0].season.g} G`;
     }
 
     // ==========================================
@@ -6919,6 +6919,8 @@ function runEndOfSeasonAwards() {
     if (hartSorted.length > 0) {
         awardTrophy(hartSorted[0].name, currentSeason, "Hart");
         runnersUp["Hart"] = hartSorted.slice(1, 4).map(p => p.name).join(', ');
+        const hW = Object.values(playerStats).find(p => p.name === hartSorted[0].name);
+        winnerStats["Hart"] = hW ? (hW.pos === 'G' ? `${hW.season.w}W  ${hW.season.so}SO` : `${hW.season.g}G  ${hW.season.a}A  ${hW.season.g+hW.season.a}PTS`) : '';
     }
 
     // 2. ART ROSS
@@ -6926,6 +6928,7 @@ function runEndOfSeasonAwards() {
     if (artSorted.length > 0) {
         awardTrophy(artSorted[0].name, currentSeason, "Art Ross");
         runnersUp["Art Ross"] = artSorted.slice(1, 4).map(p => p.name).join(', ');
+        winnerStats["Art Ross"] = `${artSorted[0].season.g}G  ${artSorted[0].season.a}A  ${artSorted[0].season.g+artSorted[0].season.a}PTS`;
     }
 
     // 3. CALDER
@@ -6935,6 +6938,7 @@ function runEndOfSeasonAwards() {
     if (calderSorted.length > 0) {
         awardTrophy(calderSorted[0].name, currentSeason, "Calder");
         runnersUp["Calder"] = calderSorted.slice(1, 4).map(p => p.name).join(', ');
+        const cW = calderSorted[0]; winnerStats["Calder"] = cW.pos === 'G' ? `${cW.season.w}W  ${cW.season.so}SO` : `${cW.season.g}G  ${cW.season.a}A  ${cW.season.g+cW.season.a}PTS`;
     }
 
     // 4. LADY BYNG
@@ -6942,6 +6946,7 @@ function runEndOfSeasonAwards() {
     if (byngSorted.length > 0) {
         awardTrophy(byngSorted[0].name, currentSeason, "Lady Byng");
         runnersUp["Lady Byng"] = byngSorted.slice(1, 4).map(p => p.name).join(', ');
+        winnerStats["Lady Byng"] = `${byngSorted[0].season.g+byngSorted[0].season.a}PTS  ${byngSorted[0].season.pim||0}PIM`;
     }
 
     // 5. BILL MASTERTON (Dedication to Hockey)
@@ -6963,6 +6968,7 @@ function runEndOfSeasonAwards() {
     if (mastSorted.length > 0) {
         awardTrophy(mastSorted[0].name, currentSeason, "Bill Masterton");
         runnersUp["Bill Masterton"] = mastSorted.slice(1, 4).map(p => p.name).join(', ');
+        winnerStats["Bill Masterton"] = `${mastSorted[0].season.g+mastSorted[0].season.a}PTS  ${mastSorted[0].season.gp}GP`;
     }
 
     // 6. FRANK J. SELKE
@@ -6977,6 +6983,7 @@ function runEndOfSeasonAwards() {
     if (selkeSorted.length > 0) {
         awardTrophy(selkeSorted[0].name, currentSeason, "Selke");
         runnersUp["Selke"] = selkeSorted.slice(1, 4).map(p => p.name).join(', ');
+        winnerStats["Selke"] = `${selkeSorted[0].season.g+selkeSorted[0].season.a}PTS  ${selkeSorted[0].season.pm>=0?'+':''}${selkeSorted[0].season.pm||0}`;
     }
 
     // 7. TED LINDSAY
@@ -6995,6 +7002,7 @@ function runEndOfSeasonAwards() {
     if (tedSorted.length > 0) {
         awardTrophy(tedSorted[0].name, currentSeason, "Ted Lindsay");
         runnersUp["Ted Lindsay"] = tedSorted.slice(1, 4).map(p => p.name).join(', ');
+        winnerStats["Ted Lindsay"] = `${tedSorted[0].season.g+tedSorted[0].season.a}PTS  ${tedSorted[0].season.gp}GP`;
     }
 
     // 8. ALKA-SELTZER PLUS MINUS
@@ -7002,14 +7010,16 @@ function runEndOfSeasonAwards() {
     if (plusMinusSorted.length > 0 && plusMinusSorted[0].season.pm > 0) {
         awardTrophy(plusMinusSorted[0].name, currentSeason, "Alka-Seltzer (+/-)");
         runnersUp["Alka-Seltzer (+/-)"] = plusMinusSorted.slice(1, 4).map(p => p.name).join(', ');
+        winnerStats["Alka-Seltzer (+/-)"] = `+${plusMinusSorted[0].season.pm||0}`;
     }
 
     // 9. NORRIS
     const defense = skaters.filter(p => p.pos === 'D');
     const norrisSorted = defense.sort((a, b) => ((b.season.g * 2 + b.season.a) + ((b.season.pm || 0) * 1.5)) - ((a.season.g * 2 + a.season.a) + ((a.season.pm || 0) * 1.5)));
     if (norrisSorted.length > 0) { 
-        awardTrophy(norrisSorted[0].name, currentSeason, "Norris"); 
+        awardTrophy(norrisSorted[0].name, currentSeason, "Norris");
         runnersUp["Norris"] = norrisSorted.slice(1, 4).map(p => p.name).join(', ');
+        winnerStats["Norris"] = `${norrisSorted[0].season.g}G  ${norrisSorted[0].season.a}A  ${norrisSorted[0].season.pm>=0?'+':''}${norrisSorted[0].season.pm||0}`;
     }
     
     // 10. VEZINA
@@ -7017,6 +7027,8 @@ function runEndOfSeasonAwards() {
     if (vezinaSorted.length > 0) {
         awardTrophy(vezinaSorted[0].name, currentSeason, "Vezina");
         runnersUp["Vezina"] = vezinaSorted.slice(1, 4).map(p => p.name).join(', ');
+        const vzW = vezinaSorted[0]; const vzSvp = vzW.season.sa > 0 ? (vzW.season.sv/vzW.season.sa).toFixed(3) : '.000';
+        winnerStats["Vezina"] = `${vzW.season.w}W  ${vzW.season.so}SO  SV% ${vzSvp}`;
     }
     
     // 11. JENNINGS (Skipping runners up here since it's a team-based goalie award)
@@ -7056,34 +7068,65 @@ function getConnSmytheScore(p) {
         if (smytheSorted.length > 0) {
             const winner = smytheSorted[0];
             awardTrophy(winner.name, currentSeason, "Conn Smythe");
-            
-            // Generate runners up using the same score logic
-            runnersUp["Conn Smythe"] = smytheSorted.slice(1, 4)
-                .map(p => `${p.name} (${getConnSmytheScore(p)} pts)`)
-                .join(', ');
+            runnersUp["Conn Smythe"] = smytheSorted.slice(1, 4).map(p => `${p.name} (${getConnSmytheScore(p)} pts)`).join(', ');
+            const csW = winner; winnerStats["Conn Smythe"] = csW.pos === 'G'
+                ? `${csW.playoff?.w||0}W  ${csW.playoff?.so||0}SO`
+                : `${csW.playoff?.g||0}G  ${csW.playoff?.a||0}A  ${(csW.playoff?.g||0)+(csW.playoff?.a||0)}PTS`;
         }
     }
 }
     
-    const getWinner = (tN) => { const wAll = allPlayers.filter(p => p.trophies && p.trophies.some(t => t.year === currentSeason && t.name === tN)); return wAll.length === 0 ? "N/A" : wAll.map(w => w.name).join(', '); }; 
-    const getRunners = (tN) => { return runnersUp[tN] ? `<br><span style="font-size:6px; color:#777;">Runners-up: ${runnersUp[tN]}</span>` : ''; };
-    
-    // ==========================================
-    // UI RENDERER (Updated with Runners Up)
-    // ==========================================
-    res += `<tr><td style="color:#aaa; padding:6px 0; border-bottom:1px solid #222;">HART (MVP):</td><td style="color:var(--neon-cyan); padding:6px 0; border-bottom:1px solid #222;">${getWinner("Hart")}${getRunners("Hart")}</td></tr>`;
-    res += `<tr><td style="color:#aaa; padding:6px 0; border-bottom:1px solid #222;">ART ROSS (PTS):</td><td style="color:var(--neon-cyan); padding:6px 0; border-bottom:1px solid #222;">${getWinner("Art Ross")}${getRunners("Art Ross")}</td></tr>`;
-    res += `<tr><td style="color:#aaa; padding:6px 0; border-bottom:1px solid #222;">ROCKET RICHARD:</td><td style="color:var(--neon-cyan); padding:6px 0; border-bottom:1px solid #222;">${getWinner("Rocket Richard")}${getRunners("Rocket Richard")}</td></tr>`;
-    res += `<tr><td style="color:#aaa; padding:6px 0; border-bottom:1px solid #222;">NORRIS (DEF):</td><td style="color:var(--neon-cyan); padding:6px 0; border-bottom:1px solid #222;">${getWinner("Norris")}${getRunners("Norris")}</td></tr>`;
-    res += `<tr><td style="color:#aaa; padding:6px 0; border-bottom:1px solid #222;">MASTERTON:</td><td style="color:var(--ea-yellow); padding:6px 0; border-bottom:1px solid #222;">${getWinner("Bill Masterton")}${getRunners("Bill Masterton")}</td></tr>`;
-    res += `<tr><td style="color:#aaa; padding:6px 0; border-bottom:1px solid #222;">SELKE (DEF FWD):</td><td style="color:var(--ea-yellow); padding:6px 0; border-bottom:1px solid #222;">${getWinner("Selke")}${getRunners("Selke")}</td></tr>`;
-    res += `<tr><td style="color:#aaa; padding:6px 0; border-bottom:1px solid #222;">TED LINDSAY:</td><td style="color:var(--ea-yellow); padding:6px 0; border-bottom:1px solid #222;">${getWinner("Ted Lindsay")}${getRunners("Ted Lindsay")}</td></tr>`;
-    res += `<tr><td style="color:#aaa; padding:6px 0; border-bottom:1px solid #222;">ALKA-SELTZER (+/-):</td><td style="color:var(--neon-cyan); padding:6px 0; border-bottom:1px solid #222;">${getWinner("Alka-Seltzer (+/-)")}${getRunners("Alka-Seltzer (+/-)")}</td></tr>`;
-    res += `<tr><td style="color:#aaa; padding:6px 0; border-bottom:1px solid #222;">CALDER (ROOKIE):</td><td style="color:var(--neon-cyan); padding:6px 0; border-bottom:1px solid #222;">${getWinner("Calder")}${getRunners("Calder")}</td></tr>`;
-    res += `<tr><td style="color:#aaa; padding:6px 0; border-bottom:1px solid #222;">LADY BYNG:</td><td style="color:var(--neon-cyan); padding:6px 0; border-bottom:1px solid #222;">${getWinner("Lady Byng")}${getRunners("Lady Byng")}</td></tr>`;
-    res += `<tr><td style="color:#aaa; padding:6px 0; border-bottom:1px solid #222;">VEZINA (GOALIE):</td><td style="color:var(--neon-cyan); padding:6px 0; border-bottom:1px solid #222;">${getWinner("Vezina")}${getRunners("Vezina")}</td></tr>`;
-    res += `<tr><td style="color:#aaa; padding:6px 0; border-bottom:1px solid #222;">JENNINGS (TEAM GA):</td><td style="color:var(--neon-cyan); padding:6px 0; border-bottom:1px solid #222;">${getWinner("Jennings")}</td></tr>`;
-    res += `<tr><td style="color:#aaa; padding:6px 0;">CONN SMYTHE:</td><td style="color:var(--ea-yellow); text-shadow:1px 1px 0 #000; padding:6px 0;">${getWinner("Conn Smythe")}${getRunners("Conn Smythe")}</td></tr></table>`;
+    const getWinner = (tN) => { const wAll = allPlayers.filter(p => p.trophies && p.trophies.some(t => t.year === currentSeason && t.name === tN)); return wAll.length === 0 ? 'N/A' : wAll.map(w => w.name).join(', '); };
+
+    const awardCard = (label, desc, awardKey, accent) => {
+        const winner = getWinner(awardKey);
+        const stat = winnerStats[awardKey] || '';
+        const runners = runnersUp[awardKey] ? `<div style="color:#555;font-size:6px;margin-top:3px;">Runners-up: ${runnersUp[awardKey]}</div>` : '';
+        const isNA = winner === 'N/A';
+        return `<div style="display:grid;grid-template-columns:28px 1fr;gap:8px;align-items:start;background:#0a0a0a;border:1px solid ${accent}44;border-left:3px solid ${accent};padding:8px 10px;margin-bottom:6px;">
+            <div style="font-size:16px;line-height:1;padding-top:2px;">🏆</div>
+            <div>
+                <div style="color:#666;font-size:6px;text-transform:uppercase;letter-spacing:.12em;">${label}</div>
+                <div style="color:${isNA ? '#444' : accent};font-size:9px;margin:3px 0;text-shadow:${isNA?'none':'1px 1px 0 #000'};">${winner}</div>
+                ${stat ? `<div style="color:var(--neon-cyan);font-size:7px;">${stat}</div>` : ''}
+                <div style="color:#555;font-size:6px;margin-top:1px;">${desc}</div>
+                ${runners}
+            </div>
+        </div>`;
+    };
+
+    const GOLD = 'var(--gold-leaf)';
+    const CYAN = 'var(--neon-cyan)';
+    const ORNG = 'var(--as-orange)';
+
+    // Header
+    res += `<div style="text-align:center;padding:12px 0 6px;border-bottom:2px solid var(--gold-leaf);margin-bottom:12px;">
+        <div style="color:var(--gold-leaf);font-size:13px;text-shadow:2px 2px 0 #000;">SEASON ${currentSeason} AWARDS</div>
+        ${currentCupChamp ? `<div style="color:var(--ea-yellow);font-size:8px;margin-top:8px;">STANLEY CUP CHAMPION</div>
+        <div style="color:#fff;font-size:12px;margin-top:4px;text-shadow:1px 1px 0 #000;">${currentCupChamp}</div>` : ''}
+    </div>`;
+
+    // Major awards
+    res += `<div style="color:#888;font-size:6px;text-transform:uppercase;letter-spacing:.16em;margin:10px 0 6px;">MAJOR AWARDS</div>`;
+    res += awardCard('HART TROPHY — MVP', 'Most Valuable Player', 'Hart', GOLD);
+    res += awardCard('CONN SMYTHE — PLAYOFF MVP', 'Most Valuable Player in the Playoffs', 'Conn Smythe', GOLD);
+    res += awardCard('ART ROSS — POINTS', 'League Scoring Champion', 'Art Ross', GOLD);
+    res += awardCard('ROCKET RICHARD — GOALS', 'League Goal-Scoring Leader', 'Rocket Richard', GOLD);
+
+    // Positional awards
+    res += `<div style="color:#888;font-size:6px;text-transform:uppercase;letter-spacing:.16em;margin:10px 0 6px;">POSITIONAL AWARDS</div>`;
+    res += awardCard('NORRIS TROPHY — BEST DEFENCEMAN', 'Top Offensive + Defensive Blueliner', 'Norris', CYAN);
+    res += awardCard('VEZINA TROPHY — BEST GOALIE', 'Top Save Percentage + Wins', 'Vezina', CYAN);
+    res += awardCard('SELKE TROPHY — DEFENSIVE FORWARD', 'Best Two-Way Forward', 'Selke', CYAN);
+    res += awardCard('CALDER TROPHY — BEST ROOKIE', 'Outstanding First-Year Player', 'Calder', CYAN);
+
+    // Character awards
+    res += `<div style="color:#888;font-size:6px;text-transform:uppercase;letter-spacing:.16em;margin:10px 0 6px;">CHARACTER AWARDS</div>`;
+    res += awardCard('LADY BYNG — GENTLEMANLY PLAY', 'High Production, Low Penalty Minutes', 'Lady Byng', ORNG);
+    res += awardCard('TED LINDSAY — OUTSTANDING PLAYER', 'Player-Voted Outstanding Player', 'Ted Lindsay', ORNG);
+    res += awardCard('BILL MASTERTON — DEDICATION', 'Perseverance & Dedication to Hockey', 'Bill Masterton', ORNG);
+    res += awardCard('ALKA-SELTZER AWARD — PLUS/MINUS', 'Best Plus/Minus in the League', 'Alka-Seltzer (+/-)', ORNG);
+    res += awardCard('JENNINGS TROPHY — FEWEST GA', 'Team Allowing Fewest Goals Against', 'Jennings', ORNG);
     
     if(awardConfig.retirements) { 
         let ind = []; 
