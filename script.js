@@ -4177,6 +4177,14 @@ function simGame(idx) {
         if (g.series.aW === 3) aPressureMod -= 1.5;
     }
 
+    // RIVALRY — teams that have met 3+ times this season play with extra intensity (+2 OVR both sides)
+    const hMeetings = !isPlayoffs ? ((g.h.season.meetings || {})[g.a.nrm] || 0) : 0;
+    const rivalBonus = (awardConfig.rivalries && hMeetings >= 3) ? 2 : 0;
+
+    // TEAM STREAK MORALE — hot/cold streaks shift line OVR up to ±3
+    const hStreakMod = g.h.winStreak >= 5 ? 3 : g.h.winStreak >= 3 ? 1.5 : g.h.loseStreak >= 5 ? -3 : g.h.loseStreak >= 3 ? -1.5 : 0;
+    const aStreakMod = g.a.winStreak >= 5 ? 3 : g.a.winStreak >= 3 ? 1.5 : g.a.loseStreak >= 5 ? -3 : g.a.loseStreak >= 3 ? -1.5 : 0;
+
     // IN-GAME FATIGUE — track cumulative shift ticks per player this game
     // After 20 ticks (10 min ice time), each additional tick costs 0.25 OVR
     const gameIceTicks = {};
@@ -4262,8 +4270,8 @@ function simGame(idx) {
         aMomentum = Math.max(0, aMomentum - 1);
 
         // Live Dynamic Matchup Overalls (momentum adds up to +3 OVR for ~4 min after a goal)
-        let hLiveOvr = (getLiveLineOvr(hOnIce) - hFatiguePen + hPressureMod + hMomentum * 0.375) * hAuraMod * homeCrowdEnergy;
-        let aLiveOvr = (getLiveLineOvr(aOnIce) - aFatiguePen + aPressureMod + aMomentum * 0.375) * aAuraMod;
+        let hLiveOvr = (getLiveLineOvr(hOnIce) - hFatiguePen + hPressureMod + hStreakMod + rivalBonus + hMomentum * 0.375) * hAuraMod * homeCrowdEnergy;
+        let aLiveOvr = (getLiveLineOvr(aOnIce) - aFatiguePen + aPressureMod + aStreakMod + rivalBonus + aMomentum * 0.375) * aAuraMod;
 
         let diff = hLiveOvr - aLiveOvr + chaosOffset;
 
@@ -4630,6 +4638,11 @@ function simGame(idx) {
             g.h.season.gp++; g.a.season.gp++;
             g.h.season.gf += hG; g.h.season.ga += aG; g.h.season.sf = (g.h.season.sf||0) + hShots; g.h.season.sa = (g.h.season.sa||0) + aShots;
             g.a.season.gf += aG; g.a.season.ga += hG; g.a.season.sf = (g.a.season.sf||0) + aShots; g.a.season.sa = (g.a.season.sa||0) + hShots;
+            // Track meetings for rivalry detection
+            if (!g.h.season.meetings) g.h.season.meetings = {};
+            if (!g.a.season.meetings) g.a.season.meetings = {};
+            g.h.season.meetings[g.a.nrm] = (g.h.season.meetings[g.a.nrm] || 0) + 1;
+            g.a.season.meetings[g.h.nrm] = (g.a.season.meetings[g.h.nrm] || 0) + 1;
             // Track H2H pts for tiebreaker (each team stores pts earned vs each opponent)
             if (!g.h.season.h2h) g.h.season.h2h = {};
             if (!g.a.season.h2h) g.a.season.h2h = {};
@@ -4664,6 +4677,13 @@ function simGame(idx) {
     if (typeof applyPostGameFatigue === 'function' && awayGoalie && homeGoalie) applyPostGameFatigue(g.a.nrm, g.h.nrm, awayGoalie.name, homeGoalie.name);
     if (typeof reviewGameForSuspensions === 'function') reviewGameForSuspensions(matchStats, g.h.nrm, g.a.nrm);
     if (typeof triggerGameInjuries === 'function') triggerGameInjuries(matchStats, g.h.nrm, g.a.nrm);
+
+    // Surface milestone banners in trade log / news ticker
+    if (gameMilestones.length > 0 && awardConfig.milestones && awardConfig.headlines) {
+        gameMilestones.forEach(msg => {
+            tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `MILESTONE: ${msg}` });
+        });
+    }
 }
 
 // --- Weighted Shooter Selection Helper ---
