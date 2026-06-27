@@ -4109,6 +4109,9 @@ function simGame(idx) {
     // After 20 ticks (10 min ice time), each additional tick costs 0.25 OVR
     const gameIceTicks = {};
 
+    // MOMENTUM — decays each step; goal gives scoring team a 4-minute surge
+    let hMomentum = 0, aMomentum = 0;
+
     //  4. THE TIME-TICK ENGINE SETUP
     let hG = 0, aG = 0;
     let hShots = 0, aShots = 0;
@@ -4182,15 +4185,25 @@ function simGame(idx) {
         const hFatiguePen = hOnIce.reduce((s,p) => s + inGameFatigue(p.name), 0) / Math.max(1, hOnIce.length);
         const aFatiguePen = aOnIce.reduce((s,p) => s + inGameFatigue(p.name), 0) / Math.max(1, aOnIce.length);
 
-        // Live Dynamic Matchup Overalls
-        let hLiveOvr = (getLiveLineOvr(hOnIce) - hFatiguePen + hPressureMod) * hAuraMod * homeCrowdEnergy;
-        let aLiveOvr = (getLiveLineOvr(aOnIce) - aFatiguePen + aPressureMod) * aAuraMod;
+        // Momentum decay — dissipates by 1 each step (~30 sec)
+        hMomentum = Math.max(0, hMomentum - 1);
+        aMomentum = Math.max(0, aMomentum - 1);
+
+        // Live Dynamic Matchup Overalls (momentum adds up to +3 OVR for ~4 min after a goal)
+        let hLiveOvr = (getLiveLineOvr(hOnIce) - hFatiguePen + hPressureMod + hMomentum * 0.375) * hAuraMod * homeCrowdEnergy;
+        let aLiveOvr = (getLiveLineOvr(aOnIce) - aFatiguePen + aPressureMod + aMomentum * 0.375) * aAuraMod;
 
         let diff = hLiveOvr - aLiveOvr + chaosOffset;
-        
+
+        // SCORE EFFECT — trailing team presses harder (more shots, more risk)
+        // Leading team plays conservative (fewer shots, tighter D)
+        const scoreDiff = hG - aG;
+        const scoreEffectH = scoreDiff * -0.012; // trailing home team gets boost
+        const scoreEffectA = scoreDiff *  0.012; // trailing away team gets boost
+
         // Shot generation  -  softer diff multiplier balances shots across lines
-        let hShotChance = 0.26 + (diff * 0.0014) * asgBoost;
-        let aShotChance = 0.26 - (diff * 0.0014) * asgBoost;
+        let hShotChance = 0.26 + (diff * 0.0014) * asgBoost + scoreEffectH;
+        let aShotChance = 0.26 - (diff * 0.0014) * asgBoost + scoreEffectA;
         
         let period = minute <= 20 ? 1 : (minute <= 40 ? 2 : 3);
         let sec = Math.floor(Math.random() * 60);
@@ -4221,6 +4234,7 @@ function simGame(idx) {
                     if (ev.sAssist) trk(ev.sAssist, 'a', 1);
                     hOnIce.forEach(p => { if(p && p.name) trk(p.name, 'pm', 1); });
                     aOnIce.forEach(p => { if(p && p.name) trk(p.name, 'pm', -1); });
+                    hMomentum = 8; // ~4 min surge for scoring team
                 }
             } else {
                 trk(aG_name, 'sv', 1); // Record Goalie Save
@@ -4251,6 +4265,7 @@ function simGame(idx) {
                     if (ev.sAssist) trk(ev.sAssist, 'a', 1);
                     aOnIce.forEach(p => { if(p.name) trk(p.name, 'pm', 1); });
                     hOnIce.forEach(p => { if(p.name) trk(p.name, 'pm', -1); });
+                    aMomentum = 8; // ~4 min surge for scoring team
                 }
             } else {
                 trk(hG_name, 'sv', 1); // Record Goalie Save
@@ -4314,6 +4329,56 @@ function simGame(idx) {
                         if (shEv.sAssist) trk(shEv.sAssist, 'a', 1);
                         const kk2 = (isPlayoffs||isASG)?'playoff':'season';
                         if (playerStats[shEv.scorer]) { playerStats[shEv.scorer][kk2].shg = (playerStats[shEv.scorer][kk2].shg||0)+1; }
+                    }
+                }
+            }
+        }
+    }
+
+    // EMPTY NETTER — trailing team pulls goalie in final 2 min (steps 116-119)
+    // ~50% chance they actually pull; leading team has ~65% chance to score EN goal
+    if (hG !== aG && !isASG) {
+        const trailerIsHome = hG < aG;
+        const goalDiff = Math.abs(hG - aG);
+        if (goalDiff === 1) {
+            const pullChance = 0.50;
+            if (Math.random() < pullChance) {
+                const enScorerTeam = trailerIsHome ? g.a : g.h;
+                const enGoalie    = trailerIsHome ? hG_name : aG_name;
+                const enShooters  = trailerIsHome ? [...aStruct.f[0], ...aStruct.d[0]] : [...hStruct.f[0], ...hStruct.d[0]];
+                if (Math.random() < 0.65 && enShooters.length > 0) {
+                    const enShooter = selectShooter(enShooters);
+                    const sec = Math.floor(Math.random() * 60);
+                    const enEv = processSingleGoal(enScorerTeam.nrm, enScorerTeam.code, enShooter, enShooters, `P3 59:${sec<10?'0'+sec:sec}`, 3, 59, sec);
+                    if (enEv) {
+                        enEv.isEN = true;
+                        enEv.tm = enScorerTeam.code;
+                        enEv.cl = teamColors[enScorerTeam.nrm]?.[0] || '#fff';
+                        enEv.txt = `EN GOAL: ${enEv.scorer}` + (enEv.pAssist ? ` (${enEv.pAssist})` : '');
+                        allGoals.push(enEv);
+                        if (trailerIsHome) aG++; else hG++;
+                        trk(enEv.scorer, 'g', 1);
+                        if (enEv.pAssist) trk(enEv.pAssist, 'a', 1);
+                        if (enEv.sAssist) trk(enEv.sAssist, 'a', 1);
+                        if (enGoalie) trk(enGoalie, 'ga', 1);
+                    }
+                } else {
+                    // Trailing team gets a shot on empty net (rare tying goal)
+                    const tieShooters = trailerIsHome ? [...hStruct.f[0], ...hStruct.d[0]] : [...aStruct.f[0], ...aStruct.d[0]];
+                    const tieScorerTeam = trailerIsHome ? g.h : g.a;
+                    if (Math.random() < 0.15 && tieShooters.length > 0) {
+                        const tieShooter = selectShooter(tieShooters);
+                        const sec = Math.floor(Math.random() * 60);
+                        const tieEv = processSingleGoal(tieScorerTeam.nrm, tieScorerTeam.code, tieShooter, tieShooters, `P3 59:${sec<10?'0'+sec:sec}`, 3, 59, sec);
+                        if (tieEv) {
+                            tieEv.tm = tieScorerTeam.code;
+                            tieEv.cl = teamColors[tieScorerTeam.nrm]?.[0] || '#fff';
+                            tieEv.txt = `GOAL: ${tieEv.scorer} (ties it late!)`;
+                            allGoals.push(tieEv);
+                            if (trailerIsHome) hG++; else aG++;
+                            trk(tieEv.scorer, 'g', 1);
+                            if (tieEv.pAssist) trk(tieEv.pAssist, 'a', 1);
+                        }
                     }
                 }
             }
