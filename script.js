@@ -1011,10 +1011,21 @@ function renderScheduleDashboard() {
     if (totalDays === 0 || currentDay >= totalDays) { upcomingEl.innerHTML = `<div class="schedule-game-line">No upcoming matchups.</div>`; return; }
 
     const upcomingLines = (calendar[currentDay] || []).slice(0, 3).map(g => {
-        const home = g.h ? (g.h.code || g.h.name || 'HOME') : 'HOME'; 
-        const away = g.a ? (g.a.code || g.a.name || 'AWAY') : 'AWAY'; 
+        const home = g.h ? (g.h.code || g.h.name || 'HOME') : 'HOME';
+        const away = g.a ? (g.a.code || g.a.name || 'AWAY') : 'AWAY';
         const when = realDatesMap && realDatesMap[currentDay] ? realDatesMap[currentDay] : `Day ${currentDay + 1}`;
-        return `<div class="schedule-game-line"><span>${home} vs ${away}</span><span>${when}</span></div>`;
+        const goalieBadge = (tk) => {
+            if (!tk) return '';
+            const gp = getProjectedGoalie(tk);
+            if (!gp) return '';
+            const ps = playerStats[gp.name];
+            const streak = ps ? (ps.macro_streak || ps.micro_streak) : null;
+            const tag = streak === 'HOT' ? ' <span style="color:#FF6600;font-size:5px;">[HOT]</span>'
+                      : streak === 'COLD' ? ' <span style="color:#55FFFF;font-size:5px;">[COLD]</span>' : '';
+            const b2b = playedYesterday(tk) ? ' <span style="color:#FFAA44;font-size:5px;">[B2B]</span>' : '';
+            return `<span style="color:#666;font-size:5px;"> ${gp.name}${tag}${b2b}</span>`;
+        };
+        return `<div class="schedule-game-line"><span>${away}${goalieBadge(g.a?.nrm)} <span style="color:#444">@</span> ${home}${goalieBadge(g.h?.nrm)}</span><span>${when}</span></div>`;
     }).join('');
     upcomingEl.innerHTML = `<div style="font-size:8px; color:var(--silver-mid); margin-bottom:6px;">Upcoming</div>${upcomingLines || '<div class="schedule-game-line">No games scheduled.</div>'}`;
 }
@@ -5366,6 +5377,7 @@ async function simRestOfSeason() {
         const dayScores = (calendar[currentDay - 1] || []).filter(g => g && g.result).map(g => `${g.a.code} ${g.result.aG}-${g.result.hG} ${g.h.code}`).join('  ');
         const ticker = document.getElementById('tickerScroll');
         if (ticker) ticker.innerText = `⚡ SIMULATING... DAY ${currentDay}/${calendar.length} (${pct}%) | ${dayScores || '---'}`;
+        refreshScheduleDashboardUI(); // keep progress bar + upcoming games live
         await sleep(0); // yield every day so scores flash in ticker
         const keepGoing = advanceCalendar();
         if (!keepGoing) break;
@@ -5823,8 +5835,20 @@ function getLiveLineOvr(line) {
         const stats = getPlayerWeightedStats(p.name);
         return sum + (stats.ovr || 0);
     }, 0);
+    const base = Math.round(totalOvr / line.length);
 
-    return Math.round(totalOvr / line.length);
+    // Chemistry bonus: +2 OVR per dynamic duo pair on this line together
+    if (awardConfig.chemistry) {
+        const names = new Set(line.map(p => p.name));
+        let chemBonus = 0;
+        for (const duo of dynamicDuos) {
+            // Count how many members of this duo group are on the line
+            const present = duo.filter(n => names.has(n));
+            if (present.length >= 2) chemBonus += 2;
+        }
+        return base + chemBonus;
+    }
+    return base;
 }
 
 /**
@@ -8011,11 +8035,40 @@ function runDraftLottery() {
     const pickTeams = picks.map(p => p.team);
     const rest = sorted.filter(t => !pickTeams.includes(t));
     rest.forEach((t, i) => picks.push({ pick: i + 4, team: t }));
-    const lines = picks.slice(0, 6).map(p => `  #${p.pick} — ${p.team.name}`).join('\n');
-    alert(`DRAFT LOTTERY RESULTS\n\n${lines}\n\n(Picks 7+ assigned by reverse standings)`);
+    // Show results in the lottery overlay with a dramatic reveal
+    const cage = document.getElementById('lotteryCage');
+    const status = document.getElementById('lotteryStatus');
+    const claimBtn = document.getElementById('btnClaimPick');
+    const overlay = document.getElementById('lotteryOverlay');
+    if (!cage || !overlay) {
+        // Fallback if overlay missing
+        alert(picks.slice(0,6).map(p=>`#${p.pick} — ${p.team.name}`).join('\n'));
+    } else {
+        cage.innerHTML = '';
+        status.innerText = 'TUMBLING BALLS...';
+        if (claimBtn) claimBtn.style.display = 'none';
+        overlay.style.display = 'flex';
+        let revealed = 0;
+        const revealNext = () => {
+            if (revealed >= Math.min(picks.length, 6)) {
+                if (status) status.innerText = `PICKS 7–${picks.length} ASSIGNED BY REVERSE STANDINGS`;
+                if (claimBtn) claimBtn.style.display = 'block';
+                return;
+            }
+            const p = picks[revealed++];
+            const isTop3 = p.pick <= 3;
+            const card = document.createElement('div');
+            card.style.cssText = `margin:6px auto;padding:8px 12px;background:#111;border:2px solid ${isTop3?'var(--gold-leaf)':'#333'};color:${isTop3?'var(--ea-yellow)':'#aaa'};font-size:${isTop3?'9px':'7px'};text-align:left;`;
+            card.innerHTML = `<span style="color:#666;">#${p.pick}</span>  ${p.team.name}${isTop3?' 🏒':''}`;
+            cage.appendChild(card);
+            if (status) status.innerText = revealed < Math.min(picks.length, 6) ? `DRAWING PICK #${revealed + 1}...` : 'LOTTERY COMPLETE';
+            setTimeout(revealNext, isTop3 ? 900 : 400);
+        };
+        setTimeout(revealNext, 600);
+    }
     const btnL = document.getElementById('btnLottery'); if (btnL) btnL.remove();
-    if(!document.getElementById('btnStartPlayoffs')) {
-        const b = document.createElement('button'); b.id = 'btnStartPlayoffs'; b.innerText = "START PLAYOFFS"; b.onclick = initPlayoffs; document.getElementById('officeControls').appendChild(b);
+    if (!document.getElementById('btnStartPlayoffs')) {
+        const b = document.createElement('button'); b.id = 'btnStartPlayoffs'; b.innerText = 'START PLAYOFFS'; b.onclick = initPlayoffs; document.getElementById('officeControls').appendChild(b);
     }
 }
 function closeLottery() { document.getElementById('lotteryOverlay').style.display = 'none'; }
