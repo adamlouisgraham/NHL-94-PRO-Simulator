@@ -611,7 +611,7 @@ function getSortedByAttr(players, category, attr) {
     });
 }
 
-let awardConfig = { streaks: true, chemistry: true, rivalries: true, aging: false, draft: false, retirements: false, headlines: true, milestones: true, injuries: true, legacy_schedule: true, trades: false };
+let awardConfig = { streaks: true, chemistry: true, rivalries: true, aging: false, draft: false, retirements: false, headlines: true, milestones: true, injuries: true, legacy_schedule: true, trades: true };
 let league = []; let rosters = {}; let playerStats = {}; let tradeLog = []; let hallOfFame = []; let leagueHistory = []; let retiredPlayers = []; let calendar = []; let realDatesMap = []; let gameMilestones = []; let monthSnapshot = {}; let pendingTrades = []; let playoffBracket = { round: 1, series: [] }; let teams = {}; let gameData = {}; let selectedTeam = null; let currentMonth = 1;
 let currentDay = 0; let currentSeason = 1; let isPlayoffs = false; let isASG = false; let activeIdx = null; let statMode = 'season'; let isSimulating = false; let isSimSeason = false; let isTurboMode = false; let currentCupChamp = ""; let activeSubInfo = null; let customRosterData = null; let customRosterSource = 'google'; let customTeamData = null; let customPlayerData = null; let customScheduleData = null; let customEventLogData = null; let eventLogData = null;
 let watchBroadcastDay = null; let watchBroadcastIdx = null;
@@ -846,6 +846,20 @@ function getGameAt(day = currentDay, idx = activeIdx) {
     return (g && g.h && g.a) ? g : null;
 }
 
+function getProjectedGoalie(nrm) {
+    const gs = (rosters[nrm] || [])
+        .filter(p => p.pos === 'G' && playerStats[p.name] && (!playerStats[p.name].injury || playerStats[p.name].injury.daysRemaining === 0))
+        .sort((a, b) => getPlayerWeightedStats(b.name).ovr - getPlayerWeightedStats(a.name).ovr);
+    if (!gs.length) return null;
+    // On a back-to-back with a close backup, likely sit the starter
+    if (playedYesterday(nrm) && gs.length > 1) {
+        const diff = getPlayerWeightedStats(gs[0].name).ovr - getPlayerWeightedStats(gs[1].name).ovr;
+        const consStarts = (playerStats[gs[0].name]?.season?.consStarts || 0);
+        if (diff <= 10 || consStarts >= 7) return gs[1];
+    }
+    return gs[0];
+}
+
 function syncArenaScoreboardUI() {
     const btn = document.getElementById('btnGameSelect');
     const aName = document.getElementById('aName');
@@ -916,7 +930,26 @@ function syncArenaScoreboardUI() {
                 + (scorerLines ? `<div style="max-height:80px;overflow-y:auto;margin:6px 0;text-align:left;">${scorerLines}</div>` : '<br>')
                 + `<button onclick="openBoxScore(${bsDay},${bsIdx})" style="font-family:'Press Start 2P',cursive;font-size:7px;padding:6px 10px;background:#000;border:2px solid var(--neon-cyan);color:var(--neon-cyan);cursor:pointer;">&#x1F4CB; VIEW BOX SCORE</button>`;
         } else {
-            jumbo.innerText = isAsgMatchup ? 'ALL-STAR GAME  -  PUCK DROP PENDING...' : 'PUCK DROP PENDING...';
+            if (isAsgMatchup) {
+                jumbo.innerText = 'ALL-STAR GAME  -  PUCK DROP PENDING...';
+            } else {
+                const aGproj = getProjectedGoalie(g.a.nrm);
+                const hGproj = getProjectedGoalie(g.h.nrm);
+                const goalieTag = (p) => {
+                    if (!p) return '---';
+                    const ps = playerStats[p.name];
+                    const streak = ps ? (ps.macro_streak || ps.micro_streak) : null;
+                    const badge = streak === 'HOT' ? ' <span style="color:#FF6600;font-size:6px;">[HOT]</span>'
+                                : streak === 'COLD' ? ' <span style="color:#55FFFF;font-size:6px;">[COLD]</span>' : '';
+                    const b2b = playedYesterday(p.teamCode || p.team) ? ' <span style="color:#FFAA44;font-size:6px;">[B2B]</span>' : '';
+                    return `<span style="color:#ccc;">${p.name}</span>${badge}${b2b}`;
+                };
+                jumbo.innerHTML = `<span style="color:var(--silver-mid);font-size:7px;">PROJECTED STARTERS</span><br>`
+                    + `<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:7px;">`
+                    + `<div>${g.a.code}: ${goalieTag(aGproj)}</div>`
+                    + `<div>${g.h.code}: ${goalieTag(hGproj)}</div>`
+                    + `</div><div style="margin-top:8px;color:var(--silver-mid);font-size:6px;">PUCK DROP PENDING...</div>`;
+            }
         }
         return;
     }
@@ -2650,12 +2683,21 @@ function getPlayerFatigueAmount(pName) {
         else pen += 8;                      // Low endurance crashes on back-to-backs
     }
 
-    // ðŸ¥µ In-Game Exhaustion (Covering for injured teammates)
+    // In-Game Exhaustion (Covering for injured teammates)
     if (p.extra_shifts && p.extra_shifts > 0) {
         if (endur >= 88) pen += 2;
         else if (endur >= 75) pen += 5;
         else pen += 10; // Hitting the "3rd Period Wall"
     }
+
+    // Season workload — stars with massive cumulative TOI wear down over 82 games
+    // Threshold: A-endurance=900 ticks (~45 heavy games), B=700, C=500
+    const seasonTicks = p.seasonTicks || 0;
+    const endurThreshold = endur >= 88 ? 900 : endur >= 75 ? 700 : 500;
+    if (seasonTicks > endurThreshold) {
+        pen += Math.min(8, Math.floor((seasonTicks - endurThreshold) / 80));
+    }
+
     return pen;
 }
 
@@ -4033,9 +4075,19 @@ function simGame(idx) {
         }); 
     };
 
-    heal(g.h.nrm); 
+    heal(g.h.nrm);
     heal(g.a.nrm);
-    
+
+    // Rest-day recovery: teams that didn't play yesterday shed 20 season ticks per rested day
+    [g.h.nrm, g.a.nrm].forEach(tk => {
+        if (!playedYesterday(tk)) {
+            (rosters[tk] || []).forEach(p => {
+                if (playerStats[p.name] && playerStats[p.name].seasonTicks > 0)
+                    playerStats[p.name].seasonTicks = Math.max(0, playerStats[p.name].seasonTicks - 20);
+            });
+        }
+    });
+
     if (rosters[g.h.nrm]) assignMicroStreaks(rosters[g.h.nrm]);
     if (rosters[g.a.nrm]) assignMicroStreaks(rosters[g.a.nrm]);
 
@@ -4545,6 +4597,11 @@ function simGame(idx) {
                 if (m.ga > 0) pStat.ga = (pStat.ga || 0) + m.ga;
             }
         }
+
+        // Accumulate season ice-time ticks for cross-game fatigue
+        Object.entries(gameIceTicks).forEach(([name, ticks]) => {
+            if (playerStats[name]) playerStats[name].seasonTicks = (playerStats[name].seasonTicks || 0) + ticks;
+        });
 
         if(!isPlayoffs) {
             if(hG > aG) { g.h.season.w++; g.h.season.pts += 2; g.a.season.l++; g.h.winStreak++; g.h.undefeated++; g.h.loseStreak = 0; g.h.winless = 0; g.a.loseStreak++; g.a.winless++; g.a.winStreak = 0; g.a.undefeated = 0; } 
@@ -5296,8 +5353,11 @@ async function simRestOfSeason() {
     if (btn) { btn.disabled = true; btn.textContent = 'SIMULATING...'; }
     while (isSimulating && currentDay < calendar.length) {
         await simDay(false, true);
-        updateUI();
-        if (currentDay % 10 === 0) await sleep(0);
+        const pct = Math.floor((currentDay / calendar.length) * 100);
+        const dayScores = (calendar[currentDay - 1] || []).filter(g => g && g.result).map(g => `${g.a.code} ${g.result.aG}-${g.result.hG} ${g.h.code}`).join('  ');
+        const ticker = document.getElementById('tickerScroll');
+        if (ticker) ticker.innerText = `⚡ SIMULATING... DAY ${currentDay}/${calendar.length} (${pct}%) | ${dayScores || '---'}`;
+        await sleep(0); // yield every day so scores flash in ticker
         const keepGoing = advanceCalendar();
         if (!keepGoing) break;
     }
@@ -7870,7 +7930,38 @@ function _pcOldBodyPlaceholder() { // never called  -  keeps linter happy if nee
 } // end _pcOldBodyPlaceholder
 
 function runDraftLottery() {
-    alert("Draft Lottery simulated! Rookies have been distributed.");
+    // Weighted odds for top-3 picks: worst team 14%, 2nd worst 11%, 3rd worst 8%, others share rest
+    const sorted = [...league].sort((a,b) => {
+        if (a.season.pts !== b.season.pts) return a.season.pts - b.season.pts;
+        return (a.season.gf - a.season.ga) - (b.season.gf - b.season.ga);
+    });
+    const n = sorted.length;
+    // Build ticket pool: bottom 3 get 14/11/8 tickets, rest share 67 equally
+    const tickets = sorted.map((t, i) => {
+        if (i === 0) return { t, w: 14 };
+        if (i === 1) return { t, w: 11 };
+        if (i === 2) return { t, w: 8 };
+        return { t, w: Math.floor(67 / Math.max(1, n - 3)) };
+    });
+    const draw = (pool) => {
+        const total = pool.reduce((s, e) => s + e.w, 0);
+        let roll = Math.random() * total;
+        for (const e of pool) { roll -= e.w; if (roll <= 0) return e.t; }
+        return pool[pool.length - 1].t;
+    };
+    const picks = [];
+    let pool = [...tickets];
+    for (let i = 1; i <= 3; i++) {
+        const winner = draw(pool);
+        picks.push({ pick: i, team: winner });
+        pool = pool.filter(e => e.t !== winner);
+    }
+    // Remaining picks go in reverse standing order
+    const pickTeams = picks.map(p => p.team);
+    const rest = sorted.filter(t => !pickTeams.includes(t));
+    rest.forEach((t, i) => picks.push({ pick: i + 4, team: t }));
+    const lines = picks.slice(0, 6).map(p => `  #${p.pick} — ${p.team.name}`).join('\n');
+    alert(`DRAFT LOTTERY RESULTS\n\n${lines}\n\n(Picks 7+ assigned by reverse standings)`);
     const btnL = document.getElementById('btnLottery'); if (btnL) btnL.remove();
     if(!document.getElementById('btnStartPlayoffs')) {
         const b = document.createElement('button'); b.id = 'btnStartPlayoffs'; b.innerText = "START PLAYOFFS"; b.onclick = initPlayoffs; document.getElementById('officeControls').appendChild(b);
