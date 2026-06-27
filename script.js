@@ -4016,6 +4016,29 @@ function simGame(idx) {
     hWallMod = Math.max(0.78, Math.min(1.22, hWallMod + (Math.random() - 0.5) * 0.20));
     aWallMod = Math.max(0.78, Math.min(1.22, aWallMod + (Math.random() - 0.5) * 0.20));
 
+    // PLAYOFF PRESSURE — elimination game modifier
+    // Facing elimination: veterans (+OVR) dig deep; less experienced players feel it (-OVR)
+    // Leading the series: slight complacency risk
+    let hPressureMod = 0, aPressureMod = 0;
+    if (isPlayoffs && g.series) {
+        const hElim = g.series.aW === 3;  // home team facing elimination (opponents lead 3)
+        const aElim = g.series.hW === 3;  // away team facing elimination
+        const getExpFactor = (nrm) => {
+            const roster = (playerStats ? Object.values(playerStats) : []).filter(p => p.teamCode === (league.find(t=>t.nrm===nrm)||{}).code);
+            const avgGP = roster.length ? roster.reduce((s,p) => s + (p.season?.gp||0), 0) / roster.length : 40;
+            return (avgGP - 40) / 40; // -1 to +1 scale; 40 GP = neutral
+        };
+        if (hElim) hPressureMod = getExpFactor(g.h.nrm) * 4; // up to ±4 OVR based on experience
+        if (aElim) aPressureMod = getExpFactor(g.a.nrm) * 4;
+        // Leading 3-0 or 3-1: small complacency dip
+        if (g.series.hW === 3) hPressureMod -= 1.5;
+        if (g.series.aW === 3) aPressureMod -= 1.5;
+    }
+
+    // IN-GAME FATIGUE — track cumulative shift ticks per player this game
+    // After 20 ticks (10 min ice time), each additional tick costs 0.25 OVR
+    const gameIceTicks = {};
+
     //  4. THE TIME-TICK ENGINE SETUP
     let hG = 0, aG = 0;
     let hShots = 0, aShots = 0;
@@ -4074,10 +4097,19 @@ function simGame(idx) {
         hOnIce.forEach(p => trk(p.name, 'toi', 0.5));
         aOnIce.forEach(p => trk(p.name, 'toi', 0.5));
 
+        // Accumulate in-game shift ticks for fatigue
+        hOnIce.forEach(p => { gameIceTicks[p.name] = (gameIceTicks[p.name] || 0) + 1; });
+        aOnIce.forEach(p => { gameIceTicks[p.name] = (gameIceTicks[p.name] || 0) + 1; });
+
+        // In-game fatigue penalty: free for first 20 ticks (10 min), then 0.25 OVR per tick
+        const inGameFatigue = (name) => Math.max(0, ((gameIceTicks[name] || 0) - 20) * 0.25);
+        const hFatiguePen = hOnIce.reduce((s,p) => s + inGameFatigue(p.name), 0) / Math.max(1, hOnIce.length);
+        const aFatiguePen = aOnIce.reduce((s,p) => s + inGameFatigue(p.name), 0) / Math.max(1, aOnIce.length);
+
         // Live Dynamic Matchup Overalls
-        let hLiveOvr = getLiveLineOvr(hOnIce) * hAuraMod * homeCrowdEnergy;
-        let aLiveOvr = getLiveLineOvr(aOnIce) * aAuraMod;
-        
+        let hLiveOvr = (getLiveLineOvr(hOnIce) - hFatiguePen + hPressureMod) * hAuraMod * homeCrowdEnergy;
+        let aLiveOvr = (getLiveLineOvr(aOnIce) - aFatiguePen + aPressureMod) * aAuraMod;
+
         let diff = hLiveOvr - aLiveOvr + chaosOffset;
         
         // Shot generation  -  softer diff multiplier balances shots across lines
