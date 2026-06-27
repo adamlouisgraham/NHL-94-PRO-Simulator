@@ -5349,6 +5349,41 @@ function updateUIDisplay() {
     container.innerHTML += gHtml;
 }
 
+function renderLeagueTeamStats() {
+    const el = document.getElementById('leagueTeamStatsTable');
+    if (!el) return;
+    const sorted = [...league].sort((a, b) => b.season.pts - a.season.pts || b.season.w - a.season.w);
+    const th = (t) => `<th style="background:#111;color:#aaa;padding:5px 8px;border-bottom:2px solid #333;white-space:nowrap;">${t}</th>`;
+    const td = (v, hi) => `<td style="padding:4px 8px;border-bottom:1px solid #222;${hi?'color:var(--neon-cyan);font-weight:bold;':''}">${v}</td>`;
+    let h = `<tr>${th('#')}${th('TEAM')}${th('GP')}${th('W')}${th('L')}${th('T')}${th('PTS')}${th('GF')}${th('GA')}${th('GD')}${th('GF/GP')}${th('GA/GP')}${th('SF/GP')}${th('SA/GP')}${th('PP%')}${th('SV%')}</tr>`;
+    sorted.forEach((t, i) => {
+        const gp  = t.season.gp || 1;
+        const gf  = t.season.gf || 0;
+        const ga  = t.season.ga || 0;
+        const sf  = t.season.sf || 0;
+        const sa  = t.season.sa || 0;
+        const ppg = t.season.ppg || 0;
+        const ppo = t.season.ppo || 0;
+        const gd  = gf - ga;
+        const pp  = ppo > 0 ? ((ppg / ppo) * 100).toFixed(1) + '%' : '-';
+        const sv  = sa > 0  ? (((sa - ga) / sa) * 100).toFixed(1) + '%' : '-';
+        const rowBg = i < 8 ? 'rgba(0,180,80,0.08)' : i >= sorted.length - 3 ? 'rgba(220,40,40,0.08)' : '';
+        h += `<tr style="background:${rowBg};">
+            ${td(i+1)}
+            ${td(`${getTeamLogoHtml(t.name)}<span style="vertical-align:middle;">${t.code}</span>`)}
+            ${td(gp)} ${td(t.season.w)} ${td(t.season.l)} ${td(t.season.t)}
+            ${td(t.season.pts, true)}
+            ${td(gf)} ${td(ga)}
+            ${td((gd > 0 ? '+' : '') + gd, gd > 0)}
+            ${td((gf/gp).toFixed(2))} ${td((ga/gp).toFixed(2))}
+            ${td(sf > 0 ? (sf/gp).toFixed(1) : '-')}
+            ${td(sa > 0 ? (sa/gp).toFixed(1) : '-')}
+            ${td(pp)} ${td(sv)}
+        </tr>`;
+    });
+    el.innerHTML = h;
+}
+
 function renderTeamStats() {
         const sel = document.getElementById('teamViewSelect');
         if (!sel || !sel.value) return;
@@ -8172,6 +8207,7 @@ function updateUI() {
     if (typeof syncTeamsFromLeague === 'function') syncTeamsFromLeague();
     if (typeof updatePlayerStats === 'function') updatePlayerStats();
     if (typeof updateStandings === 'function') updateStandings();
+    renderLeagueTeamStats();
     if (typeof updateScheduleView === 'function') updateScheduleView();
 }
 
