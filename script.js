@@ -2891,7 +2891,7 @@ const getRosterStructure = (tk) => {
         if (customF && customF.flat().length > 0) {
             // Pad missing lines with empty arrays
             while (customF.length < 4) customF.push([]);
-            while ((customD||[]).length < 3) (customD||[customF]).push([]);
+            while ((customD||[]).length < 3) (customD||[]).push([]);
             return {
                 f: customF,
                 d: customD || [[], [], []],
@@ -2966,7 +2966,7 @@ const getRosterStructure = (tk) => {
     
     // Emergency C fix
     if (allCenters.length < 4) {
-        let nonCenters = fPool.filter(p => getPos(p) !== 'C').sort((a,b) => getOvr(a) - getOvr(b));
+        let nonCenters = fPool.filter(p => getPos(p) !== 'C').sort((a,b) => getOvr(b) - getOvr(a));
         while(allCenters.length < 4 && nonCenters.length > 0) allCenters.push(nonCenters.shift());
     }
 
@@ -3268,12 +3268,10 @@ const getRosterStructure = (tk) => {
         if (!p1 || !p2) return false;
         
         // A. Explicit Duos
-        if (typeof getLineMates === 'function') {
-            let m1 = getLineMates(p1.name);
-            if (m1 && (Array.isArray(m1) ? m1.includes(p2.name) : m1 === p2.name)) return true;
-            let m2 = getLineMates(p2.name);
-            if (m2 && (Array.isArray(m2) ? m2.includes(p1.name) : m2 === p1.name)) return true;
-        }
+        let m1 = getLineMates(p1.name);
+        if (m1 && (Array.isArray(m1) ? m1.includes(p2.name) : m1 === p2.name)) return true;
+        let m2 = getLineMates(p2.name);
+        if (m2 && (Array.isArray(m2) ? m2.includes(p1.name) : m2 === p1.name)) return true;
             return false;
     };
 
