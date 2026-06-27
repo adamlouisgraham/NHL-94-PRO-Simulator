@@ -7478,46 +7478,75 @@ function initPlayoffsUI() {
 }
 
 function showBracket() {
-    let h = '';
-    playoffBracket.series.forEach(s => {
-        let winH = s.hW === 4; let winA = s.aW === 4;
-        h += `<div style="background:#111; border:2px solid ${winH||winA ? 'var(--ea-yellow)' : '#333'}; padding:10px; width:200px; text-align:center;">`;
-        h += `<div style="font-size:8px; color:#aaa; margin-bottom:5px;">${s.conf || ''}</div>`;
-        
-        // HOME TEAM (Logo + 3-Letter Code)
-        h += `<div style="display:flex; justify-content:space-between; align-items:center; color:${winH ? 'var(--ea-yellow)' : '#fff'};">
-                <span style="display:flex; align-items:center; gap:5px;">${getTeamLogoHtml(s.h.name)} ${s.h.code}</span>
-                <span style="font-size:14px; font-weight:bold;">${s.hW}</span>
-              </div>`;
-              
-        // AWAY TEAM (Logo + 3-Letter Code)
-        h += `<div style="display:flex; justify-content:space-between; align-items:center; color:${winA ? 'var(--ea-yellow)' : '#fff'}; margin-top:5px;">
-                <span style="display:flex; align-items:center; gap:5px;">${getTeamLogoHtml(s.a.name)} ${s.a.code}</span>
-                <span style="font-size:14px; font-weight:bold;">${s.aW}</span>
-              </div>`;
-              
-        h += `</div>`;
-    });
-    // Past rounds accordion
-    if (playoffBracket.history && playoffBracket.history.length > 0) {
-        h += `<div style="margin-top:15px; border-top:1px solid #333; padding-top:10px;">`;
-        h += `<div style="font-size:7px; color:#aaa; margin-bottom:8px; cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">&#x25BC; PAST ROUNDS</div>`;
-        h += `<div style="display:none;">`;
-        [...playoffBracket.history].reverse().forEach(rnd => {
-            h += `<div style="margin-bottom:8px;"><div style="font-size:7px; color:var(--ea-yellow); margin-bottom:4px;">RD ${rnd.round}  -  ${rnd.label}</div>`;
-            rnd.series.forEach(s => {
-                const winH = s.hW === 4; const winA = s.aW === 4;
-                h += `<div style="font-size:7px; background:#111; border:1px solid #333; padding:5px; margin-bottom:3px;">`;
-                h += `<span style="color:${winH?'var(--ea-yellow)':'#aaa'}">${s.hCode} <b>${s.hW}</b></span>`;
-                h += ` <span style="color:#555">vs</span> `;
-                h += `<span style="color:${winA?'var(--ea-yellow)':'#aaa'}"><b>${s.aW}</b> ${s.aCode}</span>`;
-                h += `</div>`;
-            });
-            h += `</div>`;
+    const roundLabels = ['', 'DIVISION SEMIS', 'DIVISION FINALS', 'CONF FINALS', 'STANLEY CUP FINALS'];
+
+    // Build full round list: history + current round
+    const allRounds = [...(playoffBracket.history || [])];
+    if (playoffBracket.series && playoffBracket.series.length > 0) {
+        allRounds.push({
+            round: playoffBracket.round,
+            label: roundLabels[playoffBracket.round] || `ROUND ${playoffBracket.round}`,
+            series: playoffBracket.series.map(s => ({
+                hCode: s.h ? s.h.code : '?', hName: s.h ? s.h.name : '',
+                aCode: s.a ? s.a.code : '?', aName: s.a ? s.a.name : '',
+                hW: s.hW, aW: s.aW, conf: s.conf
+            }))
         });
-        h += `</div></div>`;
+    }
+    allRounds.sort((a, b) => a.round - b.round);
+    const currentRound = playoffBracket.round;
+
+    // Series card builder
+    const seriesCard = (s, isPast) => {
+        const winH = s.hW === 4, winA = s.aW === 4;
+        const done = winH || winA;
+        const dimStyle = isPast ? 'opacity:0.7;' : '';
+        const borderColor = done ? 'var(--gold-leaf)' : isPast ? '#2a2a2a' : '#444';
+        const hColor = winH ? 'var(--ea-yellow)' : winA ? '#555' : '#ddd';
+        const aColor = winA ? 'var(--ea-yellow)' : winH ? '#555' : '#ddd';
+        const hLogo = !isPast && s.hName ? getTeamLogoHtml(s.hName) : '';
+        const aLogo = !isPast && s.aName ? getTeamLogoHtml(s.aName) : '';
+        const winMark = (w) => w === 4 ? ' ✓' : '';
+        return `<div style="${dimStyle}background:#0d0d0d;border:1px solid ${borderColor};padding:7px 9px;margin-bottom:6px;min-width:140px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;color:${hColor};font-size:7px;">
+                <span style="display:flex;align-items:center;gap:4px;">${hLogo}<span>${s.hCode}${winMark(s.hW)}</span></span>
+                <span style="font-size:11px;">${s.hW}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;color:${aColor};font-size:7px;margin-top:4px;">
+                <span style="display:flex;align-items:center;gap:4px;">${aLogo}<span>${s.aCode}${winMark(s.aW)}</span></span>
+                <span style="font-size:11px;">${s.aW}</span>
+            </div>
+        </div>`;
+    };
+
+    // Cup champion banner
+    let cupBanner = '';
+    if (currentCupChamp) {
+        cupBanner = `<div style="text-align:center;padding:12px;background:linear-gradient(135deg,#1a1200,#2a1e00);border:2px solid var(--gold-leaf);margin-bottom:16px;">
+            <div style="color:#888;font-size:6px;letter-spacing:.2em;">STANLEY CUP CHAMPION</div>
+            <div style="color:var(--ea-yellow);font-size:12px;margin-top:6px;text-shadow:2px 2px 0 #000;">${currentCupChamp}</div>
+            <div style="font-size:16px;margin-top:4px;">🏒🏆🏒</div>
+        </div>`;
     }
 
+    // Render columns
+    let cols = '';
+    allRounds.forEach(rnd => {
+        const isPast = rnd.round < currentRound;
+        const isCurrent = rnd.round === currentRound;
+        const labelColor = isCurrent ? 'var(--as-orange)' : '#555';
+        const cards = rnd.series.map(s => seriesCard(s, isPast)).join('');
+        cols += `<div style="display:inline-flex;flex-direction:column;vertical-align:top;min-width:158px;margin-right:4px;">
+            <div style="font-size:6px;color:${labelColor};letter-spacing:.14em;text-align:center;padding:4px 0 8px;border-bottom:1px solid #222;margin-bottom:8px;">${rnd.label}</div>
+            ${cards}
+        </div>`;
+        // Arrow between columns
+        if (rnd.round < Math.max(...allRounds.map(r => r.round))) {
+            cols += `<div style="display:inline-flex;align-items:center;vertical-align:top;padding:0 4px;color:#333;font-size:18px;padding-top:28px;">›</div>`;
+        }
+    });
+
+    const h = `${cupBanner}<div style="display:inline-flex;align-items:flex-start;white-space:nowrap;">${cols}</div>`;
     document.getElementById('bracketContent').innerHTML = h;
 
     if(playoffBracket.series.some(s => s.hW === 4 || s.aW === 4) && !playoffBracket.series.some(s => s.hW < 4 && s.aW < 4)) {
