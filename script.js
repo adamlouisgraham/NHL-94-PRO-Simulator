@@ -5809,13 +5809,18 @@ function renderTeamStats() {
  */
 function getLiveLineOvr(line) {
     if (!line || line.length === 0) return 0;
-    
-    // Calculate average OVR of the line based on active fatigue/streaks
+
     const totalOvr = line.reduce((sum, p) => {
         const stats = getPlayerWeightedStats(p.name);
-        return sum + (stats.ovr || 0);
+        let ovr = stats.ovr || 0;
+        // Apply both macro and micro streaks to live OVR (+10% HOT, -10% COLD)
+        const ps = playerStats[p.name];
+        const streak = ps ? (ps.macro_streak || ps.micro_streak) : null;
+        if (streak === 'HOT')  ovr *= 1.10;
+        if (streak === 'COLD') ovr *= 0.90;
+        return sum + ovr;
     }, 0);
-    
+
     return Math.round(totalOvr / line.length);
 }
 
