@@ -4063,8 +4063,8 @@ function simGame(idx) {
     };
 
     const hG_obj = selG(g.h.nrm), aG_obj = selG(g.a.nrm);
-    const hG_name = hG_obj ? hG_obj.name : null;
-    const aG_name = aG_obj ? aG_obj.name : null;
+    let hG_name = hG_obj ? hG_obj.name : null;
+    let aG_name = aG_obj ? aG_obj.name : null;
 
     // ðŸ§± 3. MACRO AURAS & MODIFIER MATH
     let hAuraMod = (getTeamSystemAura(g.h.nrm) === 'OFFENSIVE TEAM' ? 1.15 : (getTeamSystemAura(g.h.nrm) === 'DEFENSIVE TEAM' ? 0.85 : 1.0));
@@ -4419,6 +4419,11 @@ function simGame(idx) {
     if (period >= 2) {
         if (aG - hG >= 4) hG_name = checkBlowoutPull(g.h, hG_name, aG-hG, aG, hStruct);
         if (hG - aG >= 4) aG_name = checkBlowoutPull(g.a, aG_name, hG-aG, hG, aStruct);
+        // Recalculate wall mods for any backup that stepped in
+        const newHGOvr = hG_name ? (getPlayerWeightedStats(hG_name).ovr || 75) : 75;
+        const newAGOvr = aG_name ? (getPlayerWeightedStats(aG_name).ovr || 75) : 75;
+        hWallMod = Math.max(0.78, Math.min(1.22, 1.0 + (75 - newHGOvr) * 0.013 + (Math.random() - 0.5) * 0.10));
+        aWallMod = Math.max(0.78, Math.min(1.22, 1.0 + (75 - newAGOvr) * 0.013 + (Math.random() - 0.5) * 0.10));
     }
 
     //  5. OVERTIME RESOLUTION
