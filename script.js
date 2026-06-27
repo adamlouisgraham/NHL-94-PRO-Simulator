@@ -4299,14 +4299,14 @@ function simGame(idx) {
                 if (ev) {
                     ev.tm = g.h.code;
                     ev.cl = teamColors[g.h.nrm] ? teamColors[g.h.nrm][0] : '#fff';
-                    ev.txt = `GOAL: ${ev.scorer}` + (ev.pAssist ? ` (${ev.pAssist}${ev.sAssist ? ', '+ev.sAssist : ''})` : '');
+                    ev.txt = buildGoalText(ev.scorer, ev.pAssist, ev.sAssist, getPlayerWeightedStats(shooter.name)?.tag, false, false, false, hG, aG, period);
                     allGoals.push(ev);
                     if (ev.scorer) trk(ev.scorer, 'g', 1);
                     if (ev.pAssist) trk(ev.pAssist, 'a', 1);
                     if (ev.sAssist) trk(ev.sAssist, 'a', 1);
                     hOnIce.forEach(p => { if(p && p.name) trk(p.name, 'pm', 1); });
                     aOnIce.forEach(p => { if(p && p.name) trk(p.name, 'pm', -1); });
-                    hMomentum = 8; // ~4 min surge for scoring team
+                    hMomentum = 8;
                 }
             } else {
                 trk(aG_name, 'sv', 1); // Record Goalie Save
@@ -4330,7 +4330,7 @@ function simGame(idx) {
                 if (ev) {
                     ev.tm = g.a.code;
                     ev.cl = teamColors[g.a.nrm] ? teamColors[g.a.nrm][0] : '#fff';
-                    ev.txt = `GOAL: ${ev.scorer}` + (ev.pAssist ? ` (${ev.pAssist}${ev.sAssist ? ', '+ev.sAssist : ''})` : '');
+                    ev.txt = buildGoalText(ev.scorer, ev.pAssist, ev.sAssist, getPlayerWeightedStats(shooter.name)?.tag, false, false, false, aG, hG, period);
                     allGoals.push(ev);
                     if (ev.scorer) trk(ev.scorer, 'g', 1);
                     if (ev.pAssist) trk(ev.pAssist, 'a', 1);
@@ -4387,7 +4387,7 @@ function simGame(idx) {
                         ppEv.isPP = true;
                         ppEv.tm = advTeam.code;
                         ppEv.cl = teamColors[advTeam.nrm] ? teamColors[advTeam.nrm][0] : '#FFD700';
-                        ppEv.txt = `PP GOAL: ${ppEv.scorer}` + (ppEv.pAssist ? ` (${ppEv.pAssist}${ppEv.sAssist ? ', '+ppEv.sAssist : ''})` : '');
+                        ppEv.txt = buildGoalText(ppEv.scorer, ppEv.pAssist, ppEv.sAssist, null, true, false, false, 0, 0, 0);
                         allGoals.push(ppEv);
                         if (advTeam.nrm === g.h.nrm) hG++; else aG++;
                         trk(ppEv.scorer, 'g', 1);
@@ -4409,7 +4409,7 @@ function simGame(idx) {
                         shEv.isSH = true;
                         shEv.tm = penTeam.code;
                         shEv.cl = teamColors[penTeam.nrm] ? teamColors[penTeam.nrm][0] : '#00FFFF';
-                        shEv.txt = `SH GOAL: ${shEv.scorer}` + (shEv.pAssist ? ` (${shEv.pAssist}${shEv.sAssist ? ', '+shEv.sAssist : ''})` : '');
+                        shEv.txt = buildGoalText(shEv.scorer, shEv.pAssist, shEv.sAssist, null, false, true, false, 0, 0, 0);
                         allGoals.push(shEv);
                         if (penTeam.nrm === g.h.nrm) hG++; else aG++;
                         trk(shEv.scorer, 'g', 1);
@@ -4442,7 +4442,7 @@ function simGame(idx) {
                         enEv.isEN = true;
                         enEv.tm = enScorerTeam.code;
                         enEv.cl = teamColors[enScorerTeam.nrm]?.[0] || '#fff';
-                        enEv.txt = `EN GOAL: ${enEv.scorer}` + (enEv.pAssist ? ` (${enEv.pAssist})` : '');
+                        enEv.txt = buildGoalText(enEv.scorer, enEv.pAssist, null, null, false, false, true, 0, 0, 3);
                         allGoals.push(enEv);
                         if (trailerIsHome) aG++; else hG++;
                         trk(enEv.scorer, 'g', 1);
@@ -4461,7 +4461,7 @@ function simGame(idx) {
                         if (tieEv) {
                             tieEv.tm = tieScorerTeam.code;
                             tieEv.cl = teamColors[tieScorerTeam.nrm]?.[0] || '#fff';
-                            tieEv.txt = `GOAL: ${tieEv.scorer} (ties it late!)`;
+                            tieEv.txt = buildGoalText(tieEv.scorer, null, null, null, false, false, false, 0, 0, 3);
                             allGoals.push(tieEv);
                             if (trailerIsHome) hG++; else aG++;
                             trk(tieEv.scorer, 'g', 1);
@@ -4524,7 +4524,7 @@ function simGame(idx) {
                 const otM = Math.floor(otSec/60)+1, otS = otSec%60;
                 allGoals.push({ p:3+otPeriods, m:otM, s:otS, str:`OT${otPeriods} ${otM}:${otS<10?'0'+otS:otS}`,
                     tm:g.h.code, cl:teamColors[g.h.nrm]?.[0]||'#fff',
-                    txt:`OT GOAL: ${hStar.name||'Unknown'}`, scorer:hStar.name, code:g.h.code });
+                    txt:buildGoalText(hStar.name, null, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:hStar.name, code:g.h.code });
             } else {
                 aG++; aShots++;
                 trk(hG_name,'sa',1); trk(hG_name,'ga',1);
@@ -4532,7 +4532,7 @@ function simGame(idx) {
                 const otM = Math.floor(otSec/60)+1, otS = otSec%60;
                 allGoals.push({ p:3+otPeriods, m:otM, s:otS, str:`OT${otPeriods} ${otM}:${otS<10?'0'+otS:otS}`,
                     tm:g.a.code, cl:teamColors[g.a.nrm]?.[0]||'#fff',
-                    txt:`OT GOAL: ${aStar.name||'Unknown'}`, scorer:aStar.name, code:g.a.code });
+                    txt:buildGoalText(aStar.name, null, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:aStar.name, code:g.a.code });
             }
         }
     }
@@ -5048,6 +5048,144 @@ function buildCalendar() {
     league.forEach(t => t.season.gp = 0);
 }
 
+function buildGoalText(scorer, a1, a2, tag, isPP, isSH, isEN, scorerScore, opponentScore, period) {
+    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    const assists = a1 ? ` (${a1}${a2 ? ', ' + a2 : ''})` : '';
+    const name = scorer || 'Unknown';
+
+    if (isEN)  return `${name} fires into the empty net — that seals it!${assists}`;
+    if (isSH)  return pick([
+        `SHORTHANDED! ${name} breaks away and beats the goalie!${assists}`,
+        `Against the run of play — ${name} goes shortie on the breakaway!${assists}`,
+        `${name} steals the puck and goes all alone — shorthanded goal!${assists}`,
+    ]);
+    if (isPP)  return pick([
+        `Power play goal — ${name} one-times it past the netminder!${assists}`,
+        `${name} with the man advantage — buried!${assists}`,
+        `The PP clicks: ${name} finds the opening and scores!${assists}`,
+    ]);
+    if (period >= 4) return pick([
+        `OVERTIME WINNER! ${name} ends it in sudden death!${assists}`,
+        `${name} with the OT dagger — this one is OVER!${assists}`,
+        `In overtime, ${name} beats the goalie and sends the crowd home happy!${assists}`,
+    ]);
+
+    const tense = period === 3;
+    const trailing = scorerScore < opponentScore;
+
+    if (tag === 'SNIPER' || tag === 'SUPERSTAR') return pick([
+        `${name} winds up from the circle and RIFLES it top shelf!${assists}`,
+        `Textbook snipe — ${name} picks the corner and the goalie had no chance!${assists}`,
+        `${name} with the laser — perfectly placed!${assists}`,
+        `World-class finish from ${name}. The goalie didn't move.${assists}`,
+    ]);
+    if (tense && trailing) return pick([
+        `CLUTCH! ${name} cuts the lead — the bench erupts!${assists}`,
+        `${name} answers back! This game isn't over!${assists}`,
+        `Big response from ${name}. They're not done yet!${assists}`,
+    ]);
+    if (tense) return pick([
+        `${name} pots one late in the third to extend the lead!${assists}`,
+        `${name} with a big-time third-period goal!${assists}`,
+        `That's an insurance marker from ${name}!${assists}`,
+    ]);
+    return pick([
+        `${name} buries the rebound — goal!${assists}`,
+        `${name} with a wrist shot — the goalie had no read on it!${assists}`,
+        `Deflection off the stick of ${name} — it's in!${assists}`,
+        `${name} accepts the feed and fires home!${assists}`,
+        `Quick release from ${name} — scores!${assists}`,
+        `${name} beats the goalie five-hole — goal!${assists}`,
+    ]);
+}
+
+function showSeasonRecap() {
+    const allP = Object.values(playerStats);
+    const maxGP = Math.max(1, ...league.map(t => t.season.gp));
+    const minSk = Math.max(1, Math.floor(maxGP * 0.35));
+    const minG  = Math.max(1, Math.floor(maxGP * 0.25));
+    const skaters = allP.filter(p => p.pos !== 'G' && p.season.gp >= minSk);
+    const goalies  = allP.filter(p => p.pos === 'G'  && p.season.gp >= minG);
+
+    const sorted = [...league].sort((a,b) => b.season.pts - a.season.pts);
+    const presidents = sorted[0];
+
+    const topPts   = [...skaters].sort((a,b) => (b.season.g+b.season.a)-(a.season.g+a.season.a)).slice(0,5);
+    const topG     = [...skaters].sort((a,b) => b.season.g-a.season.g).slice(0,3);
+    const topSV    = [...goalies].sort((a,b) => { const sa=(s)=>s.season.sa>0?s.season.sv/s.season.sa:0; return sa(b)-sa(a); }).slice(0,3);
+    const topSO    = [...goalies].sort((a,b) => b.season.so-a.season.so)[0];
+    const topPIM   = [...skaters].sort((a,b) => (b.season.pim||0)-(a.season.pim||0))[0];
+
+    const eastSeeds = league.filter(t=>t.conf==='Eastern').sort((a,b)=>b.season.pts-a.season.pts).slice(0,8);
+    const westSeeds = league.filter(t=>t.conf==='Western').sort((a,b)=>b.season.pts-a.season.pts).slice(0,8);
+
+    const statRow = (label, val, color='var(--neon-cyan)') =>
+        `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1a1a1a;font-size:7px;">
+            <span style="color:#666;">${label}</span><span style="color:${color};">${val}</span>
+         </div>`;
+
+    const seedCol = (title, seeds) => {
+        const rows = seeds.map((t,i) => {
+            const dot = i < 8 ? (i===0?'<span style="color:var(--gold-leaf);">★</span>':'<span style="color:#0b0;">●</span>') : '';
+            return `<div style="display:flex;justify-content:space-between;font-size:6px;padding:3px 0;border-bottom:1px solid #111;">
+                <span>${dot} ${i+1}. ${t.code}</span><span style="color:#aaa;">${t.season.pts}pts</span></div>`;
+        }).join('');
+        return `<div style="flex:1;min-width:120px;"><div style="font-size:6px;color:#666;letter-spacing:.14em;margin-bottom:6px;">${title}</div>${rows}</div>`;
+    };
+
+    let h = `<div style="text-align:center;border-bottom:2px solid var(--neon-cyan);padding-bottom:12px;margin-bottom:16px;">
+        <div style="color:var(--neon-cyan);font-size:12px;">SEASON ${currentSeason} — REGULAR SEASON FINAL</div>
+        <div style="color:#555;font-size:7px;margin-top:6px;">${maxGP} GAMES PLAYED</div>
+    </div>`;
+
+    // Presidents' Trophy
+    h += `<div style="background:linear-gradient(135deg,#0a1200,#111d00);border:1px solid var(--gold-leaf);padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
+        <div><div style="color:#666;font-size:6px;letter-spacing:.14em;">PRESIDENTS' TROPHY</div>
+        <div style="color:var(--ea-yellow);font-size:10px;margin-top:4px;">${presidents.name}</div></div>
+        <div style="text-align:right;font-size:7px;color:#aaa;">${presidents.season.w}W ${presidents.season.l}L ${presidents.season.t}T<br>
+        <span style="color:var(--gold-leaf);">${presidents.season.pts} PTS</span></div>
+    </div>`;
+
+    // Scoring leaders
+    h += `<div style="color:#666;font-size:6px;letter-spacing:.14em;margin-bottom:6px;">SCORING LEADERS</div>`;
+    topPts.forEach((p,i) => {
+        const pts = p.season.g + p.season.a;
+        h += statRow(`${i+1}. ${p.name} <span style="color:#444">${p.teamCode}</span>`,
+            `${p.season.g}G  ${p.season.a}A  ${pts}PTS`);
+    });
+
+    // Goal leader + PIM
+    h += `<div style="display:flex;gap:12px;margin-top:12px;margin-bottom:12px;">`;
+    if (topG[0]) h += `<div style="flex:1;background:#0a0a0a;border:1px solid #222;padding:8px 10px;">
+        <div style="color:#555;font-size:6px;letter-spacing:.12em;">GOAL LEADER</div>
+        <div style="color:#fff;font-size:8px;margin-top:4px;">${topG[0].name}</div>
+        <div style="color:var(--neon-cyan);font-size:7px;">${topG[0].season.g} G</div></div>`;
+    if (topSO) h += `<div style="flex:1;background:#0a0a0a;border:1px solid #222;padding:8px 10px;">
+        <div style="color:#555;font-size:6px;letter-spacing:.12em;">SHUTOUT LEADER</div>
+        <div style="color:#fff;font-size:8px;margin-top:4px;">${topSO.name}</div>
+        <div style="color:var(--neon-cyan);font-size:7px;">${topSO.season.so} SO</div></div>`;
+    if (topPIM) h += `<div style="flex:1;background:#0a0a0a;border:1px solid #222;padding:8px 10px;">
+        <div style="color:#555;font-size:6px;letter-spacing:.12em;">PIM LEADER</div>
+        <div style="color:#fff;font-size:8px;margin-top:4px;">${topPIM.name}</div>
+        <div style="color:var(--as-orange);font-size:7px;">${topPIM.season.pim} PIM</div></div>`;
+    h += `</div>`;
+
+    // Goalie leaders
+    h += `<div style="color:#666;font-size:6px;letter-spacing:.14em;margin-bottom:6px;">GOALIE LEADERS</div>`;
+    topSV.forEach((g,i) => {
+        const svp = g.season.sa > 0 ? (g.season.sv/g.season.sa).toFixed(3) : '.000';
+        h += statRow(`${i+1}. ${g.name} <span style="color:#444">${g.teamCode}</span>`,
+            `${g.season.w}W  ${g.season.so}SO  ${svp}`);
+    });
+
+    // Playoff seeds
+    h += `<div style="color:#666;font-size:6px;letter-spacing:.14em;margin:14px 0 8px;">PLAYOFF SEEDS</div>
+    <div style="display:flex;gap:16px;">${seedCol('EASTERN CONF', eastSeeds)}${seedCol('WESTERN CONF', westSeeds)}</div>`;
+
+    document.getElementById('recapContent').innerHTML = h;
+    document.getElementById('recapOverlay').style.display = 'flex';
+}
+
 function initPlayoffs() {
     isPlayoffs = true; currentDay = 0; calendar = [];
     Object.values(playerStats).forEach(p => {
@@ -5082,7 +5220,7 @@ function initPlayoffs() {
         west: [ { h: westSeeds[0].nrm, a: westSeeds[7].nrm, hW: 0, aW: 0, games: [] }, { h: westSeeds[1].nrm, a: westSeeds[6].nrm, hW: 0, aW: 0, games: [] }, { h: westSeeds[2].nrm, a: westSeeds[5].nrm, hW: 0, aW: 0, games: [] }, { h: westSeeds[3].nrm, a: westSeeds[4].nrm, hW: 0, aW: 0, games: [] } ],
         nextEast: [], nextWest: [], finals: null
     };
-    buildPlayoffRound(); initPlayoffsUI(); updateUI(); saveGame(); alert("The Regular Season has ended! The Playoff Bracket is now set.");
+    buildPlayoffRound(); initPlayoffsUI(); updateUI(); saveGame(); showSeasonRecap();
 }
 
 function buildPlayoffRound() {
@@ -6303,12 +6441,41 @@ function startWatchLive() {
     document.getElementById('watchGameOverlay').style.display = 'flex';
 
     let fillerEvents = [];
-    const actions = ["winds up for a slapshot... Kick save and a beauty!", "lays a massive hit on the boards!", "with a quick wrist shot, gloved down.", "intercepts a sloppy pass in the neutral zone.", "fires it from the point... clanks off the iron!", "called for hooking. Referee's arm is up.", "dumps the puck deep into the corner.", "wins the faceoff cleanly.", "blocks a heavy slapshot. He's slow to get up."];
-    for (let i = 0; i < 15; i++) {
-        let p = Math.floor(Math.random() * 3) + 1; let m = Math.floor(Math.random() * 20); let s = Math.floor(Math.random() * 60); let t = Math.random() > 0.5 ? g.h : g.a;
-        let randPlayer = "A player";
-        if (rosters[t.nrm]) { let skaters = rosters[t.nrm].filter(x => x.pos !== 'G'); if(skaters.length > 0) randPlayer = skaters[Math.floor(Math.random() * skaters.length)].name; }
-        fillerEvents.push({ p: p, m: m, s: s, tm: t.code, cl: '#888', isFiller: true, txt: `${randPlayer} ${actions[Math.floor(Math.random() * actions.length)]}` });
+    const fillerPool = [
+        "winds up for a slapshot — kick save and a beauty!",
+        "lays a massive hit along the boards. The crowd feels that one.",
+        "fires a quick wrist shot — gloved down by the goalie.",
+        "intercepts a sloppy pass at centre ice.",
+        "hammers one from the point — clanks off the iron!",
+        "dumps the puck deep and chases it into the corner.",
+        "wins the faceoff cleanly.",
+        "blocks a heavy slapshot — he's slow to get up.",
+        "dangles around the defenceman and cuts to the slot.",
+        "takes a hit but manages to chip the puck out of the zone.",
+        "wheels behind the net looking for an opening.",
+        "rings one off the post — so close!",
+        "puts a big open-ice hit on the forechecker.",
+        "with a between-the-legs move — the crowd ooohs!",
+        "fires wide from the faceoff dot — goalie not tested.",
+        "wins a puck battle in the corner and feeds the point.",
+        "sauces a backhand pass through two sticks.",
+        "reads the play and breaks up the odd-man rush.",
+        "gets tangled up in front — both players jawing at each other.",
+        "snaps a shot on net — stopped, puck is loose!",
+        "with a spinning move at the blue line — impressive.",
+        "pressures the defenceman into a bad pinch.",
+        "wins the board battle and dishes it up the wall.",
+        "takes a slapshot from the point — tipped wide.",
+        "draws a whistle with a sharp turn into traffic.",
+    ];
+    for (let i = 0; i < 18; i++) {
+        const p = Math.floor(Math.random() * 3) + 1;
+        const m = Math.floor(Math.random() * 20);
+        const s = Math.floor(Math.random() * 60);
+        const t = Math.random() > 0.5 ? g.h : g.a;
+        let randPlayer = 'A player';
+        if (rosters[t.nrm]) { const sk = rosters[t.nrm].filter(x => x.pos !== 'G'); if (sk.length > 0) randPlayer = sk[Math.floor(Math.random() * sk.length)].name; }
+        fillerEvents.push({ p, m, s, tm: t.code, cl: '#555', isFiller: true, txt: `${randPlayer} ${fillerPool[Math.floor(Math.random() * fillerPool.length)]}` });
     }
 
     watchQueue = [...g.result.boxLog, ...fillerEvents];
@@ -6334,8 +6501,11 @@ function startWatchLive() {
                 if (ev.tm === g.a.code) { watchCurrentScore.a++; document.getElementById('wgAwayScore').innerText = watchCurrentScore.a; }
                 if (ev.tm === g.h.code) { watchCurrentScore.h++; document.getElementById('wgHomeScore').innerText = watchCurrentScore.h; }
             }
-            const evDisplay = ev.isPenalty ? `[SUS] ${ev.txt}` : `!! GOAL! ${ev.txt || (ev.scorer ? ev.scorer : '')}`;
-            document.getElementById('wgTicker').innerHTML += `<div style="background:#111; border:2px solid ${ev.cl||'#555'}; padding:8px; margin:5px 0;"><span style="color:${ev.cl||'#fff'}; font-weight:bold; margin-right:10px;">[${ev.tm||''}]</span> <span style="color:#fff;">${evDisplay}</span></div>`;
+            if (ev.isPenalty) {
+                document.getElementById('wgTicker').innerHTML += `<div style="background:#0d0800;border:1px solid #554400;padding:6px 8px;margin:4px 0;"><span style="color:#886600;margin-right:8px;">[${ev.tm||''}]</span><span style="color:#aaa;">${ev.txt||'Penalty called.'}</span></div>`;
+            } else {
+                document.getElementById('wgTicker').innerHTML += `<div style="background:#0a1500;border:2px solid ${ev.cl||'#0f0'};padding:8px 10px;margin:6px 0;"><div style="color:${ev.cl||'#fff'};font-size:9px;margin-bottom:3px;">⚡ GOAL — ${ev.tm||''}</div><div style="color:#fff;font-size:7px;">${ev.txt || ev.scorer || ''}</div></div>`;
+            }
         }
         let t = document.getElementById('wgTicker'); t.scrollTop = t.scrollHeight;
     }, 1200); 
@@ -8103,7 +8273,7 @@ function runDraftLottery() {
 function closeLottery() { document.getElementById('lotteryOverlay').style.display = 'none'; }
 // --- WINDOW EVENTS ---
 window.onclick = function(event) {
-    const modals = ['lotteryOverlay', 'allTimeOverlay', 'awardOverlay', 'leagueSettingsOverlay', 'arenaSettingsOverlay', 'tradeOverlay', 'subOverlay', 'historyOverlay', 'playerCardOverlay', 'boxScoreOverlay', 'advEditorOverlay', 'gpChecklistOverlay', 'watchGameOverlay', 'stOverlay', 'proposalOverlay'];
+    const modals = ['lotteryOverlay', 'allTimeOverlay', 'awardOverlay', 'recapOverlay', 'leagueSettingsOverlay', 'arenaSettingsOverlay', 'tradeOverlay', 'subOverlay', 'historyOverlay', 'playerCardOverlay', 'boxScoreOverlay', 'advEditorOverlay', 'gpChecklistOverlay', 'watchGameOverlay', 'stOverlay', 'proposalOverlay'];
     modals.forEach(id => { const modal = document.getElementById(id); if (event.target === modal && modal) modal.style.display = "none"; });
 };
 
