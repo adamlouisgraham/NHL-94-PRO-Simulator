@@ -1048,6 +1048,27 @@ function renderScheduleDashboard() {
         </div>`;
     }).join('');
     upcomingEl.innerHTML = `<div style="font-size:8px; color:var(--silver-mid); margin-bottom:6px;">Upcoming</div>${upcomingLines || '<div class="schedule-game-line">No games scheduled.</div>'}`;
+
+    const irEl = document.getElementById('irReport');
+    if (irEl && Object.keys(playerStats).length > 0) {
+        const injured = [], suspended = [];
+        Object.values(playerStats).forEach(ps => {
+            if (ps.injury && ps.injury.daysRemaining > 0)
+                injured.push(`<span style="color:#FF5555;">${ps.name}</span> <span style="color:#555;font-size:5px;">(${ps.teamCode||''} · ${ps.injury.daysRemaining}d)</span>`);
+            if (ps.suspended && ps.suspended.days > 0)
+                suspended.push(`<span style="color:#FF8800;">${ps.name}</span> <span style="color:#555;font-size:5px;">(${ps.teamCode||''} · ${ps.suspended.days}g · ${ps.suspended.reason||'SUS'})</span>`);
+        });
+        if (injured.length === 0 && suspended.length === 0) { irEl.innerHTML = ''; return; }
+        let h = `<div style="margin-top:10px;border-top:1px solid #222;padding-top:8px;">`;
+        if (injured.length > 0)
+            h += `<div style="color:#888;font-size:6px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px;">Injured Reserve (${injured.length})</div>` +
+                 `<div style="font-size:7px;line-height:1.8;">${injured.join('<br>')}</div>`;
+        if (suspended.length > 0)
+            h += `<div style="color:#888;font-size:6px;text-transform:uppercase;letter-spacing:.12em;margin:6px 0 4px;">Suspended (${suspended.length})</div>` +
+                 `<div style="font-size:7px;line-height:1.8;">${suspended.join('<br>')}</div>`;
+        h += `</div>`;
+        irEl.innerHTML = h;
+    }
 }
 function calculateGoalieOverall(attr) {
     // Total weight = 5.0 + 1.0 + 5.0 + 4.5 + 1.0 + 1.0 + 1.0 + 1.0 = 19.5
