@@ -1025,7 +1025,9 @@ function renderScheduleDashboard() {
             const b2b = playedYesterday(tk) ? ' <span style="color:#FFAA44;font-size:5px;">[B2B]</span>' : '';
             return `<span style="color:#666;font-size:5px;"> ${gp.name}${tag}${b2b}</span>`;
         };
-        return `<div class="schedule-game-line"><span>${away}${goalieBadge(g.a?.nrm)} <span style="color:#444">@</span> ${home}${goalieBadge(g.h?.nrm)}</span><span>${when}</span></div>`;
+        const hMeet = g.h?.season?.meetings?.[g.a?.nrm] || 0;
+        const rivalTag = (awardConfig.rivalries && hMeet >= 3) ? ' <span style="color:var(--line-red);font-size:5px;">[RIVALRY]</span>' : '';
+        return `<div class="schedule-game-line"><span>${away}${goalieBadge(g.a?.nrm)} <span style="color:#444">@</span> ${home}${goalieBadge(g.h?.nrm)}${rivalTag}</span><span>${when}</span></div>`;
     }).join('');
     upcomingEl.innerHTML = `<div style="font-size:8px; color:var(--silver-mid); margin-bottom:6px;">Upcoming</div>${upcomingLines || '<div class="schedule-game-line">No games scheduled.</div>'}`;
 }
@@ -7245,6 +7247,14 @@ function runEndOfSeasonAwards() {
         winnerStats["Vezina"] = `${vzW.season.w}W  ${vzW.season.so}SO  SV% ${vzSvp}`;
     }
     
+    // 13. THE DAGGER AWARD — most game-winning goals
+    const daggerSorted = [...skaters].filter(p => p.season.gp >= 10).sort((a, b) => (b.season.gwg || 0) - (a.season.gwg || 0));
+    if (daggerSorted.length > 0 && (daggerSorted[0].season.gwg || 0) > 0) {
+        awardTrophy(daggerSorted[0].name, currentSeason, "The Dagger");
+        runnersUp["The Dagger"] = daggerSorted.slice(1, 4).map(p => p.name).join(', ');
+        winnerStats["The Dagger"] = `${daggerSorted[0].season.gwg} GWG`;
+    }
+
     // 11. JENNINGS (Skipping runners up here since it's a team-based goalie award)
     const bestDefTeam = [...league].sort((a, b) => a.season.ga - b.season.ga)[0];
     if (bestDefTeam) goalies.filter(g => g.teamCode === bestDefTeam.code && g.season.gp >= minGoalieGP).forEach(g => awardTrophy(g.name, currentSeason, "Jennings"));
@@ -7341,6 +7351,7 @@ function getConnSmytheScore(p) {
     res += awardCard('BILL MASTERTON — DEDICATION', 'Perseverance & Dedication to Hockey', 'Bill Masterton', ORNG);
     res += awardCard('ALKA-SELTZER AWARD — PLUS/MINUS', 'Best Plus/Minus in the League', 'Alka-Seltzer (+/-)', ORNG);
     res += awardCard('JENNINGS TROPHY — FEWEST GA', 'Team Allowing Fewest Goals Against', 'Jennings', ORNG);
+    res += awardCard('THE DAGGER — CLUTCH PERFORMER', 'Most Game-Winning Goals', 'The Dagger', ORNG);
     
     if(awardConfig.retirements) { 
         let ind = []; 
