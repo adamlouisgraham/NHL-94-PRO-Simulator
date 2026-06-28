@@ -1027,7 +1027,25 @@ function renderScheduleDashboard() {
         };
         const hMeet = g.h?.season?.meetings?.[g.a?.nrm] || 0;
         const rivalTag = (awardConfig.rivalries && hMeet >= 3) ? ' <span style="color:var(--line-red);font-size:5px;">[RIVALRY]</span>' : '';
-        return `<div class="schedule-game-line"><span>${away}${goalieBadge(g.a?.nrm)} <span style="color:#444">@</span> ${home}${goalieBadge(g.h?.nrm)}${rivalTag}</span><span>${when}</span></div>`;
+        const recFmt = t => `${t.season.w||0}-${t.season.l||0}-${t.season.t||0}`;
+        const hRec = g.h ? recFmt(g.h) : '';
+        const aRec = g.a ? recFmt(g.a) : '';
+        const hPts = g.h?.season?.h2h?.[g.a?.nrm] || 0;
+        const aPts = g.a?.season?.h2h?.[g.h?.nrm] || 0;
+        const h2hLine = hMeet > 0
+            ? (() => {
+                const leader = hPts > aPts ? `${home} leads` : aPts > hPts ? `${away} leads` : 'Tied';
+                return `<div style="color:#555;font-size:5px;margin-top:2px;">H2H: ${leader} ${hPts}-${aPts}pts (${hMeet}GP)</div>`;
+              })()
+            : '';
+        return `<div class="schedule-game-line" style="flex-direction:column;align-items:flex-start;gap:1px;">
+            <div style="display:flex;justify-content:space-between;width:100%;">
+                <span>${away}${goalieBadge(g.a?.nrm)} <span style="color:#444">@</span> ${home}${goalieBadge(g.h?.nrm)}${rivalTag}</span>
+                <span>${when}</span>
+            </div>
+            <div style="color:#555;font-size:5px;">${away} ${aRec} &nbsp;|&nbsp; ${home} ${hRec}</div>
+            ${h2hLine}
+        </div>`;
     }).join('');
     upcomingEl.innerHTML = `<div style="font-size:8px; color:var(--silver-mid); margin-bottom:6px;">Upcoming</div>${upcomingLines || '<div class="schedule-game-line">No games scheduled.</div>'}`;
 }
