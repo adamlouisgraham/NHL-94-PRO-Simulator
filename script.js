@@ -7250,9 +7250,9 @@ function runEndOfSeasonAwards() {
     // 13. THE DAGGER AWARD — most game-winning goals
     const daggerSorted = [...skaters].filter(p => p.season.gp >= 10).sort((a, b) => (b.season.gwg || 0) - (a.season.gwg || 0));
     if (daggerSorted.length > 0 && (daggerSorted[0].season.gwg || 0) > 0) {
-        awardTrophy(daggerSorted[0].name, currentSeason, "The Dagger");
-        runnersUp["The Dagger"] = daggerSorted.slice(1, 4).map(p => p.name).join(', ');
-        winnerStats["The Dagger"] = `${daggerSorted[0].season.gwg} GWG`;
+        awardTrophy(daggerSorted[0].name, currentSeason, "The Espo");
+        runnersUp["The Espo"] = daggerSorted.slice(1, 4).map(p => p.name).join(', ');
+        winnerStats["The Espo"] = `${daggerSorted[0].season.gwg} GWG`;
     }
 
     // 11. JENNINGS (Skipping runners up here since it's a team-based goalie award)
@@ -7351,7 +7351,7 @@ function getConnSmytheScore(p) {
     res += awardCard('BILL MASTERTON — DEDICATION', 'Perseverance & Dedication to Hockey', 'Bill Masterton', ORNG);
     res += awardCard('ALKA-SELTZER AWARD — PLUS/MINUS', 'Best Plus/Minus in the League', 'Alka-Seltzer (+/-)', ORNG);
     res += awardCard('JENNINGS TROPHY — FEWEST GA', 'Team Allowing Fewest Goals Against', 'Jennings', ORNG);
-    res += awardCard('THE DAGGER — CLUTCH PERFORMER', 'Most Game-Winning Goals', 'The Dagger', ORNG);
+    res += awardCard('THE ESPO — CLUTCH PERFORMER', 'Most Game-Winning Goals (Phil Esposito)', 'The Espo', ORNG);
     
     if(awardConfig.retirements) { 
         let ind = []; 
