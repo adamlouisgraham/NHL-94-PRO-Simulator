@@ -6493,6 +6493,9 @@ function startWatchLive() {
     document.getElementById('wgAwayLogo').src = g.a.logo; document.getElementById('wgHomeLogo').src = g.h.logo;
     document.getElementById('wgAwayCode').innerText = g.a.code; document.getElementById('wgHomeCode').innerText = g.h.code;
     document.getElementById('wgAwayScore').innerText = '0'; document.getElementById('wgHomeScore').innerText = '0';
+    document.getElementById('wgBugAway').innerText = g.a.code; document.getElementById('wgBugHome').innerText = g.h.code;
+    document.getElementById('wgBugAwayScore').innerText = '0'; document.getElementById('wgBugHomeScore').innerText = '0';
+    document.getElementById('wgBugClock').innerText = 'P1 20:00';
     
     // Ticker initialization
     document.getElementById('wgTicker').innerHTML = '<div style="color:var(--ea-yellow); text-align:center; font-size:12px; margin-bottom:10px;">PUCK DROP! WELCOME TO THE BROADCAST...</div>';
@@ -6546,14 +6549,22 @@ function startWatchLive() {
     watchInterval = setInterval(() => {
         if (watchQueue.length === 0) {
             clearInterval(watchInterval);
-            document.getElementById('wgClock').innerText = `FINAL${g.result.ot > 0 ? ' (OT)' : ''}`;
+            const finalStr = `FINAL${g.result.ot > 0 ? ' (OT)' : ''}`;
+            document.getElementById('wgClock').innerText = finalStr;
+            document.getElementById('wgBugClock').innerText = finalStr;
+            document.getElementById('wgBugAwayScore').innerText = watchCurrentScore.a;
+            document.getElementById('wgBugHomeScore').innerText = watchCurrentScore.h;
             document.getElementById('wgTicker').innerHTML += `<div style="color:var(--ea-yellow); text-align:center; margin-top:20px; font-size:12px;">!! FINAL HORN !!</div>`;
             document.getElementById('btnWgSkip').style.display = 'none'; document.getElementById('btnWgClose').style.display = 'block';
             let t = document.getElementById('wgTicker'); t.scrollTop = t.scrollHeight; return;
         }
         const ev = watchQueue.shift();
         if (ev.p > currentPeriod) { document.getElementById('wgTicker').innerHTML += `<div style="color:var(--silver-mid); text-align:center; border-bottom:1px solid #333; margin:15px 0; padding-bottom:5px;">--- END OF PERIOD ${currentPeriod} ---</div>`; currentPeriod = ev.p; }
-        document.getElementById('wgClock').innerText = `P${ev.p} ${ev.m}:${ev.s < 10 ? '0'+ev.s : ev.s}`;
+        const clockStr = `P${ev.p} ${ev.m}:${ev.s < 10 ? '0'+ev.s : ev.s}`;
+        document.getElementById('wgClock').innerText = clockStr;
+        document.getElementById('wgBugClock').innerText = clockStr;
+        document.getElementById('wgBugAwayScore').innerText = watchCurrentScore.a;
+        document.getElementById('wgBugHomeScore').innerText = watchCurrentScore.h;
         
         if (ev.isFiller) {
             document.getElementById('wgTicker').innerHTML += `<div><span style="color:#555; margin-right:10px;">[${ev.tm}]</span> <span style="color:#ccc;">${ev.txt}</span></div>`;
@@ -6575,7 +6586,11 @@ function startWatchLive() {
 function skipWatchGame() {
     clearInterval(watchInterval); watchQueue = [];
     document.getElementById('wgAwayScore').innerText = watchGameObj.result.aG; document.getElementById('wgHomeScore').innerText = watchGameObj.result.hG;
-    document.getElementById('wgClock').innerText = `FINAL${watchGameObj.result.ot > 0 ? ' (OT)' : ''}`;
+    const skipFinal = `FINAL${watchGameObj.result.ot > 0 ? ' (OT)' : ''}`;
+    document.getElementById('wgClock').innerText = skipFinal;
+    document.getElementById('wgBugClock').innerText = skipFinal;
+    document.getElementById('wgBugAwayScore').innerText = watchGameObj.result.aG;
+    document.getElementById('wgBugHomeScore').innerText = watchGameObj.result.hG;
     let h = '<div style="color:var(--ea-yellow); text-align:center; margin-bottom:15px;">--- FAST FORWARDED TO END ---</div>';
     watchGameObj.result.boxLog.forEach(ev => {
         if (ev.isPenalty) { h += `<div style="background:#111; border:1px solid ${ev.cl}; padding:4px; margin:4px 0;"><span style="color:${ev.cl}; font-weight:bold; margin-right:10px;">[${ev.tm}]</span> <span style="color:#fff;">[SUS] ${ev.txt}</span></div>`; } 
