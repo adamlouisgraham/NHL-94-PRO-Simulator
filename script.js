@@ -1049,6 +1049,28 @@ function renderScheduleDashboard() {
     }).join('');
     upcomingEl.innerHTML = `<div style="font-size:8px; color:var(--silver-mid); margin-bottom:6px;">Upcoming</div>${upcomingLines || '<div class="schedule-game-line">No games scheduled.</div>'}`;
 
+    const leadersEl = document.getElementById('scoringLeaders');
+    if (leadersEl && Object.keys(playerStats).length > 0) {
+        const skaters = Object.values(playerStats).filter(ps => ps.season && ps.season.gp > 0 && ps.pos !== 'G');
+        const top5 = skaters.sort((a, b) => ((b.season.g||0)+(b.season.a||0)) - ((a.season.g||0)+(a.season.a||0))).slice(0, 5);
+        if (top5.length > 0) {
+            let lh = `<div style="margin-top:10px; border-top:1px solid #222; padding-top:8px;">`;
+            lh += `<div style="color:#888; font-size:6px; text-transform:uppercase; letter-spacing:.12em; margin-bottom:4px;">Scoring Leaders</div>`;
+            top5.forEach((ps, i) => {
+                const pts = (ps.season.g||0) + (ps.season.a||0);
+                const rank = ['①','②','③','④','⑤'][i];
+                lh += `<div style="display:flex; justify-content:space-between; font-size:7px; padding:2px 0; border-bottom:1px solid #111;">
+                    <span style="color:#666;">${rank}</span>
+                    <span style="color:#ccc; flex:1; margin:0 6px; cursor:pointer;" onclick="showPlayerCard('${ps.name}')">${ps.name}</span>
+                    <span style="color:#555; font-size:6px; margin-right:6px;">${ps.season.g||0}G ${ps.season.a||0}A</span>
+                    <span style="color:var(--ea-yellow); font-weight:bold;">${pts}PTS</span>
+                </div>`;
+            });
+            lh += `</div>`;
+            leadersEl.innerHTML = lh;
+        } else { leadersEl.innerHTML = ''; }
+    }
+
     const irEl = document.getElementById('irReport');
     if (irEl && Object.keys(playerStats).length > 0) {
         const injured = [], suspended = [];
@@ -4349,6 +4371,7 @@ function simGame(idx) {
                     ev.tm = g.h.code;
                     ev.cl = teamColors[g.h.nrm] ? teamColors[g.h.nrm][0] : '#fff';
                     ev.txt = buildGoalText(ev.scorer, ev.pAssist, ev.sAssist, getPlayerWeightedStats(shooter.name)?.tag, false, false, false, hG, aG, period);
+                    ev.hMom = 8; ev.aMom = aMomentum;
                     allGoals.push(ev);
                     if (ev.scorer) trk(ev.scorer, 'g', 1);
                     if (ev.pAssist) trk(ev.pAssist, 'a', 1);
@@ -4384,6 +4407,7 @@ function simGame(idx) {
                     if (ev.scorer) trk(ev.scorer, 'g', 1);
                     if (ev.pAssist) trk(ev.pAssist, 'a', 1);
                     if (ev.sAssist) trk(ev.sAssist, 'a', 1);
+                    ev.hMom = hMomentum; ev.aMom = 8;
                     aOnIce.forEach(p => { if(p.name) trk(p.name, 'pm', 1); });
                     hOnIce.forEach(p => { if(p.name) trk(p.name, 'pm', -1); });
                     aMomentum = 8; // ~4 min surge for scoring team
@@ -4633,11 +4657,40 @@ function simGame(idx) {
         trk(aG_name, 'toi', totalGameMinutes);
     }
 
-    g.result = { 
-        hG, aG, ot: otPeriods, boxLog: allGoals, matchStats, 
+    // Compute 3 Stars (skaters by pts+pm, goalies eligible by sv%)
+    const allPlayers = [
+        ...hStruct.f.flat(), ...hStruct.d.flat(),
+        ...aStruct.f.flat(), ...aStruct.d.flat()
+    ];
+    const starScores = allPlayers.map(p => {
+        const ms = matchStats[p.name] || {};
+        return { name: p.name, score: (ms.g||0)*3 + (ms.a||0)*2 + (ms.pm||0)*0.5 };
+    });
+    const goalieStars = [];
+    [[hG_name, aShots, hG], [aG_name, hShots, aG]].forEach(([gName, sa, ga]) => {
+        if (gName && sa > 0) {
+            const svPct = (sa - ga) / sa;
+            if (svPct >= 0.900) goalieStars.push({ name: gName, score: svPct * 6 + (svPct >= 0.940 ? 3 : svPct >= 0.920 ? 1.5 : 0) });
+        }
+    });
+    const allStarCandidates = [...starScores, ...goalieStars].sort((a,b) => b.score - a.score);
+    const seen = new Set(); const threeStars = [];
+    for (const c of allStarCandidates) { if (!seen.has(c.name) && c.score > 0) { seen.add(c.name); threeStars.push(c.name); } if (threeStars.length === 3) break; }
+
+    // Goalie duel detection
+    const hSvPct = hShots > 0 ? (hShots - aG) / hShots : 0;
+    const aSvPct = aShots > 0 ? (aShots - hG) / aShots : 0;
+    const isGoalieDuel = hSvPct >= 0.930 && aSvPct >= 0.930;
+    if (isGoalieDuel && !isASG && awardConfig.headlines) {
+        tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `GOALIE DUEL: ${hG_name||'?'} (${Math.round(hSvPct*1000)/10}%) vs ${aG_name||'?'} (${Math.round(aSvPct*1000)/10}%) — what a battle between the pipes!` });
+    }
+
+    g.result = {
+        hG, aG, ot: otPeriods, boxLog: allGoals, matchStats,
         awayRoster: [...aStruct.f.flat(), ...aStruct.d.flat(), ...(aStruct.g||[])].map(p=>p.name),
         homeRoster: [...hStruct.f.flat(), ...hStruct.d.flat(), ...(hStruct.g||[])].map(p=>p.name),
-        hGoalie: hG_name, aGoalie: aG_name, hShots, aShots 
+        hGoalie: hG_name, aGoalie: aG_name, hShots, aShots,
+        stars: threeStars, isGoalieDuel
     }; 
 
     //  9. CENTRALIZED SINGLE-WRITE STAT APPLICATION
@@ -6249,9 +6302,19 @@ function openBoxScore(day, idx) {
         h += `</div>`;
     }
 
+    if (g.result.isGoalieDuel) {
+        h += `<div style="background:#001a2e; border:2px solid var(--neon-cyan); padding:8px 14px; text-align:center; font-size:7px; color:var(--neon-cyan); letter-spacing:.12em; margin-bottom:6px;">★ GOALIE DUEL ★</div>`;
+    }
     if (g.result.stars && g.result.stars.length > 0) {
-        h += `<div class="unit-header">THREE STARS</div><div style="background:#111; padding:15px; text-align:center; font-size:9px;">`;
-        g.result.stars.forEach((s, i) => { h += `<div style="margin-bottom:10px; cursor:pointer;" onclick="showPlayerCard('${s}')"><span style="color:var(--ea-yellow);">[MVP]${i===0?'[MVP][MVP]':(i===1?'[MVP]':'')}</span> ${s}</div>`; });
+        const starLabels = ['★★★ 1ST STAR', '★★ 2ND STAR', '★ 3RD STAR'];
+        const starColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
+        h += `<div class="unit-header">THREE STARS</div><div style="background:#111; padding:15px; font-size:8px;">`;
+        g.result.stars.forEach((s, i) => {
+            h += `<div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #1a1a1a; cursor:pointer;" onclick="showPlayerCard('${s}')">
+                <span style="color:${starColors[i]}; font-size:7px; min-width:80px;">${starLabels[i]}</span>
+                <span style="color:#fff;">${s}</span>
+            </div>`;
+        });
         h += `</div>`;
     }
     
@@ -6496,6 +6559,9 @@ function startWatchLive() {
     document.getElementById('wgBugAway').innerText = g.a.code; document.getElementById('wgBugHome').innerText = g.h.code;
     document.getElementById('wgBugAwayScore').innerText = '0'; document.getElementById('wgBugHomeScore').innerText = '0';
     document.getElementById('wgBugClock').innerText = 'P1 20:00';
+    document.getElementById('wgMomAway').innerText = g.a.code; document.getElementById('wgMomHome').innerText = g.h.code;
+    document.getElementById('wgMomFill').style.width = '50%'; document.getElementById('wgMomFill').style.left = '0';
+    document.getElementById('wgMomFill').style.background = '#555';
     
     // Ticker initialization
     document.getElementById('wgTicker').innerHTML = '<div style="color:var(--ea-yellow); text-align:center; font-size:12px; margin-bottom:10px;">PUCK DROP! WELCOME TO THE BROADCAST...</div>';
@@ -6565,6 +6631,17 @@ function startWatchLive() {
         document.getElementById('wgBugClock').innerText = clockStr;
         document.getElementById('wgBugAwayScore').innerText = watchCurrentScore.a;
         document.getElementById('wgBugHomeScore').innerText = watchCurrentScore.h;
+        if (!ev.isFiller && (ev.hMom !== undefined || ev.aMom !== undefined)) {
+            const hm = ev.hMom || 0, am = ev.aMom || 0, total = hm + am || 1;
+            const homePct = Math.round((hm / total) * 100);
+            const fill = document.getElementById('wgMomFill');
+            if (fill) {
+                const awayPct = 100 - homePct;
+                fill.style.width = `${awayPct}%`;
+                fill.style.left = '0';
+                fill.style.background = awayPct > 60 ? '#55FFFF' : homePct > 60 ? '#FF6600' : '#888';
+            }
+        }
         
         if (ev.isFiller) {
             document.getElementById('wgTicker').innerHTML += `<div><span style="color:#555; margin-right:10px;">[${ev.tm}]</span> <span style="color:#ccc;">${ev.txt}</span></div>`;
@@ -6576,7 +6653,16 @@ function startWatchLive() {
             if (ev.isPenalty) {
                 document.getElementById('wgTicker').innerHTML += `<div style="background:#0d0800;border:1px solid #554400;padding:6px 8px;margin:4px 0;"><span style="color:#886600;margin-right:8px;">[${ev.tm||''}]</span><span style="color:#aaa;">${ev.txt||'Penalty called.'}</span></div>`;
             } else {
-                document.getElementById('wgTicker').innerHTML += `<div style="background:#0a1500;border:2px solid ${ev.cl||'#0f0'};padding:8px 10px;margin:6px 0;"><div style="color:${ev.cl||'#fff'};font-size:9px;margin-bottom:3px;">⚡ GOAL — ${ev.tm||''}</div><div style="color:#fff;font-size:7px;">${ev.txt || ev.scorer || ''}</div></div>`;
+                const isPP = ev.isPP, isSH = ev.isSH;
+                const goalBg = isPP ? '#1a1400' : '#0a1500';
+                const goalBorder = isPP ? '#FFD700' : (ev.cl||'#0f0');
+                const specialTag = isPP ? ' <span style="background:#FFD700;color:#000;font-size:6px;padding:1px 4px;margin-left:6px;">PP</span>'
+                                 : isSH ? ' <span style="background:#00FFFF;color:#000;font-size:6px;padding:1px 4px;margin-left:6px;">SH</span>' : '';
+                if (isPP) {
+                    const bug = document.getElementById('wgScoreBug');
+                    if (bug) { bug.style.background = '#332200'; setTimeout(() => { bug.style.background = '#000'; }, 1200); }
+                }
+                document.getElementById('wgTicker').innerHTML += `<div style="background:${goalBg};border:2px solid ${goalBorder};padding:8px 10px;margin:6px 0;"><div style="color:${ev.cl||'#fff'};font-size:9px;margin-bottom:3px;">⚡ GOAL — ${ev.tm||''}${specialTag}</div><div style="color:#fff;font-size:7px;">${ev.txt || ev.scorer || ''}</div></div>`;
             }
         }
         let t = document.getElementById('wgTicker'); t.scrollTop = t.scrollHeight;

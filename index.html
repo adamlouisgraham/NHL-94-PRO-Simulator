@@ -145,6 +145,7 @@
                     <div id="scheduleSummaryText" class="schedule-dashboard-row"></div>
                     <div id="scheduleUpcomingGames" class="schedule-upcoming-games"></div>
                     <div id="irReport"></div>
+                    <div id="scoringLeaders"></div>
                 </div>
             </div>
             <div id="officeControls" class="office-controls">   
@@ -353,6 +354,14 @@
                     </div>
                     <img id="wgHomeLogo" src="" style="height:40px; filter:drop-shadow(2px 2px 0 #000);">
                 </div>
+            </div>
+            <div id="wgMomentumBar" style="background:#0a0a0a; border-bottom:1px solid #1a1a1a; padding:4px 16px; display:flex; align-items:center; gap:8px; font-family:'Press Start 2P',cursive; font-size:5px; color:#444;">
+                <span id="wgMomAway" style="min-width:28px; text-align:right;">AWAY</span>
+                <div style="flex:1; height:5px; background:#111; border:1px solid #222; position:relative; border-radius:2px;">
+                    <div id="wgMomFill" style="position:absolute; top:0; height:100%; width:50%; left:0; background:#555; border-radius:2px; transition:width .4s, left .4s, background .4s;"></div>
+                    <div style="position:absolute; left:50%; top:-2px; width:1px; height:9px; background:#333;"></div>
+                </div>
+                <span id="wgMomHome" style="min-width:28px;">HOME</span>
             </div>
             <div id="wgScoreBug" style="background:#000; border-bottom:2px solid #222; padding:5px 16px; display:flex; align-items:center; justify-content:center; gap:0; font-family:'Press Start 2P',cursive; font-size:7px; letter-spacing:.08em;">
                 <span id="wgBugAway" style="color:#aaa;">AWAY</span>
