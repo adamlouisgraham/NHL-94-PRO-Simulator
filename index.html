@@ -119,7 +119,8 @@
                         <button onclick="toggleAwardConfig('injuries')" id="btnInjuries" class="award-toggle-btn" style="border-color:#FF6347; color:#FF6347;">INJURIES: ON</button>
                         <button onclick="toggleAwardConfig('legacy_schedule')" id="btnLegacySchedule" class="award-toggle-btn" class="btn-teal">LEGACY SCHEDULE: ON</button>
                         <button onclick="toggleAwardConfig('trades')" id="btnTrades" class="award-toggle-btn btn-purple">TRADES: OFF</button>
-                    
+                        <button onclick="toggleAwardConfig('tradeBlock')" id="btnTradeBlock" class="award-toggle-btn" style="border-color:#FF8C00;color:#FF8C00;opacity:0.5;">TRADE BLOCK: OFF</button>
+
                 </div>
             <div class="schedule-progress-wrapper">
                 <div class="schedule-progress-label">Schedule Progress</div>
@@ -161,6 +162,9 @@
                 <button onclick="document.getElementById('masterArchiveModal').style.display='flex'" class="btn-orange">MASTER ARCHIVES</button>
                 <button onclick="openAllTimeRecords()" class="btn-yellow">RECORD BOOK</button>
                 <button onclick="openStatLeaders()" class="btn-yellow">STAT LEADERS</button>
+                <button onclick="openChemEditor()" style="border-color:#FF69B4;color:#FF69B4;" class="award-toggle-btn">CHEMISTRY EDITOR</button>
+                <button onclick="showGMReportCard()" style="border-color:var(--gold-leaf);color:var(--gold-leaf);" class="award-toggle-btn">GM REPORT CARD</button>
+                <button onclick="openCoachingPanel()" style="border-color:#FFA500;color:#FFA500;" class="award-toggle-btn">COACHING</button>
 
                 <button onclick="simDay()" class="btn-cyan">SIM DAY</button>
                 <button onclick="simWeek()" class="btn-cyan">SIM WEEK</button>
@@ -407,6 +411,44 @@
             <div class="unit-header">CAREER ALL-STAR SELECTIONS</div>
             <div id="allStarLeaderboard" style="max-height:200px; overflow-y:auto; background:#111; border:2px solid #000;"></div>
             <button onclick="document.getElementById('masterArchiveModal').style.display='none'" class="btn-cyan" style="width:100%;margin-top:20px;">CLOSE ARCHIVES</button>
+        </div>
+    </div>
+
+    <div id="chemEditorOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:20px; max-width:680px; width:95%; max-height:90vh; overflow-y:auto;">
+            <div class="menu-header" style="color:#FF69B4; background:transparent; justify-content:center; border-bottom:2px solid #FF69B4;">CHEMISTRY EDITOR</div>
+            <div id="chemEditorContent" style="margin-top:15px;"></div>
+            <button onclick="document.getElementById('chemEditorOverlay').style.display='none'" style="width:100%;margin-top:15px;border-color:var(--line-red);color:var(--line-red);">CLOSE</button>
+        </div>
+    </div>
+
+    <div id="coachingOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:20px; max-width:520px; width:95%; max-height:90vh; overflow-y:auto;">
+            <div class="menu-header" style="color:#FFA500; background:transparent; justify-content:center; border-bottom:2px solid #FFA500;">COACHING ADJUSTMENTS</div>
+            <div id="coachingContent" style="margin-top:15px;"></div>
+            <button onclick="document.getElementById('coachingOverlay').style.display='none'" style="width:100%;margin-top:15px;border-color:var(--line-red);color:var(--line-red);">CLOSE</button>
+        </div>
+    </div>
+
+    <div id="gmReportCardOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:20px; max-width:560px; width:95%; max-height:90vh; overflow-y:auto;">
+            <div class="menu-header" style="color:var(--gold-leaf); background:transparent; justify-content:center; border-bottom:2px solid var(--gold-leaf);">GM REPORT CARD</div>
+            <div id="gmReportCardContent" style="margin-top:15px;"></div>
+        </div>
+    </div>
+
+    <div id="scoutingOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:20px; max-width:680px; width:95%; max-height:90vh; overflow-y:auto;">
+            <div class="menu-header" style="color:var(--neon-cyan); background:transparent; justify-content:center; border-bottom:2px solid var(--neon-cyan);">PRE-GAME SCOUTING REPORT</div>
+            <div id="scoutingContent" style="margin-top:15px;"></div>
+            <button onclick="document.getElementById('scoutingOverlay').style.display='none'" style="width:100%;margin-top:15px;border-color:var(--line-red);color:var(--line-red);">CLOSE</button>
+        </div>
+    </div>
+
+    <div id="awardsVotingOverlay" class="modal">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:20px; max-width:720px; width:95%; max-height:90vh; overflow-y:auto;">
+            <div class="menu-header" style="color:var(--gold-leaf); background:transparent; justify-content:center; border-bottom:2px solid var(--gold-leaf);">AWARDS VOTING — SEASON <span id="votingSeasonLabel"></span></div>
+            <div id="awardsVotingContent" style="margin-top:15px;"></div>
         </div>
     </div>
 
