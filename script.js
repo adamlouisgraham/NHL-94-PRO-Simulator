@@ -446,65 +446,6 @@ function swapPlayersInStructure(struct, name1, name2) {
 }
 
 // 2. The Integrated Line Builder
-function buildSpecialTeams(fullRosterArray, type) {
-    // 1. FORCE FRESH POOLS: Filter from the full roster to ignore 5v5 line assignments
-    const allForwards = fullRosterArray.filter(p => ['C', 'LW', 'RW'].includes(p.pos));
-    const allDefenders = fullRosterArray.filter(p => ['LD', 'RD', 'D'].includes(p.pos));
-
-    let teams = { 1: [], 2: [] };
-
-    if (type === 'PP') {
-        // --- POWER PLAY LOGIC ---
-        // Sort by Offensive Awareness ('offawr')
-        const sortByOffense = (a, b) => {
-            const offA = playerStats[a.name]?.attr?.offawr || 0;
-            const offB = playerStats[b.name]?.attr?.offawr || 0;
-            return offB - offA; // Descending
-        };
-
-        const sortedF = [...allForwards].sort(sortByOffense);
-        const sortedD = [...allDefenders].sort(sortByOffense);
-
-        // PP1: Top 4 Forwards (indices 0-3), Best Defender (index 0)
-        teams[1] = [
-            ...sortedF.slice(0, 4), 
-            sortedD[0] 
-        ].filter(Boolean);
-
-        // PP2: Next 4 Forwards (indices 4-7), 2nd Best Defender (index 1)
-        teams[2] = [
-            ...sortedF.slice(4, 8), 
-            sortedD[1] 
-        ].filter(Boolean);
-        
-    } else if (type === 'PK') {
-        // --- PENALTY KILL LOGIC ---
-        // Sort by Combined Defensive Utility (Defense + Checking)
-        const sortByDefense = (a, b) => {
-            const defA = (playerStats[a.name]?.attr?.def || 0) + (playerStats[a.name]?.attr?.chk || 0);
-            const defB = (playerStats[b.name]?.attr?.def || 0) + (playerStats[b.name]?.attr?.chk || 0);
-            return defB - defA; // Descending
-        };
-
-        const sortedF = [...allForwards].sort(sortByDefense);
-        const sortedD = [...allDefenders].sort(sortByDefense);
-
-        // PK1: Top 2 Forwards (indices 0-1), Top 2 Defenders (indices 0-1)
-        teams[1] = [
-            ...sortedF.slice(0, 2), 
-            ...sortedD.slice(0, 2)
-        ].filter(Boolean);
-
-        // PK2: Next 2 Forwards (indices 2-3), Next 2 Defenders (indices 2-3)
-        teams[2] = [
-            ...sortedF.slice(2, 4), 
-            ...sortedD.slice(2, 4)
-        ].filter(Boolean);
-    }
-
-    return teams;
-}
-
 // 3. Logic to find SN + PL pairings
 function findDuo(wings) {
     for (let i = 0; i < wings.length; i++) {
@@ -1025,9 +966,89 @@ function renderScheduleDashboard() {
             const b2b = playedYesterday(tk) ? ' <span style="color:#FFAA44;font-size:5px;">[B2B]</span>' : '';
             return `<span style="color:#666;font-size:5px;"> ${gp.name}${tag}${b2b}</span>`;
         };
-        return `<div class="schedule-game-line"><span>${away}${goalieBadge(g.a?.nrm)} <span style="color:#444">@</span> ${home}${goalieBadge(g.h?.nrm)}</span><span>${when}</span></div>`;
+        const hMeet = g.h?.season?.meetings?.[g.a?.nrm] || 0;
+        const rivalTag = (awardConfig.rivalries && hMeet >= 3) ? ' <span style="color:var(--line-red);font-size:5px;">[RIVALRY]</span>' : '';
+        const recFmt = t => `${t.season.w||0}-${t.season.l||0}-${t.season.t||0}`;
+        const hRec = g.h ? recFmt(g.h) : '';
+        const aRec = g.a ? recFmt(g.a) : '';
+        const hPts = g.h?.season?.h2h?.[g.a?.nrm] || 0;
+        const aPts = g.a?.season?.h2h?.[g.h?.nrm] || 0;
+        const h2hLine = hMeet > 0
+            ? (() => {
+                const leader = hPts > aPts ? `${home} leads` : aPts > hPts ? `${away} leads` : 'Tied';
+                return `<div style="color:#555;font-size:5px;margin-top:2px;">H2H this season: ${leader} ${hPts}-${aPts}pts (${hMeet}GP)</div>`;
+              })()
+            : '';
+        // All-time H2H from leagueHistory
+        let allTimeH = 0, allTimeA = 0;
+        leagueHistory.forEach(season => {
+            (season.standings || []).forEach(t => {
+                const h2h = (t.season && t.season.h2h) || t.h2h || {};
+                if (t.nrm === g.h?.nrm) allTimeH += Math.floor((h2h[g.a?.nrm] || 0) / 2);
+                if (t.nrm === g.a?.nrm) allTimeA += Math.floor((h2h[g.h?.nrm] || 0) / 2);
+            });
+        });
+        const allTimeLine = (allTimeH + allTimeA) > 0
+            ? `<div style="color:#444;font-size:5px;margin-top:1px;">All-time: ${home} ${allTimeH} – ${allTimeA} ${away}</div>`
+            : '';
+        return `<div class="schedule-game-line" style="flex-direction:column;align-items:flex-start;gap:1px;">
+            <div style="display:flex;justify-content:space-between;width:100%;">
+                <span>${away}${goalieBadge(g.a?.nrm)} <span style="color:#444">@</span> ${home}${goalieBadge(g.h?.nrm)}${rivalTag}</span>
+                <span>${when}</span>
+            </div>
+            <div style="color:#555;font-size:5px;">${away} ${aRec} &nbsp;|&nbsp; ${home} ${hRec}</div>
+            ${h2hLine}
+            ${allTimeLine}
+        </div>`;
     }).join('');
     upcomingEl.innerHTML = `<div style="font-size:8px; color:var(--silver-mid); margin-bottom:6px;">Upcoming</div>${upcomingLines || '<div class="schedule-game-line">No games scheduled.</div>'}`;
+
+    const leadersEl = document.getElementById('scoringLeaders');
+    if (leadersEl && Object.keys(playerStats).length > 0) {
+        const skaters = Object.values(playerStats).filter(ps => ps.season && ps.season.gp > 0 && ps.pos !== 'G');
+        const top5 = skaters.sort((a, b) => ((b.season.g||0)+(b.season.a||0)) - ((a.season.g||0)+(a.season.a||0))).slice(0, 5);
+        if (top5.length > 0) {
+            let lh = `<div style="margin-top:10px; border-top:1px solid #222; padding-top:8px;">`;
+            lh += `<div style="color:#888; font-size:6px; text-transform:uppercase; letter-spacing:.12em; margin-bottom:4px;">Scoring Leaders</div>`;
+            top5.forEach((ps, i) => {
+                const pts = (ps.season.g||0) + (ps.season.a||0);
+                const rank = ['①','②','③','④','⑤'][i];
+                lh += `<div style="display:flex; justify-content:space-between; font-size:7px; padding:2px 0; border-bottom:1px solid #111;">
+                    <span style="color:#666;">${rank}</span>
+                    <span style="color:#ccc; flex:1; margin:0 6px; cursor:pointer;" onclick="showPlayerCard('${ps.name}')">${ps.name}</span>
+                    <span style="color:#555; font-size:6px; margin-right:6px;">${ps.season.g||0}G ${ps.season.a||0}A</span>
+                    <span style="color:var(--ea-yellow); font-weight:bold;">${pts}PTS</span>
+                </div>`;
+            });
+            lh += `</div>`;
+            leadersEl.innerHTML = lh;
+        } else { leadersEl.innerHTML = ''; }
+    }
+
+    const irEl = document.getElementById('irReport');
+    if (irEl && Object.keys(playerStats).length > 0) {
+        const injured = [], suspended = [];
+        Object.values(playerStats).forEach(ps => {
+            if (ps.injury && ps.injury.daysRemaining > 0) {
+                const d = ps.injury.daysRemaining;
+                const sev = d <= 3 ? 'DAY-TO-DAY' : d <= 10 ? 'WEEK-TO-WEEK' : 'LONG-TERM';
+                const sevColor = d <= 3 ? '#FFAA44' : d <= 10 ? '#FF6600' : '#FF3333';
+                injured.push(`<span style="color:#FF5555;">${ps.name}</span> <span style="color:#555;font-size:5px;">(${ps.teamCode||''} · ${d}d)</span> <span style="color:${sevColor};font-size:5px;">[${sev}]</span>`);
+            }
+            if (ps.suspended && ps.suspended.days > 0)
+                suspended.push(`<span style="color:#FF8800;">${ps.name}</span> <span style="color:#555;font-size:5px;">(${ps.teamCode||''} · ${ps.suspended.days}g · ${ps.suspended.reason||'SUS'})</span>`);
+        });
+        if (injured.length === 0 && suspended.length === 0) { irEl.innerHTML = ''; return; }
+        let h = `<div style="margin-top:10px;border-top:1px solid #222;padding-top:8px;">`;
+        if (injured.length > 0)
+            h += `<div style="color:#888;font-size:6px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px;">Injured Reserve (${injured.length})</div>` +
+                 `<div style="font-size:7px;line-height:1.8;">${injured.join('<br>')}</div>`;
+        if (suspended.length > 0)
+            h += `<div style="color:#888;font-size:6px;text-transform:uppercase;letter-spacing:.12em;margin:6px 0 4px;">Suspended (${suspended.length})</div>` +
+                 `<div style="font-size:7px;line-height:1.8;">${suspended.join('<br>')}</div>`;
+        h += `</div>`;
+        irEl.innerHTML = h;
+    }
 }
 function calculateGoalieOverall(attr) {
     // Total weight = 5.0 + 1.0 + 5.0 + 4.5 + 1.0 + 1.0 + 1.0 + 1.0 = 19.5
@@ -1118,18 +1139,7 @@ function setSheetStatusLine(sheetName, text, status, source) {
     el.innerText = `${sheetName}: ${text}${source ? ` (${source})` : ''}`; el.classList.toggle('ok', status === 'ok'); el.classList.toggle('error', status === 'error');
 }
 
-function clearLocalSheetFileState() {
-    customTeamData = null; customPlayerData = null; customScheduleData = null; customEventLogData = null;
-    ['teamSheetFile', 'playerSheetFile', 'scheduleSheetFile', 'eventLogSheetFile'].forEach(id => { const i = document.getElementById(id); if (i) i.value = ''; });
-    ['team', 'player', 'schedule', 'eventLog'].forEach(t => setSheetFileLabel(t, `No ${t.toUpperCase()} file selected`));
-}
-
 function formatSheetStatus(statuses) { return statuses.map(s => `${s.name}: ${s.ok ? 'OK' : `ERROR${s.error ? ` - ${s.error}` : ''}`}`).join(' | '); }
-function rowHasAnyHeader(hRow, cands) { 
-    // We check if 'cands' (our search terms) exist in any 'col' (column) of the row
-    return cands.some(c => hRow.some(col => col.includes(c)));
-}
-function validateSheetHeaders(sheetName, headerRow) { return null; } // Disabled strict validation for mod flexibility
 function getHeaderIndex(hRow, keys, fb = -1) { const norm = hRow.map(h => String(h || '').trim().toUpperCase()); const idx = norm.findIndex(h => keys.some(k => h.includes(k))); return idx !== -1 ? idx : (fb >= 0 && fb < norm.length ? fb : -1); }
 function validateScheduleData(rows) {
     if (!Array.isArray(rows) || rows.length < 2) return { ok: false, error: 'Schedule must include a header row and at least one game row.' };
@@ -1558,47 +1568,6 @@ function checkHitPenalty(attacker, severity) {
     return false;
 }
 
-//  2. THE BACKGROUND PENALTY ROLLER (Call this randomly during standard play)
-// Example usage: let penResult = rollGeneralPenalty(playerStats['Cam Neely']);
-function rollGeneralPenalty(playerStatsObj) {
-    // Safely extract roughness
-    let roughness = playerStatsObj.roughness || (playerStatsObj.attr ? playerStatsObj.attr.rough : 50); 
-    
-    // If your stats are still letter grades (e.g., 'B+'), convert it to a number roughly 0-99
-    if (typeof roughness === 'string') {
-        roughness = getGradeMod(roughness) * 60; // Helper to turn grades into numerical weight
-    }
-
-    // Base chance for a penalty during a standard time tick (Adjust this up/down to tune gameplay)
-    let basePenaltyChance = 0.05; 
-
-    // Roughness Modifier: 50 = 1.0x, 99 = ~2.0x chance to take a penalty
-    let roughnessModifier = (roughness / 50); 
-    
-    // Calculate final probability including Ref Strictness
-    let finalPenaltyChance = basePenaltyChance * roughnessModifier * REF_STRICTNESS;
-
-    // Roll the dice!
-    if (Math.random() < finalPenaltyChance) {
-        // 85% chance of a Minor (2 min), 15% chance of a Major (5 min)
-        let isMajor = Math.random() < 0.15; 
-        
-        return {
-            penaltyCalled: true,
-            minutes: isMajor ? 5 : 2,
-            type: isMajor ? "Major" : "Minor"
-        };
-    }
-
-    // No penalty occurred
-    return {
-        penaltyCalled: false,
-        minutes: 0,
-        type: "None"
-    };
-}
-
-// Example of how to trigger it:
 function startPowerplay(advantageTeam, minutes) {
     specialTeams.active = true;
     specialTeams.teamAdvantage = advantageTeam;
@@ -4177,6 +4146,14 @@ function simGame(idx) {
         if (g.series.aW === 3) aPressureMod -= 1.5;
     }
 
+    // RIVALRY — teams that have met 3+ times this season play with extra intensity (+2 OVR both sides)
+    const hMeetings = !isPlayoffs ? ((g.h.season.meetings || {})[g.a.nrm] || 0) : 0;
+    const rivalBonus = (awardConfig.rivalries && hMeetings >= 3) ? 2 : 0;
+
+    // TEAM STREAK MORALE — hot/cold streaks shift line OVR up to ±3
+    const hStreakMod = g.h.winStreak >= 5 ? 3 : g.h.winStreak >= 3 ? 1.5 : g.h.loseStreak >= 5 ? -3 : g.h.loseStreak >= 3 ? -1.5 : 0;
+    const aStreakMod = g.a.winStreak >= 5 ? 3 : g.a.winStreak >= 3 ? 1.5 : g.a.loseStreak >= 5 ? -3 : g.a.loseStreak >= 3 ? -1.5 : 0;
+
     // IN-GAME FATIGUE — track cumulative shift ticks per player this game
     // After 20 ticks (10 min ice time), each additional tick costs 0.25 OVR
     const gameIceTicks = {};
@@ -4262,8 +4239,8 @@ function simGame(idx) {
         aMomentum = Math.max(0, aMomentum - 1);
 
         // Live Dynamic Matchup Overalls (momentum adds up to +3 OVR for ~4 min after a goal)
-        let hLiveOvr = (getLiveLineOvr(hOnIce) - hFatiguePen + hPressureMod + hMomentum * 0.375) * hAuraMod * homeCrowdEnergy;
-        let aLiveOvr = (getLiveLineOvr(aOnIce) - aFatiguePen + aPressureMod + aMomentum * 0.375) * aAuraMod;
+        let hLiveOvr = (getLiveLineOvr(hOnIce) - hFatiguePen + hPressureMod + hStreakMod + rivalBonus + hMomentum * 0.375) * hAuraMod * homeCrowdEnergy;
+        let aLiveOvr = (getLiveLineOvr(aOnIce) - aFatiguePen + aPressureMod + aStreakMod + rivalBonus + aMomentum * 0.375) * aAuraMod;
 
         let diff = hLiveOvr - aLiveOvr + chaosOffset;
 
@@ -4300,6 +4277,7 @@ function simGame(idx) {
                     ev.tm = g.h.code;
                     ev.cl = teamColors[g.h.nrm] ? teamColors[g.h.nrm][0] : '#fff';
                     ev.txt = buildGoalText(ev.scorer, ev.pAssist, ev.sAssist, getPlayerWeightedStats(shooter.name)?.tag, false, false, false, hG, aG, period);
+                    ev.hMom = 8; ev.aMom = aMomentum;
                     allGoals.push(ev);
                     if (ev.scorer) trk(ev.scorer, 'g', 1);
                     if (ev.pAssist) trk(ev.pAssist, 'a', 1);
@@ -4335,6 +4313,7 @@ function simGame(idx) {
                     if (ev.scorer) trk(ev.scorer, 'g', 1);
                     if (ev.pAssist) trk(ev.pAssist, 'a', 1);
                     if (ev.sAssist) trk(ev.sAssist, 'a', 1);
+                    ev.hMom = hMomentum; ev.aMom = 8;
                     aOnIce.forEach(p => { if(p.name) trk(p.name, 'pm', 1); });
                     hOnIce.forEach(p => { if(p.name) trk(p.name, 'pm', -1); });
                     aMomentum = 8; // ~4 min surge for scoring team
@@ -4584,11 +4563,40 @@ function simGame(idx) {
         trk(aG_name, 'toi', totalGameMinutes);
     }
 
-    g.result = { 
-        hG, aG, ot: otPeriods, boxLog: allGoals, matchStats, 
+    // Compute 3 Stars (skaters by pts+pm, goalies eligible by sv%)
+    const allPlayers = [
+        ...hStruct.f.flat(), ...hStruct.d.flat(),
+        ...aStruct.f.flat(), ...aStruct.d.flat()
+    ];
+    const starScores = allPlayers.map(p => {
+        const ms = matchStats[p.name] || {};
+        return { name: p.name, score: (ms.g||0)*3 + (ms.a||0)*2 + (ms.pm||0)*0.5 };
+    });
+    const goalieStars = [];
+    [[hG_name, aShots, hG], [aG_name, hShots, aG]].forEach(([gName, sa, ga]) => {
+        if (gName && sa > 0) {
+            const svPct = (sa - ga) / sa;
+            if (svPct >= 0.900) goalieStars.push({ name: gName, score: svPct * 6 + (svPct >= 0.940 ? 3 : svPct >= 0.920 ? 1.5 : 0) });
+        }
+    });
+    const allStarCandidates = [...starScores, ...goalieStars].sort((a,b) => b.score - a.score);
+    const seen = new Set(); const threeStars = [];
+    for (const c of allStarCandidates) { if (!seen.has(c.name) && c.score > 0) { seen.add(c.name); threeStars.push(c.name); } if (threeStars.length === 3) break; }
+
+    // Goalie duel detection
+    const hSvPct = hShots > 0 ? (hShots - aG) / hShots : 0;
+    const aSvPct = aShots > 0 ? (aShots - hG) / aShots : 0;
+    const isGoalieDuel = hSvPct >= 0.930 && aSvPct >= 0.930;
+    if (isGoalieDuel && !isASG && awardConfig.headlines) {
+        tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `GOALIE DUEL: ${hG_name||'?'} (${Math.round(hSvPct*1000)/10}%) vs ${aG_name||'?'} (${Math.round(aSvPct*1000)/10}%) — what a battle between the pipes!` });
+    }
+
+    g.result = {
+        hG, aG, ot: otPeriods, boxLog: allGoals, matchStats,
         awayRoster: [...aStruct.f.flat(), ...aStruct.d.flat(), ...(aStruct.g||[])].map(p=>p.name),
         homeRoster: [...hStruct.f.flat(), ...hStruct.d.flat(), ...(hStruct.g||[])].map(p=>p.name),
-        hGoalie: hG_name, aGoalie: aG_name, hShots, aShots 
+        hGoalie: hG_name, aGoalie: aG_name, hShots, aShots,
+        stars: threeStars, isGoalieDuel
     }; 
 
     //  9. CENTRALIZED SINGLE-WRITE STAT APPLICATION
@@ -4630,6 +4638,11 @@ function simGame(idx) {
             g.h.season.gp++; g.a.season.gp++;
             g.h.season.gf += hG; g.h.season.ga += aG; g.h.season.sf = (g.h.season.sf||0) + hShots; g.h.season.sa = (g.h.season.sa||0) + aShots;
             g.a.season.gf += aG; g.a.season.ga += hG; g.a.season.sf = (g.a.season.sf||0) + aShots; g.a.season.sa = (g.a.season.sa||0) + hShots;
+            // Track meetings for rivalry detection
+            if (!g.h.season.meetings) g.h.season.meetings = {};
+            if (!g.a.season.meetings) g.a.season.meetings = {};
+            g.h.season.meetings[g.a.nrm] = (g.h.season.meetings[g.a.nrm] || 0) + 1;
+            g.a.season.meetings[g.h.nrm] = (g.a.season.meetings[g.h.nrm] || 0) + 1;
             // Track H2H pts for tiebreaker (each team stores pts earned vs each opponent)
             if (!g.h.season.h2h) g.h.season.h2h = {};
             if (!g.a.season.h2h) g.a.season.h2h = {};
@@ -4637,7 +4650,11 @@ function simGame(idx) {
             const aPts = aG > hG ? 2 : aG === hG ? 1 : 0;
             g.h.season.h2h[g.a.nrm] = (g.h.season.h2h[g.a.nrm] || 0) + hPts;
             g.a.season.h2h[g.h.nrm] = (g.a.season.h2h[g.h.nrm] || 0) + aPts;
-        } else if(g.series) { if(hG > aG) g.series.hW++; else g.series.aW++; }
+        } else if(g.series) {
+            if(hG > aG) g.series.hW++; else g.series.aW++;
+            if (!g.series.games) g.series.games = [];
+            g.series.games.push(g);
+        }
     }
 
     // ðŸ§¹ 10. MORALE & POST-GAME CLEANUP
@@ -4664,6 +4681,13 @@ function simGame(idx) {
     if (typeof applyPostGameFatigue === 'function' && awayGoalie && homeGoalie) applyPostGameFatigue(g.a.nrm, g.h.nrm, awayGoalie.name, homeGoalie.name);
     if (typeof reviewGameForSuspensions === 'function') reviewGameForSuspensions(matchStats, g.h.nrm, g.a.nrm);
     if (typeof triggerGameInjuries === 'function') triggerGameInjuries(matchStats, g.h.nrm, g.a.nrm);
+
+    // Surface milestone banners in trade log / news ticker
+    if (gameMilestones.length > 0 && awardConfig.milestones && awardConfig.headlines) {
+        gameMilestones.forEach(msg => {
+            tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `MILESTONE: ${msg}` });
+        });
+    }
 }
 
 // --- Weighted Shooter Selection Helper ---
@@ -5232,7 +5256,85 @@ function buildPlayoffRound() {
 }
 function genPlayoffSlate() { calendar = [[]]; playoffBracket.series.filter(s => s.hW < 4 && s.aW < 4).forEach(s => { calendar[0].push({h:s.h, a:s.a, result:null, series:s}); }); currentDay = 0; updateUI(); showBracket(); }
 
+let _pendingRoundAdvance = null;
+
+function showSeriesRecap(onAdvance) {
+    const round = playoffBracket.round;
+    const roundLabel = round === 1 ? 'DIVISION SEMIS' : round === 2 ? 'DIVISION FINALS' : round === 3 ? 'CONF FINALS' : 'STANLEY CUP FINALS';
+    let h = `<div style="text-align:center; margin-bottom:16px;">
+        <div style="color:#888; font-size:6px; letter-spacing:.18em;">${roundLabel}</div>
+        <div style="color:var(--ea-yellow); font-size:11px; margin-top:4px;">ROUND COMPLETE</div>
+    </div>`;
+
+    playoffBracket.series.forEach(s => {
+        const winner = s.hW === 4 ? s.h : s.a;
+        const loser  = s.hW === 4 ? s.a : s.h;
+        const wW = s.hW === 4 ? s.hW : s.aW;
+        const lW = s.hW === 4 ? s.aW : s.hW;
+
+        // Collect all player stats from series games
+        const scorerTotals = {};
+        const goalieStats  = {};
+        (s.games || []).forEach(g => {
+            if (!g || !g.result) return;
+            Object.entries(g.result.matchStats || {}).forEach(([pName, ms]) => {
+                if (!scorerTotals[pName]) scorerTotals[pName] = { g: 0, a: 0 };
+                scorerTotals[pName].g += ms.g || 0;
+                scorerTotals[pName].a += ms.a || 0;
+            });
+            [[g.result.hGoalie, g.result.aShots, g.result.aG],
+             [g.result.aGoalie, g.result.hShots, g.result.hG]].forEach(([gn, sa, ga]) => {
+                if (!gn) return;
+                if (!goalieStats[gn]) goalieStats[gn] = { sa: 0, ga: 0 };
+                goalieStats[gn].sa += sa || 0;
+                goalieStats[gn].ga += ga || 0;
+            });
+        });
+
+        const topScorer = Object.entries(scorerTotals).sort((a,b) => (b[1].g+b[1].a) - (a[1].g+a[1].a))[0];
+        const seriesMVP = topScorer ? topScorer[0] : null;
+        const topGoalie = Object.entries(goalieStats).sort((a,b) => {
+            const svA = a[1].sa > 0 ? (a[1].sa - a[1].ga) / a[1].sa : 0;
+            const svB = b[1].sa > 0 ? (b[1].sa - b[1].ga) / b[1].sa : 0;
+            return svB - svA;
+        })[0];
+
+        h += `<div style="border:1px solid var(--gold-leaf); border-radius:8px; padding:14px 16px; margin-bottom:12px; background:#0d0d0d;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <span style="color:var(--ea-yellow); font-size:9px;">${winner.code} WINS</span>
+                <span style="color:#888; font-size:9px;">${wW} – ${lW}</span>
+                <span style="color:#444; font-size:9px;">def. ${loser.code}</span>
+            </div>`;
+        if (seriesMVP) {
+            const ms = scorerTotals[seriesMVP];
+            h += `<div style="font-size:7px; color:#ccc; margin-bottom:4px;">
+                <span style="color:#888;">SERIES MVP </span>${seriesMVP}
+                <span style="color:#555; margin-left:6px;">${ms.g}G ${ms.a}A ${ms.g+ms.a}PTS</span>
+            </div>`;
+        }
+        if (topGoalie) {
+            const gs = goalieStats[topGoalie[0]];
+            const svp = gs.sa > 0 ? ((gs.sa - gs.ga) / gs.sa * 100).toFixed(1) : '0.0';
+            h += `<div style="font-size:7px; color:#ccc;">
+                <span style="color:#888;">TOP GOALIE </span>${topGoalie[0]}
+                <span style="color:#555; margin-left:6px;">.${svp.replace('.','').padStart(3,'0').slice(0,3)} SV%</span>
+            </div>`;
+        }
+        h += `</div>`;
+    });
+
+    document.getElementById('seriesRecapContent').innerHTML = h;
+    const advBtn = document.getElementById('seriesRecapAdvBtn');
+    if (advBtn) advBtn.innerText = round === 4 ? 'VIEW AWARDS →' : 'ADVANCE TO NEXT ROUND →';
+    _pendingRoundAdvance = onAdvance;
+    document.getElementById('seriesRecapOverlay').style.display = 'flex';
+}
+
 function handleRoundEnd() {
+    showSeriesRecap(() => _doRoundAdvance());
+}
+
+function _doRoundAdvance() {
     const w = playoffBracket.series.map(s => s.hW === 4 ? s.h : s.a);
     // Save completed round to history before clearing
     if (!playoffBracket.history) playoffBracket.history = [];
@@ -6188,9 +6290,31 @@ function openBoxScore(day, idx) {
         h += `</div>`;
     }
 
+    // Shutout check
+    const hShutout = g.result.aG === 0 && g.result.hGoalie;
+    const aShutout = g.result.hG === 0 && g.result.aGoalie;
+    if (hShutout || aShutout) {
+        const soGoalie = hShutout ? g.result.hGoalie : g.result.aGoalie;
+        const soSaves  = hShutout ? g.result.aShots : g.result.hShots;
+        h += `<div style="background:#1a1400; border:2px solid #FFD700; padding:8px 14px; text-align:center; font-size:7px; color:#FFD700; letter-spacing:.12em; margin-bottom:6px;">🥅 SHUTOUT — ${soGoalie} (${soSaves} saves)</div>`;
+        if (awardConfig.headlines && !g._shutoutLogged) {
+            tradeLog.unshift({ day: `DAY ${(day||currentDay)+1}`, details: `SHUTOUT: ${soGoalie} blanks the opposition with ${soSaves} saves!` });
+            g._shutoutLogged = true;
+        }
+    }
+    if (g.result.isGoalieDuel) {
+        h += `<div style="background:#001a2e; border:2px solid var(--neon-cyan); padding:8px 14px; text-align:center; font-size:7px; color:var(--neon-cyan); letter-spacing:.12em; margin-bottom:6px;">★ GOALIE DUEL ★</div>`;
+    }
     if (g.result.stars && g.result.stars.length > 0) {
-        h += `<div class="unit-header">THREE STARS</div><div style="background:#111; padding:15px; text-align:center; font-size:9px;">`;
-        g.result.stars.forEach((s, i) => { h += `<div style="margin-bottom:10px; cursor:pointer;" onclick="showPlayerCard('${s}')"><span style="color:var(--ea-yellow);">[MVP]${i===0?'[MVP][MVP]':(i===1?'[MVP]':'')}</span> ${s}</div>`; });
+        const starLabels = ['★★★ 1ST STAR', '★★ 2ND STAR', '★ 3RD STAR'];
+        const starColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
+        h += `<div class="unit-header">THREE STARS</div><div style="background:#111; padding:15px; font-size:8px;">`;
+        g.result.stars.forEach((s, i) => {
+            h += `<div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #1a1a1a; cursor:pointer;" onclick="showPlayerCard('${s}')">
+                <span style="color:${starColors[i]}; font-size:7px; min-width:80px;">${starLabels[i]}</span>
+                <span style="color:#fff;">${s}</span>
+            </div>`;
+        });
         h += `</div>`;
     }
     
@@ -6432,6 +6556,12 @@ function startWatchLive() {
     document.getElementById('wgAwayLogo').src = g.a.logo; document.getElementById('wgHomeLogo').src = g.h.logo;
     document.getElementById('wgAwayCode').innerText = g.a.code; document.getElementById('wgHomeCode').innerText = g.h.code;
     document.getElementById('wgAwayScore').innerText = '0'; document.getElementById('wgHomeScore').innerText = '0';
+    document.getElementById('wgBugAway').innerText = g.a.code; document.getElementById('wgBugHome').innerText = g.h.code;
+    document.getElementById('wgBugAwayScore').innerText = '0'; document.getElementById('wgBugHomeScore').innerText = '0';
+    document.getElementById('wgBugClock').innerText = 'P1 20:00';
+    document.getElementById('wgMomAway').innerText = g.a.code; document.getElementById('wgMomHome').innerText = g.h.code;
+    document.getElementById('wgMomFill').style.width = '50%'; document.getElementById('wgMomFill').style.left = '0';
+    document.getElementById('wgMomFill').style.background = '#555';
     
     // Ticker initialization
     document.getElementById('wgTicker').innerHTML = '<div style="color:var(--ea-yellow); text-align:center; font-size:12px; margin-bottom:10px;">PUCK DROP! WELCOME TO THE BROADCAST...</div>';
@@ -6478,33 +6608,104 @@ function startWatchLive() {
         fillerEvents.push({ p, m, s, tm: t.code, cl: '#555', isFiller: true, txt: `${randPlayer} ${fillerPool[Math.floor(Math.random() * fillerPool.length)]}` });
     }
 
+    // ~15% chance of a line brawl (gated by headlines toggle)
+    if (awardConfig.headlines && Math.random() < 0.005) {
+        const brawlP = Math.floor(Math.random() * 3) + 1;
+        const brawlM = 5 + Math.floor(Math.random() * 14);
+        const brawlS = Math.floor(Math.random() * 60);
+        const hFighter = rosters[g.h.nrm] ? rosters[g.h.nrm].filter(p => p.pos !== 'G')[Math.floor(Math.random() * rosters[g.h.nrm].filter(p => p.pos !== 'G').length)]?.name : g.h.code;
+        const aFighter = rosters[g.a.nrm] ? rosters[g.a.nrm].filter(p => p.pos !== 'G')[Math.floor(Math.random() * rosters[g.a.nrm].filter(p => p.pos !== 'G').length)]?.name : g.a.code;
+        fillerEvents.push({ p: brawlP, m: brawlM, s: brawlS, tm: g.h.code, cl: '#FF4444', isBrawl: true,
+            txt: `${hFighter} and ${aFighter} drop the gloves — both benches empty! BENCH CLEARING BRAWL! Multiple majors handed out. Play suspended for several minutes.` });
+        if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `BRAWL: ${g.a.code} @ ${g.h.code} — benches clear after ${hFighter} and ${aFighter} go at it. Multiple game misconducts.` });
+    }
+
     watchQueue = [...g.result.boxLog, ...fillerEvents];
     watchQueue.sort((a,b) => a.p !== b.p ? a.p - b.p : (a.m !== b.m ? a.m - b.m : a.s - b.s));
     let currentPeriod = 1;
+    const watchGoalsByPlayer = {};
+    let watchMaxDeficit = { [g.h.code]: 0, [g.a.code]: 0 };
     
     watchInterval = setInterval(() => {
         if (watchQueue.length === 0) {
             clearInterval(watchInterval);
-            document.getElementById('wgClock').innerText = `FINAL${g.result.ot > 0 ? ' (OT)' : ''}`;
+            const finalStr = `FINAL${g.result.ot > 0 ? ' (OT)' : ''}`;
+            document.getElementById('wgClock').innerText = finalStr;
+            document.getElementById('wgBugClock').innerText = finalStr;
+            document.getElementById('wgBugAwayScore').innerText = watchCurrentScore.a;
+            document.getElementById('wgBugHomeScore').innerText = watchCurrentScore.h;
             document.getElementById('wgTicker').innerHTML += `<div style="color:var(--ea-yellow); text-align:center; margin-top:20px; font-size:12px;">!! FINAL HORN !!</div>`;
             document.getElementById('btnWgSkip').style.display = 'none'; document.getElementById('btnWgClose').style.display = 'block';
             let t = document.getElementById('wgTicker'); t.scrollTop = t.scrollHeight; return;
         }
         const ev = watchQueue.shift();
         if (ev.p > currentPeriod) { document.getElementById('wgTicker').innerHTML += `<div style="color:var(--silver-mid); text-align:center; border-bottom:1px solid #333; margin:15px 0; padding-bottom:5px;">--- END OF PERIOD ${currentPeriod} ---</div>`; currentPeriod = ev.p; }
-        document.getElementById('wgClock').innerText = `P${ev.p} ${ev.m}:${ev.s < 10 ? '0'+ev.s : ev.s}`;
+        const clockStr = `P${ev.p} ${ev.m}:${ev.s < 10 ? '0'+ev.s : ev.s}`;
+        document.getElementById('wgClock').innerText = clockStr;
+        document.getElementById('wgBugClock').innerText = clockStr;
+        document.getElementById('wgBugAwayScore').innerText = watchCurrentScore.a;
+        document.getElementById('wgBugHomeScore').innerText = watchCurrentScore.h;
+        if (!ev.isFiller && (ev.hMom !== undefined || ev.aMom !== undefined)) {
+            const hm = ev.hMom || 0, am = ev.aMom || 0, total = hm + am || 1;
+            const homePct = Math.round((hm / total) * 100);
+            const fill = document.getElementById('wgMomFill');
+            if (fill) {
+                const awayPct = 100 - homePct;
+                fill.style.width = `${awayPct}%`;
+                fill.style.left = '0';
+                fill.style.background = awayPct > 60 ? '#55FFFF' : homePct > 60 ? '#FF6600' : '#888';
+            }
+        }
         
-        if (ev.isFiller) {
+        if (ev.isBrawl) {
+            document.getElementById('wgTicker').innerHTML += `<div style="background:#1a0000;border:2px solid #FF4444;padding:10px 12px;margin:8px 0;text-align:center;"><div style="color:#FF4444;font-size:10px;margin-bottom:4px;">🥊 BENCH CLEARING BRAWL 🥊</div><div style="color:#ff9999;font-size:7px;">${ev.txt}</div></div>`;
+        } else if (ev.isFiller) {
             document.getElementById('wgTicker').innerHTML += `<div><span style="color:#555; margin-right:10px;">[${ev.tm}]</span> <span style="color:#ccc;">${ev.txt}</span></div>`;
         } else {
             if (!ev.isPenalty) {
-                if (ev.tm === g.a.code) { watchCurrentScore.a++; document.getElementById('wgAwayScore').innerText = watchCurrentScore.a; }
-                if (ev.tm === g.h.code) { watchCurrentScore.h++; document.getElementById('wgHomeScore').innerText = watchCurrentScore.h; }
+                if (ev.tm === g.a.code) {
+                    const prevDeficit = watchCurrentScore.h - watchCurrentScore.a;
+                    if (prevDeficit >= 2) watchMaxDeficit[g.a.code] = Math.max(watchMaxDeficit[g.a.code], prevDeficit);
+                    watchCurrentScore.a++;
+                    document.getElementById('wgAwayScore').innerText = watchCurrentScore.a;
+                    const newDiff = watchCurrentScore.a - watchCurrentScore.h;
+                    if (watchMaxDeficit[g.a.code] >= 2 && newDiff >= 0) {
+                        document.getElementById('wgTicker').innerHTML += `<div style="background:#001a00;border:2px solid #00FF88;padding:8px 12px;margin:6px 0;text-align:center;"><div style="color:#00FF88;font-size:9px;">⚡ COMEBACK ALERT — ${g.a.code}${newDiff > 0 ? ' TAKES THE LEAD' : ' TIES IT UP'}!</div></div>`;
+                        watchMaxDeficit[g.a.code] = 0;
+                    }
+                }
+                if (ev.tm === g.h.code) {
+                    const prevDeficit = watchCurrentScore.a - watchCurrentScore.h;
+                    if (prevDeficit >= 2) watchMaxDeficit[g.h.code] = Math.max(watchMaxDeficit[g.h.code], prevDeficit);
+                    watchCurrentScore.h++;
+                    document.getElementById('wgHomeScore').innerText = watchCurrentScore.h;
+                    const newDiff = watchCurrentScore.h - watchCurrentScore.a;
+                    if (watchMaxDeficit[g.h.code] >= 2 && newDiff >= 0) {
+                        document.getElementById('wgTicker').innerHTML += `<div style="background:#001a00;border:2px solid #00FF88;padding:8px 12px;margin:6px 0;text-align:center;"><div style="color:#00FF88;font-size:9px;">⚡ COMEBACK ALERT — ${g.h.code}${newDiff > 0 ? ' TAKES THE LEAD' : ' TIES IT UP'}!</div></div>`;
+                        watchMaxDeficit[g.h.code] = 0;
+                    }
+                }
+                if (ev.scorer) {
+                    watchGoalsByPlayer[ev.scorer] = (watchGoalsByPlayer[ev.scorer] || 0) + 1;
+                    if (watchGoalsByPlayer[ev.scorer] === 3) {
+                        document.getElementById('wgTicker').innerHTML += `<div style="background:#1a1400;border:2px solid #FFD700;padding:10px 12px;margin:8px 0;text-align:center;"><div style="color:#FFD700;font-size:11px;">🎩 HAT TRICK — ${ev.scorer}!</div><div style="color:#aa8800;font-size:7px;margin-top:3px;">The hats are on the ice!</div></div>`;
+                        if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `HAT TRICK: ${ev.scorer} (${ev.tm}) scores three in the broadcast!` });
+                    }
+                }
             }
             if (ev.isPenalty) {
                 document.getElementById('wgTicker').innerHTML += `<div style="background:#0d0800;border:1px solid #554400;padding:6px 8px;margin:4px 0;"><span style="color:#886600;margin-right:8px;">[${ev.tm||''}]</span><span style="color:#aaa;">${ev.txt||'Penalty called.'}</span></div>`;
             } else {
-                document.getElementById('wgTicker').innerHTML += `<div style="background:#0a1500;border:2px solid ${ev.cl||'#0f0'};padding:8px 10px;margin:6px 0;"><div style="color:${ev.cl||'#fff'};font-size:9px;margin-bottom:3px;">⚡ GOAL — ${ev.tm||''}</div><div style="color:#fff;font-size:7px;">${ev.txt || ev.scorer || ''}</div></div>`;
+                const isPP = ev.isPP, isSH = ev.isSH;
+                const goalBg = isPP ? '#1a1400' : '#0a1500';
+                const goalBorder = isPP ? '#FFD700' : (ev.cl||'#0f0');
+                const specialTag = isPP ? ' <span style="background:#FFD700;color:#000;font-size:6px;padding:1px 4px;margin-left:6px;">PP</span>'
+                                 : isSH ? ' <span style="background:#00FFFF;color:#000;font-size:6px;padding:1px 4px;margin-left:6px;">SH</span>' : '';
+                if (isPP) {
+                    const bug = document.getElementById('wgScoreBug');
+                    if (bug) { bug.style.background = '#332200'; setTimeout(() => { bug.style.background = '#000'; }, 1200); }
+                }
+                document.getElementById('wgTicker').innerHTML += `<div style="background:${goalBg};border:2px solid ${goalBorder};padding:8px 10px;margin:6px 0;"><div style="color:${ev.cl||'#fff'};font-size:9px;margin-bottom:3px;">⚡ GOAL — ${ev.tm||''}${specialTag}</div><div style="color:#fff;font-size:7px;">${ev.txt || ev.scorer || ''}</div></div>`;
             }
         }
         let t = document.getElementById('wgTicker'); t.scrollTop = t.scrollHeight;
@@ -6514,7 +6715,11 @@ function startWatchLive() {
 function skipWatchGame() {
     clearInterval(watchInterval); watchQueue = [];
     document.getElementById('wgAwayScore').innerText = watchGameObj.result.aG; document.getElementById('wgHomeScore').innerText = watchGameObj.result.hG;
-    document.getElementById('wgClock').innerText = `FINAL${watchGameObj.result.ot > 0 ? ' (OT)' : ''}`;
+    const skipFinal = `FINAL${watchGameObj.result.ot > 0 ? ' (OT)' : ''}`;
+    document.getElementById('wgClock').innerText = skipFinal;
+    document.getElementById('wgBugClock').innerText = skipFinal;
+    document.getElementById('wgBugAwayScore').innerText = watchGameObj.result.aG;
+    document.getElementById('wgBugHomeScore').innerText = watchGameObj.result.hG;
     let h = '<div style="color:var(--ea-yellow); text-align:center; margin-bottom:15px;">--- FAST FORWARDED TO END ---</div>';
     watchGameObj.result.boxLog.forEach(ev => {
         if (ev.isPenalty) { h += `<div style="background:#111; border:1px solid ${ev.cl}; padding:4px; margin:4px 0;"><span style="color:${ev.cl}; font-weight:bold; margin-right:10px;">[${ev.tm}]</span> <span style="color:#fff;">[SUS] ${ev.txt}</span></div>`; } 
@@ -6841,18 +7046,16 @@ function saveSpecialTeams(tk, manualKey, maxSpots) {
 }
 
 function toggleAwardConfig(setting) {
-    // Toggle various award/feature settings on/off
-    const btnId = `btn${setting.charAt(0).toUpperCase() + setting.slice(1).replace(/_/g, '').toLowerCase()}`;
+    awardConfig[setting] = !awardConfig[setting];
+    const btnId = `btn${setting.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('')}`;
     const btn = document.getElementById(btnId);
     if (!btn) return;
-    
-    const isOn = btn.textContent.includes('ON');
-    if (isOn) {
-        btn.textContent = btn.textContent.replace('ON', 'OFF');
-        btn.style.opacity = '0.5';
-    } else {
+    if (awardConfig[setting]) {
         btn.textContent = btn.textContent.replace('OFF', 'ON');
         btn.style.opacity = '1';
+    } else {
+        btn.textContent = btn.textContent.replace('ON', 'OFF');
+        btn.style.opacity = '0.5';
     }
 }
 
@@ -6941,8 +7144,32 @@ function checkMonthlyAwards() {
         
         let eF = eastF ? eastF.name : 'N/A'; let eD = eastD ? eastD.name : 'N/A'; let eG = eastG ? eastG.name : 'N/A';
         let wF = westF ? westF.name : 'N/A'; let wD = westD ? westD.name : 'N/A'; let wG = westG ? westG.name : 'N/A';
-        
-        document.getElementById('jumboMessage').innerHTML = `<span style="color:var(--ea-yellow)">[AWD] MONTH ${monthNum} EAST AWARDS [AWD]</span><br>F: ${eF} | D: ${eD} | G: ${eG}<br><span style="color:var(--ea-yellow)">[AWD] MONTH ${monthNum} WEST AWARDS [AWD]</span><br>F: ${wF} | D: ${wD} | G: ${wG}`;
+
+        // Team of the Month — best pts over the last 30 days
+        const teamMonthPts = {};
+        for (let d = Math.max(0, currentDay - 30); d < currentDay; d++) {
+            (calendar[d] || []).forEach(g => {
+                if (!g || !g.result) return;
+                if (g.result.hG > g.result.aG) { teamMonthPts[g.h.nrm] = (teamMonthPts[g.h.nrm]||0) + 2; }
+                else if (g.result.aG > g.result.hG) { teamMonthPts[g.a.nrm] = (teamMonthPts[g.a.nrm]||0) + 2; }
+                else { teamMonthPts[g.h.nrm] = (teamMonthPts[g.h.nrm]||0) + 1; teamMonthPts[g.a.nrm] = (teamMonthPts[g.a.nrm]||0) + 1; }
+            });
+        }
+        const teamOfMonth = Object.entries(teamMonthPts).sort((a,b) => b[1]-a[1])[0];
+        const tomTeam = teamOfMonth ? (league.find(t => t.nrm === teamOfMonth[0]) || {}) : null;
+        const tomStr = tomTeam ? `${tomTeam.code || teamOfMonth[0]} (${teamOfMonth[1]}pts)` : 'N/A';
+
+        document.getElementById('jumboMessage').innerHTML = `<span style="color:var(--ea-yellow)">[AWD] MONTH ${monthNum} EAST AWARDS [AWD]</span><br>F: ${eF} | D: ${eD} | G: ${eG}<br><span style="color:var(--ea-yellow)">[AWD] MONTH ${monthNum} WEST AWARDS [AWD]</span><br>F: ${wF} | D: ${wD} | G: ${wG}<br><span style="color:var(--neon-cyan)">TEAM OF THE MONTH: ${tomStr}</span>`;
+
+        // Push to news ticker
+        const day = `DAY ${currentDay + 1}`;
+        if (awardConfig.headlines) {
+            tradeLog.unshift({ day, details: `MONTH ${monthNum} AWARDS — EAST: F:${eF} D:${eD} G:${eG} | WEST: F:${wF} D:${wD} G:${wG}` });
+            if (tomTeam) tradeLog.unshift({ day, details: `TEAM OF THE MONTH: ${tomStr} — hottest team in the league over the last 30 days.` });
+            if (eastF) tradeLog.unshift({ day, details: `PLAYER OF THE MONTH (EAST): ${eF} — ${eastF.g}G ${eastF.a}A ${eastF.pts}PTS this month.` });
+            if (westF) tradeLog.unshift({ day, details: `PLAYER OF THE MONTH (WEST): ${wF} — ${westF.g}G ${westF.a}A ${westF.pts}PTS this month.` });
+        }
+
         takeMonthSnapshot(); renderTradeLog();
     }
 }
@@ -7225,6 +7452,14 @@ function runEndOfSeasonAwards() {
         winnerStats["Vezina"] = `${vzW.season.w}W  ${vzW.season.so}SO  SV% ${vzSvp}`;
     }
     
+    // 13. THE DAGGER AWARD — most game-winning goals
+    const daggerSorted = [...skaters].filter(p => p.season.gp >= 10).sort((a, b) => (b.season.gwg || 0) - (a.season.gwg || 0));
+    if (daggerSorted.length > 0 && (daggerSorted[0].season.gwg || 0) > 0) {
+        awardTrophy(daggerSorted[0].name, currentSeason, "The Espo");
+        runnersUp["The Espo"] = daggerSorted.slice(1, 4).map(p => p.name).join(', ');
+        winnerStats["The Espo"] = `${daggerSorted[0].season.gwg} GWG`;
+    }
+
     // 11. JENNINGS (Skipping runners up here since it's a team-based goalie award)
     const bestDefTeam = [...league].sort((a, b) => a.season.ga - b.season.ga)[0];
     if (bestDefTeam) goalies.filter(g => g.teamCode === bestDefTeam.code && g.season.gp >= minGoalieGP).forEach(g => awardTrophy(g.name, currentSeason, "Jennings"));
@@ -7321,6 +7556,7 @@ function getConnSmytheScore(p) {
     res += awardCard('BILL MASTERTON — DEDICATION', 'Perseverance & Dedication to Hockey', 'Bill Masterton', ORNG);
     res += awardCard('ALKA-SELTZER AWARD — PLUS/MINUS', 'Best Plus/Minus in the League', 'Alka-Seltzer (+/-)', ORNG);
     res += awardCard('JENNINGS TROPHY — FEWEST GA', 'Team Allowing Fewest Goals Against', 'Jennings', ORNG);
+    res += awardCard('THE ESPO — CLUTCH PERFORMER', 'Most Game-Winning Goals (Phil Esposito)', 'The Espo', ORNG);
     
     if(awardConfig.retirements) { 
         let ind = []; 
@@ -7496,6 +7732,37 @@ function showHistoricalStandings(y) {
     document.getElementById('historyOverlay').style.display = 'flex';
 }
 
+function openStatLeaders() {
+    const k = 'season';
+    const skaters = Object.values(playerStats).filter(p => p[k] && p[k].gp > 0 && p.pos !== 'G');
+    const goalies  = Object.values(playerStats).filter(p => p[k] && p[k].gp > 0 && p.pos === 'G');
+    const top = (arr, sortFn, n=10) => [...arr].sort(sortFn).slice(0, n);
+    const row = (p, val, color='#fff') => `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')">
+        <td style="color:#888;font-size:6px;padding:3px 6px;">${p.teamCode||''}</td>
+        <td style="padding:3px 6px;">${p.name}</td>
+        <td style="text-align:right;color:${color};font-weight:bold;padding:3px 10px;">${val}</td></tr>`;
+    const tbl = (title, rows, color) => `<div style="margin-bottom:14px;">
+        <div style="font-size:6px;color:#888;text-transform:uppercase;letter-spacing:.14em;border-bottom:1px solid #222;padding-bottom:4px;margin-bottom:6px;">${title}</div>
+        <table style="width:100%;font-size:8px;border-collapse:collapse;">${rows}</table></div>`;
+
+    const goalieSvp = p => p[k].sa > 0 ? ((p[k].sv||0)/p[k].sa) : 0;
+
+    let h = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">`;
+    h += `<div>`;
+    h += tbl('Points', top(skaters, (a,b)=>(b[k].g+b[k].a)-(a[k].g+a[k].a)).map(p=>row(p,(p[k].g+p[k].a),'var(--ea-yellow)')).join(''), 'var(--ea-yellow)');
+    h += tbl('Goals',  top(skaters, (a,b)=>b[k].g-a[k].g).map(p=>row(p,p[k].g,'#FF6666')).join(''));
+    h += tbl('Assists',top(skaters, (a,b)=>b[k].a-a[k].a).map(p=>row(p,p[k].a,'var(--neon-cyan)')).join(''));
+    h += `</div><div>`;
+    h += tbl('+/-',   top(skaters, (a,b)=>b[k].pm-a[k].pm).map(p=>row(p,(p[k].pm>=0?'+':'')+p[k].pm,'#88FF88')).join(''));
+    h += tbl('PIM',   top(skaters, (a,b)=>b[k].pim-a[k].pim).map(p=>row(p,p[k].pim,'#FF8800')).join(''));
+    h += tbl('GWG',   top(skaters, (a,b)=>(b[k].gwg||0)-(a[k].gwg||0)).map(p=>row(p,p[k].gwg||0,'#FFD700')).join(''));
+    h += tbl('SV%',   top(goalies,  (a,b)=>goalieSvp(b)-goalieSvp(a)).filter(p=>p[k].sa>=10).map(p=>row(p,goalieSvp(p).toFixed(3),'var(--neon-cyan)')).join(''));
+    h += `</div></div>`;
+
+    document.getElementById('statLeadersContent').innerHTML = h;
+    document.getElementById('statLeadersOverlay').style.display = 'flex';
+}
+
 function openAllTimeRecords() {
     let pl=[]; 
     Object.values(playerStats).forEach(p=>pl.push({name:p.name,pos:p.pos,gp:p.career.gp+p.season.gp,g:p.career.g+p.season.g,a:p.career.a+p.season.a,pts:p.career.pts+p.season.g+p.season.a,w:p.career.w+p.season.w,pim:(p.career.pim||0)+(p.season.pim||0),ppg:(p.career.ppg||0)+(p.season.ppg||0)})); 
@@ -7530,14 +7797,6 @@ function openArenaSettings() {
 function resetLeague() { 
     if(confirm("Wipe dynasty data? History/HOF will remain.")) { localStorage.removeItem(SAVE_STORAGE_KEY); location.reload(); } 
 } 
-
-function clearArchives() { 
-    if(confirm("Delete past History & HOF?")) { 
-        leagueHistory = []; hallOfFame = []; retiredPlayers = []; 
-        localStorage.removeItem(HISTORY_STORAGE_KEY); localStorage.removeItem(HOF_STORAGE_KEY); localStorage.removeItem(RETIRED_STORAGE_KEY); 
-        renderLeagueHistory(); renderHallOfFame(); renderRetiredPlayers(); 
-    } 
-}
 
 // =========================================================
 // --- MISSING UI HELPER FUNCTIONS ---
@@ -8273,7 +8532,7 @@ function runDraftLottery() {
 function closeLottery() { document.getElementById('lotteryOverlay').style.display = 'none'; }
 // --- WINDOW EVENTS ---
 window.onclick = function(event) {
-    const modals = ['lotteryOverlay', 'allTimeOverlay', 'awardOverlay', 'recapOverlay', 'leagueSettingsOverlay', 'arenaSettingsOverlay', 'tradeOverlay', 'subOverlay', 'historyOverlay', 'playerCardOverlay', 'boxScoreOverlay', 'advEditorOverlay', 'gpChecklistOverlay', 'watchGameOverlay', 'stOverlay', 'proposalOverlay'];
+    const modals = ['lotteryOverlay', 'allTimeOverlay', 'awardOverlay', 'recapOverlay', 'seriesRecapOverlay', 'statLeadersOverlay', 'leagueSettingsOverlay', 'arenaSettingsOverlay', 'tradeOverlay', 'subOverlay', 'historyOverlay', 'playerCardOverlay', 'boxScoreOverlay', 'advEditorOverlay', 'gpChecklistOverlay', 'watchGameOverlay', 'stOverlay', 'proposalOverlay'];
     modals.forEach(id => { const modal = document.getElementById(id); if (event.target === modal && modal) modal.style.display = "none"; });
 };
 

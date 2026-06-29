@@ -111,7 +111,7 @@
                         <button onclick="toggleAwardConfig('streaks')" id="btnStreaks" class="award-toggle-btn" style="border-color:#FFD700; color:#FFD700;">STREAKS: ON</button>
                         <button onclick="toggleAwardConfig('chemistry')" id="btnChemistry" class="award-toggle-btn" style="border-color:#FF69B4; color:#FF69B4;">CHEMISTRY: ON</button>
                         <button onclick="toggleAwardConfig('rivalries')" id="btnRivalries" class="award-toggle-btn" style="border-color:#FF4500; color:#FF4500;">RIVALRIES: ON</button>
-                        <button onclick="toggleAwardConfig('aging')" id="btnAging" class="award-toggle-btn" style="border-color:#32CD32; color:#32CD32;">AGING: OFF</button>
+                        <button onclick="toggleAwardConfig('aging')" id="btnAging" class="award-toggle-btn" style="border-color:#32CD32; color:#32CD32;">PROGRESSION: OFF</button>
                         <button onclick="toggleAwardConfig('draft')" id="btnDraft" class="award-toggle-btn" style="border-color:#1E90FF; color:#1E90FF;">DRAFT: OFF</button>
                         <button onclick="toggleAwardConfig('retirements')" id="btnRetirements" class="award-toggle-btn" style="border-color:#DC143C; color:#DC143C;">RETIREMENTS: OFF</button>
                         <button onclick="toggleAwardConfig('headlines')" id="btnHeadlines" class="award-toggle-btn" style="border-color:#FFA500; color:#FFA500;">HEADLINES: ON</button>
@@ -144,6 +144,8 @@
                 <div id="scheduleDashboard" class="schedule-dashboard">
                     <div id="scheduleSummaryText" class="schedule-dashboard-row"></div>
                     <div id="scheduleUpcomingGames" class="schedule-upcoming-games"></div>
+                    <div id="irReport"></div>
+                    <div id="scoringLeaders"></div>
                 </div>
             </div>
             <div id="officeControls" class="office-controls">   
@@ -158,6 +160,7 @@
                 <button onclick="openTradeModal()" class="btn-purple" id="btnTrade">TRADES</button>
                 <button onclick="document.getElementById('masterArchiveModal').style.display='flex'" class="btn-orange">MASTER ARCHIVES</button>
                 <button onclick="openAllTimeRecords()" class="btn-yellow">RECORD BOOK</button>
+                <button onclick="openStatLeaders()" class="btn-yellow">STAT LEADERS</button>
 
                 <button onclick="simDay()" class="btn-cyan">SIM DAY</button>
                 <button onclick="simWeek()" class="btn-cyan">SIM WEEK</button>
@@ -353,6 +356,23 @@
                     <img id="wgHomeLogo" src="" style="height:40px; filter:drop-shadow(2px 2px 0 #000);">
                 </div>
             </div>
+            <div id="wgMomentumBar" style="background:#0a0a0a; border-bottom:1px solid #1a1a1a; padding:4px 16px; display:flex; align-items:center; gap:8px; font-family:'Press Start 2P',cursive; font-size:5px; color:#444;">
+                <span id="wgMomAway" style="min-width:28px; text-align:right;">AWAY</span>
+                <div style="flex:1; height:5px; background:#111; border:1px solid #222; position:relative; border-radius:2px;">
+                    <div id="wgMomFill" style="position:absolute; top:0; height:100%; width:50%; left:0; background:#555; border-radius:2px; transition:width .4s, left .4s, background .4s;"></div>
+                    <div style="position:absolute; left:50%; top:-2px; width:1px; height:9px; background:#333;"></div>
+                </div>
+                <span id="wgMomHome" style="min-width:28px;">HOME</span>
+            </div>
+            <div id="wgScoreBug" style="background:#000; border-bottom:2px solid #222; padding:5px 16px; display:flex; align-items:center; justify-content:center; gap:0; font-family:'Press Start 2P',cursive; font-size:7px; letter-spacing:.08em;">
+                <span id="wgBugAway" style="color:#aaa;">AWAY</span>
+                <span id="wgBugAwayScore" style="color:var(--neon-cyan); margin:0 8px; font-size:10px;">0</span>
+                <span style="color:#333; margin:0 10px;">|</span>
+                <span id="wgBugClock" style="color:var(--ea-yellow);">P1 20:00</span>
+                <span style="color:#333; margin:0 10px;">|</span>
+                <span id="wgBugHomeScore" style="color:var(--neon-cyan); margin:0 8px; font-size:10px;">0</span>
+                <span id="wgBugHome" style="color:#aaa;">HOME</span>
+            </div>
             <div id="wgTicker" style="height:350px; overflow-y:auto; padding:20px; font-size:9px; line-height:2.2; display:flex; flex-direction:column; gap:8px;"></div>
             <div style="padding:15px; background:#111; border-top:2px solid #333; display:flex; gap:10px;">
                 <button id="btnWgSkip" onclick="skipWatchGame()" class="btn-orange" style="width:100%;">SKIP TO FINAL HORN</button>
@@ -390,6 +410,14 @@
         </div>
     </div>
 
+    <div id="statLeadersOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:20px; max-width:700px; width:95%; max-height:90vh; overflow-y:auto;">
+            <div class="menu-header" style="color:var(--ea-yellow); background:transparent; justify-content:center; border-bottom:2px solid var(--ea-yellow);">THIS SEASON — STAT LEADERS</div>
+            <div id="statLeadersContent" style="margin-top:15px;"></div>
+            <button onclick="document.getElementById('statLeadersOverlay').style.display='none'" style="width:100%;margin-top:15px;border-color:var(--line-red);color:var(--line-red);">CLOSE</button>
+        </div>
+    </div>
+
     <div id="allTimeOverlay" class="modal" onclick="this.style.display='none'">
         <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:20px; max-width:700px;">
             <div class="menu-header" style="color:var(--gold-leaf); background:transparent; justify-content:center; border-bottom:2px solid var(--gold-leaf);">
@@ -408,6 +436,13 @@
                 <div><div class="unit-header">CAREER WINS (GOALIES)</div><table id="allTimeWins"></table></div>
             </div>
             <button onclick="document.getElementById('allTimeOverlay').style.display='none'" class="btn-gold" style="width:100%;margin-top:20px;">CLOSE LEADERBOARDS</button>
+        </div>
+    </div>
+
+    <div id="seriesRecapOverlay" class="modal" style="z-index:3100;">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:24px; max-width:600px; width:95%; max-height:90vh; overflow-y:auto;">
+            <div id="seriesRecapContent"></div>
+            <button id="seriesRecapAdvBtn" onclick="document.getElementById('seriesRecapOverlay').style.display='none'; _pendingRoundAdvance && _pendingRoundAdvance();" class="btn-cyan" style="width:100%;margin-top:20px;">ADVANCE TO NEXT ROUND →</button>
         </div>
     </div>
 
