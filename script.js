@@ -6691,7 +6691,7 @@ function startWatchLive() {
     }
 
     // ~15% chance of a line brawl (gated by headlines toggle)
-    if (awardConfig.headlines && Math.random() < 0.15) {
+    if (awardConfig.headlines && Math.random() < 0.005) {
         const brawlP = Math.floor(Math.random() * 3) + 1;
         const brawlM = 5 + Math.floor(Math.random() * 14);
         const brawlS = Math.floor(Math.random() * 60);
