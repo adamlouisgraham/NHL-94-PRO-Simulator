@@ -430,6 +430,13 @@
         </div>
     </div>
 
+    <div id="seriesRecapOverlay" class="modal" style="z-index:3100;">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:24px; max-width:600px; width:95%; max-height:90vh; overflow-y:auto;">
+            <div id="seriesRecapContent"></div>
+            <button id="seriesRecapAdvBtn" onclick="document.getElementById('seriesRecapOverlay').style.display='none'; _pendingRoundAdvance && _pendingRoundAdvance();" class="btn-cyan" style="width:100%;margin-top:20px;">ADVANCE TO NEXT ROUND →</button>
+        </div>
+    </div>
+
     <div id="recapOverlay" class="modal">
         <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:24px; max-width:660px; width:95%; max-height:90vh; overflow-y:auto;">
             <div id="recapContent"></div>

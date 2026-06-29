@@ -4744,7 +4744,11 @@ function simGame(idx) {
             const aPts = aG > hG ? 2 : aG === hG ? 1 : 0;
             g.h.season.h2h[g.a.nrm] = (g.h.season.h2h[g.a.nrm] || 0) + hPts;
             g.a.season.h2h[g.h.nrm] = (g.a.season.h2h[g.h.nrm] || 0) + aPts;
-        } else if(g.series) { if(hG > aG) g.series.hW++; else g.series.aW++; }
+        } else if(g.series) {
+            if(hG > aG) g.series.hW++; else g.series.aW++;
+            if (!g.series.games) g.series.games = [];
+            g.series.games.push(g);
+        }
     }
 
     // ðŸ§¹ 10. MORALE & POST-GAME CLEANUP
@@ -5346,7 +5350,85 @@ function buildPlayoffRound() {
 }
 function genPlayoffSlate() { calendar = [[]]; playoffBracket.series.filter(s => s.hW < 4 && s.aW < 4).forEach(s => { calendar[0].push({h:s.h, a:s.a, result:null, series:s}); }); currentDay = 0; updateUI(); showBracket(); }
 
+let _pendingRoundAdvance = null;
+
+function showSeriesRecap(onAdvance) {
+    const round = playoffBracket.round;
+    const roundLabel = round === 1 ? 'DIVISION SEMIS' : round === 2 ? 'DIVISION FINALS' : round === 3 ? 'CONF FINALS' : 'STANLEY CUP FINALS';
+    let h = `<div style="text-align:center; margin-bottom:16px;">
+        <div style="color:#888; font-size:6px; letter-spacing:.18em;">${roundLabel}</div>
+        <div style="color:var(--ea-yellow); font-size:11px; margin-top:4px;">ROUND COMPLETE</div>
+    </div>`;
+
+    playoffBracket.series.forEach(s => {
+        const winner = s.hW === 4 ? s.h : s.a;
+        const loser  = s.hW === 4 ? s.a : s.h;
+        const wW = s.hW === 4 ? s.hW : s.aW;
+        const lW = s.hW === 4 ? s.aW : s.hW;
+
+        // Collect all player stats from series games
+        const scorerTotals = {};
+        const goalieStats  = {};
+        (s.games || []).forEach(g => {
+            if (!g || !g.result) return;
+            Object.entries(g.result.matchStats || {}).forEach(([pName, ms]) => {
+                if (!scorerTotals[pName]) scorerTotals[pName] = { g: 0, a: 0 };
+                scorerTotals[pName].g += ms.g || 0;
+                scorerTotals[pName].a += ms.a || 0;
+            });
+            [[g.result.hGoalie, g.result.aShots, g.result.aG],
+             [g.result.aGoalie, g.result.hShots, g.result.hG]].forEach(([gn, sa, ga]) => {
+                if (!gn) return;
+                if (!goalieStats[gn]) goalieStats[gn] = { sa: 0, ga: 0 };
+                goalieStats[gn].sa += sa || 0;
+                goalieStats[gn].ga += ga || 0;
+            });
+        });
+
+        const topScorer = Object.entries(scorerTotals).sort((a,b) => (b[1].g+b[1].a) - (a[1].g+a[1].a))[0];
+        const seriesMVP = topScorer ? topScorer[0] : null;
+        const topGoalie = Object.entries(goalieStats).sort((a,b) => {
+            const svA = a[1].sa > 0 ? (a[1].sa - a[1].ga) / a[1].sa : 0;
+            const svB = b[1].sa > 0 ? (b[1].sa - b[1].ga) / b[1].sa : 0;
+            return svB - svA;
+        })[0];
+
+        h += `<div style="border:1px solid var(--gold-leaf); border-radius:8px; padding:14px 16px; margin-bottom:12px; background:#0d0d0d;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <span style="color:var(--ea-yellow); font-size:9px;">${winner.code} WINS</span>
+                <span style="color:#888; font-size:9px;">${wW} – ${lW}</span>
+                <span style="color:#444; font-size:9px;">def. ${loser.code}</span>
+            </div>`;
+        if (seriesMVP) {
+            const ms = scorerTotals[seriesMVP];
+            h += `<div style="font-size:7px; color:#ccc; margin-bottom:4px;">
+                <span style="color:#888;">SERIES MVP </span>${seriesMVP}
+                <span style="color:#555; margin-left:6px;">${ms.g}G ${ms.a}A ${ms.g+ms.a}PTS</span>
+            </div>`;
+        }
+        if (topGoalie) {
+            const gs = goalieStats[topGoalie[0]];
+            const svp = gs.sa > 0 ? ((gs.sa - gs.ga) / gs.sa * 100).toFixed(1) : '0.0';
+            h += `<div style="font-size:7px; color:#ccc;">
+                <span style="color:#888;">TOP GOALIE </span>${topGoalie[0]}
+                <span style="color:#555; margin-left:6px;">.${svp.replace('.','').padStart(3,'0').slice(0,3)} SV%</span>
+            </div>`;
+        }
+        h += `</div>`;
+    });
+
+    document.getElementById('seriesRecapContent').innerHTML = h;
+    const advBtn = document.getElementById('seriesRecapAdvBtn');
+    if (advBtn) advBtn.innerText = round === 4 ? 'VIEW AWARDS →' : 'ADVANCE TO NEXT ROUND →';
+    _pendingRoundAdvance = onAdvance;
+    document.getElementById('seriesRecapOverlay').style.display = 'flex';
+}
+
 function handleRoundEnd() {
+    showSeriesRecap(() => _doRoundAdvance());
+}
+
+function _doRoundAdvance() {
     const w = playoffBracket.series.map(s => s.hW === 4 ? s.h : s.a);
     // Save completed round to history before clearing
     if (!playoffBracket.history) playoffBracket.history = [];
@@ -6608,6 +6690,18 @@ function startWatchLive() {
         fillerEvents.push({ p, m, s, tm: t.code, cl: '#555', isFiller: true, txt: `${randPlayer} ${fillerPool[Math.floor(Math.random() * fillerPool.length)]}` });
     }
 
+    // ~15% chance of a line brawl (gated by headlines toggle)
+    if (awardConfig.headlines && Math.random() < 0.15) {
+        const brawlP = Math.floor(Math.random() * 3) + 1;
+        const brawlM = 5 + Math.floor(Math.random() * 14);
+        const brawlS = Math.floor(Math.random() * 60);
+        const hFighter = rosters[g.h.nrm] ? rosters[g.h.nrm].filter(p => p.pos !== 'G')[Math.floor(Math.random() * rosters[g.h.nrm].filter(p => p.pos !== 'G').length)]?.name : g.h.code;
+        const aFighter = rosters[g.a.nrm] ? rosters[g.a.nrm].filter(p => p.pos !== 'G')[Math.floor(Math.random() * rosters[g.a.nrm].filter(p => p.pos !== 'G').length)]?.name : g.a.code;
+        fillerEvents.push({ p: brawlP, m: brawlM, s: brawlS, tm: g.h.code, cl: '#FF4444', isBrawl: true,
+            txt: `${hFighter} and ${aFighter} drop the gloves — both benches empty! BENCH CLEARING BRAWL! Multiple majors handed out. Play suspended for several minutes.` });
+        if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `BRAWL: ${g.a.code} @ ${g.h.code} — benches clear after ${hFighter} and ${aFighter} go at it. Multiple game misconducts.` });
+    }
+
     watchQueue = [...g.result.boxLog, ...fillerEvents];
     watchQueue.sort((a,b) => a.p !== b.p ? a.p - b.p : (a.m !== b.m ? a.m - b.m : a.s - b.s));
     let currentPeriod = 1;
@@ -6643,7 +6737,9 @@ function startWatchLive() {
             }
         }
         
-        if (ev.isFiller) {
+        if (ev.isBrawl) {
+            document.getElementById('wgTicker').innerHTML += `<div style="background:#1a0000;border:2px solid #FF4444;padding:10px 12px;margin:8px 0;text-align:center;"><div style="color:#FF4444;font-size:10px;margin-bottom:4px;">🥊 BENCH CLEARING BRAWL 🥊</div><div style="color:#ff9999;font-size:7px;">${ev.txt}</div></div>`;
+        } else if (ev.isFiller) {
             document.getElementById('wgTicker').innerHTML += `<div><span style="color:#555; margin-right:10px;">[${ev.tm}]</span> <span style="color:#ccc;">${ev.txt}</span></div>`;
         } else {
             if (!ev.isPenalty) {
@@ -8444,7 +8540,7 @@ function runDraftLottery() {
 function closeLottery() { document.getElementById('lotteryOverlay').style.display = 'none'; }
 // --- WINDOW EVENTS ---
 window.onclick = function(event) {
-    const modals = ['lotteryOverlay', 'allTimeOverlay', 'awardOverlay', 'recapOverlay', 'leagueSettingsOverlay', 'arenaSettingsOverlay', 'tradeOverlay', 'subOverlay', 'historyOverlay', 'playerCardOverlay', 'boxScoreOverlay', 'advEditorOverlay', 'gpChecklistOverlay', 'watchGameOverlay', 'stOverlay', 'proposalOverlay'];
+    const modals = ['lotteryOverlay', 'allTimeOverlay', 'awardOverlay', 'recapOverlay', 'seriesRecapOverlay', 'leagueSettingsOverlay', 'arenaSettingsOverlay', 'tradeOverlay', 'subOverlay', 'historyOverlay', 'playerCardOverlay', 'boxScoreOverlay', 'advEditorOverlay', 'gpChecklistOverlay', 'watchGameOverlay', 'stOverlay', 'proposalOverlay'];
     modals.forEach(id => { const modal = document.getElementById(id); if (event.target === modal && modal) modal.style.display = "none"; });
 };
 
