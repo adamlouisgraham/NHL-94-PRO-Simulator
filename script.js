@@ -4113,8 +4113,11 @@ function simGame(idx) {
     // Sliding goalie save modifier  -  centered at OVR 75: bad goalie=1.12, avg=1.0, elite=0.88
     const hGOvr = hG_obj ? (getPlayerWeightedStats(hG_obj.name).ovr || 75) : 75;
     const aGOvr = aG_obj ? (getPlayerWeightedStats(aG_obj.name).ovr || 75) : 75;
-    let hWallMod = Math.max(0.86, Math.min(1.14, 1.0 + (75 - hGOvr) * 0.013));
-    let aWallMod = Math.max(0.86, Math.min(1.14, 1.0 + (75 - aGOvr) * 0.013));
+    // B2B goalie fatigue: starting goalie on back-to-back takes a wall modifier hit
+    const hB2BPen = (!isPlayoffs && hG_obj && playedYesterday(g.h.nrm)) ? 0.06 : 0;
+    const aB2BPen = (!isPlayoffs && aG_obj && playedYesterday(g.a.nrm)) ? 0.06 : 0;
+    let hWallMod = Math.max(0.86, Math.min(1.14, 1.0 + (75 - hGOvr) * 0.013 + hB2BPen));
+    let aWallMod = Math.max(0.86, Math.min(1.14, 1.0 + (75 - aGOvr) * 0.013 + aB2BPen));
     let asgBoost = isASG ? 1.8 : 1.0;
     let homeCrowdEnergy = 1.03;
 
@@ -4257,6 +4260,33 @@ function simGame(idx) {
         let period = minute <= 20 ? 1 : (minute <= 40 ? 2 : 3);
         let sec = Math.floor(Math.random() * 60);
         let timeStr = `P${period} ${minute % 20 || 20}:${sec < 10 ? '0'+sec : sec}`;
+
+        // PENALTY SHOT — ~0.4% chance per tick (~0-1 per game)
+        if (!isASG && Math.random() < 0.004) {
+            const psHome = Math.random() < 0.5;
+            const psTeam = psHome ? g.h : g.a;
+            const psGoalie = psHome ? aG_obj : hG_obj;
+            const psRoster = rosters[psTeam.nrm] ? rosters[psTeam.nrm].filter(p => p.pos !== 'G') : [];
+            const psShooter = psRoster.length ? psRoster[Math.floor(Math.random() * psRoster.length)] : null;
+            if (psShooter && psGoalie) {
+                const shooterOvr = getPlayerWeightedStats(psShooter.name).ovr || 75;
+                const goalieOvr  = getPlayerWeightedStats(psGoalie.name).ovr  || 75;
+                const psScoreProb = 0.30 + (shooterOvr - goalieOvr) * 0.005;
+                const psScored = Math.random() < Math.max(0.15, Math.min(0.65, psScoreProb));
+                if (psScored) {
+                    if (psHome) { hG++; trk(psShooter.name, 'g', 1); trk(aG_name, 'ga', 1); }
+                    else        { aG++; trk(psShooter.name, 'g', 1); trk(hG_name, 'ga', 1); }
+                } else {
+                    if (psHome) trk(aG_name, 'sv', 1); else trk(hG_name, 'sv', 1);
+                }
+                const psResult = psScored ? 'GOAL' : 'STOPPED';
+                const psTxt = `${psShooter.name} on a PENALTY SHOT — ${psResult}! (${psTeam.code} vs ${psGoalie.name})`;
+                allGoals.push({ p: period, m: minute % 20 || 20, s: sec, tm: psTeam.code,
+                    cl: psScored ? (teamColors[psTeam.nrm]?.[0] || '#fff') : '#888',
+                    txt: psTxt, isPenaltyShot: true, isGoal: psScored });
+                if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `PENALTY SHOT: ${psTxt}` });
+            }
+        }
 
         // HOME TEAM ATTACK FLOW
         if (Math.random() < hShotChance) {
@@ -6657,7 +6687,10 @@ function startWatchLive() {
             }
         }
         
-        if (ev.isBrawl) {
+        if (ev.isPenaltyShot) {
+            const psColor = ev.isGoal ? '#FFD700' : '#888';
+            document.getElementById('wgTicker').innerHTML += `<div style="background:#0d0d1a;border:2px solid ${psColor};padding:10px 12px;margin:8px 0;text-align:center;"><div style="color:${psColor};font-size:9px;">🚨 PENALTY SHOT — ${ev.isGoal ? 'GOAL!' : 'STOPPED!'}</div><div style="color:#aaa;font-size:7px;margin-top:3px;">${ev.txt}</div></div>`;
+        } else if (ev.isBrawl) {
             document.getElementById('wgTicker').innerHTML += `<div style="background:#1a0000;border:2px solid #FF4444;padding:10px 12px;margin:8px 0;text-align:center;"><div style="color:#FF4444;font-size:10px;margin-bottom:4px;">🥊 BENCH CLEARING BRAWL 🥊</div><div style="color:#ff9999;font-size:7px;">${ev.txt}</div></div>`;
         } else if (ev.isFiller) {
             document.getElementById('wgTicker').innerHTML += `<div><span style="color:#555; margin-right:10px;">[${ev.tm}]</span> <span style="color:#ccc;">${ev.txt}</span></div>`;
@@ -8883,6 +8916,12 @@ function checkTradeDeadlineAnnouncements() {
         tradeLog.unshift({ day: currentDay, details: `!! NEWS: IT IS TRADE DEADLINE DAY! The window closes at midnight.` });
     } else if (currentDay === deadlineDay + 1) {
         tradeLog.unshift({ day: currentDay, details: ` NEWS: The Trade Deadline has officially passed. Rosters are locked for the playoffs.` });
+        // Lock the trades toggle
+        if (awardConfig.trades) {
+            awardConfig.trades = false;
+            const btn = document.getElementById('btnTrades');
+            if (btn) { btn.textContent = btn.textContent.replace('ON', 'OFF'); btn.style.opacity = '0.5'; }
+        }
     }
 }
 
