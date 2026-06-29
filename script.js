@@ -6705,6 +6705,8 @@ function startWatchLive() {
     watchQueue = [...g.result.boxLog, ...fillerEvents];
     watchQueue.sort((a,b) => a.p !== b.p ? a.p - b.p : (a.m !== b.m ? a.m - b.m : a.s - b.s));
     let currentPeriod = 1;
+    const watchGoalsByPlayer = {};
+    let watchMaxDeficit = { [g.h.code]: 0, [g.a.code]: 0 };
     
     watchInterval = setInterval(() => {
         if (watchQueue.length === 0) {
@@ -6743,8 +6745,35 @@ function startWatchLive() {
             document.getElementById('wgTicker').innerHTML += `<div><span style="color:#555; margin-right:10px;">[${ev.tm}]</span> <span style="color:#ccc;">${ev.txt}</span></div>`;
         } else {
             if (!ev.isPenalty) {
-                if (ev.tm === g.a.code) { watchCurrentScore.a++; document.getElementById('wgAwayScore').innerText = watchCurrentScore.a; }
-                if (ev.tm === g.h.code) { watchCurrentScore.h++; document.getElementById('wgHomeScore').innerText = watchCurrentScore.h; }
+                if (ev.tm === g.a.code) {
+                    const prevDeficit = watchCurrentScore.h - watchCurrentScore.a;
+                    if (prevDeficit >= 2) watchMaxDeficit[g.a.code] = Math.max(watchMaxDeficit[g.a.code], prevDeficit);
+                    watchCurrentScore.a++;
+                    document.getElementById('wgAwayScore').innerText = watchCurrentScore.a;
+                    const newDiff = watchCurrentScore.a - watchCurrentScore.h;
+                    if (watchMaxDeficit[g.a.code] >= 2 && newDiff >= 0) {
+                        document.getElementById('wgTicker').innerHTML += `<div style="background:#001a00;border:2px solid #00FF88;padding:8px 12px;margin:6px 0;text-align:center;"><div style="color:#00FF88;font-size:9px;">⚡ COMEBACK ALERT — ${g.a.code}${newDiff > 0 ? ' TAKES THE LEAD' : ' TIES IT UP'}!</div></div>`;
+                        watchMaxDeficit[g.a.code] = 0;
+                    }
+                }
+                if (ev.tm === g.h.code) {
+                    const prevDeficit = watchCurrentScore.a - watchCurrentScore.h;
+                    if (prevDeficit >= 2) watchMaxDeficit[g.h.code] = Math.max(watchMaxDeficit[g.h.code], prevDeficit);
+                    watchCurrentScore.h++;
+                    document.getElementById('wgHomeScore').innerText = watchCurrentScore.h;
+                    const newDiff = watchCurrentScore.h - watchCurrentScore.a;
+                    if (watchMaxDeficit[g.h.code] >= 2 && newDiff >= 0) {
+                        document.getElementById('wgTicker').innerHTML += `<div style="background:#001a00;border:2px solid #00FF88;padding:8px 12px;margin:6px 0;text-align:center;"><div style="color:#00FF88;font-size:9px;">⚡ COMEBACK ALERT — ${g.h.code}${newDiff > 0 ? ' TAKES THE LEAD' : ' TIES IT UP'}!</div></div>`;
+                        watchMaxDeficit[g.h.code] = 0;
+                    }
+                }
+                if (ev.scorer) {
+                    watchGoalsByPlayer[ev.scorer] = (watchGoalsByPlayer[ev.scorer] || 0) + 1;
+                    if (watchGoalsByPlayer[ev.scorer] === 3) {
+                        document.getElementById('wgTicker').innerHTML += `<div style="background:#1a1400;border:2px solid #FFD700;padding:10px 12px;margin:8px 0;text-align:center;"><div style="color:#FFD700;font-size:11px;">🎩 HAT TRICK — ${ev.scorer}!</div><div style="color:#aa8800;font-size:7px;margin-top:3px;">The hats are on the ice!</div></div>`;
+                        if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `HAT TRICK: ${ev.scorer} (${ev.tm}) scores three in the broadcast!` });
+                    }
+                }
             }
             if (ev.isPenalty) {
                 document.getElementById('wgTicker').innerHTML += `<div style="background:#0d0800;border:1px solid #554400;padding:6px 8px;margin:4px 0;"><span style="color:#886600;margin-right:8px;">[${ev.tm||''}]</span><span style="color:#aaa;">${ev.txt||'Penalty called.'}</span></div>`;
@@ -7199,8 +7228,32 @@ function checkMonthlyAwards() {
         
         let eF = eastF ? eastF.name : 'N/A'; let eD = eastD ? eastD.name : 'N/A'; let eG = eastG ? eastG.name : 'N/A';
         let wF = westF ? westF.name : 'N/A'; let wD = westD ? westD.name : 'N/A'; let wG = westG ? westG.name : 'N/A';
-        
-        document.getElementById('jumboMessage').innerHTML = `<span style="color:var(--ea-yellow)">[AWD] MONTH ${monthNum} EAST AWARDS [AWD]</span><br>F: ${eF} | D: ${eD} | G: ${eG}<br><span style="color:var(--ea-yellow)">[AWD] MONTH ${monthNum} WEST AWARDS [AWD]</span><br>F: ${wF} | D: ${wD} | G: ${wG}`;
+
+        // Team of the Month — best pts over the last 30 days
+        const teamMonthPts = {};
+        for (let d = Math.max(0, currentDay - 30); d < currentDay; d++) {
+            (calendar[d] || []).forEach(g => {
+                if (!g || !g.result) return;
+                if (g.result.hG > g.result.aG) { teamMonthPts[g.h.nrm] = (teamMonthPts[g.h.nrm]||0) + 2; }
+                else if (g.result.aG > g.result.hG) { teamMonthPts[g.a.nrm] = (teamMonthPts[g.a.nrm]||0) + 2; }
+                else { teamMonthPts[g.h.nrm] = (teamMonthPts[g.h.nrm]||0) + 1; teamMonthPts[g.a.nrm] = (teamMonthPts[g.a.nrm]||0) + 1; }
+            });
+        }
+        const teamOfMonth = Object.entries(teamMonthPts).sort((a,b) => b[1]-a[1])[0];
+        const tomTeam = teamOfMonth ? (league.find(t => t.nrm === teamOfMonth[0]) || {}) : null;
+        const tomStr = tomTeam ? `${tomTeam.code || teamOfMonth[0]} (${teamOfMonth[1]}pts)` : 'N/A';
+
+        document.getElementById('jumboMessage').innerHTML = `<span style="color:var(--ea-yellow)">[AWD] MONTH ${monthNum} EAST AWARDS [AWD]</span><br>F: ${eF} | D: ${eD} | G: ${eG}<br><span style="color:var(--ea-yellow)">[AWD] MONTH ${monthNum} WEST AWARDS [AWD]</span><br>F: ${wF} | D: ${wD} | G: ${wG}<br><span style="color:var(--neon-cyan)">TEAM OF THE MONTH: ${tomStr}</span>`;
+
+        // Push to news ticker
+        const day = `DAY ${currentDay + 1}`;
+        if (awardConfig.headlines) {
+            tradeLog.unshift({ day, details: `MONTH ${monthNum} AWARDS — EAST: F:${eF} D:${eD} G:${eG} | WEST: F:${wF} D:${wD} G:${wG}` });
+            if (tomTeam) tradeLog.unshift({ day, details: `TEAM OF THE MONTH: ${tomStr} — hottest team in the league over the last 30 days.` });
+            if (eastF) tradeLog.unshift({ day, details: `PLAYER OF THE MONTH (EAST): ${eF} — ${eastF.g}G ${eastF.a}A ${eastF.pts}PTS this month.` });
+            if (westF) tradeLog.unshift({ day, details: `PLAYER OF THE MONTH (WEST): ${wF} — ${westF.g}G ${westF.a}A ${westF.pts}PTS this month.` });
+        }
+
         takeMonthSnapshot(); renderTradeLog();
     }
 }
