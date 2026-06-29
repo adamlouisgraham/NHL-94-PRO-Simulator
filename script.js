@@ -4556,6 +4556,9 @@ function simGame(idx) {
         if (goalDiff === 1) {
             const pullChance = 0.50;
             if (Math.random() < pullChance) {
+                const trailingTeam = trailerIsHome ? g.h : g.a;
+                allGoals.push({ p:3, m:59, s:1, str:`P3 59:01`, tm: trailingTeam.code,
+                    cl:'#888', txt:`${trailingTeam.code} pulls the goalie for the extra attacker — 6-on-5 with time running out!`, isNote:true });
                 const enScorerTeam = trailerIsHome ? g.a : g.h;
                 const enGoalie    = trailerIsHome ? hG_name : aG_name;
                 const enShooters  = trailerIsHome ? [...aStruct.f[0], ...aStruct.d[0]] : [...hStruct.f[0], ...hStruct.d[0]];
@@ -4728,6 +4731,10 @@ function simGame(idx) {
     const allStarCandidates = [...starScores, ...goalieStars].sort((a,b) => b.score - a.score);
     const seen = new Set(); const threeStars = [];
     for (const c of allStarCandidates) { if (!seen.has(c.name) && c.score > 0) { seen.add(c.name); threeStars.push(c.name); } if (threeStars.length === 3) break; }
+    if (!isASG && awardConfig.headlines && threeStars.length > 0) {
+        const starLine = threeStars.map((n,i) => `${['1st','2nd','3rd'][i]}: ${n}`).join(' | ');
+        tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `THREE STARS — ${g.a.code} ${aG}-${hG} ${g.h.code}: ${starLine}` });
+    }
 
     // Goalie duel detection
     const hSvPct = hShots > 0 ? (hShots - aG) / hShots : 0;
@@ -6831,6 +6838,8 @@ function startWatchLive() {
             document.getElementById('wgTicker').innerHTML += `<div style="background:#1a0000;border:2px solid #FF4444;padding:10px 12px;margin:8px 0;text-align:center;"><div style="color:#FF4444;font-size:10px;margin-bottom:4px;">🥊 BENCH CLEARING BRAWL 🥊</div><div style="color:#ff9999;font-size:7px;">${ev.txt}</div></div>`;
         } else if (ev.isFiller) {
             document.getElementById('wgTicker').innerHTML += `<div><span style="color:#555; margin-right:10px;">[${ev.tm}]</span> <span style="color:#ccc;">${ev.txt}</span></div>`;
+        } else if (ev.isNote) {
+            document.getElementById('wgTicker').innerHTML += `<div style="background:#0a0a14;border:2px solid #888;padding:8px 10px;margin:6px 0;text-align:center;"><div style="color:#ccc;font-size:8px;">🥅 ${ev.txt}</div></div>`;
         } else {
             if (!ev.isPenalty) {
                 if (ev.tm === g.a.code) {
@@ -6866,16 +6875,18 @@ function startWatchLive() {
             if (ev.isPenalty) {
                 document.getElementById('wgTicker').innerHTML += `<div style="background:#0d0800;border:1px solid #554400;padding:6px 8px;margin:4px 0;"><span style="color:#886600;margin-right:8px;">[${ev.tm||''}]</span><span style="color:#aaa;">${ev.txt||'Penalty called.'}</span></div>`;
             } else {
-                const isPP = ev.isPP, isSH = ev.isSH;
-                const goalBg = isPP ? '#1a1400' : '#0a1500';
-                const goalBorder = isPP ? '#FFD700' : (ev.cl||'#0f0');
-                const specialTag = isPP ? ' <span style="background:#FFD700;color:#000;font-size:6px;padding:1px 4px;margin-left:6px;">PP</span>'
+                const isPP = ev.isPP, isSH = ev.isSH, isEN = ev.isEN;
+                const goalBg = isEN ? '#1a0a00' : isPP ? '#1a1400' : '#0a1500';
+                const goalBorder = isEN ? '#FF8800' : isPP ? '#FFD700' : (ev.cl||'#0f0');
+                const specialTag = isEN ? ' <span style="background:#FF8800;color:#000;font-size:6px;padding:1px 4px;margin-left:6px;">EN</span>'
+                                 : isPP ? ' <span style="background:#FFD700;color:#000;font-size:6px;padding:1px 4px;margin-left:6px;">PP</span>'
                                  : isSH ? ' <span style="background:#00FFFF;color:#000;font-size:6px;padding:1px 4px;margin-left:6px;">SH</span>' : '';
+                const goalLabel = isEN ? '🥅 EMPTY NET GOAL' : '⚡ GOAL';
                 if (isPP) {
                     const bug = document.getElementById('wgScoreBug');
                     if (bug) { bug.style.background = '#332200'; setTimeout(() => { bug.style.background = '#000'; }, 1200); }
                 }
-                document.getElementById('wgTicker').innerHTML += `<div style="background:${goalBg};border:2px solid ${goalBorder};padding:8px 10px;margin:6px 0;"><div style="color:${ev.cl||'#fff'};font-size:9px;margin-bottom:3px;">⚡ GOAL — ${ev.tm||''}${specialTag}</div><div style="color:#fff;font-size:7px;">${ev.txt || ev.scorer || ''}</div></div>`;
+                document.getElementById('wgTicker').innerHTML += `<div style="background:${goalBg};border:2px solid ${goalBorder};padding:8px 10px;margin:6px 0;"><div style="color:${ev.cl||'#fff'};font-size:9px;margin-bottom:3px;">${goalLabel} — ${ev.tm||''}${specialTag}</div><div style="color:#fff;font-size:7px;">${ev.txt || ev.scorer || ''}</div></div>`;
             }
         }
         let t = document.getElementById('wgTicker'); t.scrollTop = t.scrollHeight;
@@ -6892,7 +6903,8 @@ function skipWatchGame() {
     document.getElementById('wgBugHomeScore').innerText = watchGameObj.result.hG;
     let h = '<div style="color:var(--ea-yellow); text-align:center; margin-bottom:15px;">--- FAST FORWARDED TO END ---</div>';
     watchGameObj.result.boxLog.forEach(ev => {
-        if (ev.isPenalty) { h += `<div style="background:#111; border:1px solid ${ev.cl}; padding:4px; margin:4px 0;"><span style="color:${ev.cl}; font-weight:bold; margin-right:10px;">[${ev.tm}]</span> <span style="color:#fff;">[SUS] ${ev.txt}</span></div>`; } 
+        if (ev.isPenalty) { h += `<div style="background:#111; border:1px solid ${ev.cl}; padding:4px; margin:4px 0;"><span style="color:${ev.cl}; font-weight:bold; margin-right:10px;">[${ev.tm}]</span> <span style="color:#fff;">[SUS] ${ev.txt}</span></div>`; }
+        else if (ev.isNote) { h += `<div style="background:#111; border:1px solid #888; padding:4px; margin:4px 0;"><span style="color:#ccc;">🥅 ${ev.txt}</span></div>`; }
         else {
             h += `<div style="background:#111; border:1px solid ${ev.cl||'#555'}; padding:4px; margin:4px 0;"><span style="color:${ev.cl||'#fff'}; font-weight:bold; margin-right:10px;">[${ev.tm||''}]</span> <span style="color:#fff;">!! GOAL! ${ev.txt || ev.scorer || ''}</span></div>`; }
     });
@@ -7932,6 +7944,15 @@ function openScoutingReport(day, gIdx) {
         </div>`;
     };
 
+    // Team captain
+    const captainCard = (tkNrm) => {
+        const capName = teamCaptains[tkNrm];
+        if (!capName) return '';
+        const score = Math.round(getLeadershipScore(capName));
+        return `<div style="font-size:5px;color:#555;margin-top:8px;margin-bottom:3px;">CAPTAIN</div>
+            <div style="font-size:6px;color:#FFD700;">[C] ${capName} <span style="color:#888;font-size:5px;">LEADERSHIP ${score}</span></div>`;
+    };
+
     // Top line chemistry
     const lineCard = (tkNrm) => {
         if (!rosters || !rosters[tkNrm]) return '';
@@ -7983,6 +8004,7 @@ function openScoutingReport(day, gIdx) {
         <div style="font-size:6px;color:#888;letter-spacing:.12em;margin-bottom:8px;">${aCode} — AWAY</div>
         <div style="font-size:5px;color:#555;margin-bottom:3px;">STARTING GOALIE</div>
         ${goalieCard(aNrm, aCode)}
+        ${captainCard(aNrm)}
         <div style="font-size:5px;color:#555;margin-top:8px;margin-bottom:3px;">TOP LINE</div>
         ${lineCard(aNrm)}
         ${hotColdLine(aNrm)}
@@ -7994,6 +8016,7 @@ function openScoutingReport(day, gIdx) {
         <div style="font-size:6px;color:#888;letter-spacing:.12em;margin-bottom:8px;">${hCode} — HOME</div>
         <div style="font-size:5px;color:#555;margin-bottom:3px;">STARTING GOALIE</div>
         ${goalieCard(hNrm, hCode)}
+        ${captainCard(hNrm)}
         <div style="font-size:5px;color:#555;margin-top:8px;margin-bottom:3px;">TOP LINE</div>
         ${lineCard(hNrm)}
         ${hotColdLine(hNrm)}
@@ -9058,6 +9081,19 @@ function applyPostGameFatigue(awayTeamCode, homeTeamCode, awayGoalieName, homeGo
 
 // 2. THE MIDNIGHT LOOP (Runs at the end of the day)
 function processDailyUpdates() {
+    // Expire pending trades older than 7 days
+    if (pendingTrades.length > 0) {
+        const TRADE_EXPIRE_DAYS = 7;
+        const expired = pendingTrades.filter(t => t.day == null || (currentDay - t.day) >= TRADE_EXPIRE_DAYS);
+        if (expired.length > 0) {
+            expired.forEach(t => {
+                tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `TRADE EXPIRED: ${t.t1.toUpperCase()} ↔ ${t.t2.toUpperCase()} offer (${t.p1} / ${t.p2}) went unanswered and has been withdrawn.` });
+            });
+            pendingTrades = pendingTrades.filter(t => t.day != null && (currentDay - t.day) < TRADE_EXPIRE_DAYS);
+            refreshTradeBadge();
+        }
+    }
+
     let teamsPlayedToday = new Set();
     let todaysGames = calendar[currentDay] || [];
     todaysGames.forEach(g => { teamsPlayedToday.add(g.a.nrm); teamsPlayedToday.add(g.h.nrm); });
@@ -9146,8 +9182,8 @@ function processDailyUpdates() {
             rosters[teamB].push(playerA);
 
             if (awardConfig.tradeBlock) {
-                pendingTrades.push({ id: Date.now() + Math.random(), t1: teamA, t2: teamB, t1Name: teamA, t2Name: teamB, p1: playerA.name, p2: playerB.name });
-                tradeLog.unshift({ day: currentDay, details: `TRADE OFFER: ${teamA.toUpperCase()} ↔ ${teamB.toUpperCase()} — pending approval.` });
+                pendingTrades.push({ id: Date.now() + Math.random(), t1: teamA, t2: teamB, t1Name: teamA, t2Name: teamB, p1: playerA.name, p2: playerB.name, day: currentDay });
+                tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `TRADE OFFER: ${teamA.toUpperCase()} ↔ ${teamB.toUpperCase()} — pending approval.` });
                 refreshTradeBadge();
             } else {
                 tradeLog.unshift({ day: currentDay, details: `${dealTag}.` });
