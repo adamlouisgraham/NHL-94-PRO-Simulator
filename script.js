@@ -1035,8 +1035,20 @@ function renderScheduleDashboard() {
         const h2hLine = hMeet > 0
             ? (() => {
                 const leader = hPts > aPts ? `${home} leads` : aPts > hPts ? `${away} leads` : 'Tied';
-                return `<div style="color:#555;font-size:5px;margin-top:2px;">H2H: ${leader} ${hPts}-${aPts}pts (${hMeet}GP)</div>`;
+                return `<div style="color:#555;font-size:5px;margin-top:2px;">H2H this season: ${leader} ${hPts}-${aPts}pts (${hMeet}GP)</div>`;
               })()
+            : '';
+        // All-time H2H from leagueHistory
+        let allTimeH = 0, allTimeA = 0;
+        leagueHistory.forEach(season => {
+            (season.standings || []).forEach(t => {
+                const h2h = (t.season && t.season.h2h) || t.h2h || {};
+                if (t.nrm === g.h?.nrm) allTimeH += Math.floor((h2h[g.a?.nrm] || 0) / 2);
+                if (t.nrm === g.a?.nrm) allTimeA += Math.floor((h2h[g.h?.nrm] || 0) / 2);
+            });
+        });
+        const allTimeLine = (allTimeH + allTimeA) > 0
+            ? `<div style="color:#444;font-size:5px;margin-top:1px;">All-time: ${home} ${allTimeH} – ${allTimeA} ${away}</div>`
             : '';
         return `<div class="schedule-game-line" style="flex-direction:column;align-items:flex-start;gap:1px;">
             <div style="display:flex;justify-content:space-between;width:100%;">
@@ -1045,6 +1057,7 @@ function renderScheduleDashboard() {
             </div>
             <div style="color:#555;font-size:5px;">${away} ${aRec} &nbsp;|&nbsp; ${home} ${hRec}</div>
             ${h2hLine}
+            ${allTimeLine}
         </div>`;
     }).join('');
     upcomingEl.innerHTML = `<div style="font-size:8px; color:var(--silver-mid); margin-bottom:6px;">Upcoming</div>${upcomingLines || '<div class="schedule-game-line">No games scheduled.</div>'}`;
@@ -1075,8 +1088,12 @@ function renderScheduleDashboard() {
     if (irEl && Object.keys(playerStats).length > 0) {
         const injured = [], suspended = [];
         Object.values(playerStats).forEach(ps => {
-            if (ps.injury && ps.injury.daysRemaining > 0)
-                injured.push(`<span style="color:#FF5555;">${ps.name}</span> <span style="color:#555;font-size:5px;">(${ps.teamCode||''} · ${ps.injury.daysRemaining}d)</span>`);
+            if (ps.injury && ps.injury.daysRemaining > 0) {
+                const d = ps.injury.daysRemaining;
+                const sev = d <= 3 ? 'DAY-TO-DAY' : d <= 10 ? 'WEEK-TO-WEEK' : 'LONG-TERM';
+                const sevColor = d <= 3 ? '#FFAA44' : d <= 10 ? '#FF6600' : '#FF3333';
+                injured.push(`<span style="color:#FF5555;">${ps.name}</span> <span style="color:#555;font-size:5px;">(${ps.teamCode||''} · ${d}d)</span> <span style="color:${sevColor};font-size:5px;">[${sev}]</span>`);
+            }
             if (ps.suspended && ps.suspended.days > 0)
                 suspended.push(`<span style="color:#FF8800;">${ps.name}</span> <span style="color:#555;font-size:5px;">(${ps.teamCode||''} · ${ps.suspended.days}g · ${ps.suspended.reason||'SUS'})</span>`);
         });
@@ -6384,6 +6401,18 @@ function openBoxScore(day, idx) {
         h += `</div>`;
     }
 
+    // Shutout check
+    const hShutout = g.result.aG === 0 && g.result.hGoalie;
+    const aShutout = g.result.hG === 0 && g.result.aGoalie;
+    if (hShutout || aShutout) {
+        const soGoalie = hShutout ? g.result.hGoalie : g.result.aGoalie;
+        const soSaves  = hShutout ? g.result.aShots : g.result.hShots;
+        h += `<div style="background:#1a1400; border:2px solid #FFD700; padding:8px 14px; text-align:center; font-size:7px; color:#FFD700; letter-spacing:.12em; margin-bottom:6px;">🥅 SHUTOUT — ${soGoalie} (${soSaves} saves)</div>`;
+        if (awardConfig.headlines && !g._shutoutLogged) {
+            tradeLog.unshift({ day: `DAY ${(day||currentDay)+1}`, details: `SHUTOUT: ${soGoalie} blanks the opposition with ${soSaves} saves!` });
+            g._shutoutLogged = true;
+        }
+    }
     if (g.result.isGoalieDuel) {
         h += `<div style="background:#001a2e; border:2px solid var(--neon-cyan); padding:8px 14px; text-align:center; font-size:7px; color:var(--neon-cyan); letter-spacing:.12em; margin-bottom:6px;">★ GOALIE DUEL ★</div>`;
     }
@@ -7816,6 +7845,37 @@ function showHistoricalStandings(y) {
     document.getElementById('historyOverlay').style.display = 'flex';
 }
 
+function openStatLeaders() {
+    const k = 'season';
+    const skaters = Object.values(playerStats).filter(p => p[k] && p[k].gp > 0 && p.pos !== 'G');
+    const goalies  = Object.values(playerStats).filter(p => p[k] && p[k].gp > 0 && p.pos === 'G');
+    const top = (arr, sortFn, n=10) => [...arr].sort(sortFn).slice(0, n);
+    const row = (p, val, color='#fff') => `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')">
+        <td style="color:#888;font-size:6px;padding:3px 6px;">${p.teamCode||''}</td>
+        <td style="padding:3px 6px;">${p.name}</td>
+        <td style="text-align:right;color:${color};font-weight:bold;padding:3px 10px;">${val}</td></tr>`;
+    const tbl = (title, rows, color) => `<div style="margin-bottom:14px;">
+        <div style="font-size:6px;color:#888;text-transform:uppercase;letter-spacing:.14em;border-bottom:1px solid #222;padding-bottom:4px;margin-bottom:6px;">${title}</div>
+        <table style="width:100%;font-size:8px;border-collapse:collapse;">${rows}</table></div>`;
+
+    const goalieSvp = p => p[k].sa > 0 ? ((p[k].sv||0)/p[k].sa) : 0;
+
+    let h = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">`;
+    h += `<div>`;
+    h += tbl('Points', top(skaters, (a,b)=>(b[k].g+b[k].a)-(a[k].g+a[k].a)).map(p=>row(p,(p[k].g+p[k].a),'var(--ea-yellow)')).join(''), 'var(--ea-yellow)');
+    h += tbl('Goals',  top(skaters, (a,b)=>b[k].g-a[k].g).map(p=>row(p,p[k].g,'#FF6666')).join(''));
+    h += tbl('Assists',top(skaters, (a,b)=>b[k].a-a[k].a).map(p=>row(p,p[k].a,'var(--neon-cyan)')).join(''));
+    h += `</div><div>`;
+    h += tbl('+/-',   top(skaters, (a,b)=>b[k].pm-a[k].pm).map(p=>row(p,(p[k].pm>=0?'+':'')+p[k].pm,'#88FF88')).join(''));
+    h += tbl('PIM',   top(skaters, (a,b)=>b[k].pim-a[k].pim).map(p=>row(p,p[k].pim,'#FF8800')).join(''));
+    h += tbl('GWG',   top(skaters, (a,b)=>(b[k].gwg||0)-(a[k].gwg||0)).map(p=>row(p,p[k].gwg||0,'#FFD700')).join(''));
+    h += tbl('SV%',   top(goalies,  (a,b)=>goalieSvp(b)-goalieSvp(a)).filter(p=>p[k].sa>=10).map(p=>row(p,goalieSvp(p).toFixed(3),'var(--neon-cyan)')).join(''));
+    h += `</div></div>`;
+
+    document.getElementById('statLeadersContent').innerHTML = h;
+    document.getElementById('statLeadersOverlay').style.display = 'flex';
+}
+
 function openAllTimeRecords() {
     let pl=[]; 
     Object.values(playerStats).forEach(p=>pl.push({name:p.name,pos:p.pos,gp:p.career.gp+p.season.gp,g:p.career.g+p.season.g,a:p.career.a+p.season.a,pts:p.career.pts+p.season.g+p.season.a,w:p.career.w+p.season.w,pim:(p.career.pim||0)+(p.season.pim||0),ppg:(p.career.ppg||0)+(p.season.ppg||0)})); 
@@ -8593,7 +8653,7 @@ function runDraftLottery() {
 function closeLottery() { document.getElementById('lotteryOverlay').style.display = 'none'; }
 // --- WINDOW EVENTS ---
 window.onclick = function(event) {
-    const modals = ['lotteryOverlay', 'allTimeOverlay', 'awardOverlay', 'recapOverlay', 'seriesRecapOverlay', 'leagueSettingsOverlay', 'arenaSettingsOverlay', 'tradeOverlay', 'subOverlay', 'historyOverlay', 'playerCardOverlay', 'boxScoreOverlay', 'advEditorOverlay', 'gpChecklistOverlay', 'watchGameOverlay', 'stOverlay', 'proposalOverlay'];
+    const modals = ['lotteryOverlay', 'allTimeOverlay', 'awardOverlay', 'recapOverlay', 'seriesRecapOverlay', 'statLeadersOverlay', 'leagueSettingsOverlay', 'arenaSettingsOverlay', 'tradeOverlay', 'subOverlay', 'historyOverlay', 'playerCardOverlay', 'boxScoreOverlay', 'advEditorOverlay', 'gpChecklistOverlay', 'watchGameOverlay', 'stOverlay', 'proposalOverlay'];
     modals.forEach(id => { const modal = document.getElementById(id); if (event.target === modal && modal) modal.style.display = "none"; });
 };
 

@@ -160,6 +160,7 @@
                 <button onclick="openTradeModal()" class="btn-purple" id="btnTrade">TRADES</button>
                 <button onclick="document.getElementById('masterArchiveModal').style.display='flex'" class="btn-orange">MASTER ARCHIVES</button>
                 <button onclick="openAllTimeRecords()" class="btn-yellow">RECORD BOOK</button>
+                <button onclick="openStatLeaders()" class="btn-yellow">STAT LEADERS</button>
 
                 <button onclick="simDay()" class="btn-cyan">SIM DAY</button>
                 <button onclick="simWeek()" class="btn-cyan">SIM WEEK</button>
@@ -406,6 +407,14 @@
             <div class="unit-header">CAREER ALL-STAR SELECTIONS</div>
             <div id="allStarLeaderboard" style="max-height:200px; overflow-y:auto; background:#111; border:2px solid #000;"></div>
             <button onclick="document.getElementById('masterArchiveModal').style.display='none'" class="btn-cyan" style="width:100%;margin-top:20px;">CLOSE ARCHIVES</button>
+        </div>
+    </div>
+
+    <div id="statLeadersOverlay" class="modal" onclick="this.style.display='none'">
+        <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:20px; max-width:700px; width:95%; max-height:90vh; overflow-y:auto;">
+            <div class="menu-header" style="color:var(--ea-yellow); background:transparent; justify-content:center; border-bottom:2px solid var(--ea-yellow);">THIS SEASON — STAT LEADERS</div>
+            <div id="statLeadersContent" style="margin-top:15px;"></div>
+            <button onclick="document.getElementById('statLeadersOverlay').style.display='none'" style="width:100%;margin-top:15px;border-color:var(--line-red);color:var(--line-red);">CLOSE</button>
         </div>
     </div>
 
