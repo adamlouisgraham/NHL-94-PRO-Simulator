@@ -556,6 +556,7 @@ function getSortedByAttr(players, category, attr) {
 
 let awardConfig = { streaks: true, chemistry: true, rivalries: true, aging: false, draft: false, retirements: false, headlines: true, milestones: true, injuries: true, legacy_schedule: true, trades: true, tradeBlock: false };
 let coachAdj = { forecheck: 0, pp: 0, lineMatch: false };
+let coachTrust = 50; // 0-100; updated after each user-team game
 let preseasonOvrSnapshot = {}; // { teamNrm: avgOvr } captured at season start
 let teamCaptains = {}; // { teamNrm: playerName }
 
@@ -594,7 +595,9 @@ function placeOnIR(pName, tk) {
     if (!ps) return;
     if (!ps.injury || ps.injury.daysRemaining === 0) return alert(`${pName} must be injured to be placed on IR.`);
     ps.onIR = true;
-    tradeLog.unshift({ day: currentDay, details: `IR MOVE: ${pName} (${tk.toUpperCase()}) placed on Injured Reserve — ${ps.injury.daysRemaining} days remaining.` });
+    ps.irDay = currentDay;
+    ps.irTotalDays = ps.injury.daysRemaining;
+    tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `IR MOVE: ${pName} (${tk.toUpperCase()}) placed on Injured Reserve — ${ps.injury.daysRemaining} days remaining.` });
     clearWpCache(); updateUI(); renderTeamDirectory(tk); saveGame();
 }
 
@@ -748,7 +751,7 @@ function buildSavePayload() {
             league, rosters, playerStats, tradeLog, hallOfFame, leagueHistory, 
             retiredPlayers, calendar: lightweightCalendar, currentDay, currentSeason, 
             isPlayoffs, isASG, currentCupChamp, playoffBracket, awardConfig, 
-            monthSnapshot, pendingTrades, realDatesMap, customDuos, coachAdj, preseasonOvrSnapshot, teamCaptains
+            monthSnapshot, pendingTrades, realDatesMap, customDuos, coachAdj, coachTrust, preseasonOvrSnapshot, teamCaptains
         }
     };
 }
@@ -791,6 +794,7 @@ function applyLoadedSave(data) {
     pendingTrades = Array.isArray(data.pendingTrades) ? data.pendingTrades : [];
     customDuos = Array.isArray(data.customDuos) ? data.customDuos : [];
     if (typeof data.coachAdj === 'object' && data.coachAdj) coachAdj = { ...coachAdj, ...data.coachAdj };
+    if (typeof data.coachTrust === 'number') coachTrust = data.coachTrust;
     if (typeof data.preseasonOvrSnapshot === 'object' && data.preseasonOvrSnapshot) preseasonOvrSnapshot = data.preseasonOvrSnapshot;
     teamCaptains = (typeof data.teamCaptains === 'object' && data.teamCaptains) ? data.teamCaptains : {};
     if (!Object.keys(teamCaptains).length) assignTeamCaptains();
@@ -2992,10 +2996,19 @@ function renderTeamDirectory(tk) {
         irPlayers.forEach(p => {
             const ps = playerStats[p.name];
             const daysLeft = ps?.injury?.daysRemaining || 0;
-            h += `<div style="background:#1a0000; padding:8px 12px; margin-bottom:6px; border-left:4px solid #FF5555; display:flex; align-items:center; justify-content:space-between;">`;
+            const totalDays = ps?.irTotalDays || daysLeft || 1;
+            const dayOnIR = ps?.irDay != null ? currentDay - ps.irDay : null;
+            const pctHealed = Math.min(1, totalDays > 0 ? 1 - (daysLeft / totalDays) : 1);
+            const timelineHtml = dayOnIR != null ? `
+                <div style="background:#2a0000;border-radius:2px;height:4px;margin-top:4px;overflow:hidden;">
+                    <div style="height:100%;width:${Math.round(pctHealed*100)}%;background:${daysLeft===0?'#00FF88':'#FF5555'};border-radius:2px;"></div>
+                </div>
+                <div style="color:#555;font-size:6px;margin-top:2px;">Day ${dayOnIR} of ~${totalDays}</div>` : '';
+            h += `<div style="background:#1a0000; padding:8px 12px; margin-bottom:6px; border-left:4px solid #FF5555;">`;
+            h += `<div style="display:flex; align-items:center; justify-content:space-between;">`;
             h += `<span style="color:#FF8888; font-size:9px;">[IR] ${p.name} <span style="color:#555; font-size:8px;">${daysLeft > 0 ? `(${daysLeft}d remaining)` : '(READY TO ACTIVATE)'}</span></span>`;
             h += `<button onclick="activateFromIR('${p.name}','${tk}')" style="font-size:6px; padding:3px 8px; border-color:${daysLeft === 0 ? '#00FF88' : '#555'}; color:${daysLeft === 0 ? '#00FF88' : '#555'}; cursor:pointer;">${daysLeft === 0 ? 'ACTIVATE' : 'NOT YET'}</button>`;
-            h += `</div>`;
+            h += `</div>${timelineHtml}</div>`;
         });
         injuredNotIR.forEach(p => {
             const ps = playerStats[p.name];
@@ -4232,6 +4245,12 @@ function simGame(idx) {
     if (!isPlayoffs && !isASG) {
         const fMod = coachAdj.forecheck * 0.025; // aggressive opens scoring both ways
         hWallMod += fMod; aWallMod += fMod;
+        // Coach trust: high trust slightly boosts user team's goalie, low trust slightly hurts
+        if (selectedTeam) {
+            const trustMod = (coachTrust - 50) * 0.0004; // ±0.02 at extremes
+            if (g.h.nrm === selectedTeam) hWallMod -= trustMod;
+            if (g.a.nrm === selectedTeam) aWallMod -= trustMod;
+        }
     }
     let asgBoost = isASG ? 1.8 : 1.0;
     let homeCrowdEnergy = 1.03;
@@ -4834,6 +4853,14 @@ function simGame(idx) {
     if (typeof applyPostGameFatigue === 'function' && awayGoalie && homeGoalie) applyPostGameFatigue(g.a.nrm, g.h.nrm, awayGoalie.name, homeGoalie.name);
     if (typeof reviewGameForSuspensions === 'function') reviewGameForSuspensions(matchStats, g.h.nrm, g.a.nrm);
     if (typeof triggerGameInjuries === 'function') triggerGameInjuries(matchStats, g.h.nrm, g.a.nrm);
+
+    // Update coach trust after user-team games
+    if (selectedTeam && (g.h.nrm === selectedTeam || g.a.nrm === selectedTeam) && !isASG) {
+        const userIsHome = g.h.nrm === selectedTeam;
+        const userWon = userIsHome ? hG > aG : aG > hG;
+        const userLost = userIsHome ? aG > hG : hG > aG;
+        coachTrust = Math.max(0, Math.min(100, coachTrust + (userWon ? 4 : userLost ? -3 : 1)));
+    }
 
     // Surface milestone banners in trade log / news ticker
     if (gameMilestones.length > 0 && awardConfig.milestones && awardConfig.headlines) {
@@ -6785,6 +6812,7 @@ function startWatchLive() {
     let currentPeriod = 1;
     const watchGoalsByPlayer = {};
     let watchMaxDeficit = { [g.h.code]: 0, [g.a.code]: 0 };
+    let watchLastGoalTime = null; // { p, m } of last goal for momentum-swing detection
     
     watchInterval = setInterval(() => {
         if (watchQueue.length === 0) {
@@ -6842,6 +6870,24 @@ function startWatchLive() {
             document.getElementById('wgTicker').innerHTML += `<div style="background:#0a0a14;border:2px solid #888;padding:8px 10px;margin:6px 0;text-align:center;"><div style="color:#ccc;font-size:8px;">🥅 ${ev.txt}</div></div>`;
         } else {
             if (!ev.isPenalty) {
+                // Momentum swing: back-to-back goals within 2 minutes
+                if (watchLastGoalTime) {
+                    const periodDiff = (ev.p - watchLastGoalTime.p) * 20 * 60;
+                    const timeDiffSec = periodDiff + (ev.m - watchLastGoalTime.m) * 60 + ((ev.s || 0) - (watchLastGoalTime.s || 0));
+                    if (timeDiffSec <= 120 && timeDiffSec >= 0) {
+                        const swingTeam = ev.tm;
+                        document.getElementById('wgTicker').innerHTML += `<div style="background:#1a0014;border:2px solid #FF00FF;padding:8px 12px;margin:6px 0;text-align:center;animation:none;"><div style="color:#FF44FF;font-size:10px;">🔥 MOMENTUM SWING — ${swingTeam}!</div><div style="color:#884488;font-size:6px;margin-top:2px;">BACK-TO-BACK GOALS</div></div>`;
+                        // Spike momentum bar
+                        const fill = document.getElementById('wgMomFill');
+                        if (fill) {
+                            fill.style.width = '85%';
+                            fill.style.left = swingTeam === g.a.code ? '0' : 'auto';
+                            fill.style.right = swingTeam === g.h.code ? '0' : 'auto';
+                            fill.style.background = '#FF00FF';
+                        }
+                    }
+                }
+                watchLastGoalTime = { p: ev.p, m: ev.m };
                 if (ev.tm === g.a.code) {
                     const prevDeficit = watchCurrentScore.h - watchCurrentScore.a;
                     if (prevDeficit >= 2) watchMaxDeficit[g.a.code] = Math.max(watchMaxDeficit[g.a.code], prevDeficit);
@@ -7687,6 +7733,22 @@ function getConnSmytheScore(p) {
     }
 }
     
+    // Trade log headlines for major awards
+    if (awardConfig.headlines) {
+        const logAward = (tName, label) => {
+            const winner = allPlayers.find(p => p.trophies && p.trophies.some(t => t.year === currentSeason && t.name === tName));
+            if (winner) tradeLog.unshift({ day: `SEASON ${currentSeason}`, details: `AWARD: ${winner.name} wins the ${label} — ${winnerStats[tName] || ''}` });
+        };
+        logAward('Hart', 'Hart Trophy (MVP)');
+        logAward('Conn Smythe', 'Conn Smythe Trophy (Playoff MVP)');
+        logAward('Vezina', 'Vezina Trophy (Best Goalie)');
+        logAward('Norris', 'Norris Trophy (Best Defenceman)');
+        logAward('Selke', 'Selke Trophy (Defensive Forward)');
+        logAward('Art Ross', 'Art Ross Trophy (Scoring Leader)');
+        logAward('Rocket Richard', 'Rocket Richard Trophy (Goal Leader)');
+        if (currentCupChamp) tradeLog.unshift({ day: `SEASON ${currentSeason}`, details: `STANLEY CUP CHAMPION: ${currentCupChamp} hoists the Cup!` });
+    }
+
     const getWinner = (tN) => { const wAll = allPlayers.filter(p => p.trophies && p.trophies.some(t => t.year === currentSeason && t.name === tN)); return wAll.length === 0 ? 'N/A' : wAll.map(w => w.name).join(', '); };
 
     const awardCard = (label, desc, awardKey, accent) => {
@@ -8080,7 +8142,14 @@ function openCoachingPanel() {
                 background:${coachAdj.lineMatch?'#0d0800':'#000'};">ON</button>
         </div>
     </div>
-    <div style="font-size:5px;color:#333;margin-top:8px;text-align:center;">Settings persist across games. Reset to NEUTRAL/OFF for balanced sim.</div>`;
+    <div style="font-size:5px;color:#333;margin-top:8px;text-align:center;">Settings persist across games. Reset to NEUTRAL/OFF for balanced sim.</div>
+    <div style="margin-top:14px;border-top:1px solid #1a1a1a;padding-top:10px;">
+        <div style="font-size:6px;color:#888;letter-spacing:.12em;margin-bottom:6px;">COACH CONFIDENCE</div>
+        <div style="background:#111;border-radius:3px;height:6px;overflow:hidden;margin-bottom:5px;">
+            <div style="height:100%;width:${coachTrust}%;background:${coachTrust >= 70 ? '#00FF88' : coachTrust >= 40 ? '#FFA500' : '#FF4444'};transition:width .3s;border-radius:3px;"></div>
+        </div>
+        <div style="font-size:6px;color:${coachTrust >= 70 ? '#00FF88' : coachTrust >= 40 ? '#FFA500' : '#FF4444'};">${coachTrust >= 70 ? 'TRUSTED — players responding well' : coachTrust >= 40 ? 'NEUTRAL — steady but unproven' : 'QUESTIONED — locker room tension'}</div>
+    </div>`;
 
     document.getElementById('coachingContent').innerHTML = html;
     document.getElementById('coachingOverlay').style.display = 'flex';
