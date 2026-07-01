@@ -327,7 +327,7 @@ function getCaptainChemModifier(teamNrm) {
     if (isHot) return 2;
     return 1; // healthy, active captain provides a small baseline boost
 }
-let league = []; let rosters = {}; let playerStats = {}; let tradeLog = []; let hallOfFame = []; let leagueHistory = []; let retiredPlayers = []; let calendar = []; let realDatesMap = []; let gameMilestones = []; let monthSnapshot = {}; let pendingTrades = []; let playoffBracket = { round: 1, series: [] }; let teams = {}; let gameData = {}; let selectedTeam = null; let currentMonth = 1;
+let league = []; let rosters = {}; let playerStats = {}; let tradeLog = []; let hallOfFame = []; let leagueHistory = []; let retiredPlayers = []; let calendar = []; let realDatesMap = []; let gameMilestones = []; let monthSnapshot = {}; let pendingTrades = []; let playoffBracket = { round: 1, series: [] }; let teams = {}; let selectedTeam = null;
 let customDuos = []; // user-defined chemistry pairs, supplements the hardcoded dynamicDuos
 let currentDay = 0; let currentSeason = 1; let isPlayoffs = false; let isASG = false; let activeIdx = null; let statMode = 'season'; let isSimulating = false; let isSimSeason = false; let isTurboMode = false; let currentCupChamp = ""; let activeSubInfo = null; let customRosterData = null; let customRosterSource = 'google'; let customTeamData = null; let customPlayerData = null; let customScheduleData = null; let customEventLogData = null; let eventLogData = null;
 let watchBroadcastDay = null; let watchBroadcastIdx = null;
@@ -8112,27 +8112,44 @@ function triggerLoadBackup() {
 }
 
 function exportSaveData() {
-    // NOTE: Replace 'leagueState' with the actual global object or localStorage key 
-    // holding your simulator's current state.
-    const saveData = {
-        timestamp: new Date().toISOString(),
-        // state: leagueState 
-    };
+    const payload = buildSavePayload();
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload));
+    const a = document.createElement('a');
+    a.setAttribute("href", dataStr);
+    const ts = new Date().toISOString().slice(0, 10);
+    a.setAttribute("download", `nhl94_dynasty_backup_${ts}.json`);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
 
-    // Convert the data to a JSON string
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(saveData));
-    
-    // Create a temporary anchor link to trigger the download
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", "nhl94_dynasty_backup.json");
-    
-    // Append, click, and remove the anchor
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-    
-    console.log("Save data exported successfully.");
+function importSaveData(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const parsed = JSON.parse(e.target.result);
+            const normalized = normalizeSavePackage(parsed);
+            if (!normalized || !isSupportedSaveVersion(normalized.meta.version))
+                return displaySaveStateInfo('Unsupported save version — cannot import.', 'error');
+            if (!isValidSaveData(normalized.payload))
+                return displaySaveStateInfo('Invalid save file — data missing or corrupted.', 'error');
+            applyLoadedSave(normalized.payload);
+            saveGame({ force: true });
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('appContainer').style.display = 'block';
+            document.getElementById('seasonYearDisplay').innerText = currentSeason;
+            updateUI();
+            renderSaveSlotHistory();
+            if (isPlayoffs) initPlayoffsUI();
+            displaySaveStateInfo('Backup imported successfully.', 'success');
+        } catch (err) {
+            displaySaveStateInfo(`Import failed: ${err.message}`, 'error');
+        }
+        event.target.value = '';
+    };
+    reader.readAsText(file);
 }
 
 function clearSaveSlot() {
