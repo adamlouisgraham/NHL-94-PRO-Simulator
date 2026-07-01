@@ -239,8 +239,12 @@ function gradeToNum(val) {
 // ==========================================
 
 // Attribute Getters: Handle potential naming inconsistencies in spreadsheet headers
-const getOff = (pName) => parseInt(playerStats[pName]?.attr.off || playerStats[pName]?.attr.OFF || 0);
-const getDef = (pName) => parseInt(playerStats[pName]?.attr.def || playerStats[pName]?.attr.DEF || 0);
+const getOff  = (pName) => parseInt(playerStats[pName]?.attr.off   || playerStats[pName]?.attr.OFF  || 0);
+const getDef  = (pName) => parseInt(playerStats[pName]?.attr.def   || playerStats[pName]?.attr.DEF  || 0);
+const getChk  = (pName) => { const p = playerStats[pName]; return p ? (gradeToNum(p.attr.check) || 50) : 50; };
+const getAggr = (pName) => { const p = playerStats[pName]; return p ? (gradeToNum(p.attr.aggr)  || 50) : 50; };
+const getWgt  = (pName) => { const p = playerStats[pName]; return p ? (p.weight || getWeightLbs(p.attr.weight || 'C')) : 180; };
+const getArch = (pName) => getPlayerWeightedStats(pName).tag || 'Unknown';
 
 
 // ==========================================
@@ -759,7 +763,8 @@ function renderScheduleDashboard() {
             return `<span style="color:#666;font-size:5px;"> ${gp.name}${tag}${b2b}</span>`;
         };
         const hMeet = g.h?.season?.meetings?.[g.a?.nrm] || 0;
-        const rivalTag = (awardConfig.rivalries && hMeet >= 3) ? ' <span style="color:var(--line-red);font-size:5px;">[RIVALRY]</span>' : '';
+        const isHistRival = awardConfig.rivalries && !!(rivals[g.h?.nrm]?.includes(g.a?.nrm));
+        const rivalTag = awardConfig.rivalries && (hMeet >= 3 || isHistRival) ? ' <span style="color:var(--line-red);font-size:5px;">[RIVALRY]</span>' : '';
         const recFmt = t => `${t.season.w||0}-${t.season.l||0}-${t.season.t||0}`;
         const hRec = g.h ? recFmt(g.h) : '';
         const aRec = g.a ? recFmt(g.a) : '';
@@ -881,11 +886,36 @@ function getTeamLogoPath(teamName) {
         'winnipeg': 'winnipeg', 'winnipeg jets': 'winnipeg', 
         'wales conference': 'wales', 'campbell conference': 'campbell', 'wal': 'wales', 'cam': 'campbell' 
     }; 
-    return teamLogos[shortNames[key] || key] || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='; 
+    const fromName = teamLogos[shortNames[key] || key];
+    if (fromName) return fromName;
+    // Fallback: try 3-letter code lookup (e.g. 'CHI', 'DET')
+    const codeKey = teamName.toUpperCase().trim();
+    return PC_LOGOS[codeKey] || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 }
 function getTeamLogoHtml(teamName) { if(!teamName) return '<div style="display:inline-block; width:32px; height:32px; margin:0 5px; flex-shrink:0;"></div>'; return `<img src="${getTeamLogoPath(teamName)}" style="width:36px; height:32px; object-fit:contain; border:none; box-shadow:none; padding:0; margin: 0 5px; vertical-align:middle; flex-shrink:0; transform: scale(1.15);">`; }
 const teamMap = { "Mighty Ducks of Anaheim": "ANA", "Boston Bruins": "BOS", "Buffalo Sabres": "BUF", "Calgary Flames": "CGY", "Chicago Blackhawks": "CHI", "Minnesota North Stars": "MIN", "Detroit Red Wings": "DET", "Edmonton Oilers": "EDM", "Florida Panthers": "FLA", "Hartford Whalers": "HAR", "Los Angeles Kings": "LAK", "Montreal Canadiens": "MTL", "New Jersey Devils": "NJD", "New York Islanders": "NYI", "New York Rangers": "NYR", "Ottawa Senators": "OTT", "Philadelphia Flyers": "PHI", "Pittsburgh Penguins": "PIT", "Quebec Nordiques": "QUE", "San Jose Sharks": "SJS", "St. Louis Blues": "STL", "Tampa Bay Lightning": "TBL", "Toronto Maple Leafs": "TOR", "Vancouver Canucks": "VAN", "Washington Capitals": "WSH", "Winnipeg Jets": "WPG" };
 const teamColors = { 'har': ['#00B140', '#00539B', '#A2AAAD'], 'hfd': ['#00B140', '#00539B', '#A2AAAD'], 'ana': ['#532a44', '#00685E', '#c4ced4'], 'win': ['#00468B', '#CE1126', '#E0E8EE'], 'wpg': ['#00468B', '#CE1126', '#E0E8EE'], 'bos': ['#FFB81C', '#000000', '#8A630B'], 'buf': ['#002654', '#FCB514', '#A2AAAD'], 'cgy': ['#C8102E', '#F1BE48', '#590613'], 'car': ['#CC0000', '#000000', '#A2AAAD'], 'chi': ['#CF0A2C', '#000000', '#D0CACA'], 'col': ['#6F263D', '#236192', '#A2AAAD'], 'min': ['#009639', '#FFD100', '#00331D'], 'det': ['#CE1126', '#FFFFFF', '#A2AAAD'], 'edm': ['#FF4C00', '#041E42', '#C65C10'], 'fla': ['#C8102E', '#041E42', '#B9975B'], 'la': ['#111111', '#A2AAAD', '#555555'], 'lak': ['#111111', '#A2AAAD', '#555555'], 'mon': ['#AF1E2D', '#192168', '#E0E8EE'], 'mtl': ['#AF1E2D', '#192168', '#E0E8EE'], 'nj': ['#CE1126', '#00533B', '#889398'], 'njd': ['#CE1126', '#00533B', '#889398'], 'nyi': ['#00539B', '#F47D30', '#002040'], 'nyr': ['#0038A8', '#CE1126', '#7FA9D6'], 'ott': ['#E31837', '#000000', '#B9975B'], 'phi': ['#F74902', '#000000', '#F3E9D2'], 'pit': ['#000000', '#FCBA03', '#B08D00'], 'que': ['#003E7E', '#FFFFFF', '#CE1126'], 'sa': ['#006D75', '#000000', '#A2AAAD'], 'sjs': ['#006D75', '#000000', '#A2AAAD'], 'stl': ['#002F87', '#FCB514', '#041E42'], 'tb': ['#002868', '#FFFFFF', '#A2AAAD'], 'tbl': ['#002868', '#FFFFFF', '#A2AAAD'], 'tor': ['#00205B', '#FFFFFF', '#B0C4DE'], 'van': ['#000000', '#F2A900', '#C8102E'], 'was': ['#041E42', '#C8102E', '#0033A0'], 'wsh': ['#041E42', '#C8102E', '#0033A0'], 'cbj': ['#002654', '#CE1126', '#A2AAAD'], 'wales': ['#000000', '#FF6600', '#FFFFFF'], 'campbell': ['#FF6600', '#000000', '#FFFFFF'] };
+
+const PC_LOGOS = {
+    ANA:'Team Logos/Ducks.png',     BOS:'Team Logos/Bruins.png',    BUF:'Team Logos/sabres.png',
+    CGY:'Team Logos/Flames.png',    CHI:'Team Logos/blackhawks.png',DAL:'Team Logos/North_Stars.png',
+    DET:'Team Logos/Red_Wings.png', EDM:'Team Logos/Oilers.png',    FLA:'Team Logos/Panthers.png',
+    HFD:'Team Logos/whalers.png',   HAR:'Team Logos/whalers.png',   LAK:'Team Logos/kings.png',
+    MIN:'Team Logos/North_Stars.png',MTL:'Team Logos/Canadiens.png', NJD:'Team Logos/Devils.png',
+    NYI:'Team Logos/islanders.png', NYR:'Team Logos/Rangers.png',   OTT:'Team Logos/Senators.png',
+    PHI:'Team Logos/Flyers.png',    PIT:'Team Logos/Penguins.png',  QUE:'Team Logos/Nordiques.png',
+    SJS:'Team Logos/sharks.png',    STL:'Team Logos/blues.png',     TBL:'Team Logos/tampa.png',
+    TOR:'Team Logos/maple_leafs.png',VAN:'Team Logos/canucks.png',  WSH:'Team Logos/capitals.png',
+    WIN:'Team Logos/jets.png',      WPG:'Team Logos/jets.png',
+};
+
+// Historical rivalries — bonus activates from game 1 (organic meetings-based rivalry still stacks at 3+)
+const rivals = {
+    'chi':['det','stl','tor'], 'det':['chi','tor','nyr'], 'mtl':['tor','bos','que'],
+    'tor':['mtl','det','chi'], 'nyr':['nyi','njd','phi'], 'edm':['cgy','van','win'],
+    'bos':['mtl','nyr','har'], 'phi':['njd','nyr','pit'], 'pit':['phi','wsh','njd'],
+    'cgy':['edm','van','win'], 'njd':['nyr','phi','pit'],
+};
 
 const DEFAULT_TEAM_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7TQG09fJijxS0CFdwQF3ht_Q1ggw99rfmHzRC2RF4Ht5ZlmyJP2qTMOtOvxuiijczcO_UXm_zwIig/pub?gid=732700653&single=true&output=csv";
 const DEFAULT_PLAYER_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7TQG09fJijxS0CFdwQF3ht_Q1ggw99rfmHzRC2RF4Ht5ZlmyJP2qTMOtOvxuiijczcO_UXm_zwIig/pub?gid=1253001256&single=true&output=csv";
@@ -1089,6 +1119,10 @@ async function importEventLogSheet() {
 }
 
 
+
+let gameStatus = {
+    globalChaos: 0.15, // Base volatility — scales random shot-probability variance each tick
+};
 
 let momentum = {
     abs: 0.0,
@@ -1803,7 +1837,7 @@ function processPostGameStreaks(skaters, goalies) {
 
 // ðŸ·ï¸ UI BADGE GENERATOR (2-Letter Abbreviation Version)
 function getArchetypeBadge(pName) {
-    const tag = getPlayerWeightedStats(pName).tag;
+    const tag = getArch(pName);
     if (!tag || tag === 'NONE' || tag === 'GOALTENDER') return ''; 
     
     const abbrevMap = {
@@ -2798,27 +2832,26 @@ function checkMilestones(pName) {
  * @param {Object} struct - The return from getRosterStructure(teamCode) containing .f and .d
  * @returns {Object} - An object with arrays of calculated minutes per player for forwards and defenders
  */
+function getPairOvr(pair) {
+    if (!pair || pair.length === 0) return 0;
+    const total = pair.reduce((sum, p) => sum + (getLiveIceOvr(p.name) || 75), 0);
+    return Math.round(total / pair.length);
+}
+
 function calculateDynamicIceTime(struct) {
     if (!struct || !struct.f || !struct.d) {
         return { forwardTimes: [15, 15, 15, 15], defenseTimes: [20, 20, 20] };
     }
 
-    // --- Helper: Get Line/Pair Average Overall Rating ---
-    const getUnitAverageOvr = (players) => {
-        if (!players || players.length === 0) return 0;
-        let sum = players.reduce((acc, p) => acc + (typeof getLiveIceOvr === 'function' ? getLiveIceOvr(p.name) : 75), 0);
-        return sum / players.length;
-    };
-
     // Calculate line overals
-    const f1Ovr = getUnitAverageOvr(struct.f[0]);
-    const f2Ovr = getUnitAverageOvr(struct.f[1]);
-    const f3Ovr = getUnitAverageOvr(struct.f[2]);
-    const f4Ovr = getUnitAverageOvr(struct.f[3]);
+    const f1Ovr = getPairOvr(struct.f[0]);
+    const f2Ovr = getPairOvr(struct.f[1]);
+    const f3Ovr = getPairOvr(struct.f[2]);
+    const f4Ovr = getPairOvr(struct.f[3]);
 
-    const d1Ovr = getUnitAverageOvr(struct.d[0]);
-    const d2Ovr = getUnitAverageOvr(struct.d[1]);
-    const d3Ovr = getUnitAverageOvr(struct.d[2]);
+    const d1Ovr = getPairOvr(struct.d[0]);
+    const d2Ovr = getPairOvr(struct.d[1]);
+    const d3Ovr = getPairOvr(struct.d[2]);
 
     // Total regulation game minutes to fill per position group (3 skaters on ice for F * 60 = 180, 2 for D * 60 = 120)
     const totalForwardMinutes = 180;
@@ -3087,9 +3120,10 @@ function simGame(idx) {
         if (g.series.aW === 3) aPressureMod -= 1.5;
     }
 
-    // RIVALRY — teams that have met 3+ times this season play with extra intensity (+2 OVR both sides)
+    // RIVALRY — historical rivals play with extra intensity from game 1; organic (3+ meetings) adds more
     const hMeetings = !isPlayoffs ? ((g.h.season.meetings || {})[g.a.nrm] || 0) : 0;
-    const rivalBonus = (awardConfig.rivalries && hMeetings >= 3) ? 2 : 0;
+    const isHistoricRival = awardConfig.rivalries && !!(rivals[g.h.nrm]?.includes(g.a.nrm));
+    const rivalBonus = !awardConfig.rivalries ? 0 : isHistoricRival ? (hMeetings >= 3 ? 3 : 1) : (hMeetings >= 3 ? 2 : 0);
 
     // TEAM STREAK MORALE — hot/cold streaks shift line OVR up to ±3
     let hStreakMod = g.h.winStreak >= 5 ? 3 : g.h.winStreak >= 3 ? 1.5 : g.h.loseStreak >= 5 ? -3 : g.h.loseStreak >= 3 ? -1.5 : 0;
@@ -3198,9 +3232,10 @@ function simGame(idx) {
         const scoreEffectH = scoreDiff * -0.012; // trailing home team gets boost
         const scoreEffectA = scoreDiff *  0.012; // trailing away team gets boost
 
-        // Shot generation  -  softer diff multiplier balances shots across lines
-        let hShotChance = 0.26 + (diff * 0.0014) * asgBoost + scoreEffectH;
-        let aShotChance = 0.26 - (diff * 0.0014) * asgBoost + scoreEffectA;
+        // Shot generation — diff multiplier balances shots; globalChaos adds per-tick variance (upsets)
+        const chaosSpike = (Math.random() - 0.5) * gameStatus.globalChaos * 0.12;
+        let hShotChance = 0.26 + (diff * 0.0014) * asgBoost + scoreEffectH + chaosSpike;
+        let aShotChance = 0.26 - (diff * 0.0014) * asgBoost + scoreEffectA - chaosSpike;
         
         period = minute <= 20 ? 1 : (minute <= 40 ? 2 : 3);
         let sec = Math.floor(Math.random() * 60);
@@ -3881,15 +3916,11 @@ function applyDailyRandomSwing(tk) {
 //  2. THE BACKGROUND PENALTY ROLLER (Renamed and Upgraded)
 // Call this randomly during standard play: let penResult = rollGeneralPenalty(attacker);
 function rollGeneralPenalty(attacker) {
-    // 1. Safely extract attributes (0-99 scale, defaulting to 50 if missing)
-    let rgh = attacker.stats?.RGH || attacker.attr?.rough || 50;
-    let agr = attacker.stats?.AGR || attacker.attr?.aggr || 50;
-    let chk = attacker.stats?.CHK || attacker.attr?.check || 50;
-
-    // Handle legacy letter grades just in case you load an old save file
-    if (typeof rgh === 'string') rgh = 50;
-    if (typeof agr === 'string') agr = 50;
-    if (typeof chk === 'string') chk = 50;
+    // 1. Safely extract attributes via unified grade-aware accessors
+    const aName = attacker.name;
+    let rgh = aName ? (gradeToNum(playerStats[aName]?.attr?.rough) || 50) : 50;
+    let agr = aName ? getAggr(aName) : 50;
+    let chk = aName ? getChk(aName)  : 50;
 
     // 2. Base Probability (Overall chance to commit ANY penalty)
     // Aggression and Roughness drive the likelihood of breaking the rules
