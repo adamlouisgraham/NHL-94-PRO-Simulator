@@ -241,10 +241,6 @@ function gradeToNum(val) {
 // Attribute Getters: Handle potential naming inconsistencies in spreadsheet headers
 const getOff = (pName) => parseInt(playerStats[pName]?.attr.off || playerStats[pName]?.attr.OFF || 0);
 const getDef = (pName) => parseInt(playerStats[pName]?.attr.def || playerStats[pName]?.attr.DEF || 0);
-const getChk = (pName) => parseInt(playerStats[pName]?.attr.chk || playerStats[pName]?.attr.CHK || 0);
-const getWgt = (pName) => playerStats[pName]?.weight || getWeightLbs(playerStats[pName]?.attr.weight || 'C');
-const getAggr = (pName) => parseInt(playerStats[pName]?.attr.aggr || playerStats[pName]?.attr.AGR || 0);
-const getArch = (pName) => playerStats[pName]?.archetype || 'Unknown'; // Column AE
 
 
 // ==========================================
@@ -890,7 +886,6 @@ function getTeamLogoPath(teamName) {
 function getTeamLogoHtml(teamName) { if(!teamName) return '<div style="display:inline-block; width:32px; height:32px; margin:0 5px; flex-shrink:0;"></div>'; return `<img src="${getTeamLogoPath(teamName)}" style="width:36px; height:32px; object-fit:contain; border:none; box-shadow:none; padding:0; margin: 0 5px; vertical-align:middle; flex-shrink:0; transform: scale(1.15);">`; }
 const teamMap = { "Mighty Ducks of Anaheim": "ANA", "Boston Bruins": "BOS", "Buffalo Sabres": "BUF", "Calgary Flames": "CGY", "Chicago Blackhawks": "CHI", "Minnesota North Stars": "MIN", "Detroit Red Wings": "DET", "Edmonton Oilers": "EDM", "Florida Panthers": "FLA", "Hartford Whalers": "HAR", "Los Angeles Kings": "LAK", "Montreal Canadiens": "MTL", "New Jersey Devils": "NJD", "New York Islanders": "NYI", "New York Rangers": "NYR", "Ottawa Senators": "OTT", "Philadelphia Flyers": "PHI", "Pittsburgh Penguins": "PIT", "Quebec Nordiques": "QUE", "San Jose Sharks": "SJS", "St. Louis Blues": "STL", "Tampa Bay Lightning": "TBL", "Toronto Maple Leafs": "TOR", "Vancouver Canucks": "VAN", "Washington Capitals": "WSH", "Winnipeg Jets": "WPG" };
 const teamColors = { 'har': ['#00B140', '#00539B', '#A2AAAD'], 'hfd': ['#00B140', '#00539B', '#A2AAAD'], 'ana': ['#532a44', '#00685E', '#c4ced4'], 'win': ['#00468B', '#CE1126', '#E0E8EE'], 'wpg': ['#00468B', '#CE1126', '#E0E8EE'], 'bos': ['#FFB81C', '#000000', '#8A630B'], 'buf': ['#002654', '#FCB514', '#A2AAAD'], 'cgy': ['#C8102E', '#F1BE48', '#590613'], 'car': ['#CC0000', '#000000', '#A2AAAD'], 'chi': ['#CF0A2C', '#000000', '#D0CACA'], 'col': ['#6F263D', '#236192', '#A2AAAD'], 'min': ['#009639', '#FFD100', '#00331D'], 'det': ['#CE1126', '#FFFFFF', '#A2AAAD'], 'edm': ['#FF4C00', '#041E42', '#C65C10'], 'fla': ['#C8102E', '#041E42', '#B9975B'], 'la': ['#111111', '#A2AAAD', '#555555'], 'lak': ['#111111', '#A2AAAD', '#555555'], 'mon': ['#AF1E2D', '#192168', '#E0E8EE'], 'mtl': ['#AF1E2D', '#192168', '#E0E8EE'], 'nj': ['#CE1126', '#00533B', '#889398'], 'njd': ['#CE1126', '#00533B', '#889398'], 'nyi': ['#00539B', '#F47D30', '#002040'], 'nyr': ['#0038A8', '#CE1126', '#7FA9D6'], 'ott': ['#E31837', '#000000', '#B9975B'], 'phi': ['#F74902', '#000000', '#F3E9D2'], 'pit': ['#000000', '#FCBA03', '#B08D00'], 'que': ['#003E7E', '#FFFFFF', '#CE1126'], 'sa': ['#006D75', '#000000', '#A2AAAD'], 'sjs': ['#006D75', '#000000', '#A2AAAD'], 'stl': ['#002F87', '#FCB514', '#041E42'], 'tb': ['#002868', '#FFFFFF', '#A2AAAD'], 'tbl': ['#002868', '#FFFFFF', '#A2AAAD'], 'tor': ['#00205B', '#FFFFFF', '#B0C4DE'], 'van': ['#000000', '#F2A900', '#C8102E'], 'was': ['#041E42', '#C8102E', '#0033A0'], 'wsh': ['#041E42', '#C8102E', '#0033A0'], 'cbj': ['#002654', '#CE1126', '#A2AAAD'], 'wales': ['#000000', '#FF6600', '#FFFFFF'], 'campbell': ['#FF6600', '#000000', '#FFFFFF'] };
-const rivals = { 'chi': ['det','stl','tor'], 'det': ['chi','tor','nyr'], 'mtl': ['tor','bos','que'], 'tor': ['mtl','det','chi'], 'nyr': ['nyi','njd','phi'], 'edm': ['cgy','van','win'], 'bos': ['mtl','nyr','har'], 'phi': ['njd','nyr','pit'], 'pit': ['phi','wsh','njd'], 'cgy': ['edm','van','win'], 'njd': ['nyr','phi','pit'] };
 
 const DEFAULT_TEAM_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7TQG09fJijxS0CFdwQF3ht_Q1ggw99rfmHzRC2RF4Ht5ZlmyJP2qTMOtOvxuiijczcO_UXm_zwIig/pub?gid=732700653&single=true&output=csv";
 const DEFAULT_PLAYER_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7TQG09fJijxS0CFdwQF3ht_Q1ggw99rfmHzRC2RF4Ht5ZlmyJP2qTMOtOvxuiijczcO_UXm_zwIig/pub?gid=1253001256&single=true&output=csv";
@@ -1106,16 +1101,6 @@ let momentum = {
 // =========================================================
 
 // Make sure your global object looks like this
-let gameStatus = {
-    globalChaos: 0.15, // Base Volatility
-    momentum: {
-        abs: 0.0, // Game Heat (Volume)
-        rel: 0.0, // Team Edge (Pos = Home, Neg = Away)
-        alpha: 0.15, // Blending sensitivity
-        carryoverTimer: 0,
-        bufferedFloor: 0
-    }
-};
 
 
 
@@ -5000,41 +4985,6 @@ function getLiveLineOvr(line) {
  * @param {number} totalMins - Total available minutes for that unit (e.g., 60 for forwards)
  * @param {boolean} isPlayoff - Whether to use playoff caps
  */
-function calculateLineIceTime(ovrs, totalMins, isPlayoff) {
-    const numLines = ovrs.length;
-    let weights = new Array(numLines).fill(1);
-
-    // 1. Calculate differences between adjacent lines
-    for (let i = 1; i < numLines; i++) {
-        let diff = ovrs[i - 1] - ovrs[i];
-        if (Math.abs(diff) <= 2) {
-            weights[i] = weights[i - 1]; // Parity
-        } else {
-            // Apply exponential weight
-            weights[i] = weights[i - 1] * Math.pow(0.85, diff); 
-        }
-    }
-
-    let totalWeight = weights.reduce((a, b) => a + b, 0);
-
-    // 2.  THE MISSING CAP: Apply your throttle to the stat sheet!
-    let maxPercent = isPlayoff ? 0.433 : 0.383;
-    
-    if (weights.length > 0 && (weights[0] / totalWeight) > maxPercent) {
-        let remainingWeight = totalWeight - weights[0];
-        let allowedL1Weight = remainingWeight * (maxPercent / (1 - maxPercent));
-        weights[0] = allowedL1Weight;
-        
-        // Recalculate the total weight pool with the new capped value
-        totalWeight = weights.reduce((a, b) => a + b, 0); 
-    }
-
-    // 3. Normalize to fit total minutes and set a safe floor of 5 mins for the 4th line
-    return weights.map(w => {
-        let rawMins = Math.round((w / totalWeight) * totalMins);
-        return Math.max(5, rawMins); // Ensures no line gets less than 5 minutes
-    });
-}
 
 
 /**
@@ -5042,18 +4992,6 @@ function calculateLineIceTime(ovrs, totalMins, isPlayoff) {
  * @param {Array} pair - An array of two player objects
  * @returns {number} - The average overall rating of the pair
  */
-function getPairOvr(pair) {
-    if (!pair || pair.length === 0) return 0;
-    
-    // Calculate total OVR of the pair
-    let totalOvr = pair.reduce((sum, p) => {
-        // Use your existing OVR getter for an individual player
-        return sum + (typeof getLiveIceOvr === 'function' ? getLiveIceOvr(p.name) : 50);
-    }, 0);
-    
-    // Return the average
-    return Math.round(totalOvr / pair.length);
-}
 
 function getLineOvr(line) {
     if (!line || line.length === 0) return 0;
@@ -7272,17 +7210,6 @@ const PC_COLORS = {
     VAN:['#008852','#001F5B'], WSH:['#041E42','#C8102E'], WIN:['#003E7E','#7B3F6E'],
 };
 
-const PC_LOGOS = {
-    ANA:'Team Logos/Ducks.png',     BOS:'Team Logos/Bruins.png',    BUF:'Team Logos/sabres.png',
-    CGY:'Team Logos/Flames.png',    CHI:'Team Logos/blackhawks.png',DAL:'Team Logos/North_Stars.png',
-    DET:'Team Logos/Red_Wings.png', EDM:'Team Logos/Oilers.png',    FLA:'Team Logos/Panthers.png',
-    HFD:'Team Logos/whalers.png',   LAK:'Team Logos/kings.png',     MIN:'Team Logos/North_Stars.png',
-    MTL:'Team Logos/Canadiens.png', NJD:'Team Logos/Devils.png',    NYI:'Team Logos/islanders.png',
-    NYR:'Team Logos/Rangers.png',   OTT:'Team Logos/Senators.png',  PHI:'Team Logos/Flyers.png',
-    PIT:'Team Logos/Penguins.png',  QUE:'Team Logos/Nordiques.png', SJS:'Team Logos/sharks.png',
-    STL:'Team Logos/blues.png',     TBL:'Team Logos/tampa.png',     TOR:'Team Logos/maple_leafs.png',
-    VAN:'Team Logos/canucks.png',   WSH:'Team Logos/capitals.png',  WIN:'Team Logos/jets.png',
-};
 
 // Pose files: 3 skater poses (blue-jersey rows from reference sheet)
 //             2 goalie poses (butterfly + standing V)
@@ -8142,10 +8069,6 @@ function updateUI() {
     if (typeof updateScheduleView === 'function') updateScheduleView();
 }
 
-function handlePlayerClick(playerName) {
-    // Your logic for selecting/swapping players in the line editor
-    console.log(`Player clicked: ${playerName}`);
-}
 
 function triggerLoadBackup() {
     const fileInput = document.getElementById('saveFileInput');
