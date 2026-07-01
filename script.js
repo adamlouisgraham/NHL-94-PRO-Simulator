@@ -1486,7 +1486,7 @@ function getPlayerWeightedStats(pName) {
         let rough = gradeToNum(p.attr.rough);
         let aggr = gradeToNum(p.attr.aggr);
         let endur = gradeToNum(p.attr.endur);
-        let weight = p.weight || getWeightLbs(p.attr.weight || 'C');
+        let weight = getWgt(pName);
         let wgt = parseInt(p.attr.wgt || p.weight) || 180;
 
         // =========================================================
@@ -1592,7 +1592,7 @@ function getPlayerWeightedStats(pName) {
     // !! WEIGHT MODIFIER INJECTION ZONE (FIXED) !!
     // =========================================================
     // Use stored numeric lbs  -  no random re-roll
-    let weightMod = getWeightModifier(p.weight || getWeightLbs(p.attr.weight || 'C'), tag);
+    let weightMod = getWeightModifier(getWgt(pName), tag);
     
     // Instead of massively multiplying the rating, we apply a balanced flat adjustment
     if (weightMod >= 1.15) {
