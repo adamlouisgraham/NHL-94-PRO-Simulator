@@ -2969,8 +2969,6 @@ function simGame(idx) {
     clearWpCache(); // invalidate per-game OVR/tag cache at start of each game
     const dayGames = Array.isArray(calendar[currentDay]) ? calendar[currentDay] : [];
     const g = dayGames[idx];
-    let awayGoalie = getStartingGoalie(g.a.nrm);
-    let homeGoalie = getStartingGoalie(g.h.nrm);
     gameMilestones = [];
     const k = (isPlayoffs || isASG) ? 'playoff' : 'season';
     
@@ -3032,13 +3030,14 @@ function simGame(idx) {
         if (diff <= 10) restChance = 0.45; else if (diff <= 15) restChance = 0.30; 
         if (playedYesterday(tk)) restChance += 0.60;
         
+        const bStats = playerStats[backup.name]?.[k];
         if (sStats.consStarts >= 7 || Math.random() < restChance) {
-            sStats.consStarts = 0; 
-            if(playerStats[backup.name][k]) playerStats[backup.name][k].consStarts = (playerStats[backup.name][k].consStarts || 0) + 1;
+            sStats.consStarts = 0;
+            if (bStats) bStats.consStarts = (bStats.consStarts || 0) + 1;
             return backup;
         } else {
-            sStats.consStarts = (sStats.consStarts || 0) + 1; 
-            if(playerStats[backup.name][k]) playerStats[backup.name][k].consStarts = 0;
+            sStats.consStarts = (sStats.consStarts || 0) + 1;
+            if (bStats) bStats.consStarts = 0;
             return starter;
         }
     };
@@ -3554,9 +3553,7 @@ function simGame(idx) {
     }
 
     // ðŸ¤• 7. INJURIES
-    if (typeof rollInGameInjuries === 'function') {
-        rollInGameInjuries(g.h.nrm, g.a.nrm);
-    }
+    rollInGameInjuries(g.h.nrm, g.a.nrm);
     
     //  8. GOALIE POSITION RECORDING
     let hStatus = hG > aG ? 'win' : (hG < aG ? 'loss' : 'tie'); 
@@ -3695,7 +3692,7 @@ function simGame(idx) {
 
     let activeGoalies = [hG_obj, aG_obj].filter(g => g !== null);
     if (typeof processPostGameStreaks === 'function') processPostGameStreaks(winningTeamRoster.concat(losingTeamRoster), activeGoalies);
-    if (typeof applyPostGameFatigue === 'function' && awayGoalie && homeGoalie) applyPostGameFatigue(g.a.nrm, g.h.nrm, awayGoalie.name, homeGoalie.name);
+    if (typeof applyPostGameFatigue === 'function' && aG_name && hG_name) applyPostGameFatigue(g.a.nrm, g.h.nrm, aG_name, hG_name);
     if (typeof reviewGameForSuspensions === 'function') reviewGameForSuspensions(matchStats, g.h.nrm, g.a.nrm);
     if (typeof triggerGameInjuries === 'function') triggerGameInjuries(matchStats, g.h.nrm, g.a.nrm);
 
@@ -7889,6 +7886,53 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
 // =========================================================
 // [INJ] INJURY ENGINE
 // =========================================================
+// Mid-game injury system — fires during the sim tick loop (called per game, not per tick)
+// Low base rate; goalie injuries trigger backup pull event and get logged prominently
+function rollInGameInjuries(homeCode, awayCode) {
+    if (!awardConfig.injuries) return;
+    const SKATER_CHANCE = 0.022; // ~2 skater injuries per 10 games
+    const GOALIE_CHANCE = 0.008; // ~1 goalie pull per 12 games
+
+    [homeCode, awayCode].forEach(tk => {
+        if (!rosters[tk]) return;
+        const skaters = rosters[tk].filter(p => p.pos !== 'G' && playerStats[p.name] && playerStats[p.name].injury?.daysRemaining === 0);
+        const goalies = rosters[tk].filter(p => p.pos === 'G' && playerStats[p.name] && playerStats[p.name].injury?.daysRemaining === 0);
+
+        // Skater injury
+        skaters.forEach(p => {
+            const ps = playerStats[p.name];
+            if (!ps) return;
+            const fatigueBonus = (ps.fatigue || 0) > 65 ? 0.005 : 0;
+            const aggrBonus = getAggr(p.name) > 70 ? 0.004 : 0; // physical players hurt more often
+            if (Math.random() < SKATER_CHANCE + fatigueBonus + aggrBonus) {
+                const roll = Math.random();
+                let days;
+                if      (roll < 0.45) days = 0;  // shaken up, plays through
+                else if (roll < 0.75) days = 1;
+                else if (roll < 0.92) days = Math.floor(Math.random() * 4) + 2;
+                else                  days = Math.floor(Math.random() * 5) + 6;
+                days = Math.min(days, 12);
+                if (days > 0) ps.injury = { severity: days, daysRemaining: days };
+                const label = days === 0 ? 'shaken up — playing through' : `out ${days} game${days > 1 ? 's' : ''}`;
+                tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `[INJ] IN-GAME: ${p.name} (${tk.toUpperCase()}) — ${label}.` });
+            }
+        });
+
+        // Goalie injury — triggers backup pull event
+        goalies.forEach(p => {
+            const ps = playerStats[p.name];
+            if (!ps) return;
+            if (Math.random() < GOALIE_CHANCE) {
+                const days = Math.floor(Math.random() * 4) + 1; // 1-4 game goalie injury
+                ps.injury = { severity: days, daysRemaining: days };
+                const backupG = rosters[tk].find(b => b.pos === 'G' && b.name !== p.name && playerStats[b.name]?.injury?.daysRemaining === 0);
+                const backupNote = backupG ? ` ${backupG.name} enters in relief.` : ' No healthy backup available.';
+                tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `🚨 GOALIE PULLED (INJURY): ${p.name} (${tk.toUpperCase()}) — out ${days} game${days > 1 ? 's' : ''}.${backupNote}` });
+            }
+        });
+    });
+}
+
 function triggerGameInjuries(matchStats, homeCode, awayCode) {
     if (!awardConfig.injuries) return;
     const BASE_CHANCE = 0.015; // lowered overall rate; short injuries now dominate volume
