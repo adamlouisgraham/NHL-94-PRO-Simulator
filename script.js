@@ -507,7 +507,7 @@ function applyLoadedSave(data) {
     realDatesMap = Array.isArray(data.realDatesMap) ? data.realDatesMap : [];
 
     if (currentDay < 0) currentDay = 0;
-    if (currentDay > calendar.length) currentDay = calendar.length;
+    if (currentDay >= calendar.length) currentDay = calendar.length - 1;
 
     //  STANDINGS FIX: Re-link the schedule calendar back to the master league array
     calendar.forEach(day => {
@@ -1980,7 +1980,7 @@ function playedYesterday(tk) { if (currentDay === 0 || !calendar[currentDay - 1]
 function getPlayerFatigueAmount(pName) { 
     const p = playerStats[pName]; if (!p) return 0;
     let pen = 0; 
-    let endur = p.attr.endur || 70; // Fallback is now a number
+    let endur = gradeToNum(p.attr.endur) || 70;
 
     // ðŸ“… Back-to-Back Schedule Penalty
     if (playedYesterday(p.teamCode || p.team)) {
@@ -4414,7 +4414,7 @@ async function beginNewYear() {
             p.season = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0}; 
             p.playoff = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0};
         }
-        p.streakType = 'stable'; p.hasScored = false; 
+        p.streakType = 'stable'; p.hasScored = false; p.seasonTicks = 0;
     });
     
     takeMonthSnapshot(); 
@@ -4900,7 +4900,7 @@ function renderTeamStats() {
     h += `<div style="font-size:7px; color:#aaa; margin-top:5px; display:flex; justify-content:space-between; align-items:center;"><span>PULLED GOALIE UNIT</span> <button onclick="openSpecialTeamsMenu('${tk}', 'EXA', 1)" style="background:#222; color:#fff; border:1px solid #666; padding:2px 6px; cursor:pointer; font-size:7px;">EDIT</button></div>`;
     h += `<div style="display:flex; justify-content:space-around; flex-wrap:wrap; padding:10px 0;">`;
     h += exaU.map(p => `<div style="cursor:pointer; background:#111; padding:5px 10px; border:1px solid #333; border-radius:4px; text-align:center; min-width:80px; margin-bottom:5px;" onclick="showPlayerCard('${p.name}')">
-        <div style="font-size:10px; color:#fff;">${playerStats[p.name].injury>0?'[INJ]':''}${p.name} ${getArchetypeBadge(p.name)}</div>
+        <div style="font-size:10px; color:#fff;">${playerStats[p.name].injury?.daysRemaining>0?'[INJ]':''}${p.name} ${getArchetypeBadge(p.name)}</div>
         <div style="font-size:8px; color:#FF55FF; margin-top:3px;">OVR: ${getPlayerWeightedStats(p.name).ovr}</div>
         </div>`).join('');
     h += `</div></div><div class="grid-2" style="margin-top:20px;"><div>`; 
@@ -4909,7 +4909,7 @@ function renderTeamStats() {
     const bench = (rosters[tk] || []).filter(p => !activeNames.includes(p.name));
     if (bench.length > 0) {
         h += `<div class="unit-header" style="color:var(--silver-mid);">BENCH / SCRATCHES</div><table style="width:100%;">`;
-        h += bench.map(b => `<tr><td style="cursor:pointer;" onclick="showPlayerCard('${b.name}')"><button style="${yStyle}" onclick="openSubMenu('${tk}', '${b.name}', '${b.pos}'); event.stopPropagation();">EDIT</button>${playerStats[b.name].injury>0?'[INJ]':''}${b.name} ${getArchetypeBadge(b.name)} (${b.pos}) ${getEmoji(b.name)}</td><td style="text-align:right;"><span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(b.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(b.name)}</span></td></tr>`).join('');
+        h += bench.map(b => `<tr><td style="cursor:pointer;" onclick="showPlayerCard('${b.name}')"><button style="${yStyle}" onclick="openSubMenu('${tk}', '${b.name}', '${b.pos}'); event.stopPropagation();">EDIT</button>${playerStats[b.name].injury?.daysRemaining>0?'[INJ]':''}${b.name} ${getArchetypeBadge(b.name)} (${b.pos}) ${getEmoji(b.name)}</td><td style="text-align:right;"><span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(b.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(b.name)}</span></td></tr>`).join('');
         h += `</table>`;
     }
 
@@ -6618,7 +6618,7 @@ function openScoutingReport(day, gIdx) {
     // Active injuries
     const injuryLine = (tkNrm) => {
         if (!rosters?.[tkNrm]) return '';
-        const inj = (rosters[tkNrm] || []).filter(p => playerStats[p.name]?.injury > 0)
+        const inj = (rosters[tkNrm] || []).filter(p => playerStats[p.name]?.injury?.daysRemaining > 0)
             .map(p => `<span style="color:#FF4444;">${p.name} (${playerStats[p.name].injury}d)</span>`).join(', ');
         return inj ? `<div style="font-size:5px;margin-top:4px;color:#555;">IR: ${inj}</div>` : '';
     };
@@ -8072,7 +8072,7 @@ function updateUI() {
 
     const renderLeaderboard = (id, ti, d, sf, vf, lim) => {    
         let h = `<div style="background:#111; padding:10px; text-align:center; color:var(--ea-yellow); text-shadow:2px 2px 0px #000;">${ti}</div><table><tr style="background:#222;"><th>#</th><th>PLAYER</th><th>VAL</th></tr>`; 
-        d.sort(sf).slice(0,lim).forEach((p,idx) => { h += `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')"><td>${idx+1}</td><td>${p.injury > 0 ? '[INJ] ' : ''}${p.name} <span class="team-hl">${p.teamCode}</span></td><td class="pts-hl">${vf(p)}</td></tr>`; }); h += `</table>`; document.getElementById(id).innerHTML = h; 
+        d.sort(sf).slice(0,lim).forEach((p,idx) => { h += `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')"><td>${idx+1}</td><td>${p.injury?.daysRemaining > 0 ? '[INJ] ' : ''}${p.name} <span class="team-hl">${p.teamCode}</span></td><td class="pts-hl">${vf(p)}</td></tr>`; }); h += `</table>`; document.getElementById(id).innerHTML = h; 
     };
     
     renderLeaderboard('pointsContainer', 'POINTS', [...sks], (a,b) => ((b[k].g+b[k].a) - (a[k].g+a[k].a)), x => x[k].g+x[k].a, 25); 
