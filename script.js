@@ -3091,14 +3091,16 @@ function simGame(idx) {
     let asgBoost = isASG ? 1.8 : 1.0;
     let homeCrowdEnergy = 1.03;
 
-    // CHAOS — per-game variance so upsets are always possible
-    // Each team has a 1-in-5 chance of a significant night factor (hot/cold).
-    // Goalie hot/cold night shifts opponent scoring probability ±10%.
-    const hNight = Math.random() < 0.2 ? (Math.random() - 0.5) * 20 : 0;
-    const aNight = Math.random() < 0.2 ? (Math.random() - 0.5) * 20 : 0;
+    // CHAOS — globalChaos drives all random variance; scaled by context
+    // Rivalry games and playoffs get extra chaos; wall mod randomness uses same scale
+    const chaosScale = gameStatus.globalChaos * (isHistoricRival ? 1.4 : 1.0) * (isPlayoffs ? 1.2 : 1.0);
+    const nightMag = 14 * chaosScale;    // pre-game night factor magnitude
+    const wallJitter = 0.18 * chaosScale; // goalie wall mod random jitter
+    const hNight = Math.random() < 0.22 ? (Math.random() - 0.5) * nightMag : 0;
+    const aNight = Math.random() < 0.22 ? (Math.random() - 0.5) * nightMag : 0;
     const chaosOffset = hNight - aNight;
-    hWallMod = Math.max(0.78, Math.min(1.22, hWallMod + (Math.random() - 0.5) * 0.20));
-    aWallMod = Math.max(0.78, Math.min(1.22, aWallMod + (Math.random() - 0.5) * 0.20));
+    hWallMod = Math.max(0.78, Math.min(1.22, hWallMod + (Math.random() - 0.5) * wallJitter));
+    aWallMod = Math.max(0.78, Math.min(1.22, aWallMod + (Math.random() - 0.5) * wallJitter));
 
     // PLAYOFF PRESSURE — elimination game modifier
     // Facing elimination: veterans (+OVR) dig deep; less experienced players feel it (-OVR)
@@ -3231,8 +3233,13 @@ function simGame(idx) {
         const scoreEffectH = scoreDiff * -0.012; // trailing home team gets boost
         const scoreEffectA = scoreDiff *  0.012; // trailing away team gets boost
 
-        // Shot generation — diff multiplier balances shots; globalChaos adds per-tick variance (upsets)
-        const chaosSpike = (Math.random() - 0.5) * gameStatus.globalChaos * 0.12;
+        // Shot generation — activeChaos scales with period and game closeness
+        // 3rd period in a tied/1-goal game = peak chaos; blowouts dampen it
+        const absDiff = Math.abs(hG - aG);
+        const periodMult = period === 3 ? 1.5 : period === 2 ? 1.1 : 1.0;
+        const closeMult  = absDiff === 0 ? 1.4 : absDiff === 1 ? 1.15 : absDiff >= 3 ? 0.6 : 1.0;
+        const activeChaos = chaosScale * periodMult * closeMult;
+        const chaosSpike = (Math.random() - 0.5) * activeChaos * 0.12;
         let hShotChance = 0.26 + (diff * 0.0014) * asgBoost + scoreEffectH + chaosSpike;
         let aShotChance = 0.26 - (diff * 0.0014) * asgBoost + scoreEffectA - chaosSpike;
         
@@ -3277,7 +3284,8 @@ function simGame(idx) {
             // Conversion Roll  -  base 10.5%, sniper gets +14% multiplier, softer diff scaling
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const hSniperMod = hShooterTag === 'SNIPER' ? 1.14 : hShooterTag === 'SUPERSTAR' ? 1.05 : 1.0;
-            let scoringProb = (0.105 + (diff * 0.0018)) * aWallMod * hSniperMod;
+            const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
+            let scoringProb = (0.105 + (diff * 0.0018)) * aWallMod * hSniperMod * hChaosMod;
             if (Math.random() < Math.max(0.03, Math.min(0.26, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
@@ -3309,7 +3317,8 @@ function simGame(idx) {
 
             const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const aSniperMod = aShooterTag === 'SNIPER' ? 1.14 : aShooterTag === 'SUPERSTAR' ? 1.05 : 1.0;
-            let scoringProb = (0.105 - (diff * 0.0018)) * hWallMod * aSniperMod;
+            const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
+            let scoringProb = (0.105 - (diff * 0.0018)) * hWallMod * aSniperMod * aChaosMod;
             if (Math.random() < Math.max(0.03, Math.min(0.26, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
