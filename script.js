@@ -1716,7 +1716,7 @@ function assignMicroStreaks(rosterArray) {
 
     const eligible = rosterArray.filter(p => {
         const ps = playerStats[p.name];
-        return ps && ps.injury.daysRemaining === 0 && !ps.macro_streak && p.line !== 'BENCH';
+        return ps && (ps.injury?.daysRemaining ?? 0) === 0 && !ps.macro_streak && p.line !== 'BENCH';
     });
     if (eligible.length < 2) return;
 
@@ -4360,9 +4360,8 @@ function processOffseasonGrowth() {
         } else if (p.age >= 31) {
             let sev = p.age >= 35 ? 2 : 1; let r = Math.random(); oChg = -(Math.floor(r * 2) + sev); dChg = -(Math.floor(r * 2) + (sev - 1)); pChg = -(Math.floor(r * 1.5) + sev);
         }
-        if (p.pos === 'G') { 
-            p.attr.gDef = Math.max(20, Math.min(99, p.attr.gDef + dChg)); 
-            p.attr.ovr = Math.max(20, Math.min(99, p.attr.ovr + dChg)); // Preserves your custom Matrix OVR!
+        if (p.pos === 'G') {
+            p.attr.gDef = Math.max(20, Math.min(99, (parseInt(p.attr.gDef) || 70) + dChg));
         }
         else { p.attr.off = Math.max(20, Math.min(99, p.attr.off + oChg)); p.attr.def = Math.max(20, Math.min(99, p.attr.def + dChg)); p.attr.ovr = getPlayerWeightedStats(p.name).ovr; }
         if (awardConfig.headlines) {
@@ -6625,7 +6624,7 @@ function openScoutingReport(day, gIdx) {
     const injuryLine = (tkNrm) => {
         if (!rosters?.[tkNrm]) return '';
         const inj = (rosters[tkNrm] || []).filter(p => playerStats[p.name]?.injury?.daysRemaining > 0)
-            .map(p => `<span style="color:#FF4444;">${p.name} (${playerStats[p.name].injury}d)</span>`).join(', ');
+            .map(p => `<span style="color:#FF4444;">${p.name} (${playerStats[p.name].injury.daysRemaining}d)</span>`).join(', ');
         return inj ? `<div style="font-size:5px;margin-top:4px;color:#555;">IR: ${inj}</div>` : '';
     };
 
