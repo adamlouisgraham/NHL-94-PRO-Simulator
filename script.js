@@ -46,7 +46,7 @@
     
     // We derive leadership from Experience (using Age if you have it, 
     // otherwise Aggressiveness/Stick Handling to represent veteran savvy)
-    let age = parseInt(p.attr.age) || 25; 
+    let age = parseInt(p.age) || 25;
     let aggr = gradeToNum(p.attr.aggr) || 50;
     let stk = gradeToNum(p.attr.stkHnd) || 50;
     let asgAppearances = p.asgAppearances || 0;
@@ -64,7 +64,9 @@ function getPlayerBadges(pName) {
     const ps = playerStats[pName];
     if (!ps) return '';
     let badges = '';
-    if (ps.injury && ps.injury.daysRemaining > 0) badges += '[INJ]';
+    if (isTeamCaptain(pName)) badges += '[C]';
+    if (ps.onIR) badges += '[IR]';
+    else if (ps.injury && ps.injury.daysRemaining > 0) badges += '[INJ]';
     if (ps.suspended && ps.suspended.days > 0) badges += '[SUS]';
     let isHot = ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT' || ps.streakType === 'hot';
     let isCold = ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD' || ps.streakType === 'cold';
@@ -96,7 +98,7 @@ function buildStatusBadges(pName) {
         out += badge('HOT', streakLen >= 5 ? `HOT ${streakLen}G` : 'HOT', '#FFAA00', '#1a1000');
     else if (isCold)
         out += badge('COLD', 'COLD', '#55FFFF', '#001a1a');
-    if (!isHot && !isCold && ps.consPointless >= 3)
+    if (!isHot && !isCold && ps.consPointless >= 2)
         out += badge('', `SLUMP ${ps.consPointless}G`, '#FF6666', '#1a0000');
     if (fatigue >= 6)
         out += badge('', `FATIGUED -${fatigue}`, '#FFAA44', '#1a1000');
@@ -119,17 +121,6 @@ function buildStatusBadges(pName) {
     return `<div style="display:flex;flex-wrap:wrap;gap:5px;margin:10px 0 4px 0;">${out}</div>`;
 }
 
-function getWeightValue(grade) {
-    // A+ = lightest (~179-185 lbs), F+/F- = heaviest (~235-249 lbs)
-    const r = (lo,hi) => Math.floor(Math.random()*(hi-lo+1))+lo;
-    const weightMap = {
-        'A+': ()=>r(179,185), 'A': ()=>r(186,194),
-        'B':  ()=>r(195,204), 'C': ()=>r(205,214),
-        'D':  ()=>r(215,224), 'F': ()=>r(225,234),
-        'F+': ()=>r(235,249), 'F-':()=>r(235,249)
-    };
-    return weightMap[grade] ? weightMap[grade]() : 210;
-}
 // Deterministic midpoint lbs for display (card, tooltip, etc.)
 function getWeightLbs(grade) {
     const lbs = {'A+':182,'A':190,'B':200,'C':210,'D':220,'F':230,'F+':242,'F-':242};
@@ -241,9 +232,6 @@ function gradeToNum(val) {
     return map[cleanVal] ? map[cleanVal]() : 70; 
 }
 
-function getRandomInt(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-}
 
 
 // ==========================================
@@ -251,143 +239,13 @@ function getRandomInt(min, max) {
 // ==========================================
 
 // Attribute Getters: Handle potential naming inconsistencies in spreadsheet headers
-const getOff = (pName) => parseInt(playerStats[pName]?.attr.off || playerStats[pName]?.attr.OFF || 0);
-const getDef = (pName) => parseInt(playerStats[pName]?.attr.def || playerStats[pName]?.attr.DEF || 0);
-const getChk = (pName) => parseInt(playerStats[pName]?.attr.chk || playerStats[pName]?.attr.CHK || 0);
-const getWgt = (pName) => playerStats[pName]?.weight || getWeightLbs(playerStats[pName]?.attr.weight || 'C');
-const getAggr = (pName) => parseInt(playerStats[pName]?.attr.aggr || playerStats[pName]?.attr.AGR || 0);
-const getArch = (pName) => playerStats[pName]?.archetype || 'Unknown'; // Column AE
+const getOff  = (pName) => parseInt(playerStats[pName]?.attr.off   || playerStats[pName]?.attr.OFF  || 0);
+const getDef  = (pName) => parseInt(playerStats[pName]?.attr.def   || playerStats[pName]?.attr.DEF  || 0);
+const getChk  = (pName) => { const p = playerStats[pName]; return p ? (gradeToNum(p.attr.check) || 50) : 50; };
+const getAggr = (pName) => { const p = playerStats[pName]; return p ? (gradeToNum(p.attr.aggr)  || 50) : 50; };
+const getWgt  = (pName) => { const p = playerStats[pName]; return p ? (p.weight || getWeightLbs(p.attr.weight || 'C')) : 180; };
+const getArch = (pName) => getPlayerWeightedStats(pName).tag || 'Unknown';
 
-/**
- * Generates a perfectly balanced 60-minute game schedule for a team
- * Handles strict limits, rating closeness, and the defense deployment matrix.
- */
-function generateTeam60MinSchedule(struct) {
-    if (!struct || !struct.f || !struct.d) {
-        return { fSched: Array(60).fill(0), dSched: Array(60).fill(0) };
-    }
-
-    const getUnitOvr = (players) => {
-        if (!players || players.length === 0) return 75;
-        return players.reduce((s, p) => s + (typeof getLiveIceOvr === 'function' ? getLiveIceOvr(p.name) : (p.ovr || 75)), 0) / players.length;
-    };
-
-    // -- SHARED HELPERS ----------------------------------------------------
-    const OVR_CAP  = 75;  // units below this are capped at MAX_CAP minutes
-    const MAX_CAP  = 20;
-    const EVEN_GAP = 4;   // OVR gap threshold  blend toward equal time
-
-    // If two adjacent units are within EVEN_GAP OVR points, blend their
-    // minutes toward the midpoint. Blend strength scales linearly with
-    // how close they are (gap=0  full average, gap=4  no blend).
-    function blendClose(mins, ovrs) {
-        for (let i = 0; i < mins.length - 1; i++) {
-            const gap = Math.abs(ovrs[i] - ovrs[i + 1]);
-            if (gap < EVEN_GAP) {
-                const blend = (EVEN_GAP - gap) / EVEN_GAP; // 0..1
-                const mid   = (mins[i] + mins[i + 1]) / 2;
-                mins[i]     = mins[i]     + (mid - mins[i])     * blend;
-                mins[i + 1] = mins[i + 1] + (mid - mins[i + 1]) * blend;
-            }
-        }
-        return mins;
-    }
-
-    // -- FORWARD ICE TIME --------------------------------------------------
-    const fOvr = struct.f.map(getUnitOvr);               // [L1, L2, L3, L4]
-
-    // Start with OVR-weighted base from 60 minutes
-    const fWeight = fOvr.map(o => Math.max(o - 60, 1));  // weight = OVR above 60
-    const fWeightSum = fWeight.reduce((s, w) => s + w, 0);
-    let fMins = fWeight.map(w => (w / fWeightSum) * 60);
-
-    // Blend adjacent lines that are within 4 OVR points toward equal time
-    fMins = blendClose(fMins, fOvr);
-
-    // Hard clamps per line position (realistic NHL ranges)
-    const fClamp = [[18, 24], [14, 20], [10, 16], [6, 13]];
-    fMins = fMins.map((m, i) => Math.max(fClamp[i][0], Math.min(fClamp[i][1], m)));
-
-    // Cap any sub-75 OVR line at 20 min and redistribute surplus to better lines
-    let surplus = 0;
-    fMins.forEach((m, i) => {
-        if (fOvr[i] < OVR_CAP && m > MAX_CAP) {
-            surplus += m - MAX_CAP;
-            fMins[i] = MAX_CAP;
-        }
-    });
-    if (surplus > 0) {
-        // Distribute surplus proportionally to lines that are NOT capped
-        const eligible = fMins.map((m, i) => (fOvr[i] >= OVR_CAP ? fWeight[i] : 0));
-        const eligSum = eligible.reduce((s, w) => s + w, 0);
-        if (eligSum > 0) {
-            fMins = fMins.map((m, i) => m + (eligible[i] / eligSum) * surplus);
-            // Re-clamp after redistribution
-            fMins = fMins.map((m, i) => Math.max(fClamp[i][0], Math.min(fClamp[i][1], m)));
-        }
-    }
-
-    // Ensure line order is always respected (L1 >= L2 >= L3 >= L4)
-    for (let i = 0; i < 3; i++) {
-        if (fMins[i] < fMins[i + 1]) fMins[i] = fMins[i + 1] + 1;
-    }
-
-    // Round and force total to exactly 60
-    let finalFCounts = fMins.map(m => Math.round(m));
-    while (finalFCounts.reduce((a, b) => a + b, 0) < 60) finalFCounts[0]++;
-    while (finalFCounts.reduce((a, b) => a + b, 0) > 60) {
-        // Shave from the lowest-OVR line that is above its floor
-        for (let i = 3; i >= 0; i--) {
-            if (finalFCounts[i] > fClamp[i][0]) { finalFCounts[i]--; break; }
-        }
-    }
-
-    // Build shuffled forward schedule
-    let fSched = [];
-    finalFCounts.forEach((count, idx) => { for (let i = 0; i < count; i++) fSched.push(idx); });
-    fSched.sort(() => Math.random() - 0.5);
-
-    // -- DEFENSE ICE TIME --------------------------------------------------
-    // D pairs rotate independently; Pair 1 ALWAYS leads ice time.
-    // Realistic NHL clamps: P1=22-30, P2=16-24, P3=6-16 (total must = 60)
-    const dClamp = [[22, 30], [16, 24], [6, 16]];
-    const dOvr = struct.d.map(getUnitOvr);
-    const dWeight = dOvr.map(o => Math.max(o - 60, 1));
-    const dWeightSum = dWeight.reduce((s, w) => s + w, 0);
-    let dMins = dWeight.map(w => (w / dWeightSum) * 60);
-
-    // Blend adjacent D pairs within 4 OVR toward equal time (before clamping)
-    dMins = blendClose(dMins.slice(0, 3), dOvr.slice(0, 3));
-
-    // Apply per-pair clamps
-    dMins = dMins.slice(0, 3).map((m, i) => Math.max(dClamp[i][0], Math.min(dClamp[i][1], m)));
-
-    // Enforce Pair 1 >= Pair 2 >= Pair 3 (with at least 2-min gap between pairs)
-    if (dMins[0] <= dMins[1]) dMins[0] = dMins[1] + 2;
-    if (dMins[1] <= dMins[2]) dMins[1] = dMins[2] + 2;
-    // Re-clamp after order enforcement
-    dMins = dMins.map((m, i) => Math.max(dClamp[i][0], Math.min(dClamp[i][1], m)));
-
-    // Balance total to exactly 60  -  trim/add from Pair 3 first, then Pair 2
-    let finalDCounts = dMins.map(m => Math.round(m));
-    const dBalance = () => finalDCounts.reduce((a, b) => a + b, 0);
-    while (dBalance() < 60) finalDCounts[0]++;
-    while (dBalance() > 60) {
-        if (finalDCounts[2] > dClamp[2][0]) finalDCounts[2]--;
-        else if (finalDCounts[1] > dClamp[1][0]) finalDCounts[1]--;
-        else finalDCounts[0]--;
-    }
-
-    // Build shuffled D schedule (independent of F schedule  -  D pairs rotate on their own)
-    let dSchedBase = [];
-    finalDCounts.forEach((count, idx) => { for (let i = 0; i < count; i++) dSchedBase.push(idx); });
-    dSchedBase.sort(() => Math.random() - 0.5);
-
-    // Map back to fSched length (D sched must be same length as fSched = 60)
-    const dSched = dSchedBase.slice(0, fSched.length);
-
-    return { fSched, dSched };
-}
 
 // ==========================================
 // ðŸ“‹ FRANCHISE MODE: CUSTOM LINE HELPERS
@@ -395,165 +253,82 @@ function generateTeam60MinSchedule(struct) {
 // 1. Load any previously saved lines
 let customLines = JSON.parse(localStorage.getItem('nhl94_customLines')) || {};
 
-// 2. Save Lines to Memory
-function saveTeamLines(tk, fLines, dLines, gPool) {
-    customLines[tk] = {
-        f: fLines.map(line => line.map(p => p.name)),
-        d: dLines.map(line => line.map(p => p.name)),
-        g: gPool.map(p => p.name)
-    };
-    localStorage.setItem('nhl94_customLines', JSON.stringify(customLines));
-    alert(`Lines saved successfully for ${tk.toUpperCase()}!`);
+
+let awardConfig = { streaks: true, chemistry: true, rivalries: true, aging: false, draft: false, retirements: false, headlines: true, milestones: true, injuries: true, legacy_schedule: true, trades: true, tradeBlock: false };
+let coachAdj = { forecheck: 0, pp: 0, lineMatch: false };
+let coachTrust = 50; // 0-100; updated after each user-team game
+let deadlineCountermove = {}; // { teamNrm: expiryDay } — contenders flagged after a rival deadline deal
+let chemScores = {}; // { "P1|P2": 0-100 } — per-custom-duo chemistry score, decays without shared goals
+let preseasonOvrSnapshot = {}; // { teamNrm: avgOvr } captured at season start
+let teamCaptains = {}; // { teamNrm: playerName }
+
+function isTeamCaptain(pName) {
+    return Object.values(teamCaptains).includes(pName);
 }
 
-// 3. Clear Lines (Return to AI Coach)
-function clearTeamLines(tk) {
-    delete customLines[tk];
-    localStorage.setItem('nhl94_customLines', JSON.stringify(customLines));
-    alert(`Custom lines cleared. The AI will now coach ${tk.toUpperCase()}.`);
+// Trade Value Index: OVR weighted by prime-age factor (peaks ~age 28, drops off steeply after 33)
+function getTradeValue(pName) {
+    const ps = playerStats[pName];
+    if (!ps) return 50;
+    const ovr = getPlayerWeightedStats(pName).ovr;
+    const age = ps.age || 25;
+    const primeMod = Math.max(0, 14 - Math.abs(age - 28)); // 0 at extremes, 14 at prime
+    return Math.round(ovr * 0.65 + primeMod * 2.5);
 }
 
-// 4. The Swapper (PASTE IT HERE!)
-function swapPlayersInStructure(struct, name1, name2) {
-    let pos1 = null, pos2 = null;
-
-    const findLocation = (arrays, groupName) => {
-        for (let i = 0; i < arrays.length; i++) {
-            for (let j = 0; j < arrays[i].length; j++) {
-                if (arrays[i][j].name === name1) pos1 = { group: groupName, i, j, p: arrays[i][j] };
-                if (arrays[i][j].name === name2) pos2 = { group: groupName, i, j, p: arrays[i][j] };
-            }
-        }
-    };
-
-    findLocation(struct.f, 'f');
-    findLocation(struct.d, 'd');
-    
-    struct.g.forEach((p, j) => {
-        if (p.name === name1) pos1 = { group: 'g', i: 0, j, p };
-        if (p.name === name2) pos2 = { group: 'g', i: 0, j, p };
-    });
-
-    if (pos1 && pos2) {
-        if (pos1.group === 'g') struct[pos1.group][pos1.j] = pos2.p;
-        else struct[pos1.group][pos1.i][pos1.j] = pos2.p;
-        if (pos2.group === 'g') struct[pos2.group][pos2.j] = pos1.p;
-        else struct[pos2.group][pos2.i][pos2.j] = pos1.p;
-        
-        return true; 
-    }
-    return false; 
-}
-
-// 2. The Integrated Line Builder
-// 3. Logic to find SN + PL pairings
-function findDuo(wings) {
-    for (let i = 0; i < wings.length; i++) {
-        let p1 = wings[i];
-        let arch1 = getArch(p1.name);
-        
-        if (arch1 === 'SN' || arch1 === 'PL') {
-            let targetArch = (arch1 === 'SN') ? 'PL' : 'SN';
-            // Find best available partner
-            let partnerIdx = wings.findIndex((w, idx) => idx !== i && getArch(w.name) === targetArch);
-            
-            if (partnerIdx !== -1) {
-                return { p1: p1, p2: wings[partnerIdx] };
-            }
-        }
-    }
-    return null;
-}
-
-function buildSpecialTeams(fullRosterArray, type) {
-    // 1. Force fresh pools from the full roster array
-    const allForwards = fullRosterArray.filter(p => ['C', 'LW', 'RW'].includes(p.pos));
-    const allDefenders = fullRosterArray.filter(p => ['LD', 'RD', 'D'].includes(p.pos));
-
-    let teams = { 1: [], 2: [] };
-
-    if (type === 'PP') {
-        // Sort by Offensive Awareness
-        const sortByOff = (a, b) => {
-            const offA = playerStats[a.name]?.attr?.offawr || 0;
-            const offB = playerStats[b.name]?.attr?.offawr || 0;
-            return offB - offA;
-        };
-
-        const sortedF = [...allForwards].sort(sortByOff);
-        const sortedD = [...allDefenders].sort(sortByOff);
-
-        // PP1: Top 4 Forwards, Best Defender
-        teams[1] = [...sortedF.slice(0, 4), sortedD[0]].filter(Boolean);
-        // PP2: Next 4 Forwards, 2nd Best Defender
-        teams[2] = [...sortedF.slice(4, 8), sortedD[1]].filter(Boolean);
-
-    } else if (type === 'PK') {
-        // Sort by combined Defensive utility (Defense + Checking)
-        const sortDef = (a, b) => {
-            const defA = (playerStats[a.name]?.attr?.def || 0) + (playerStats[a.name]?.attr?.chk || 0);
-            const defB = (playerStats[b.name]?.attr?.def || 0) + (playerStats[b.name]?.attr?.chk || 0);
-            return defB - defA;
-        };
-
-        const sortedF = [...allForwards].sort(sortDef).slice(0, 8); //  Fixed variable name
-        const sortedD = [...allDefenders].sort(sortDef).slice(0, 4); //  Fixed variable name
-
-        // PK1: Top 2 Forwards, Top 2 Defenders
-        teams[1] = [...sortedF.slice(0, 2), ...sortedD.slice(0, 2)].filter(Boolean);
-        // PK2: Next 2 Forwards, Next 2 Defenders
-        teams[2] = [...sortedF.slice(2, 4), ...sortedD.slice(2, 4)].filter(Boolean);
-    }
-
-    return teams;
-}
-
-// =========================================================
-//  ARCHETYPE BEHAVIOR MULTIPLIERS
-// =========================================================
-/**
- *  THE ARCHETYPE FIREWALL
- * Prevents stacking 2 Snipers or 2 Playmakers on the same unit
- */
-function canAddForward(currentLine, newPlayer, isPowerPlay) {
-    // 1. If it's a Power Play, bypass the firewall immediately.
-    if (isPowerPlay === true) {
-        return true; 
-    }
-
-    // 2. Safely get the new player's archetype and convert to uppercase to avoid typos.
-    const newArch = (newPlayer.archetype || 'UNKNOWN').toUpperCase();
-
-    // 3. We only care about restricting Snipers and Playmakers.
-    if (newArch !== 'SNIPER' && newArch !== 'PLAYMAKER') {
-        return true; 
-    }
-
-    // 4. Check the current line for a match.
-    for (let i = 0; i < currentLine.length; i++) {
-        const existingPlayer = currentLine[i];
-        if (!existingPlayer) continue; 
-
-        const existingArch = (existingPlayer.archetype || 'UNKNOWN').toUpperCase();
-        
-        if (existingArch === newArch) {
-            return false; 
-        }
-    }
-
-    return true;
-}
-
-function getSortedByAttr(players, category, attr) {
-    return [...players].sort((a, b) => {
-        const valA = playerStats[a.name].attr[attr] || 0;
-        const valB = playerStats[b.name].attr[attr] || 0;
-        return valB - valA; // Descending
+// Picks the highest-leadership skater on each roster as team captain for the season
+function assignTeamCaptains() {
+    teamCaptains = {};
+    league.forEach(t => {
+        const roster = (rosters[t.nrm] || []).filter(p => p.pos !== 'G');
+        if (!roster.length) return;
+        let best = null, bestScore = -1;
+        roster.forEach(p => {
+            const score = getLeadershipScore(p.name);
+            if (score > bestScore) { bestScore = score; best = p.name; }
+        });
+        if (best) teamCaptains[t.nrm] = best;
     });
 }
 
-let awardConfig = { streaks: true, chemistry: true, rivalries: true, aging: false, draft: false, retirements: false, headlines: true, milestones: true, injuries: true, legacy_schedule: true, trades: true };
-let league = []; let rosters = {}; let playerStats = {}; let tradeLog = []; let hallOfFame = []; let leagueHistory = []; let retiredPlayers = []; let calendar = []; let realDatesMap = []; let gameMilestones = []; let monthSnapshot = {}; let pendingTrades = []; let playoffBracket = { round: 1, series: [] }; let teams = {}; let gameData = {}; let selectedTeam = null; let currentMonth = 1;
+// Captains amplify team chemistry when healthy/hot, and hurt it more than a regular player when injured/cold
+function placeOnIR(pName, tk) {
+    const ps = playerStats[pName];
+    if (!ps) return;
+    if (!ps.injury || ps.injury.daysRemaining === 0) return alert(`${pName} must be injured to be placed on IR.`);
+    ps.onIR = true;
+    ps.irDay = currentDay;
+    ps.irTotalDays = ps.injury.daysRemaining;
+    tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `IR MOVE: ${pName} (${tk.toUpperCase()}) placed on Injured Reserve — ${ps.injury.daysRemaining} days remaining.` });
+    clearWpCache(); updateUI(); renderTeamDirectory(tk); saveGame();
+}
+
+function activateFromIR(pName, tk) {
+    const ps = playerStats[pName];
+    if (!ps) return;
+    if (ps.injury && ps.injury.daysRemaining > 0) return alert(`${pName} is still injured (${ps.injury.daysRemaining}d). Cannot activate yet.`);
+    ps.onIR = false;
+    tradeLog.unshift({ day: currentDay, details: `IR ACTIVATE: ${pName} (${tk.toUpperCase()}) activated from Injured Reserve and returns to lineup.` });
+    clearWpCache(); updateUI(); renderTeamDirectory(tk); saveGame();
+}
+
+function duoKey(pair) { return [...pair].sort().join('|'); }
+function getChemScore(pair) { return chemScores[duoKey(pair)] ?? 100; }
+
+function getCaptainChemModifier(teamNrm) {
+    const capName = teamCaptains[teamNrm];
+    if (!capName) return 0;
+    const ps = playerStats[capName];
+    if (!ps) return 0;
+    if (ps.injury && ps.injury.daysRemaining > 0) return -3;
+    const isCold = ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD' || ps.streakType === 'cold';
+    if (isCold) return -2;
+    const isHot = ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT' || ps.streakType === 'hot';
+    if (isHot) return 2;
+    return 1; // healthy, active captain provides a small baseline boost
+}
+let league = []; let rosters = {}; let playerStats = {}; let tradeLog = []; let hallOfFame = []; let leagueHistory = []; let retiredPlayers = []; let calendar = []; let realDatesMap = []; let gameMilestones = []; let monthSnapshot = {}; let pendingTrades = []; let playoffBracket = { round: 1, series: [] }; let teams = {}; let selectedTeam = null;
+let customDuos = []; // user-defined chemistry pairs, supplements the hardcoded dynamicDuos
 let currentDay = 0; let currentSeason = 1; let isPlayoffs = false; let isASG = false; let activeIdx = null; let statMode = 'season'; let isSimulating = false; let isSimSeason = false; let isTurboMode = false; let currentCupChamp = ""; let activeSubInfo = null; let customRosterData = null; let customRosterSource = 'google'; let customTeamData = null; let customPlayerData = null; let customScheduleData = null; let customEventLogData = null; let eventLogData = null;
 let watchBroadcastDay = null; let watchBroadcastIdx = null;
 
@@ -623,15 +398,6 @@ function writeSavePayload(data) {
     }
 }
 
-function loadSavePayload() {
-    let rawData = localStorage.getItem('nhl94dynasty');
-    if (rawData) {
-        // Decompress when loading
-        let decompressedData = LZString.decompressFromUTF16(rawData);
-        return JSON.parse(decompressedData);
-    }
-    return null;
-}
 function saveGame({slot = 'AUTO', force = false} = {}) {
     // Cancel any pending save
     if (saveGameTimer !== null) {
@@ -656,20 +422,28 @@ function displaySaveStateInfo(message, type = 'info') { const el = document.getE
 function buildSavePayload() {
     //  STORAGE FIX: Create a lightweight copy of the calendar to save space
     // This deletes the massive HTML play-by-play strings from old games so you don't hit the 5MB limit!
+    // Also strips the circular series↔games back-reference to allow JSON serialization.
     const lightweightCalendar = (Array.isArray(calendar) ? calendar : []).map((day, dIdx) => {
         const safeDay = Array.isArray(day) ? day : [];
         return safeDay.map(g => {
             if (!g || typeof g !== 'object') return g;
-            if (dIdx < currentDay && g.result && g.result.boxLog) {
-                // Clone the game object but wipe the heavy boxLog array
-                return { 
-                    ...g, 
-                    result: { ...g.result, boxLog: [] } 
-                };
+            // Always strip circular series ref; strip heavy boxLog from played games
+            const { series: _s, ...rest } = g;
+            if (dIdx < currentDay && rest.result && rest.result.boxLog) {
+                return { ...rest, result: { ...rest.result, boxLog: [] } };
             }
-            return g;
+            return rest;
         });
     });
+    // Lightweight playoff bracket — strip series.games to break circular ref; re-built on load
+    const stripSeries = (arr) => (arr || []).map(s => { const { games: _g, ...rest } = s; return rest; });
+    const lightweightBracket = playoffBracket ? {
+        ...playoffBracket,
+        series: stripSeries(playoffBracket.series),
+        east: stripSeries(playoffBracket.east),
+        west: stripSeries(playoffBracket.west),
+        history: playoffBracket.history || []
+    } : playoffBracket;
 
     //  STORAGE FIX: Keep trade logs and history trimmed so they don't grow infinitely
     if (tradeLog.length > 200) tradeLog = tradeLog.slice(0, 200);
@@ -680,8 +454,8 @@ function buildSavePayload() {
         data: { 
             league, rosters, playerStats, tradeLog, hallOfFame, leagueHistory, 
             retiredPlayers, calendar: lightweightCalendar, currentDay, currentSeason, 
-            isPlayoffs, isASG, currentCupChamp, playoffBracket, awardConfig, 
-            monthSnapshot, pendingTrades, realDatesMap
+            isPlayoffs, isASG, currentCupChamp, playoffBracket: lightweightBracket, awardConfig, 
+            monthSnapshot, pendingTrades, realDatesMap, customDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains
         }
     };
 }
@@ -720,12 +494,20 @@ function applyLoadedSave(data) {
     currentCupChamp = data.currentCupChamp || ""; 
     playoffBracket = typeof data.playoffBracket === 'object' && data.playoffBracket ? data.playoffBracket : { round: 1, series: [] }; 
     awardConfig = typeof data.awardConfig === 'object' && data.awardConfig ? data.awardConfig : awardConfig; 
-    monthSnapshot = typeof data.monthSnapshot === 'object' && data.monthSnapshot ? data.monthSnapshot : {}; 
-    pendingTrades = Array.isArray(data.pendingTrades) ? data.pendingTrades : []; 
+    monthSnapshot = typeof data.monthSnapshot === 'object' && data.monthSnapshot ? data.monthSnapshot : {};
+    pendingTrades = Array.isArray(data.pendingTrades) ? data.pendingTrades : [];
+    customDuos = Array.isArray(data.customDuos) ? data.customDuos : [];
+    if (typeof data.coachAdj === 'object' && data.coachAdj) coachAdj = { ...coachAdj, ...data.coachAdj };
+    if (typeof data.coachTrust === 'number') coachTrust = data.coachTrust;
+    if (typeof data.deadlineCountermove === 'object' && data.deadlineCountermove) deadlineCountermove = data.deadlineCountermove;
+    if (typeof data.chemScores === 'object' && data.chemScores) chemScores = data.chemScores;
+    if (typeof data.preseasonOvrSnapshot === 'object' && data.preseasonOvrSnapshot) preseasonOvrSnapshot = data.preseasonOvrSnapshot;
+    teamCaptains = (typeof data.teamCaptains === 'object' && data.teamCaptains) ? data.teamCaptains : {};
+    if (!Object.keys(teamCaptains).length) assignTeamCaptains();
     realDatesMap = Array.isArray(data.realDatesMap) ? data.realDatesMap : [];
 
     if (currentDay < 0) currentDay = 0;
-    if (currentDay > calendar.length) currentDay = calendar.length;
+    if (currentDay >= calendar.length) currentDay = calendar.length - 1;
 
     //  STANDINGS FIX: Re-link the schedule calendar back to the master league array
     calendar.forEach(day => {
@@ -740,6 +522,20 @@ function applyLoadedSave(data) {
         playoffBracket.series.forEach(s => {
             if (s.h && s.h.nrm) s.h = league.find(t => t.nrm === s.h.nrm) || s.h;
             if (s.a && s.a.nrm) s.a = league.find(t => t.nrm === s.a.nrm) || s.a;
+            if (!s.games) s.games = [];
+        });
+        // Rebuild game.series and series.games from calendar (stripped on save to break circular ref)
+        calendar.forEach(day => {
+            day.forEach(g => {
+                if (!g || !g.h || !g.a) return;
+                const match = playoffBracket.series.find(s =>
+                    s.h && s.a && s.h.nrm === g.h.nrm && s.a.nrm === g.a.nrm
+                );
+                if (match) {
+                    g.series = match;
+                    if (g.result && !match.games.includes(g)) match.games.push(g);
+                }
+            });
         });
     }
 }
@@ -951,7 +747,7 @@ function renderScheduleDashboard() {
     summaryEl.innerHTML = `<span>${statusText}</span><span>Completed: ${completedDays}</span><span>Remaining: ${remainingDays}</span><span>${currentDate}</span><span>${versionLabel}</span>`;
     if (totalDays === 0 || currentDay >= totalDays) { upcomingEl.innerHTML = `<div class="schedule-game-line">No upcoming matchups.</div>`; return; }
 
-    const upcomingLines = (calendar[currentDay] || []).slice(0, 3).map(g => {
+    const upcomingLines = (calendar[currentDay] || []).slice(0, 3).map((g, gIdx) => {
         const home = g.h ? (g.h.code || g.h.name || 'HOME') : 'HOME';
         const away = g.a ? (g.a.code || g.a.name || 'AWAY') : 'AWAY';
         const when = realDatesMap && realDatesMap[currentDay] ? realDatesMap[currentDay] : `Day ${currentDay + 1}`;
@@ -967,7 +763,8 @@ function renderScheduleDashboard() {
             return `<span style="color:#666;font-size:5px;"> ${gp.name}${tag}${b2b}</span>`;
         };
         const hMeet = g.h?.season?.meetings?.[g.a?.nrm] || 0;
-        const rivalTag = (awardConfig.rivalries && hMeet >= 3) ? ' <span style="color:var(--line-red);font-size:5px;">[RIVALRY]</span>' : '';
+        const isHistRival = awardConfig.rivalries && !!(rivals[g.h?.nrm]?.includes(g.a?.nrm));
+        const rivalTag = awardConfig.rivalries && (hMeet >= 3 || isHistRival) ? ' <span style="color:var(--line-red);font-size:5px;">[RIVALRY]</span>' : '';
         const recFmt = t => `${t.season.w||0}-${t.season.l||0}-${t.season.t||0}`;
         const hRec = g.h ? recFmt(g.h) : '';
         const aRec = g.a ? recFmt(g.a) : '';
@@ -992,9 +789,13 @@ function renderScheduleDashboard() {
             ? `<div style="color:#444;font-size:5px;margin-top:1px;">All-time: ${home} ${allTimeH} – ${allTimeA} ${away}</div>`
             : '';
         return `<div class="schedule-game-line" style="flex-direction:column;align-items:flex-start;gap:1px;">
-            <div style="display:flex;justify-content:space-between;width:100%;">
+            <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
                 <span>${away}${goalieBadge(g.a?.nrm)} <span style="color:#444">@</span> ${home}${goalieBadge(g.h?.nrm)}${rivalTag}</span>
-                <span>${when}</span>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="font-size:5px;color:#444;">${when}</span>
+                    <button onclick="openScoutingReport(${currentDay},${gIdx})" style="font-size:5px;padding:2px 6px;border-color:var(--neon-cyan);color:var(--neon-cyan);">SCOUT</button>
+                    <button onclick="openCoachingPanel()" style="font-size:5px;padding:2px 6px;border-color:#FFA500;color:#FFA500;">COACH</button>
+                </div>
             </div>
             <div style="color:#555;font-size:5px;">${away} ${aRec} &nbsp;|&nbsp; ${home} ${hRec}</div>
             ${h2hLine}
@@ -1050,23 +851,7 @@ function renderScheduleDashboard() {
         irEl.innerHTML = h;
     }
 }
-function calculateGoalieOverall(attr) {
-    // Total weight = 5.0 + 1.0 + 5.0 + 4.5 + 1.0 + 1.0 + 1.0 + 1.0 = 19.5
-    const totalWeight = 19.5; 
 
-    let weightedSum = 
-        (attr.agil * 5.0) +
-        (attr.speed * 1.0) +
-        (attr.def * 5.0) +             // Def Aware
-        (attr.puckControl * 4.5) +
-        (attr.stickRight * 1.0) +
-        (attr.stickLeft * 1.0) +
-        (attr.gloveRight * 1.0) +
-        (attr.gloveLeft * 1.0);
-
-    // Returns a properly scaled 30-99 overall rating
-    return Math.round(weightedSum / totalWeight); 
-}
 // --- LOGOS & DICTIONARIES ---
 const teamLogos = { 'anaheim': 'Team Logos/Anaheim_Ducks_logo_2024.png', 'boston': 'Team Logos/Bruins.png', 'buffalo': 'Team Logos/sabres.png', 'calgary': 'Team Logos/Calgary_Flames_logo.png', 'chicago': 'Team Logos/blackhawks.png', 'dallas': 'Team Logos/North_Stars.png', 'minnesota': 'Team Logos/North_Stars.png', 'detroit': 'Team Logos/Red_Wings.png', 'edmonton': 'Team Logos/Oilers.png', 'florida': 'Team Logos/Panthers.png', 'hartford': 'Team Logos/whalers.png', 'los angeles': 'Team Logos/kings.png', 'montreal': 'Team Logos/Montreal_Canadiens.png', 'new jersey': 'Team Logos/New_Jersey_Devils.png', 'new york islanders': 'Team Logos/New_York_Islanders.png', 'new york rangers': 'Team Logos/Rangers.png', 'ottawa': 'Team Logos/Senators.png', 'philadelphia': 'Team Logos/Flyers.png', 'pittsburgh': 'Team Logos/Penguins.png', 'quebec': 'Team Logos/Nordiques.png', 'san jose': 'Team Logos/SanJoseSharksLogo.png', 'st. louis': 'Team Logos/St._Louis_Blues_logo.png', 'tampa bay': 'Team Logos/tampa_bay_lightning.png', 'toronto': 'Team Logos/Toronto_Maple_Leafs_2016_logo.png', 'vancouver': 'Team Logos/canucks.png', 'washington': 'Team Logos/capitals.png', 'winnipeg': 'Team Logos/jets.png', 'wales': 'wales.jpg', 'campbell': 'campbell.jpg' };
 function getTeamLogoPath(teamName) { 
@@ -1101,15 +886,39 @@ function getTeamLogoPath(teamName) {
         'winnipeg': 'winnipeg', 'winnipeg jets': 'winnipeg', 
         'wales conference': 'wales', 'campbell conference': 'campbell', 'wal': 'wales', 'cam': 'campbell' 
     }; 
-    return teamLogos[shortNames[key] || key] || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='; 
+    const fromName = teamLogos[shortNames[key] || key];
+    if (fromName) return fromName;
+    // Fallback: try 3-letter code lookup (e.g. 'CHI', 'DET')
+    const codeKey = teamName.toUpperCase().trim();
+    return PC_LOGOS[codeKey] || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 }
 function getTeamLogoHtml(teamName) { if(!teamName) return '<div style="display:inline-block; width:32px; height:32px; margin:0 5px; flex-shrink:0;"></div>'; return `<img src="${getTeamLogoPath(teamName)}" style="width:36px; height:32px; object-fit:contain; border:none; box-shadow:none; padding:0; margin: 0 5px; vertical-align:middle; flex-shrink:0; transform: scale(1.15);">`; }
 const teamMap = { "Mighty Ducks of Anaheim": "ANA", "Boston Bruins": "BOS", "Buffalo Sabres": "BUF", "Calgary Flames": "CGY", "Chicago Blackhawks": "CHI", "Minnesota North Stars": "MIN", "Detroit Red Wings": "DET", "Edmonton Oilers": "EDM", "Florida Panthers": "FLA", "Hartford Whalers": "HAR", "Los Angeles Kings": "LAK", "Montreal Canadiens": "MTL", "New Jersey Devils": "NJD", "New York Islanders": "NYI", "New York Rangers": "NYR", "Ottawa Senators": "OTT", "Philadelphia Flyers": "PHI", "Pittsburgh Penguins": "PIT", "Quebec Nordiques": "QUE", "San Jose Sharks": "SJS", "St. Louis Blues": "STL", "Tampa Bay Lightning": "TBL", "Toronto Maple Leafs": "TOR", "Vancouver Canucks": "VAN", "Washington Capitals": "WSH", "Winnipeg Jets": "WPG" };
 const teamColors = { 'har': ['#00B140', '#00539B', '#A2AAAD'], 'hfd': ['#00B140', '#00539B', '#A2AAAD'], 'ana': ['#532a44', '#00685E', '#c4ced4'], 'win': ['#00468B', '#CE1126', '#E0E8EE'], 'wpg': ['#00468B', '#CE1126', '#E0E8EE'], 'bos': ['#FFB81C', '#000000', '#8A630B'], 'buf': ['#002654', '#FCB514', '#A2AAAD'], 'cgy': ['#C8102E', '#F1BE48', '#590613'], 'car': ['#CC0000', '#000000', '#A2AAAD'], 'chi': ['#CF0A2C', '#000000', '#D0CACA'], 'col': ['#6F263D', '#236192', '#A2AAAD'], 'min': ['#009639', '#FFD100', '#00331D'], 'det': ['#CE1126', '#FFFFFF', '#A2AAAD'], 'edm': ['#FF4C00', '#041E42', '#C65C10'], 'fla': ['#C8102E', '#041E42', '#B9975B'], 'la': ['#111111', '#A2AAAD', '#555555'], 'lak': ['#111111', '#A2AAAD', '#555555'], 'mon': ['#AF1E2D', '#192168', '#E0E8EE'], 'mtl': ['#AF1E2D', '#192168', '#E0E8EE'], 'nj': ['#CE1126', '#00533B', '#889398'], 'njd': ['#CE1126', '#00533B', '#889398'], 'nyi': ['#00539B', '#F47D30', '#002040'], 'nyr': ['#0038A8', '#CE1126', '#7FA9D6'], 'ott': ['#E31837', '#000000', '#B9975B'], 'phi': ['#F74902', '#000000', '#F3E9D2'], 'pit': ['#000000', '#FCBA03', '#B08D00'], 'que': ['#003E7E', '#FFFFFF', '#CE1126'], 'sa': ['#006D75', '#000000', '#A2AAAD'], 'sjs': ['#006D75', '#000000', '#A2AAAD'], 'stl': ['#002F87', '#FCB514', '#041E42'], 'tb': ['#002868', '#FFFFFF', '#A2AAAD'], 'tbl': ['#002868', '#FFFFFF', '#A2AAAD'], 'tor': ['#00205B', '#FFFFFF', '#B0C4DE'], 'van': ['#000000', '#F2A900', '#C8102E'], 'was': ['#041E42', '#C8102E', '#0033A0'], 'wsh': ['#041E42', '#C8102E', '#0033A0'], 'cbj': ['#002654', '#CE1126', '#A2AAAD'], 'wales': ['#000000', '#FF6600', '#FFFFFF'], 'campbell': ['#FF6600', '#000000', '#FFFFFF'] };
-const rivals = { 'chi': ['det','stl','tor'], 'det': ['chi','tor','nyr'], 'mtl': ['tor','bos','que'], 'tor': ['mtl','det','chi'], 'nyr': ['nyi','njd','phi'], 'edm': ['cgy','van','win'], 'bos': ['mtl','nyr','har'], 'phi': ['njd','nyr','pit'], 'pit': ['phi','wsh','njd'], 'cgy': ['edm','van','win'], 'njd': ['nyr','phi','pit'] };
+
+const PC_LOGOS = {
+    ANA:'Team Logos/Ducks.png',     BOS:'Team Logos/Bruins.png',    BUF:'Team Logos/sabres.png',
+    CGY:'Team Logos/Flames.png',    CHI:'Team Logos/blackhawks.png',DAL:'Team Logos/North_Stars.png',
+    DET:'Team Logos/Red_Wings.png', EDM:'Team Logos/Oilers.png',    FLA:'Team Logos/Panthers.png',
+    HFD:'Team Logos/whalers.png',   HAR:'Team Logos/whalers.png',   LAK:'Team Logos/kings.png',
+    MIN:'Team Logos/North_Stars.png',MTL:'Team Logos/Canadiens.png', NJD:'Team Logos/Devils.png',
+    NYI:'Team Logos/islanders.png', NYR:'Team Logos/Rangers.png',   OTT:'Team Logos/Senators.png',
+    PHI:'Team Logos/Flyers.png',    PIT:'Team Logos/Penguins.png',  QUE:'Team Logos/Nordiques.png',
+    SJS:'Team Logos/sharks.png',    STL:'Team Logos/blues.png',     TBL:'Team Logos/tampa.png',
+    TOR:'Team Logos/maple_leafs.png',VAN:'Team Logos/canucks.png',  WSH:'Team Logos/capitals.png',
+    WIN:'Team Logos/jets.png',      WPG:'Team Logos/jets.png',
+};
+
+// Historical rivalries — bonus activates from game 1 (organic meetings-based rivalry still stacks at 3+)
+const rivals = {
+    'chi':['det','stl','tor'], 'det':['chi','tor','nyr'], 'mtl':['tor','bos','que'],
+    'tor':['mtl','det','chi'], 'nyr':['nyi','njd','phi'], 'edm':['cgy','van','win'],
+    'bos':['mtl','nyr','har'], 'phi':['njd','nyr','pit'], 'pit':['phi','wsh','njd'],
+    'cgy':['edm','van','win'], 'njd':['nyr','phi','pit'],
+};
 
 const DEFAULT_TEAM_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7TQG09fJijxS0CFdwQF3ht_Q1ggw99rfmHzRC2RF4Ht5ZlmyJP2qTMOtOvxuiijczcO_UXm_zwIig/pub?gid=732700653&single=true&output=csv";
-const DEFAULT_PLAYER_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7TQG09fJijxS0CFdwQF3ht_Q1ggw99rfmHzRC2RF4Ht5ZlmyJP2qTMOtOvxuiijczcO_UXm_zwIig/pub?gid=1253001256&single=true&output=csv";
+const DEFAULT_PLAYER_URL = "NHL94_Stats_Exports/team%20rosters%20-%20Rosters.csv";
 const DEFAULT_SCHEDULE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7TQG09fJijxS0CFdwQF3ht_Q1ggw99rfmHzRC2RF4Ht5ZlmyJP2qTMOtOvxuiijczcO_UXm_zwIig/pub?gid=184342160&single=true&output=csv";
 const DEFAULT_EVENT_LOG_URL = "";
 const SHEET_URL_STORAGE_KEY = "nhl94CustomSheetUrls";
@@ -1117,11 +926,10 @@ let teamUrl = DEFAULT_TEAM_URL; let playerUrl = DEFAULT_PLAYER_URL; let schedule
 let sheetSources = { TEAM: 'default sheet', PLAYER: 'default sheet', SCHEDULE: 'default sheet', EVENT_LOG: 'default sheet' };
 
 // --- SHEET VALIDATION & LOADING ---
-function saveSheetUrlPreferences(t, p, s, e) { try { localStorage.setItem(SHEET_URL_STORAGE_KEY, JSON.stringify({teamSheetUrl: t||"", playerSheetUrl: p||"", scheduleSheetUrl: s||"", eventLogSheetUrl: e||""})); } catch(err){} }
+
 function hasSavedSheetUrlPreferences() { try { const r = localStorage.getItem(SHEET_URL_STORAGE_KEY); if(!r)return false; const p = JSON.parse(r); return Boolean(p.teamSheetUrl || p.playerSheetUrl || p.scheduleSheetUrl || p.eventLogSheetUrl); } catch{return false;} }
 function setSheetSourceBadge(v, txt='Saved sheet settings loaded') { const b = document.getElementById('sheetUrlBadge'); if(b) { b.innerText = txt; b.style.display = v ? 'inline-block' : 'none'; } }
 function resetSheetSourcesToDefault() { sheetSources = { TEAM: 'default sheet', PLAYER: 'default sheet', SCHEDULE: 'default sheet', EVENT_LOG: 'default sheet' }; }
-function getSheetSourceLabel(s) { return sheetSources[s] || 'default sheet'; }
 
 function loadSheetUrlPreferences() {
     const raw = localStorage.getItem(SHEET_URL_STORAGE_KEY); if (!raw) return;
@@ -1139,7 +947,7 @@ function setSheetStatusLine(sheetName, text, status, source) {
     el.innerText = `${sheetName}: ${text}${source ? ` (${source})` : ''}`; el.classList.toggle('ok', status === 'ok'); el.classList.toggle('error', status === 'error');
 }
 
-function formatSheetStatus(statuses) { return statuses.map(s => `${s.name}: ${s.ok ? 'OK' : `ERROR${s.error ? ` - ${s.error}` : ''}`}`).join(' | '); }
+
 function getHeaderIndex(hRow, keys, fb = -1) { const norm = hRow.map(h => String(h || '').trim().toUpperCase()); const idx = norm.findIndex(h => keys.some(k => h.includes(k))); return idx !== -1 ? idx : (fb >= 0 && fb < norm.length ? fb : -1); }
 function validateScheduleData(rows) {
     if (!Array.isArray(rows) || rows.length < 2) return { ok: false, error: 'Schedule must include a header row and at least one game row.' };
@@ -1181,7 +989,6 @@ function applyCustomSheetUrls(test = true) {
     scheduleUrl = normalizeSheetUrl($('scheduleSheetUrl')?.value) || DEFAULT_SCHEDULE_URL; eventLogUrl = normalizeSheetUrl($('eventLogSheetUrl')?.value) || DEFAULT_EVENT_LOG_URL;
 }
 function resetSheetUrlsToDefault() { teamUrl = DEFAULT_TEAM_URL; playerUrl = DEFAULT_PLAYER_URL; scheduleUrl = DEFAULT_SCHEDULE_URL; eventLogUrl = DEFAULT_EVENT_LOG_URL; localStorage.removeItem(SHEET_URL_STORAGE_KEY); resetSheetSourcesToDefault(); }
-function clearSheetStatusLines() {}
 
 async function fetchCSV(url) {
     const cleanUrl = String(url || '').trim();
@@ -1311,131 +1118,12 @@ async function importEventLogSheet() {
     }
 }
 
-function importRosterFromCSV(csvText) {
-    const parsed = Papa.parse(csvText, { header: false, skipEmptyLines: true });
-    const rows = Array.isArray(parsed.data) ? parsed.data : [];
-    const roster = [];
 
-    if (rows.length < 2) return roster;
 
-    const headerRow = rows[0].map(cell => String(cell || '').trim().toUpperCase());
-    const getIdx = (aliases, fallback) => {
-        for (const alias of aliases) {
-            const key = String(alias || '').trim().toUpperCase();
-            const idx = headerRow.indexOf(key);
-            if (idx !== -1) return idx;
-        }
-        return fallback;
-    };
+let gameStatus = {
+    globalChaos: 0.15, // Base volatility — scales random shot-probability variance each tick
+};
 
-    const teamCodeIdx = getIdx(['TEAM CODE', 'TEAM', 'TEAMCODE'], 2);
-    const firstNameIdx = getIdx(['FIRST NAME', 'FNAME', 'FIRST'], 8);
-    const lastNameIdx = getIdx(['LAST NAME', 'LNAME', 'LAST'], 4);
-    const posIdx = getIdx(['POS', 'POSITION'], 7);
-    const overallIdx = getIdx(['OVERALL', 'OVR'], 19);
-    const weightIdx = getIdx(['WEIGHT', 'WGT'], 20);
-    const agilityIdx = getIdx(['AGILITY', 'AGIL'], 17);
-    const speedIdx = getIdx(['SPEED'], 18);
-    const shotPowerIdx = getIdx(['SHOT POWER', 'SHOTPOWER', 'SHOT_POW', 'SHOT PWR'], 9);
-    const passingIdx = getIdx(['PASSING', 'PASS'], 10);
-    const aggressionIdx = getIdx(['AGGRESSION', 'AGGR'], 11);
-    const roughnessIdx = getIdx(['ROUGHNESS', 'ROUGH'], 12);
-    const enduranceIdx = getIdx(['ENDURANCE', 'ENDUR'], 13);
-    const checkingIdx = getIdx(['CHECKING', 'CHK'], 14);
-    const shotAccuracyIdx = getIdx(['SHOT ACCURACY', 'SHOT_ACCURACY', 'ACCURACY'], 15);
-    const stickHandlingIdx = getIdx(['STICK HANDLING', 'STICKHANDLING', 'STKHND', 'STICKHND'], 16);
-    const goalieDefIdx = getIdx(['G DEF', 'GDEF', 'GOALIE DEFENSE', 'GOALIE DEF', 'G DEFENSE'], 6);
-    const careerGpIdx = getIdx(['GP', 'GAMES PLAYED', 'GAMES'], 22);
-    const careerGIdx = getIdx(['G', 'GOALS'], 23);
-    const careerAIdx = getIdx(['A', 'ASSISTS'], 24);
-    const careerPtsIdx = getIdx(['PTS', 'POINTS'], 25);
-    const careerPpgIdx = getIdx(['PPG'], 26);
-    const careerPlusMinusIdx = getIdx(['PLUSMINUS', 'PLUS/MINUS', 'PLUS_MINUS'], 27);
-
-    const getCell = (row, idx) => String(row[idx] || '').trim();
-    const parseGradeStat = (row, idx, fallback = 60) => {
-        const raw = getCell(row, idx);
-        return raw === '' ? fallback : gradeToNum(raw);
-    };
-    const parseIntCell = (row, idx, fallback = 0) => {
-        const value = parseInt(getCell(row, idx), 10);
-        return Number.isFinite(value) ? value : fallback;
-    };
-    const parseFloatCell = (row, idx, fallback = 0) => {
-        const value = parseFloat(getCell(row, idx));
-        return Number.isFinite(value) ? value : fallback;
-    };
-
-    for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || !row.length) continue;
-
-        const lastName = getCell(row, lastNameIdx);
-        if (!lastName) continue;
-
-        const firstName = getCell(row, firstNameIdx);
-        const fullName = `${firstName} ${lastName}`.trim();
-        const playerPosition = getCell(row, posIdx).toUpperCase();
-
-        let playerAttributes;
-        if (playerPosition === 'G') {
-            playerAttributes = {
-                goalieDefense: parseIntCell(row, goalieDefIdx, 30),
-                agil: parseGradeStat(row, agilityIdx, 60),
-                speed: parseGradeStat(row, speedIdx, 60)
-            };
-        } else {
-            playerAttributes = {
-                shotPwr: parseGradeStat(row, shotPowerIdx, 60),
-                pass:    parseGradeStat(row, passingIdx, 60),
-                aggr:    parseGradeStat(row, aggressionIdx, 60),
-                rough:   parseGradeStat(row, roughnessIdx, 60),
-                endur:   parseGradeStat(row, enduranceIdx, 60),
-                check:   parseGradeStat(row, checkingIdx, 60),
-                shotAcc: parseGradeStat(row, shotAccuracyIdx, 60),
-                stkHnd:  parseGradeStat(row, stickHandlingIdx, 60),
-                agil:    parseGradeStat(row, agilityIdx, 60),
-                speed:   parseGradeStat(row, speedIdx, 60),
-                grades: {
-                    speed:   getCell(row, speedIdx)        || 'C',
-                    agil:    getCell(row, agilityIdx)      || 'C',
-                    shotPwr: getCell(row, shotPowerIdx)    || 'C',
-                    pass:    getCell(row, passingIdx)      || 'C',
-                    aggr:    getCell(row, aggressionIdx)   || 'C',
-                    rough:   getCell(row, roughnessIdx)    || 'C',
-                    endur:   getCell(row, enduranceIdx)    || 'C',
-                    check:   getCell(row, checkingIdx)     || 'C',
-                    shotAcc: getCell(row, shotAccuracyIdx) || 'C',
-                    stkHnd:  getCell(row, stickHandlingIdx)|| 'C',
-                }
-            };
-        }
-
-        const wParsed = parseWeightCell(getCell(row, weightIdx));
-        playerAttributes.weight = wParsed.grade;
-        const player = {
-            teamCode: getCell(row, teamCodeIdx),
-            name: fullName,
-            pos: playerPosition,
-            overall: parseIntCell(row, overallIdx, 30),
-            weight: wParsed.lbs,
-            attr: playerAttributes,
-            career: {
-                gp: parseIntCell(row, careerGpIdx, 0),
-                g: parseIntCell(row, careerGIdx, 0),
-                a: parseIntCell(row, careerAIdx, 0),
-                pts: parseIntCell(row, careerPtsIdx, 0),
-                ppg: parseFloatCell(row, careerPpgIdx, 0),
-                plusMinus: parseIntCell(row, careerPlusMinusIdx, 0)
-            }
-        };
-
-        roster.push(player);
-    }
-
-    return roster;
-}
-  
 let momentum = {
     abs: 0.0,
     rel: 0.0,
@@ -1447,78 +1135,7 @@ let momentum = {
 // =========================================================
 
 // Make sure your global object looks like this
-let gameStatus = {
-    globalChaos: 0.15, // Base Volatility
-    momentum: {
-        abs: 0.0, // Game Heat (Volume)
-        rel: 0.0, // Team Edge (Pos = Home, Neg = Away)
-        alpha: 0.15, // Blending sensitivity
-        carryoverTimer: 0,
-        bufferedFloor: 0
-    }
-};
 
-//  1. THE TICK ENGINE (Runs every game second/frame to decay momentum)
-function updateMomentumDecay(deltaSeconds, timeRemaining, scoreDiff) {
-    let m = gameStatus.momentum;
-
-    // Standard Absolute Momentum (The Heat) decay continues as normal
-    m.abs = Math.max(0, m.abs - (0.004 * deltaSeconds));
-
-    // Determine the Desperation/Sentiment Floor
-    let sentimentFloor = 0;
-    
-    // If trailing in the final 2 minutes, establish a desperation floor
-    if (timeRemaining <= 120 && scoreDiff !== 0) {
-        // Floor anchors to the deficit (e.g., -2 goals = -0.10 floor)
-        sentimentFloor = (scoreDiff < 0) ? Math.max(-0.15, (scoreDiff * 0.05)) : 0;
-    } else if (m.carryoverTimer > 0) {
-        // If a shock event just happened, respect the carryover floor
-        sentimentFloor = m.bufferedFloor;
-        m.carryoverTimer -= deltaSeconds;
-    }
-
-    // Decay the Relative Momentum (The Edge) but stop at the active floor
-    if (m.rel > sentimentFloor) {
-        m.rel = Math.max(sentimentFloor, m.rel - (0.015 * deltaSeconds));
-    } else if (m.rel < sentimentFloor) {
-        // If somehow below the floor, gently pull it back up
-        m.rel = Math.min(sentimentFloor, m.rel + (0.015 * deltaSeconds));
-    }
-}
-
-// ðŸ’¥ 2. THE EVENT SHOCK ENGINE (Run this when a big play happens)
-// Example usage: applyMomentumShock('GOAL', 'BOS', true)
-function applyMomentumShock(eventType, teamCode, isHomeTeam, customValue = null) {
-    let m = gameStatus.momentum;
-    
-    // A NEW EVENT ELIMINATES THE CARRYOVER (Resets the floor hold)
-    m.carryoverTimer = 0;
-    m.bufferedFloor = 0;
-
-    let absShift = 0;
-    let relShift = 0;
-
-    // Determine shift values based on event type
-    if (customValue !== null) {
-        relShift = isHomeTeam ? customValue : -customValue;
-        absShift = Math.abs(customValue) / 2;
-    } else if (eventType === 'GOAL') {
-        absShift = 0.10;
-        relShift = isHomeTeam ? 0.15 : -0.15;
-    } else if (eventType === 'SAVE' || eventType === 'HIT') {
-        absShift = 0.02;
-        relShift = isHomeTeam ? 0.10 : -0.10;
-    }
-
-    // Apply the Alpha-Blended Trend
-    m.abs = (absShift * m.alpha) + (m.abs * (1 - m.alpha));
-    m.rel = (relShift * m.alpha) + (m.rel * (1 - m.alpha));
-    
-    // Apply Hard Caps (Circuit Breakers)
-    m.abs = Math.min(0.25, Math.max(0, m.abs));
-    m.rel = Math.max(-0.20, Math.min(0.20, m.rel));
-}
 
 
 let specialTeams = {
@@ -1539,219 +1156,7 @@ const REF_STRICTNESS = (() => {
 })();
 
 // ðŸ¥Š 1. THE HIT PENALTY ENGINE (Call this immediately after a hit is calculated)
-function checkHitPenalty(attacker, severity) {
-    let roughness = 50;
-    if (attacker.stats && attacker.stats.RGH) roughness = attacker.stats.RGH;
-    else if (attacker.attr && attacker.attr.rough) {
-        roughness = typeof attacker.attr.rough === 'string' ? 75 : attacker.attr.rough;
-    }
 
-    // Safely extract weight
-    let aWeight = attacker.weight || (attacker.stats ? attacker.stats.WGT : 180) || 180;
-    
-    let penaltyChance = 0;
-
-    // Scale chance based on the severity of the hit
-    if (severity === 3) penaltyChance = 1.0; // Hard Violation (Guaranteed)
-    else if (severity === 2) penaltyChance = (roughness / 100) * 0.60 * REF_STRICTNESS;
-    else if (severity === 1) penaltyChance = (roughness / 100) * 0.25 * REF_STRICTNESS;
-
-    // !! THE BIG GUY BIAS: Referees penalize big hits from heavy players more frequently
-    if (aWeight >= 215 && severity >= 2) {
-        penaltyChance *= 1.30; // 30% higher chance of being called for a penalty
-    }
-
-    if (Math.random() < penaltyChance) {
-        if (typeof stopPlay === 'function') stopPlay('PENALTY', attacker.team);
-        return true;
-    }
-    return false;
-}
-
-function startPowerplay(advantageTeam, minutes) {
-    specialTeams.active = true;
-    specialTeams.teamAdvantage = advantageTeam;
-    specialTeams.timeRemaining += (minutes * 60); // Convert minutes to seconds
-    specialTeams.strength = '5v4';
-    console.log(`POWERPLAY STARTED! ${advantageTeam} goes on the man advantage.`);
-}
-
-function onEventTrigger(type, team) {
-    // A NEW EVENT ELIMINATES THE CARRYOVER
-    // This allows momentum to "pick right back up" without being held by a floor
-    momentum.carryoverTimer = 0;
-    momentum.bufferedFloor = 0;
-
-    // Process the new event normally to increase Relative Momentum
-    processEvent(type, team);
-}
-
-function getEffectiveStat(player, statName) {
-    const ps = playerStats[player.name];
-    if (!ps || !ps.attr) return 50;
-
-    const getVal = (grade) => {
-        const m = {
-            'A+': 98, 'A': 94, 'A-': 88,
-            'B+': 83, 'B': 78, 'B-': 72,
-            'C+': 66, 'C': 60, 'C-': 55,
-            'D': 45, 'F': 30
-        };
-        return m[String(grade || '').trim().toUpperCase()] || 60;
-    };
-
-    const rawStat = ps.attr[statName];
-    const baseStat = (typeof rawStat === 'string')
-        ? getVal(rawStat)
-        : (Number.isFinite(rawStat) ? rawStat : 50);
-
-    const fatigueMod = 1 - ((player.currentFatigue || 0) * 0.4);
-    const decayedStat = (statName === 'END' || statName === 'endur')
-        ? baseStat
-        : baseStat * fatigueMod;
-
-    // Apply morale modifier: morale 100 = neutral (1.0), 75 = -5% (0.95), 125 = +5% (1.05)
-    const moraleMod = 1.0 + ((ps.morale - 100) * 0.0005);
-
-    const composure = ((ps.attr.def || 50) * 0.5)
-        + (getVal(ps.attr.endur || 'C') * 0.3)
-        + ((ps.attr.ovr || 50) * 0.2);
-
-    let pressure = 1.0;
-    const tRemain = typeof finalTime !== 'undefined' ? finalTime : 999;
-    const sDiff = typeof scoreDiff !== 'undefined' ? scoreDiff : 0;
-    const isEN = typeof isEmptyNet !== 'undefined' ? isEmptyNet : false;
-
-    if (tRemain <= 300) pressure = 1.15;
-    if (tRemain <= 120 && Math.abs(sDiff) <= 1) pressure = 1.30;
-    if (tRemain <= 60 && isEN) pressure = 1.50;
-
-    const clutchPenalty = Math.max(0, (pressure * 100) - composure) * 0.005;
-    const chaos = gameStatus.globalChaos || 0.15;
-    const roll = (Math.random() * (1 - chaos)) + (0.5 * chaos);
-
-    let teamMod = 0;
-    if (gameStatus.momentum) {
-        teamMod = (player.team === 'HOME') ? gameStatus.momentum.rel : -gameStatus.momentum.rel;
-    }
-
-    const finalValue = decayedStat * (roll + teamMod - clutchPenalty) * moraleMod;
-    return Math.max(1, finalValue);
-}
-function useTimeout(team) {
-    // 1. Reset Global Chaos (Calm the game down)
-    gameStatus.globalChaos = Math.max(0.1, gameStatus.globalChaos - 0.4);
-
-    // 2. Momentum Reset
-    gameStatus.momentum.rel = gameStatus.momentum.rel * 0.5;
-
-    // 3. Optional: Restore a small amount of endurance to the current line
-    // Assuming 'players' array is accessible in this scope
-    if (typeof players !== 'undefined') {
-        players.forEach(p => {
-            if (p.team === team && p.isOnIce) {
-                p.currentFatigue = Math.max(0, p.currentFatigue - 0.15);
-            }
-        });
-    }
-
-    console.log(`${team} calls a timeout. Chaos subsided.`);
-    if (typeof renderGameUI === 'function') renderGameUI(); 
-} // <--- Added the missing closing bracket here!
-
-function triggerPenaltyEvent(attacker) {
-    // Log the event to your engine's console/tracker
-    console.log(`Penalty called on ${attacker.name} (${attacker.team})!`);
-    
-    // Trigger the stop play state using your existing logic
-    stopPlay('PENALTY', attacker.team);
-}
-
-function handleHit(attacker, victim) {
-    // 1. Safely extract weights (Fallback to 180 lbs if missing)
-    let aWeight = attacker.weight || (attacker.stats ? attacker.stats.WGT : 180) || 180;
-    let vWeight = victim.weight || (victim.stats ? victim.stats.WGT : 180) || 180;
-
-    // 2. Calculate Weight Differential Multiplier
-    // If the attacker is 40 lbs heavier, they get a 1.4x (40%) power boost
-    let weightDiff = aWeight - vWeight;
-    let weightMod = Math.max(0.6, Math.min(1.5, 1.0 + (weightDiff / 100)));
-
-    // 3. Calculate Strength Delta (NOW WITH WEIGHT MODIFIER!)
-    let basePower = (attacker.stats.CHK * 0.7) + (attacker.stats.AGR * 0.3) + (gameStatus.globalChaos * 10);
-    let power = basePower * weightMod; // Apply the physics
-    let resistance = (victim.stats.BAL * (1 - victim.currentFatigue * 0.4)) + (vWeight * 0.2);
-
-    let delta = power / resistance;
-    let severity = 0;
-
-    if (delta > 1.5) severity = 3;      // Grade 3: Injury/Penalty
-    else if (delta > 1.25) severity = 2; // Grade 2: Stun
-    else if (delta > 1.0) severity = 1;  // Grade 1: Loose Puck
-
-    if (severity > 0) {
-        // Trigger Shock (Fatigue acceleration)
-        victim.isShocked = true;
-        victim.shockTimer = 3.0; // Seconds
-        
-        // Spike Global Chaos
-        gameStatus.globalChaos = Math.min(1.0, gameStatus.globalChaos + (severity * 0.05));
-        
-        // Check for Penalty based on Roughness and Ref Strictness
-        checkHitPenalty(attacker, severity);
-        
-        console.log(`Hit Severity: ${severity} | Power: ${power.toFixed(2)} | Resistance: ${resistance.toFixed(2)} | Delta: ${delta.toFixed(2)}`);
-    }   
-    
-    return severity;
-}
-
-function updateEngine(delta) {
-   // --- SPECIAL TEAMS CLOCK ---
-    if (specialTeams.active) {
-        specialTeams.timeRemaining -= delta;
-        
-        if (specialTeams.timeRemaining <= 0) {
-            specialTeams.active = false;
-            specialTeams.teamAdvantage = null;
-            specialTeams.timeRemaining = 0;
-            specialTeams.strength = '5v5';
-            console.log("Penalty killed. Back to 5-on-5 hockey.");
-        }
-    }
-    let m = gameStatus.momentum;
-
-    // 1. Determine Desperation Floor (Final 2 Mins)
-    let activeFloor = 0;
-    if (gameTime <= 120 && scoreDiff !== 0) {
-        // Floor anchors to the deficit
-        activeFloor = (scoreDiff < 0) ? Math.max(-0.15, scoreDiff * 0.05) : 0;
-    } else if (m.carryoverTimer > 0) {
-        activeFloor = m.bufferedFloor;
-        m.carryoverTimer -= delta;
-    }
-
-    // 2. Apply Decay (Relative decays faster than Absolute)
-    if (m.rel > activeFloor) {
-        m.rel = Math.max(activeFloor, m.rel - (0.015 * delta)); // Sentiment Decay
-    }
-    m.abs = Math.max(0, m.abs - (0.004 * delta)); // Heat Decay
-
-   // 3. Fatigue Accumulation (Shock Multiplier + Weight Tax)
-    players.forEach(p => {
-        let shockMult = p.isShocked ? (100 / 20) : 1.0; // 5x Drain during shock
-        
-        // !! WEIGHT TAX: Heavy players carry more mass and drain energy slightly faster
-        let pWeight = p.weight || (p.stats ? p.stats.WGT : 180) || 180;
-        let weightTax = 1.0;
-        if (pWeight > 220) weightTax = 1.15; // 15% faster drain for heavyweights
-        else if (pWeight < 185) weightTax = 0.90; // 10% slower drain for smaller, lighter players
-
-        // Apply all modifiers to the fatigue calculation
-        let baseDrain = (0.001 * (1 + gameStatus.globalChaos) * shockMult * weightTax);
-        p.currentFatigue += baseDrain / (p.stats.END / 100);
-    });
-}
 
 // =========================================================
 // ðŸ­ FACTORY FUNCTIONS FOR PLAYER STATS CREATION
@@ -1764,33 +1169,6 @@ function updateEngine(delta) {
  * @param {object} attributes - pre-parsed attr object
  * @returns {object} Complete skater stats object
  */
-function createSkaterStats(firstName, lastName, teamCode, attributes) {
-    const fullName = `${firstName} ${lastName}`;
-    return {
-        name: fullName,
-        team: teamCode,
-        teamCode: teamCode,
-        pos: 'S',
-        attr: attributes,
-        potential: 'Star',
-        streakType: 'stable',
-        streakDur: 0,
-        hasScored: false,
-        consPointless: 0,
-        recentPts: [],
-        milestones: [],
-        asgMvp: false,
-        injury: { severity: 0, daysRemaining: 0 },
-        cumulativeFatigue: 0,
-        morale: 100,
-        suspended: { days: 0, reason: "" },
-        asgAppearances: 0,
-        career: { gp: 0, g: 0, a: 0, pts: 0, pm: 0, pim: 0, ppg: 0, shg: 0, gwg: 0, asg: 0, s: 0, awards: 0 },
-        careerPlayoff: { gp: 0, g: 0, a: 0, pts: 0, pm: 0, pim: 0, ppg: 0, shg: 0, gwg: 0, s: 0, toi: 0, svg: 0 },
-        season: { gp: 0, g: 0, a: 0, pm: 0, pim: 0, ppg: 0, shg: 0, gwg: 0, s: 0, toi: 0, svg: 0 },
-        playoff: { gp: 0, g: 0, a: 0, pm: 0, pim: 0, ppg: 0, shg: 0, gwg: 0, s: 0, toi: 0, svg: 0 }
-    };
-}
 
 /**
  * Creates a standardized goalie stats object
@@ -1800,39 +1178,6 @@ function createSkaterStats(firstName, lastName, teamCode, attributes) {
  * @param {object} attributes - pre-parsed attr object
  * @returns {object} Complete goalie stats object
  */
-function createGoalieStats(firstName, lastName, teamCode, attributes) {
-    const fullName = `${firstName} ${lastName}`;
-    return {
-        name: fullName,
-        team: teamCode,
-        teamCode: teamCode,
-        pos: 'G',
-        attr: attributes,
-        potential: 'Depth',
-        streakType: 'stable',
-        streakDur: 0,
-        hasScored: false,
-        consPointless: 0,
-        recentPts: [],
-        milestones: [],
-        asgMvp: false,
-        asgAppearances: 0,
-        injury: { severity: 0, daysRemaining: 0 },
-        cumulativeFatigue: 0,
-        morale: 100,
-        suspended: { days: 0, reason: "" },
-        goalieDays: 0,
-        lastStart: -1,
-        career: { gp: 0, g: 0, a: 0, pts: 0, pm: 0, pim: 0, ppg: 0, w: 0, l: 0, t: 0, so: 0, sv: 0, sa: 0 },
-        careerPlayoff: { gp: 0, w: 0, l: 0, t: 0, so: 0, sv: 0, sa: 0, toi: 0, svg: 0 },
-        season: { gp: 0, g: 0, a: 0, pm: 0, so: 0, sv: 0, sa: 0, w: 0, l: 0, t: 0, pim: 0, ppg: 0, lastGAA: 0, lastSV: 0, consStarts: 0, toi: 0, svg: 0 },
-        playoff: { gp: 0, g: 0, a: 0, pm: 0, so: 0, sv: 0, sa: 0, w: 0, l: 0, pim: 0, ppg: 0, lastGAA: 0, lastSV: 0, consStarts: 0, toi: 0, svg: 0 }
-    };
-}
-
-// =========================================================
-//  DEFENSIVE NULL CHECKS & SAFE ACCESSORS
-// =========================================================
 /**
  * Safely retrieve a nested stat value with default fallback
  * @param {string} playerName
@@ -1840,43 +1185,6 @@ function createGoalieStats(firstName, lastName, teamCode, attributes) {
  * @param {*} defaultValue - fallback if path not found
  * @returns {*} The stat value or default
  */
-function safeGetStat(playerName, statPath, defaultValue = 0) {
-    const ps = playerStats[playerName];
-    if (!ps) return defaultValue;
-    
-    const keys = statPath.split('.');
-    let value = ps;
-    
-    for (const key of keys) {
-        if (value == null) return defaultValue;
-        value = value[key];
-    }
-    
-    return (value ?? defaultValue);
-}
-
-/**
- * Safely increment a player stat (handles missing objects gracefully)
- * @param {string} playerName
- * @param {string} statPath - dot-notation path
- * @param {number} amount - amount to increment (default 1)
- */
-function safeIncrementStat(playerName, statPath, amount = 1) {
-    const ps = playerStats[playerName];
-    if (!ps) return;
-    
-    const keys = statPath.split('.');
-    let obj = ps;
-    
-    for (let i = 0; i < keys.length - 1; i++) {
-        const key = keys[i];
-        if (!obj[key]) obj[key] = {};
-        obj = obj[key];
-    }
-    
-    const lastKey = keys[keys.length - 1];
-    obj[lastKey] = (obj[lastKey] ?? 0) + amount;
-}
 
 // --- INITIALIZATION ---
 async function startNewGame(useCustomRoster = false) {  
@@ -2131,7 +1439,7 @@ async function startNewGame(useCustomRoster = false) {
     }     
         });
 
-        await loadScheduleFromCSV(customScheduleData); populateTeamSelect(); updateTradeDropdowns(); takeMonthSnapshot(); updateUI(); saveGame(); 
+        await loadScheduleFromCSV(customScheduleData); populateTeamSelect(); updateTradeDropdowns(); takeMonthSnapshot(); assignTeamCaptains(); updateUI(); saveGame();
         document.getElementById('startScreen').style.display = 'none'; document.getElementById('appContainer').style.display = 'block'; 
         if (btn) { btn.innerText = origText; btn.disabled = false; }
     } catch (error) { console.error(error); alert("ERROR: Could not load data."); if (btn) { btn.innerText = origText; btn.disabled = false; } }
@@ -2178,7 +1486,7 @@ function getPlayerWeightedStats(pName) {
         let rough = gradeToNum(p.attr.rough);
         let aggr = gradeToNum(p.attr.aggr);
         let endur = gradeToNum(p.attr.endur);
-        let weight = p.weight || getWeightLbs(p.attr.weight || 'C');
+        let weight = getWgt(pName);
         let wgt = parseInt(p.attr.wgt || p.weight) || 180;
 
         // =========================================================
@@ -2284,7 +1592,7 @@ function getPlayerWeightedStats(pName) {
     // !! WEIGHT MODIFIER INJECTION ZONE (FIXED) !!
     // =========================================================
     // Use stored numeric lbs  -  no random re-roll
-    let weightMod = getWeightModifier(p.weight || getWeightLbs(p.attr.weight || 'C'), tag);
+    let weightMod = getWeightModifier(getWgt(pName), tag);
     
     // Instead of massively multiplying the rating, we apply a balanced flat adjustment
     if (weightMod >= 1.15) {
@@ -2316,13 +1624,15 @@ function getPlayerWeightedStats(pName) {
         finalOvr += morale;
     }
 
-    // HOT/COLD streaks modify the player's own OVR (+10% / -10%)
-    // macro_streak (3-game trend) takes priority over micro_streak (1-game form)
+    // HOT/COLD streaks modify the player's own OVR — macro > micro; both can stack with dailySwing
     const ps = playerStats[pName];
     if (ps) {
-        const streak = ps.macro_streak || ps.micro_streak;
-        if (streak === 'HOT')  finalOvr = Math.round(finalOvr * 1.10);
-        if (streak === 'COLD') finalOvr = Math.round(finalOvr * 0.90);
+        if (ps.macro_streak === 'HOT')       finalOvr = Math.round(finalOvr * 1.12);
+        else if (ps.micro_streak === 'HOT')  finalOvr = Math.round(finalOvr * 1.06);
+        if (ps.macro_streak === 'COLD')      finalOvr = Math.round(finalOvr * 0.88);
+        else if (ps.micro_streak === 'COLD') finalOvr = Math.round(finalOvr * 0.94);
+        // dailySwing: pre-game per-player variance (+8/-8 flat, set by applyDailyRandomSwing)
+        if (ps.dailySwing) finalOvr = Math.max(40, Math.min(99, finalOvr + ps.dailySwing));
     }
 
     const result = { ovr: finalOvr, tag: tag, baseOvr: baseOvr };
@@ -2335,25 +1645,6 @@ function getPlayerWeightedStats(pName) {
 // ==========================================
 
 // 1. The Auto-Coach Evaluation (Used for building lines)
-function getCoachEvaluation(pName) {
-    let ps = playerStats[pName];
-    if (!ps) return 0;
-    
-    // Get Base OVR from your archetype function
-    let baseOvr = getPlayerWeightedStats(pName).ovr; 
-    let multiplier = 1.0;
-
-    // Apply Fatigue (1.5% penalty per point of fatigue)
-    let fatigue = typeof getPlayerFatigueAmount === 'function' ? getPlayerFatigueAmount(pName) : 0;
-    multiplier *= (1 - (fatigue * 0.015));
-
-    // Apply Streaks (+10% Hot, -10% Cold)
-    let streakStatus = ps.macro_streak || ps.micro_streak || 'NONE';
-    if (streakStatus === 'HOT') multiplier *= 1.10;
-    if (streakStatus === 'COLD') multiplier *= 0.90;
-
-    return baseOvr * multiplier;
-}
 class CreaseManager {
     constructor(starter, backup) {
         this.starter = starter;
@@ -2421,24 +1712,36 @@ class CreaseManager {
 
 // 2. The Daily "Any Given Night" Micro Streaks (Run Pre-Game)
 function assignMicroStreaks(rosterArray) {
-    // Clear old micro streaks for this team
     rosterArray.forEach(p => { if (playerStats[p.name]) playerStats[p.name].micro_streak = null; });
 
-    // Filter eligible players (those not injured and with at least 1 point in the last 3 games)
-    // 1. Filter out injured, streaking, and BENCHED players
-    let eligible = rosterArray.filter(p => {
-        let ps = playerStats[p.name];
-        let isHealthyAndAvailable = ps && ps.injury.daysRemaining === 0 && !ps.macro_streak;
-        let isActive = p.line !== 'BENCH'; // Ensure they are on the ice
-        return isHealthyAndAvailable && isActive;
+    const eligible = rosterArray.filter(p => {
+        const ps = playerStats[p.name];
+        return ps && (ps.injury?.daysRemaining ?? 0) === 0 && !ps.macro_streak && p.line !== 'BENCH';
     });
+    if (eligible.length < 2) return;
 
-    if (eligible.length >= 2) {
-        // Shuffle the eligible players and pick 2 randomly
-        let shuffled = eligible.sort(() => 0.5 - Math.random());
-        playerStats[shuffled[0].name].micro_streak = 'HOT';
-        playerStats[shuffled[1].name].micro_streak = 'COLD';
-    }
+    // Weighted selection — biased by recent production, morale, fatigue
+    const hotWeight  = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; const morale = ps.status?.morale || 100; const fatigue = ps.status?.fatigue || 0; return Math.max(0.1, (1 + lastPts * 2.5) * (morale / 100) * (1 - fatigue / 250)); };
+    const coldWeight = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; const pointless = ps.consPointless || 0; const fatigue = ps.status?.fatigue || 0; return Math.max(0.1, (1 + pointless * 0.6 + fatigue / 80) * (lastPts === 0 ? 2.5 : 0.4)); };
+    const pick = (pool, weightFn) => { const w = pool.map(weightFn); const total = w.reduce((a,b)=>a+b,0); let r = Math.random()*total; for(let i=0;i<pool.length;i++){r-=w[i];if(r<=0)return pool[i];} return pool[0]; };
+
+    // Persistence: 60% chance HOT/COLD player carries over if they earned it last game
+    let hotPick = null, coldPick = null;
+    const prevHot  = eligible.find(p => playerStats[p.name]._prevMicro === 'HOT');
+    const prevCold = eligible.find(p => playerStats[p.name]._prevMicro === 'COLD');
+    if (prevHot  && (playerStats[prevHot.name].recentGames?.slice(-1)[0]?.pts || 0) > 0 && Math.random() < 0.60) hotPick  = prevHot;
+    if (prevCold && (playerStats[prevCold.name].recentGames?.slice(-1)[0]?.pts || 0) === 0 && Math.random() < 0.60) coldPick = prevCold;
+
+    if (!hotPick)  hotPick  = pick(eligible.filter(p => p !== coldPick), hotWeight);
+    if (!coldPick) coldPick = pick(eligible.filter(p => p !== hotPick),  coldWeight);
+
+    eligible.forEach(p => {
+        const ps = playerStats[p.name];
+        ps.micro_streak = null;
+        ps._prevMicro = null;
+    });
+    if (hotPick)  { playerStats[hotPick.name].micro_streak  = 'HOT';  playerStats[hotPick.name]._prevMicro  = 'HOT';  }
+    if (coldPick) { playerStats[coldPick.name].micro_streak = 'COLD'; playerStats[coldPick.name]._prevMicro = 'COLD'; }
 }
 
 // 3. The 5-Game Rolling "Macro" Streaks (Run Post-Game)
@@ -2456,29 +1759,40 @@ function processPostGameStreaks(skaters, goalies) {
             pm: p.pm || 0
         });
         
-        // Rolling window: Keep only the last 5 games
-        if (ps.recentGames.length > 5) ps.recentGames.shift();
+        // Track consecutive pointless games
+        const thisGamePts = (p.goals || 0) + (p.assists || 0);
+        if (thisGamePts === 0) {
+            ps.consPointless = (ps.consPointless || 0) + 1;
+        } else {
+            ps.consPointless = 0;
+        }
 
-        // Evaluate ONLY if they have a full 5-game sample size
-        if (ps.recentGames.length === 5) {
-            let pts5 = ps.recentGames.reduce((sum, g) => sum + g.pts, 0);
-            let pm5 = ps.recentGames.reduce((sum, g) => sum + g.pm, 0);
+        // Rolling window: Keep only the last 4 games (tighter, faster response)
+        if (ps.recentGames.length > 4) ps.recentGames.shift();
+
+        // Evaluate ONLY if they have a full 4-game sample size
+        if (ps.recentGames.length === 4) {
+            let pts4 = ps.recentGames.reduce((sum, g) => sum + g.pts, 0);
+            let pm4 = ps.recentGames.reduce((sum, g) => sum + g.pm, 0);
             let ovr = getPlayerWeightedStats(p.name).ovr;
 
             ps.macro_streak = null; // Reset to stable by default
 
-            if (ovr >= 85) {
+            // 4 straight pointless games always triggers macro COLD
+            if (ps.consPointless >= 4) {
+                ps.macro_streak = 'COLD';
+            } else if (ovr >= 85) {
                 // STARS (85+ OVR)
-                if (pts5 >= 7) ps.macro_streak = 'HOT';
-                else if (pts5 <= 2) ps.macro_streak = 'COLD';
+                if (pts4 >= 6) ps.macro_streak = 'HOT';
+                else if (pts4 <= 1) ps.macro_streak = 'COLD';
             } else if (ovr >= 75) {
                 // TOP 6 / TOP 4 (75-84 OVR)
-                if (pts5 >= 4) ps.macro_streak = 'HOT';
-                else if (pts5 === 0) ps.macro_streak = 'COLD';
+                if (pts4 >= 4) ps.macro_streak = 'HOT';
+                else if (pts4 === 0) ps.macro_streak = 'COLD';
             } else {
                 // DEPTH (<75 OVR)
-                if (pts5 >= 3) ps.macro_streak = 'HOT';
-                else if (pm5 <= -4) ps.macro_streak = 'COLD';
+                if (pts4 >= 3) ps.macro_streak = 'HOT';
+                else if (pm4 <= -4) ps.macro_streak = 'COLD';
             }
         }
     });
@@ -2523,7 +1837,7 @@ function processPostGameStreaks(skaters, goalies) {
 
 // ðŸ·ï¸ UI BADGE GENERATOR (2-Letter Abbreviation Version)
 function getArchetypeBadge(pName) {
-    const tag = getPlayerWeightedStats(pName).tag;
+    const tag = getArch(pName);
     if (!tag || tag === 'NONE' || tag === 'GOALTENDER') return ''; 
     
     const abbrevMap = {
@@ -2607,8 +1921,11 @@ function getLiveIceOvr(pName) {
         live += ((p.status.morale - 100) * 0.05); // Adjust multiplier scaling to your liking
     }
     
-    // 5. Apply Line Chemistry
+    // 4b. Captain Effect - a healthy/hot captain lifts team-wide morale; an injured/cold captain hurts it harder than a regular player would
     const tObj = league.find(t => t.code === p.teamCode);
+    if (tObj) live += getCaptainChemModifier(tObj.nrm);
+
+    // 5. Apply Line Chemistry
     if (tObj && tObj.chem && tObj.chem.lastUnit) {
         let chemVal = 0, isTelepathic = false;
         const lineIdx = tObj.chem.lastUnit.f.findIndex(l => l.some(x => x.name === pName));
@@ -2663,7 +1980,7 @@ function playedYesterday(tk) { if (currentDay === 0 || !calendar[currentDay - 1]
 function getPlayerFatigueAmount(pName) { 
     const p = playerStats[pName]; if (!p) return 0;
     let pen = 0; 
-    let endur = p.attr.endur || 70; // Fallback is now a number
+    let endur = gradeToNum(p.attr.endur) || 70;
 
     // ðŸ“… Back-to-Back Schedule Penalty
     if (playedYesterday(p.teamCode || p.team)) {
@@ -2719,18 +2036,8 @@ const dynamicDuos = [
     ['Ron Francis', 'Kevin Stevens', 'Tomas Sandstrom'],
 ];
 
-function getDuoPartner(playerName) {
-    for (let pair of dynamicDuos) {
-        if (pair[0] === playerName) return pair[1];
-        if (pair[1] === playerName) return pair[0];
-        if (pair.length === 3) {
-            if (pair[0] === playerName) return [pair[1], pair[2]];
-            if (pair[1] === playerName) return [pair[0], pair[2]];
-            if (pair[2] === playerName) return [pair[0], pair[1]];
-        }
-    }
-    return null;
-}
+function getAllDuos() { return [...dynamicDuos, ...customDuos]; }
+
 
 // Example helper to ensure every player has a tag
 function getTag(name) {
@@ -2752,8 +2059,8 @@ function getPlayerPosition(player) {
     // 1. Get raw value
     let p = String(player.pos || '').toUpperCase().trim();
     
-    // 2. Debug: If you see F, check the console
-    if (p !== 'C' && p !== 'LW' && p !== 'RW' && p !== 'D' && p !== 'G') {
+    // 2. Debug: warn only on truly unknown values (F is a valid roster CSV position)
+    if (p !== 'C' && p !== 'LW' && p !== 'RW' && p !== 'D' && p !== 'G' && p !== 'F') {
         console.log(`âš ï¸ POSITION WARNING: Player "${player.name}" has unmapped pos: "${p}"`);
     }
 
@@ -2767,57 +2074,9 @@ function getPlayerPosition(player) {
     return 'F'; // Only returns F if no match is found
 }
 
-/**
- * Sort forwards by position preference
- * @param {array} players - Array of player objects
- * @param {string} preferPosition - Preferred position (C, LW, RW)
- * @returns {array} Sorted array by position preference
- */
-function sortByPositionPreference(players, preferPosition) {
-    return [...players].sort((a, b) => {
-        const posA = getPlayerPosition(a);
-        const posB = getPlayerPosition(b);
-        
-        // Exact position match gets priority
-        if (posA === preferPosition && posB !== preferPosition) return -1;
-        if (posB === preferPosition && posA !== preferPosition) return 1;
-        
-        // Both same or both different: sort by OVR
-        return getPlayerWeightedStats(b.name).ovr - getPlayerWeightedStats(a.name).ovr;
-    });
-}
-
-/**
- * Check if a winger can fill a center position (OVR-based override)
- * @param {object} winger - Winger player object
- * @param {number} centersNeeded - How many centers still needed
- * @returns {boolean} True if winger can be promoted to center
- */
-function canWingerFillCenter(winger, centersNeeded) {
-    // Wingers can only fill centers if not enough Cs exist on entire roster
-    if (centersNeeded > 0) {
-        const wingOvr = getPlayerWeightedStats(winger.name).ovr;
-        // Allow promotion only if it's a very high-rated winger
-        return wingOvr >= 85;  // Elite-level winger can play center in emergency
-    }
-    return false;
-}
-
-/**
- * Check if a center can fill a winger position (OVR-based override)
- * @param {object} center - Center player object
- * @param {object} existingWinger - Winger currently in that position
- * @returns {boolean} True if center outranks winger by 3+ OVR
- */
-function canCenterFillWing(center, existingWinger) {
-    const cOvr = getPlayerWeightedStats(center.name).ovr;
-    const wOvr = existingWinger ? getPlayerWeightedStats(existingWinger.name).ovr : 0;
-    // Centers can fill wings only if they're 3+ OVR higher
-    return (cOvr - wOvr) >= 3;
-}
 
 function getLineMates(playerName) {
-    for (let pair of dynamicDuos) {
+    for (let pair of getAllDuos()) {
         if (pair.includes(playerName)) return pair.filter(name => name !== playerName);
     }
     return null;
@@ -2898,7 +2157,44 @@ function renderTeamDirectory(tk) {
         h += `</div></div>`;
     }
     h += `</div>`;
-    
+
+    // Injured Reserve section
+    const irPlayers = (rosters[tk] || []).filter(p => playerStats[p.name]?.onIR);
+    const injuredNotIR = (rosters[tk] || []).filter(p => {
+        const ps = playerStats[p.name];
+        return ps && !ps.onIR && ps.injury && ps.injury.daysRemaining > 0;
+    });
+    if (irPlayers.length || injuredNotIR.length) {
+        h += `<div style="margin-top:20px; border-top:1px solid #2a0000; padding-top:12px;">`;
+        h += `<div style="color:#FF5555; font-weight:bold; margin-bottom:12px; text-transform:uppercase; font-size:11px; letter-spacing:2px;">INJURED RESERVE</div>`;
+        irPlayers.forEach(p => {
+            const ps = playerStats[p.name];
+            const daysLeft = ps?.injury?.daysRemaining || 0;
+            const totalDays = ps?.irTotalDays || daysLeft || 1;
+            const dayOnIR = ps?.irDay != null ? currentDay - ps.irDay : null;
+            const pctHealed = Math.min(1, totalDays > 0 ? 1 - (daysLeft / totalDays) : 1);
+            const timelineHtml = dayOnIR != null ? `
+                <div style="background:#2a0000;border-radius:2px;height:4px;margin-top:4px;overflow:hidden;">
+                    <div style="height:100%;width:${Math.round(pctHealed*100)}%;background:${daysLeft===0?'#00FF88':'#FF5555'};border-radius:2px;"></div>
+                </div>
+                <div style="color:#555;font-size:6px;margin-top:2px;">Day ${dayOnIR} of ~${totalDays}</div>` : '';
+            h += `<div style="background:#1a0000; padding:8px 12px; margin-bottom:6px; border-left:4px solid #FF5555;">`;
+            h += `<div style="display:flex; align-items:center; justify-content:space-between;">`;
+            h += `<span style="color:#FF8888; font-size:9px;">[IR] ${p.name} <span style="color:#555; font-size:8px;">${daysLeft > 0 ? `(${daysLeft}d remaining)` : '(READY TO ACTIVATE)'}</span></span>`;
+            h += `<button onclick="activateFromIR('${p.name}','${tk}')" style="font-size:6px; padding:3px 8px; border-color:${daysLeft === 0 ? '#00FF88' : '#555'}; color:${daysLeft === 0 ? '#00FF88' : '#555'}; cursor:pointer;">${daysLeft === 0 ? 'ACTIVATE' : 'NOT YET'}</button>`;
+            h += `</div>${timelineHtml}</div>`;
+        });
+        injuredNotIR.forEach(p => {
+            const ps = playerStats[p.name];
+            const daysLeft = ps?.injury?.daysRemaining || 0;
+            h += `<div style="background:#0d0d0d; padding:8px 12px; margin-bottom:6px; border-left:4px solid #884444; display:flex; align-items:center; justify-content:space-between;">`;
+            h += `<span style="color:#aa6666; font-size:9px;">${p.name} [INJ ${daysLeft}d]</span>`;
+            h += `<button onclick="placeOnIR('${p.name}','${tk}')" style="font-size:6px; padding:3px 8px; border-color:#FF5555; color:#FF5555; cursor:pointer;">PLACE ON IR</button>`;
+            h += `</div>`;
+        });
+        h += `</div>`;
+    }
+
     h += `</div>`;
     container.innerHTML = h;
 }
@@ -2914,8 +2210,13 @@ const getRosterStructure = (tk) => {
     if (customLines[tk]) {
         const cl = customLines[tk];
         const byName = n => r.find(p => p.name === n);
-        const resolveGroup = (nameArrays, fallback) =>
-            nameArrays.map(slots => slots.map(n => byName(n)).filter(Boolean));
+        // Dedupe across the whole group — a player may only occupy ONE slot
+        const resolveGroup = (nameArrays, fallback) => {
+            const seen = new Set();
+            return nameArrays.map(slots => slots
+                .filter(n => { if (seen.has(n)) return false; seen.add(n); return true; })
+                .map(n => byName(n)).filter(Boolean));
+        };
         const customF = cl.f ? resolveGroup(cl.f) : null;
         const customD = cl.d ? resolveGroup(cl.d) : null;
         const customG = cl.g ? cl.g.map(n => byName(n)).filter(Boolean) : null;
@@ -2940,7 +2241,7 @@ const getRosterStructure = (tk) => {
 
     let healthySkaters = r.filter(p => {
         let ps = playerStats[p.name];
-        return getPos(p) !== 'G' && ps && (!ps.injury || ps.injury.daysRemaining === 0);
+        return getPos(p) !== 'G' && ps && !ps.onIR && (!ps.injury || ps.injury.daysRemaining === 0);
     });
 
     let fPool = healthySkaters.filter(p => getPos(p) !== 'D')
@@ -3376,7 +2677,26 @@ const getRosterStructure = (tk) => {
         return getPos(p) === 'G' && ps && (!ps.injury || ps.injury.daysRemaining === 0);
     }).sort((a,b) => getOvr(b) - getOvr(a));
     
-    const struct = { f: fLines, d: dPairs, g: gPool };
+    // FINAL DEDUPE PASS — a skater may only appear on ONE forward line and
+    // ONE defense pair. Keeps the first (highest) slot, drops any clones that
+    // slipped through synergy rebalancing or duplicate roster entries.
+    const seenSkaters = new Set();
+    const dedupeGroup = (group) => group.map(line =>
+        line.filter(p => {
+            if (!p || !p.name) return false;
+            if (seenSkaters.has(p.name)) return false;
+            seenSkaters.add(p.name);
+            return true;
+        })
+    );
+    const cleanF = dedupeGroup(fLines);
+    const cleanD = dedupeGroup(dPairs);
+    // Backfill any holes the dedupe opened with best unused healthy skaters
+    const spareF = fPool.filter(p => !seenSkaters.has(p.name)).sort((a,b) => getOvr(b) - getOvr(a));
+    cleanF.forEach(line => { while (line.length < 3 && spareF.length) { const p = spareF.shift(); line.push(p); seenSkaters.add(p.name); } });
+    const spareD = dPool.filter(p => !seenSkaters.has(p.name)).sort((a,b) => getOvr(b) - getOvr(a));
+    cleanD.forEach(pair => { while (pair.length < 2 && spareD.length) { const p = spareD.shift(); pair.push(p); seenSkaters.add(p.name); } });
+    const struct = { f: cleanF, d: cleanD, g: gPool };
     _structCache[tk] = struct;
     return struct;
 }
@@ -3393,10 +2713,13 @@ function getSpecialTeamsUnit(tk, type, unitNum, isEN = false) {
 
     let unit = [];
 
+    // Dedupe pools by name so a player can only land on ONE PP and ONE PK unit
+    const uniqByName = (arr) => { const s = new Set(); return arr.filter(p => { if (!p || !p.name || s.has(p.name)) return false; s.add(p.name); return true; }); };
+
     if (type === 'PP') {
         // Pool ALL available forwards and defensemen for evaluation
-        let allForwards = [...struct.f.flat()].filter(Boolean);
-        let allDefense = [...struct.d.flat()].filter(Boolean);
+        let allForwards = uniqByName(struct.f.flat());
+        let allDefense = uniqByName(struct.d.flat());
 
         // Sort pools by offensive capability (highest off first)
         allForwards.sort((a, b) => getOffAttr(b) - getOffAttr(a));
@@ -3424,8 +2747,8 @@ function getSpecialTeamsUnit(tk, type, unitNum, isEN = false) {
     }
 
     else if (type === 'PK') {
-        let pkForwards = [...(struct.f[2] || []), ...(struct.f[3] || [])].filter(Boolean);
-        let allDefense = [...struct.d.flat()].filter(Boolean);
+        let pkForwards = uniqByName([...(struct.f[2] || []), ...(struct.f[3] || [])]);
+        let allDefense = uniqByName(struct.d.flat());
 
         pkForwards.sort((a, b) => (playerStats[b.name]?.attr?.def || 0) - (playerStats[a.name]?.attr?.def || 0));
         allDefense.sort((a, b) => (playerStats[b.name]?.attr?.def || 0) - (playerStats[a.name]?.attr?.def || 0));
@@ -3480,65 +2803,9 @@ function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
 }
 
 // Helper function to build the Special Teams HTML dynamically
-function buildSpecialTeamsHTML(type, unitNum, unitPlayers) {
-    const gridClass = (type === 'PK') ? 'pk-grid-layout' : 'pp-grid-layout';
-    
-    let htmlContent = `
-        <div style="color:var(--ea-yellow); font-weight:bold; margin-top:10px; margin-bottom:5px;">
-            ${type} UNIT ${unitNum}
-        </div>
-        <div class="${gridClass}">
-    `;
-    
-    unitPlayers.forEach((player, index) => {
-        if (!player) {
-            htmlContent += `<div class="player-slot" style="color:#555;">-- EMPTY --</div>`;
-            return; 
-        }
-
-        let label = '';
-        if (type === 'PK') {
-            label = index < 2 ? '[F]' : '[D]'; 
-        } else {
-            label = index < 4 ? '[F]' : '[D]'; 
-        }
-        
-        htmlContent += `
-            <div class="player-slot" onclick="showPlayerCard('${player.name}')">
-                <span class="pos-badge">${label}</span>
-                <span style="color:#fff;">${player.name}</span>
-                <div style="font-size:7px; color:#aaa; margin-top:3px;">
-                    OVR: ${getPlayerWeightedStats(player.name).ovr || 0}
-                </div>
-            </div>
-        `;
-    });
-    
-    htmlContent += `</div>`;
-    return htmlContent;
-}
 function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.10, Math.min(0.46, 0.215 + diff * 0.0028 * pace)); }
 
-// Find this function in script.js and update the return:
-function getDefenseAndGoalieModifiers(defRating, goalie) {
-    // !! SHIFTED BASELINE
-    const shot = Math.max(0.75, Math.min(1.25, 1 - (defRating - 70) * 0.004));
-
-    if (!goalie || !playerStats[goalie.name]) return { shot, goal: 1.0 };
-    
-    const gStats = playerStats[goalie.name];
-    const streakModifier = gStats.streakType === 'hot' ? 1.05 : (gStats.streakType === 'cold' ? 0.95 : 1.0);
-    const baseOvr = gStats.attr.ovr || gStats.attr.gDef || 60;
-    const quality = Math.max(0.75, Math.min(1.25, (baseOvr / 60) * streakModifier));
-    
-    // ADDED 'shot' TO THE RETURN OBJECT BELOW
-    return { shot, goal: Math.max(0.80, Math.min(1.25, 1 - (quality - 1) * 0.30)) }; 
-}
-
-function getActiveSkaters(tk) { const s = getRosterStructure(tk); return [...s.f.flat(), ...s.d.flat(), ...(s.g.slice(0, 2))]; }
-
 // --- GAME MATH & STATS ---
-function pois(l) { if(isNaN(l) || l <= 0 || l === Infinity) return 0; let L = Math.exp(-l), kv = 0, pr = 1; do { kv++; pr *= Math.random(); } while(pr > L); return kv - 1; }
 function checkMilestones(pName) {
     if (!awardConfig || !awardConfig.milestones) return;
     const p = playerStats[pName];
@@ -3586,286 +2853,32 @@ function checkMilestones(pName) {
         soMilestones.forEach(m => { if (totalSO >= m) addMilestone(`${m} Career Shutouts`); });
     }
 }
-function calculateStars(hSc, aSc, hGn, aGn, hW, aW, hGA, aGA) { 
-    let c = []; const add = (n, pts) => { if(!n) return; let ex = c.find(x => x.n === n); if(ex) ex.s += pts; else c.push({n, s:pts}); }; 
-    hSc.forEach(g => { add(g.scorer, 30); add(g.a1, 15); add(g.a2, 10); }); aSc.forEach(g => { add(g.scorer, 30); add(g.a1, 15); add(g.a2, 10); }); 
-    if(hGn) add(hGn, (25-hGA) + (hGA === 0 ? 50 : 0) + (hW ? 20 : 0)); if(aGn) add(aGn, (25-aGA) + (aGA === 0 ? 50 : 0) + (aW ? 20 : 0)); 
-    return c.sort((a,b) => b.s - a.s).slice(0,3).map(x => x.n); 
-}
-
-function creditStats(tk, oppTk, goals, k, baseOff, hPPG, teamSHG, teamEXA, activeSkaters) {
-    let ev = []; 
-    const blendStat = (base, comp) => base * (1 + ((comp - 1) * 0.75));
-
-    for(let i = 0; i < goals; i++) {
-        let pG = false, sH = false, isEN = false;
-        if (hPPG > 0 && Math.random() < (hPPG / goals)) { pG = true; hPPG--; }
-        else if (teamSHG > 0 && Math.random() < (teamSHG / Math.max(1, goals - hPPG))) { sH = true; teamSHG--; }
-        if (!pG && teamEXA > 0 && Math.random() < 0.22) { isEN = true; teamEXA--; }
-
-        let u; let dUnit = [];
-        let struct = getRosterStructure(tk);
-        
-        if (pG) {
-            u = getSpecialTeamsUnit(tk, 'PP', (Math.random() < 0.55 ? 1 : 2), isEN);
-        } else if (sH) {
-            u = getSpecialTeamsUnit(tk, 'PK', (Math.random() < 0.60 ? 1 : 2), isEN);
-        } else {
-            // --- DYNAMIC SHIFTS ---
-            const pickLine = (linesArray) => {
-                let ovrs = linesArray.map(l => l.length > 0 ? l.reduce((s, p) => s + getPlayerWeightedStats(p.name).ovr, 0) / l.length : 10);
-                let weights = ovrs.map(o => Math.pow(o, 2)); 
-                let total = weights.reduce((a, b) => a + b, 0);
-
-                //  MODIFIED: ICE TIME CAP FOR TOP LINE
-                // Regular Season: ~23 mins (38.3%), Playoffs: ~26 mins (43.3%)
-                let maxPercent = (k === 'playoff') ? 0.433 : 0.383;
-                
-                // If Line 1 exceeds the minute cap, throttle them and redistribute
-                if (weights.length > 0 && (weights[0] / total) > maxPercent) {
-                    let remainingWeight = total - weights[0];
-                    let allowedL1Weight = remainingWeight * (maxPercent / (1 - maxPercent));
-                    weights[0] = allowedL1Weight;
-                    
-                    // Recalculate the total weight pool with the new capped value
-                    total = weights.reduce((a, b) => a + b, 0); 
-                }
-
-                let roll = Math.random() * total;
-                for (let i = 0, cum = 0; i < weights.length; i++) {
-                    cum += weights[i];
-                    if (roll <= cum) return i;
-                }
-                return 0;
-            };
-
-            const fIndex = pickLine(struct.f);
-            const activeForwards = struct.f[fIndex] || struct.f[0];
-            const dIndex = pickLine(struct.d);
-            const activeDefense = struct.d[dIndex] || struct.d[0];
-            u = [...activeForwards, ...activeDefense];
-        }
-
-        // --- SAFETY: Ensure u is valid ---
-        u = (u || []).filter(p => p && p.name);
-        if (u.length === 0) u = (activeSkaters || []).filter(p => p && p.name);
-
-        let oppStruct = getRosterStructure(oppTk); 
-        dUnit = [...(oppStruct.f[0] || []), ...(oppStruct.d[0] || [])];
-
-        // Filter players
-        let eligible = u.filter(p => {
-            let ps = playerStats[p.name];
-            let isHealthyAndAvailable = ps && ps.injury.daysRemaining === 0; 
-            let isActive = p.line !== 'BENCH';
-            return isHealthyAndAvailable && isActive;
-        });
-
-        if (eligible.length === 0) eligible = u;
-
-       // 1. Goal Weights  -  equal base for all forwards; D-men penalized; driven by attributes + archetype
-const gWeights = eligible.map(p => {
-    let pA = playerStats[p.name].attr;
-    let tag = getPlayerWeightedStats(p.name).tag || 'GENERIC';
-    let arch = archMods[tag] || { shotRate: 1.0 };
-
-    // Attributes: Off, ShotPwr, ShotAcc
-    let off = pA.off || 70;
-    let pwr = pA.shotPwr || 70;
-    let acc = pA.shotAcc || 70;
-    let baseChance = (off * 0.20) + (pwr * 0.40) + (acc * 0.40);
-
-    // Apply Archetype Multiplier
-    let archMod = arch.shotRate;
-
-    let shotRoll = Math.random();
-    let goalDist = (shotRoll < 0.35) ? 'Close' : (shotRoll > 0.87 ? 'Far' : 'Medium');
-
-    let modifier = 1.0;
-    if (isEN) modifier *= 3.20;
-    if (playerStats[p.name].isHot) modifier *= 1.20;
-    if (playerStats[p.name].isCold) modifier *= 0.80;
-
-    // Position modifier: ALL forwards equal base (1.0), D-men penalized (~31% less)
-    // No center bonus  -  C/LW/RW are identical base; difference comes only from attrs/archetype
-    const isD = (p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD');
-    let compMod = isD ? 0.80 : 1.0;
-    // Extra accuracy penalty for D on non-Far shots
-    if (isD && goalDist !== 'Far') compMod *= (acc >= 90) ? 1.0 : 0.65;
-    if (isD && goalDist === 'Far') compMod *= (acc >= 80) ? 1.0 : 0.75;
-
-    let ppMod = 1.0;
-    if (typeof specialTeams !== 'undefined' && specialTeams.active) {
-        ppMod = (p.team === specialTeams.teamAdvantage) ? 1.40 : 0.35;
-    }
-
-    // Underperformance penalty: skilled shooter (B+ shotPwr or shotAcc) with <=1.0 SOG/GP
-    let usageMod = 1.0;
-    const _ps = playerStats[p.name]?.season;
-    if (_ps && _ps.gp >= 5) {
-        const soPerGame = (_ps.s || 0) / _ps.gp;
-        if (soPerGame <= 1.0 && (pA.shotPwr >= 65 || pA.shotAcc >= 65)) usageMod = 0.78;
-    }
-
-    return Math.max(1, baseChance * archMod * modifier * compMod * ppMod * usageMod);
-});
-
-        // 3. Roll scorer
-        let tGW = gWeights.reduce((a,b)=>a+b,0), rG = Math.random()*tGW, cG = 0, scr = eligible[0];
-        for(let j=0; j<eligible.length; j++){ cG+=gWeights[j]; if(rG<=cG){ scr=eligible[j]; break; }}
-        
-        // Powerplay Termination
-        if (typeof specialTeams !== 'undefined' && specialTeams.active) {
-            if (scr.team === specialTeams.teamAdvantage) {
-                specialTeams.active = false;
-                specialTeams.teamAdvantage = null;
-                specialTeams.timeRemaining = 0;
-                specialTeams.strength = '5v5';
-                console.log(`!! POWERPLAY GOAL by ${scr.name}! Penalty expires, back to 5-on-5.`);
-            } else {
-                console.log(`!! SHORTHANDED GOAL by ${scr.name}! The Powerplay continues.`);
-            }
-        }
-
-        playerStats[scr.name][k].g++; 
-        playerStats[scr.name][k].pts = (playerStats[scr.name][k].pts || 0) + 1; 
-        if(pG) playerStats[scr.name][k].ppg = (playerStats[scr.name][k].ppg || 0) + 1;
-        if(sH) playerStats[scr.name][k].shg = (playerStats[scr.name][k].shg || 0) + 1;
-
-        if (getPlayerWeightedStats(scr.name).tag === 'GRINDER') {
-            rosters[tk].forEach(p => { if(playerStats[p.name]) playerStats[p.name].fatigue = Math.max(0, (playerStats[p.name].fatigue || 0) - 2); });
-        }
-
-        let a1N = null, a2N = null;
-        let pPassers = u.filter(p => p.name !== scr.name);
-        
-       // 2. Assist Weights
-const getAWeight = (p, isSec) => {
-    let pA = playerStats[p.name].attr;
-    let tag = getPlayerWeightedStats(p.name).tag || 'GENERIC';
-    let arch = archMods[tag] || { assistRate: 1.0 };
-
-    // Attributes: Off, Pass, StickHandling
-    let off = pA.off || 70;
-    let pass = pA.pass || 70;
-    let stick = pA.stkHnd || 70;
-    
-    let baseWeight = (off * 0.3) + (pass * 0.5) + (stick * 0.2);
-
-    // Apply Archetype Multiplier
-    let archMod = arch.assistRate;
-
-    let mod = isSec ? 1.1 : 0.9; // Secondary assists get a slight boost, primary assists get a slight reduction to create more variance
-    const isD = (p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD');
-    if (isD) mod *= 0.90; // Defensemen assist penalty, applies to both primary and secondary assists
-
-    // Underperformance penalty: skilled passer (B+ pass) with <=0.35 A/GP
-    let passUsageMod = 1.0;
-    const _aps = playerStats[p.name]?.season;
-    if (_aps && _aps.gp >= 5 && pass >= 65) {
-        const aPerGame = (_aps.a || 0) / _aps.gp;
-        if (aPerGame <= 0.35) passUsageMod = 0.78;
-    }
-
-    return baseWeight * archMod * mod * passUsageMod;
-};
-
-       let assistRoll = Math.random();
-        let numAssists = 0;
-        let chance2A = 0.755; let chance1A = 0.195; 
-        
-        if (u.some(p => getPlayerWeightedStats(p.name).tag === 'PLAYMAKER')) {
-            chance2A = 0.855; chance1A = 0.115;
-        }
-
-        if (assistRoll < chance2A) numAssists = 2;
-        else if (assistRoll < (chance2A + chance1A)) numAssists = 1;
-
-        if (numAssists > 0 && pPassers.length > 0) {
-            
-          // Slight bonus for defensemen assists  -  D-men are active in the rush and transition
-            const getModAWeight = (p, isSecondary) => {
-                let weight = getAWeight(p, isSecondary);
-                const isD = p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD';
-                return isD ? weight * 1.18 : weight;
-            };
-
-            //  MODIFIED: Replaced 'getAWeight' with 'getModAWeight' below
-            let tA1 = pPassers.reduce((s, p) => s + getModAWeight(p, false), 0);
-            let rA1 = Math.random()*tA1, cA1 = 0, a1 = pPassers[0];
-            for(let p of pPassers){ cA1 += getModAWeight(p, false); if(rA1 <= cA1){ a1 = p; break; }}
-            
-            playerStats[a1.name][k].a++; playerStats[a1.name][k].pts++; a1N = a1.name;
-            if (pG) playerStats[a1.name][k].ppa = (playerStats[a1.name][k].ppa || 0) + 1; 
-
-            if (numAssists === 2) {
-                let sPassers = pPassers.filter(p => p.name !== a1N);
-                if (sPassers.length > 0) {
-                    //  MODIFIED: Replaced 'getAWeight' with 'getModAWeight' below
-                    let tA2 = sPassers.reduce((s, p) => s + getModAWeight(p, true), 0);
-                    let rA2 = Math.random()*tA2, cA2 = 0, a2 = sPassers[0];
-                    for(let p of sPassers){ cA2 += getModAWeight(p, true); if(rA2 <= cA2){ a2 = p; break; }}
-                    
-                    playerStats[a2.name][k].a++; playerStats[a2.name][k].pts++; a2N = a2.name;
-                    if (pG) playerStats[a2.name][k].ppa = (playerStats[a2.name][k].ppa || 0) + 1; 
-                }
-            }
-        }
-        // ==========================================
-        //  PLUS/MINUS (+/-) TRACKER
-        // ==========================================
-        // Only apply +/- if it is NOT a power play goal (pG).
-        // Even strength and shorthanded goals count!
-        if (!pG) {
-            
-            // Give +1 to the scoring team on the ice (u)
-            u.forEach(p => {
-                if (playerStats[p.name] && playerStats[p.name][k]) {
-                    // Uses your engine's specific '.pm' key
-                    playerStats[p.name][k].pm = (playerStats[p.name][k].pm || 0) + 1;
-                }
-            });
-
-            // Give -1 to the defending team on the ice (dUnit)
-            dUnit.forEach(p => {
-                if (playerStats[p.name] && playerStats[p.name][k]) {
-                    playerStats[p.name][k].pm = (playerStats[p.name][k].pm || 0) - 1;
-                }
-            });
-        }
-
-        //  MODIFIED: Added `isSH: sH` so the engine knows it was a shorthanded goal
-        ev.push({scorer: scr.name, a1: a1N, a2: a2N, onIce: u.map(p=>p.name), oppOnIce: dUnit.map(p=>p.name), isPP: pG, isSH: sH, isEN: isEN});        
-    }
-    return ev;
-}
 
 /**
  * Dynamic Ice Time Allocator with Strict Base Limits & Rating Weight Modifiers
  * @param {Object} struct - The return from getRosterStructure(teamCode) containing .f and .d
  * @returns {Object} - An object with arrays of calculated minutes per player for forwards and defenders
  */
+function getPairOvr(pair) {
+    if (!pair || pair.length === 0) return 0;
+    const total = pair.reduce((sum, p) => sum + (getLiveIceOvr(p.name) || 75), 0);
+    return Math.round(total / pair.length);
+}
+
 function calculateDynamicIceTime(struct) {
     if (!struct || !struct.f || !struct.d) {
         return { forwardTimes: [15, 15, 15, 15], defenseTimes: [20, 20, 20] };
     }
 
-    // --- Helper: Get Line/Pair Average Overall Rating ---
-    const getUnitAverageOvr = (players) => {
-        if (!players || players.length === 0) return 0;
-        let sum = players.reduce((acc, p) => acc + (typeof getLiveIceOvr === 'function' ? getLiveIceOvr(p.name) : 75), 0);
-        return sum / players.length;
-    };
-
     // Calculate line overals
-    const f1Ovr = getUnitAverageOvr(struct.f[0]);
-    const f2Ovr = getUnitAverageOvr(struct.f[1]);
-    const f3Ovr = getUnitAverageOvr(struct.f[2]);
-    const f4Ovr = getUnitAverageOvr(struct.f[3]);
+    const f1Ovr = getPairOvr(struct.f[0]);
+    const f2Ovr = getPairOvr(struct.f[1]);
+    const f3Ovr = getPairOvr(struct.f[2]);
+    const f4Ovr = getPairOvr(struct.f[3]);
 
-    const d1Ovr = getUnitAverageOvr(struct.d[0]);
-    const d2Ovr = getUnitAverageOvr(struct.d[1]);
-    const d3Ovr = getUnitAverageOvr(struct.d[2]);
+    const d1Ovr = getPairOvr(struct.d[0]);
+    const d2Ovr = getPairOvr(struct.d[1]);
+    const d3Ovr = getPairOvr(struct.d[2]);
 
     // Total regulation game minutes to fill per position group (3 skaters on ice for F * 60 = 180, 2 for D * 60 = 120)
     const totalForwardMinutes = 180;
@@ -3978,63 +2991,11 @@ function calculateDynamicIceTime(struct) {
     };
 }
 
-function executeShotSequence(attackingTeamId, line, opposingGoalie) {
-    // 1. Pick a logical shooter from the active unit (Bias towards Wings and Center)
-    const roll = Math.random();
-    let shooterName = line.c;
-    if (roll < 0.35) shooterName = line.rw;
-    else if (roll < 0.70) shooterName = line.lw;
-    else if (roll < 0.85) shooterName = line.ld;
-    else if (roll < 1.00) shooterName = line.rd;
-
-    if (!shooterName) return;
-
-    // 2. Extract shooter attributes & Archetype multipliers
-    const shooter = playerStats[shooterName];
-    const shotAcc = shooter?.attr?.wsh || 60; // Accuracy attribute
-    const shotPwr = shooter?.attr?.wsp || 60; // Power attribute
-    const offAwr  = shooter?.attr?.offawr || 60;
-    const arch    = shooter?.archetype || "BALANCED";
-    
-    // Safety check for your master archetype multipliers list
-    const shooterMods = archMods[arch] || { shotRate: 1.0, assistRate: 1.0 };
-
-    // 3. Extract goalie attributes
-    const goalie = playerStats[opposingGoalie];
-    const goalieValue = goalie?.attr?.def || 70; // Using defensive capability as base save rating
-    const goalieAwr   = goalie?.attr?.offawr || 70; // Position/Awareness logic
-
-    // Track the raw shot metric immediately
-    recordShot(attackingTeamId, shooterName);
-
-    // 4. THE CALCULATOR: Balance shooter skill against goalie skill
-    // Convert attributes to small percentage impacts so they don't break the scale
-    let shooterAdvantage = ((shotAcc * 0.4) + (shotPwr * 0.3) + (offAwr * 0.3)) / 100; // Scales up to ~1.0
-    let goalieAdvantage  = ((goalieValue * 0.6) + (goalieAwr * 0.4)) / 100;          // Scales up to ~1.0
-
-    // Combine into final conversion rate
-    let conversionChance = BASE_GOAL_CHANCE + (shooterAdvantage * 0.05) - (goalieAdvantage * 0.05);
-    
-    // Apply archetype shooting adjustments directly to execution success
-    conversionChance *= shooterMods.shotRate;
-
-    // Hard clamps: Ensure no shot ever has less than a 2% or more than a 30% chance of scoring
-    conversionChance = Math.max(0.02, Math.min(0.30, conversionChance));
-
-    // 5. Roll for Goal
-    if (Math.random() < conversionChance) {
-        processGoal(attackingTeamId, shooterName, line);
-    } else {
-        recordSave(opposingGoalie);
-    }
-}
 
 function simGame(idx) {
     clearWpCache(); // invalidate per-game OVR/tag cache at start of each game
     const dayGames = Array.isArray(calendar[currentDay]) ? calendar[currentDay] : [];
     const g = dayGames[idx];
-    let awayGoalie = getStartingGoalie(g.a.nrm);
-    let homeGoalie = getStartingGoalie(g.h.nrm);
     gameMilestones = [];
     const k = (isPlayoffs || isASG) ? 'playoff' : 'season';
     
@@ -4079,6 +3040,10 @@ function simGame(idx) {
 
     if (rosters[g.h.nrm]) assignMicroStreaks(rosters[g.h.nrm]);
     if (rosters[g.a.nrm]) assignMicroStreaks(rosters[g.a.nrm]);
+    // Per-game dailySwing — must run after micro streaks so cache is built correctly
+    applyDailyRandomSwing(g.h.nrm);
+    applyDailyRandomSwing(g.a.nrm);
+    clearWpCache(); // flush after swing assignment so OVR picks up dailySwing values
 
     //  2. GOALIE SELECTION
     const selG = (tk) => { 
@@ -4092,13 +3057,14 @@ function simGame(idx) {
         if (diff <= 10) restChance = 0.45; else if (diff <= 15) restChance = 0.30; 
         if (playedYesterday(tk)) restChance += 0.60;
         
+        const bStats = playerStats[backup.name]?.[k];
         if (sStats.consStarts >= 7 || Math.random() < restChance) {
-            sStats.consStarts = 0; 
-            if(playerStats[backup.name][k]) playerStats[backup.name][k].consStarts = (playerStats[backup.name][k].consStarts || 0) + 1;
+            sStats.consStarts = 0;
+            if (bStats) bStats.consStarts = (bStats.consStarts || 0) + 1;
             return backup;
         } else {
-            sStats.consStarts = (sStats.consStarts || 0) + 1; 
-            if(playerStats[backup.name][k]) playerStats[backup.name][k].consStarts = 0;
+            sStats.consStarts = (sStats.consStarts || 0) + 1;
+            if (bStats) bStats.consStarts = 0;
             return starter;
         }
     };
@@ -4118,17 +3084,55 @@ function simGame(idx) {
     const aB2BPen = (!isPlayoffs && aG_obj && playedYesterday(g.a.nrm)) ? 0.06 : 0;
     let hWallMod = Math.max(0.86, Math.min(1.14, 1.0 + (75 - hGOvr) * 0.013 + hB2BPen));
     let aWallMod = Math.max(0.86, Math.min(1.14, 1.0 + (75 - aGOvr) * 0.013 + aB2BPen));
+    // Coaching adjustments: forecheck 1=aggressive(open game), -1=defensive(tight); pp 1=shoot, -1=cycle
+    if (!isPlayoffs && !isASG) {
+        const fMod = coachAdj.forecheck * 0.025; // aggressive opens scoring both ways
+        hWallMod += fMod; aWallMod += fMod;
+        // Coach trust: high trust slightly boosts user team's goalie, low trust slightly hurts
+        if (selectedTeam) {
+            const trustMod = (coachTrust - 50) * 0.0004; // ±0.02 at extremes
+            if (g.h.nrm === selectedTeam) hWallMod -= trustMod;
+            if (g.a.nrm === selectedTeam) aWallMod -= trustMod;
+        }
+    }
+    // Goalie streak wall modifier — HOT goalie = harder to score on, COLD goalie = easier
+    // macro carries more weight than micro; these stack (macro HOT goalie on a micro HOT night = -0.085)
+    if (hG_obj) {
+        const hGps = playerStats[hG_obj.name];
+        if (hGps) {
+            if (hGps.macro_streak === 'HOT')       hWallMod -= 0.060;
+            else if (hGps.micro_streak === 'HOT')  hWallMod -= 0.030;
+            if (hGps.macro_streak === 'COLD')      hWallMod += 0.060;
+            else if (hGps.micro_streak === 'COLD') hWallMod += 0.030;
+        }
+    }
+    if (aG_obj) {
+        const aGps = playerStats[aG_obj.name];
+        if (aGps) {
+            if (aGps.macro_streak === 'HOT')       aWallMod -= 0.060;
+            else if (aGps.micro_streak === 'HOT')  aWallMod -= 0.030;
+            if (aGps.macro_streak === 'COLD')      aWallMod += 0.060;
+            else if (aGps.micro_streak === 'COLD') aWallMod += 0.030;
+        }
+    }
     let asgBoost = isASG ? 1.8 : 1.0;
     let homeCrowdEnergy = 1.03;
 
-    // CHAOS — per-game variance so upsets are always possible
-    // Each team has a 1-in-5 chance of a significant night factor (hot/cold).
-    // Goalie hot/cold night shifts opponent scoring probability ±10%.
-    const hNight = Math.random() < 0.2 ? (Math.random() - 0.5) * 20 : 0;
-    const aNight = Math.random() < 0.2 ? (Math.random() - 0.5) * 20 : 0;
+    // RIVALRY — historical rivals play with extra intensity from game 1; organic (3+ meetings) adds more
+    const hMeetings = !isPlayoffs ? ((g.h.season.meetings || {})[g.a.nrm] || 0) : 0;
+    const isHistoricRival = awardConfig.rivalries && !!(rivals[g.h.nrm]?.includes(g.a.nrm));
+    const rivalBonus = !awardConfig.rivalries ? 0 : isHistoricRival ? (hMeetings >= 3 ? 3 : 1) : (hMeetings >= 3 ? 2 : 0);
+
+    // CHAOS — globalChaos drives all random variance; scaled by context
+    // Rivalry games and playoffs get extra chaos; wall mod randomness uses same scale
+    const chaosScale = gameStatus.globalChaos * (isHistoricRival ? 1.4 : 1.0) * (isPlayoffs ? 1.2 : 1.0);
+    const nightMag = 14 * chaosScale;    // pre-game night factor magnitude
+    const wallJitter = 0.18 * chaosScale; // goalie wall mod random jitter
+    const hNight = Math.random() < 0.22 ? (Math.random() - 0.5) * nightMag : 0;
+    const aNight = Math.random() < 0.22 ? (Math.random() - 0.5) * nightMag : 0;
     const chaosOffset = hNight - aNight;
-    hWallMod = Math.max(0.78, Math.min(1.22, hWallMod + (Math.random() - 0.5) * 0.20));
-    aWallMod = Math.max(0.78, Math.min(1.22, aWallMod + (Math.random() - 0.5) * 0.20));
+    hWallMod = Math.max(0.78, Math.min(1.22, hWallMod + (Math.random() - 0.5) * wallJitter));
+    aWallMod = Math.max(0.78, Math.min(1.22, aWallMod + (Math.random() - 0.5) * wallJitter));
 
     // PLAYOFF PRESSURE — elimination game modifier
     // Facing elimination: veterans (+OVR) dig deep; less experienced players feel it (-OVR)
@@ -4149,13 +3153,14 @@ function simGame(idx) {
         if (g.series.aW === 3) aPressureMod -= 1.5;
     }
 
-    // RIVALRY — teams that have met 3+ times this season play with extra intensity (+2 OVR both sides)
-    const hMeetings = !isPlayoffs ? ((g.h.season.meetings || {})[g.a.nrm] || 0) : 0;
-    const rivalBonus = (awardConfig.rivalries && hMeetings >= 3) ? 2 : 0;
-
     // TEAM STREAK MORALE — hot/cold streaks shift line OVR up to ±3
-    const hStreakMod = g.h.winStreak >= 5 ? 3 : g.h.winStreak >= 3 ? 1.5 : g.h.loseStreak >= 5 ? -3 : g.h.loseStreak >= 3 ? -1.5 : 0;
-    const aStreakMod = g.a.winStreak >= 5 ? 3 : g.a.winStreak >= 3 ? 1.5 : g.a.loseStreak >= 5 ? -3 : g.a.loseStreak >= 3 ? -1.5 : 0;
+    let hStreakMod = g.h.winStreak >= 5 ? 3 : g.h.winStreak >= 3 ? 1.5 : g.h.loseStreak >= 5 ? -3 : g.h.loseStreak >= 3 ? -1.5 : 0;
+    let aStreakMod = g.a.winStreak >= 5 ? 3 : g.a.winStreak >= 3 ? 1.5 : g.a.loseStreak >= 5 ? -3 : g.a.loseStreak >= 3 ? -1.5 : 0;
+    // COMEBACK ARC — user team on 3+ losing streak gets a +2 resolve boost offsetting the streak penalty
+    if (selectedTeam && !isASG) {
+        if (g.h.nrm === selectedTeam && g.h.loseStreak >= 3) hStreakMod += 2;
+        if (g.a.nrm === selectedTeam && g.a.loseStreak >= 3) aStreakMod += 2;
+    }
 
     // IN-GAME FATIGUE — track cumulative shift ticks per player this game
     // After 20 ticks (10 min ice time), each additional tick costs 0.25 OVR
@@ -4212,6 +3217,7 @@ function simGame(idx) {
     // ==========================================
     //  THE 60-MINUTE SIMULATION LOOP (120 steps)
     // ==========================================
+    let period = 1; // hoisted so PATRICK ROY PROTOCOL can read it after the loop
     for (let step = 0; step < 120; step++) {
         let minute = Math.floor(step / 2) + 1;
 
@@ -4242,7 +3248,8 @@ function simGame(idx) {
         aMomentum = Math.max(0, aMomentum - 1);
 
         // Live Dynamic Matchup Overalls (momentum adds up to +3 OVR for ~4 min after a goal)
-        let hLiveOvr = (getLiveLineOvr(hOnIce) - hFatiguePen + hPressureMod + hStreakMod + rivalBonus + hMomentum * 0.375) * hAuraMod * homeCrowdEnergy;
+        const lineMatchBonus = (!isPlayoffs && !isASG && coachAdj.lineMatch) ? 1.0 : 0;
+        let hLiveOvr = (getLiveLineOvr(hOnIce) + lineMatchBonus - hFatiguePen + hPressureMod + hStreakMod + rivalBonus + hMomentum * 0.375) * hAuraMod * homeCrowdEnergy;
         let aLiveOvr = (getLiveLineOvr(aOnIce) - aFatiguePen + aPressureMod + aStreakMod + rivalBonus + aMomentum * 0.375) * aAuraMod;
 
         let diff = hLiveOvr - aLiveOvr + chaosOffset;
@@ -4253,11 +3260,17 @@ function simGame(idx) {
         const scoreEffectH = scoreDiff * -0.012; // trailing home team gets boost
         const scoreEffectA = scoreDiff *  0.012; // trailing away team gets boost
 
-        // Shot generation  -  softer diff multiplier balances shots across lines
-        let hShotChance = 0.26 + (diff * 0.0014) * asgBoost + scoreEffectH;
-        let aShotChance = 0.26 - (diff * 0.0014) * asgBoost + scoreEffectA;
+        // Shot generation — activeChaos scales with period and game closeness
+        // 3rd period in a tied/1-goal game = peak chaos; blowouts dampen it
+        const absDiff = Math.abs(hG - aG);
+        const periodMult = period === 3 ? 1.5 : period === 2 ? 1.1 : 1.0;
+        const closeMult  = absDiff === 0 ? 1.4 : absDiff === 1 ? 1.15 : absDiff >= 3 ? 0.6 : 1.0;
+        const activeChaos = chaosScale * periodMult * closeMult;
+        const chaosSpike = (Math.random() - 0.5) * activeChaos * 0.12;
+        let hShotChance = 0.26 + (diff * 0.0014) * asgBoost + scoreEffectH + chaosSpike;
+        let aShotChance = 0.26 - (diff * 0.0014) * asgBoost + scoreEffectA - chaosSpike;
         
-        let period = minute <= 20 ? 1 : (minute <= 40 ? 2 : 3);
+        period = minute <= 20 ? 1 : (minute <= 40 ? 2 : 3);
         let sec = Math.floor(Math.random() * 60);
         let timeStr = `P${period} ${minute % 20 || 20}:${sec < 10 ? '0'+sec : sec}`;
 
@@ -4295,11 +3308,13 @@ function simGame(idx) {
             trk(shooter.name, 's', 1); // Record Skater Shot
             trk(aG_name, 'sa', 1);     // Record Goalie Shot Against
 
-            // Conversion Roll  -  base 10.5%, sniper gets +14% multiplier, softer diff scaling
+            // Conversion Roll  -  base 7.2%, sniper gets +14% multiplier, softer diff scaling
+            // (tuned so ES + PP + EN goals land near the 93-94 real avg of ~6.5 total/game)
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const hSniperMod = hShooterTag === 'SNIPER' ? 1.14 : hShooterTag === 'SUPERSTAR' ? 1.05 : 1.0;
-            let scoringProb = (0.105 + (diff * 0.0018)) * aWallMod * hSniperMod;
-            if (Math.random() < Math.max(0.03, Math.min(0.26, scoringProb))) {
+            const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
+            let scoringProb = (0.072 + (diff * 0.0018)) * aWallMod * hSniperMod * hChaosMod;
+            if (Math.random() < Math.max(0.025, Math.min(0.18, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
                 let ev = processSingleGoal(g.h.nrm, g.h.code, shooter, hOnIce, timeStr, period, (minute % 20 || 20), sec);
@@ -4330,8 +3345,9 @@ function simGame(idx) {
 
             const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const aSniperMod = aShooterTag === 'SNIPER' ? 1.14 : aShooterTag === 'SUPERSTAR' ? 1.05 : 1.0;
-            let scoringProb = (0.105 - (diff * 0.0018)) * hWallMod * aSniperMod;
-            if (Math.random() < Math.max(0.03, Math.min(0.26, scoringProb))) {
+            const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
+            let scoringProb = (0.072 - (diff * 0.0018)) * hWallMod * aSniperMod * aChaosMod;
+            if (Math.random() < Math.max(0.025, Math.min(0.18, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
                 let ev = processSingleGoal(g.a.nrm, g.a.code, shooter, aOnIce, timeStr, period, (minute % 20 || 20), sec);
@@ -4354,8 +3370,8 @@ function simGame(idx) {
         }
 
         // Quick Penalty Roll  -  triggers a real powerplay opportunity
-        // 0.075 per 30-sec step  ~9 penalties/game (realistic NHL rate)
-        if (Math.random() < 0.075) {
+        // 0.055 per 30-sec step  ~6.6 penalties/game (keeps PP goals near ~1.3/game)
+        if (Math.random() < 0.055) {
             let penTeam = Math.random() > 0.5 ? g.h : g.a;
             let advTeam = penTeam.nrm === g.h.nrm ? g.a : g.h;
             let activeSkaters = penTeam.nrm === g.h.nrm ? hOnIce : aOnIce;
@@ -4366,8 +3382,8 @@ function simGame(idx) {
                 const pimAmt = isMajor ? 5 : 2;
                 trk(offender, 'pim', pimAmt);
                 penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: penTeam.code, cl: teamColors[penTeam.nrm] ? teamColors[penTeam.nrm][0] : '#fff', txt: `PENALTY: ${offender} (${isMajor ? '5 min major' : '2 min minor'})`, isPenalty: true });
-                // Major penalty → 25% chance of 1-3 game suspension
-                if (isMajor && Math.random() < 0.25 && playerStats[offender]) {
+                // Major penalty → 6% chance of 1-3 game suspension
+                if (isMajor && Math.random() < 0.06 && playerStats[offender]) {
                     const days = Math.ceil(Math.random() * 3);
                     playerStats[offender].suspended = { days, reason: 'Match penalty' };
                     penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: penTeam.code,
@@ -4440,6 +3456,9 @@ function simGame(idx) {
         if (goalDiff === 1) {
             const pullChance = 0.50;
             if (Math.random() < pullChance) {
+                const trailingTeam = trailerIsHome ? g.h : g.a;
+                allGoals.push({ p:3, m:59, s:1, str:`P3 59:01`, tm: trailingTeam.code,
+                    cl:'#888', txt:`${trailingTeam.code} pulls the goalie for the extra attacker — 6-on-5 with time running out!`, isNote:true });
                 const enScorerTeam = trailerIsHome ? g.a : g.h;
                 const enGoalie    = trailerIsHome ? hG_name : aG_name;
                 const enShooters  = trailerIsHome ? [...aStruct.f[0], ...aStruct.d[0]] : [...hStruct.f[0], ...hStruct.d[0]];
@@ -4571,9 +3590,7 @@ function simGame(idx) {
     }
 
     // ðŸ¤• 7. INJURIES
-    if (typeof rollInGameInjuries === 'function') {
-        rollInGameInjuries(g.h.nrm, g.a.nrm);
-    }
+    rollInGameInjuries(g.h.nrm, g.a.nrm);
     
     //  8. GOALIE POSITION RECORDING
     let hStatus = hG > aG ? 'win' : (hG < aG ? 'loss' : 'tie'); 
@@ -4612,6 +3629,10 @@ function simGame(idx) {
     const allStarCandidates = [...starScores, ...goalieStars].sort((a,b) => b.score - a.score);
     const seen = new Set(); const threeStars = [];
     for (const c of allStarCandidates) { if (!seen.has(c.name) && c.score > 0) { seen.add(c.name); threeStars.push(c.name); } if (threeStars.length === 3) break; }
+    if (!isASG && awardConfig.headlines && threeStars.length > 0) {
+        const starLine = threeStars.map((n,i) => `${['1st','2nd','3rd'][i]}: ${n}`).join(' | ');
+        tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `THREE STARS — ${g.a.code} ${aG}-${hG} ${g.h.code}: ${starLine}` });
+    }
 
     // Goalie duel detection
     const hSvPct = hShots > 0 ? (hShots - aG) / hShots : 0;
@@ -4708,9 +3729,32 @@ function simGame(idx) {
 
     let activeGoalies = [hG_obj, aG_obj].filter(g => g !== null);
     if (typeof processPostGameStreaks === 'function') processPostGameStreaks(winningTeamRoster.concat(losingTeamRoster), activeGoalies);
-    if (typeof applyPostGameFatigue === 'function' && awayGoalie && homeGoalie) applyPostGameFatigue(g.a.nrm, g.h.nrm, awayGoalie.name, homeGoalie.name);
+    if (typeof applyPostGameFatigue === 'function' && aG_name && hG_name) applyPostGameFatigue(g.a.nrm, g.h.nrm, aG_name, hG_name);
     if (typeof reviewGameForSuspensions === 'function') reviewGameForSuspensions(matchStats, g.h.nrm, g.a.nrm);
     if (typeof triggerGameInjuries === 'function') triggerGameInjuries(matchStats, g.h.nrm, g.a.nrm);
+
+    // Chemistry score decay/rebuild for custom duos
+    if (!isASG && customDuos.length > 0) {
+        const goalParticipants = allGoals
+            .filter(ev => !ev.isNote && !ev.isFiller && !ev.isPenalty && ev.scorer)
+            .map(ev => new Set([ev.scorer, ev.pAssist, ev.sAssist].filter(Boolean)));
+        for (const duo of customDuos) {
+            const key = duoKey(duo);
+            const current = chemScores[key] ?? 100;
+            const connected = goalParticipants.some(participants =>
+                duo.filter(n => participants.has(n)).length >= 2
+            );
+            chemScores[key] = Math.max(40, Math.min(100, current + (connected ? 5 : -1)));
+        }
+    }
+
+    // Update coach trust after user-team games
+    if (selectedTeam && (g.h.nrm === selectedTeam || g.a.nrm === selectedTeam) && !isASG) {
+        const userIsHome = g.h.nrm === selectedTeam;
+        const userWon = userIsHome ? hG > aG : aG > hG;
+        const userLost = userIsHome ? aG > hG : hG > aG;
+        coachTrust = Math.max(0, Math.min(100, coachTrust + (userWon ? 4 : userLost ? -3 : 1)));
+    }
 
     // Surface milestone banners in trade log / news ticker
     if (gameMilestones.length > 0 && awardConfig.milestones && awardConfig.headlines) {
@@ -4855,36 +3899,29 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
     };
 }
 
-function applyDailyRandomSwing(tk, gameObj) {
-    // 1. Get the current roster structure (which only contains starters)
+function applyDailyRandomSwing(tk) {
     const struct = getRosterStructure(tk);
-    if (!struct || !struct.f || !struct.d || !struct.g) return;
+    if (!struct || !struct.f || !struct.d) return;
 
-    // 2. Combine only the starters into one flat array
-    // This includes: All 4 Forward lines, all 3 D-pairs, and the starting Goalie
-    let starters = [
-        ...struct.f.flat(), 
-        ...struct.d.flat(), 
-        struct.g[0] // The starting goalie (the first one in the G array)
-    ].filter(p => p && playerStats[p.name] && playerStats[p.name].injury.daysRemaining === 0);
+    const starters = [...struct.f.flat(), ...struct.d.flat()]
+        .filter(p => p && playerStats[p.name] && playerStats[p.name].injury.daysRemaining === 0);
 
-    // 3. Reset all players on the full roster to 0 first (Cleanup)
-    rosters[tk].forEach(p => {
-        if (playerStats[p.name]) playerStats[p.name].dailySwing = 0;
-    });
+    // Reset daily swing for whole roster
+    rosters[tk].forEach(p => { if (playerStats[p.name]) playerStats[p.name].dailySwing = 0; });
 
-    // 4. Force selection from the 'starters' pool only
-    if (starters.length >= 2) {
-        let shuffled = starters.sort(() => 0.5 - Math.random());
-        let hotPlayer = shuffled[0];
-        let coldPlayer = shuffled[1];
+    if (starters.length < 2) return;
 
-        // 5. Assign the swings
-        playerStats[hotPlayer.name].dailySwing = 10;
-        playerStats[coldPlayer.name].dailySwing = -10;
-        
-        console.log(`[SWING] ${tk.toUpperCase()} | HOT: ${hotPlayer.name} (+10) | COLD: ${coldPlayer.name} (-10)`);
-    }
+    // Weighted selection — mirrors assignMicroStreaks logic so swing and micro reinforce each other
+    const hotW  = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; const morale = ps.status?.morale || 100; return Math.max(0.1, (1 + lastPts * 2) * (morale / 100)); };
+    const coldW = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; const pointless = ps.consPointless || 0; return Math.max(0.1, (1 + pointless * 0.5) * (lastPts === 0 ? 2 : 0.5)); };
+    const pick  = (pool, wFn) => { const w = pool.map(wFn); const t = w.reduce((a,b)=>a+b,0); let r = Math.random()*t; for(let i=0;i<pool.length;i++){r-=w[i];if(r<=0)return pool[i];} return pool[0]; };
+
+    const hotPlayer  = pick(starters, hotW);
+    const coldPlayer = pick(starters.filter(p => p !== hotPlayer), coldW);
+
+    // dailySwing feeds into getPlayerWeightedStats OVR (+8 hot / -8 cold)
+    playerStats[hotPlayer.name].dailySwing  =  8;
+    playerStats[coldPlayer.name].dailySwing = -8;
 }
 
 // =========================================================
@@ -4897,29 +3934,6 @@ function applyDailyRandomSwing(tk, gameObj) {
  * @param {array} scoringPlayers - Goals array from this game [{scorer, a1, a2, ...}]
  * @param {boolean} isGoalieStart - Whether goalie started this game
  */
-function trackPostGameStats(roster, teamCode, scoringPlayers, isGoalieStart = false) {
-    if (!roster || !Array.isArray(roster)) return;
-    
-    roster.forEach(player => {
-        if (!playerStats[player.name]) return;
-        
-        const ps = playerStats[player.name];
-        const k = (isPlayoffs || isASG) ? 'playoff' : 'season';
-        
-        if (player.pos === 'G') {
-            // Goalie: +60 TOI per start, +1 SVG per game started
-            if (isGoalieStart) {
-                ps[k].toi += GAME_CONFIG.ice_time.goalie_full;
-                ps[k].svg += 1;
-            }
-        } else {
-            
-            // SVG: Count goals scored this game by this player
-            const goalsScored = scoringPlayers.filter(g => g.scorer === player.name).length;
-            ps[k].svg += goalsScored;
-        }
-    });
-}
 
 // =========================================================
 // ðŸ’ª POST-GAME MORALE SYSTEM (Refactored)
@@ -4932,55 +3946,15 @@ function trackPostGameStats(roster, teamCode, scoringPlayers, isGoalieStart = fa
  * @param {boolean} isHomeWin - Whether home team won
  * @param {boolean} isRegularSeason - Whether regular season (affects loss penalty)
  */
-function applyPostGameMorale(winnerRoster, loserRoster, scoringPlayers, isHomeWin, isRegularSeason) {
-    if (winnerRoster) {
-        const winBoost = isHomeWin ? GAME_CONFIG.morale.win_home : GAME_CONFIG.morale.win_away;
-        
-        winnerRoster.forEach(player => {
-            if (!playerStats[player.name]) return;
-            
-            let boost = winBoost;
-            
-            // Extra boost for goal scorers
-            if (scoringPlayers && scoringPlayers.some(g => g.scorer === player.name)) {
-                boost += GAME_CONFIG.morale.scorer_bonus;
-            }
-            
-            playerStats[player.name].morale = Math.min(
-                GAME_CONFIG.morale.max, 
-                playerStats[player.name].morale + boost
-            );
-        });
-    }
-    
-    if (loserRoster && isRegularSeason) {
-        const lossPenalty = !isHomeWin 
-            ? GAME_CONFIG.morale.loss_home 
-            : GAME_CONFIG.morale.loss_away;
-        
-        loserRoster.forEach(player => {
-            if (!playerStats[player.name]) return;
-            
-            playerStats[player.name].morale = Math.max(
-                GAME_CONFIG.morale.min, 
-                playerStats[player.name].morale - lossPenalty
-            );
-        });
-    }
-}
 
 //  2. THE BACKGROUND PENALTY ROLLER (Renamed and Upgraded)
 // Call this randomly during standard play: let penResult = rollGeneralPenalty(attacker);
 function rollGeneralPenalty(attacker) {
-    // 1. Safely extract attributes (0-99 scale, defaulting to 50 if missing)
-    let rgh = attacker.stats?.RGH || attacker.attr?.rough || 50;
-    let agr = attacker.stats?.AGR || attacker.attr?.aggr || 50;
-    let chk = attacker.stats?.CHK || attacker.attr?.check || 50;
-
-    // Handle legacy letter grades just in case you load an old save file
-    if (typeof rgh === 'string') rgh = 50;
-    if (typeof agr === 'string') agr = 50;
-    if (typeof chk === 'string') chk = 50;
+    // 1. Safely extract attributes via unified grade-aware accessors
+    const aName = attacker.name;
+    let rgh = aName ? (gradeToNum(playerStats[aName]?.attr?.rough) || 50) : 50;
+    let agr = aName ? getAggr(aName) : 50;
+    let chk = aName ? getChk(aName)  : 50;
 
     // 2. Base Probability (Overall chance to commit ANY penalty)
     // Aggression and Roughness drive the likelihood of breaking the rules
@@ -5234,7 +4208,7 @@ function showSeasonRecap() {
 
     // Playoff seeds
     h += `<div style="color:#666;font-size:6px;letter-spacing:.14em;margin:14px 0 8px;">PLAYOFF SEEDS</div>
-    <div style="display:flex;gap:16px;">${seedCol('EASTERN CONF', eastSeeds)}${seedCol('WESTERN CONF', westSeeds)}</div>`;
+    <div style="display:flex;gap:16px;">${seedCol('WALES CONF', eastSeeds)}${seedCol('CAMPBELL CONF', westSeeds)}</div>`;
 
     document.getElementById('recapContent').innerHTML = h;
     document.getElementById('recapOverlay').style.display = 'flex';
@@ -5373,9 +4347,9 @@ function _doRoundAdvance() {
         label: playoffBracket.round === 1 ? 'DIVISION SEMIS' : playoffBracket.round === 2 ? 'DIVISION FINALS' : playoffBracket.round === 3 ? 'CONF FINALS' : 'STANLEY CUP FINALS',
         series: playoffBracket.series.map(s => ({ hCode: s.h.code, hName: s.h.name, aCode: s.a.code, aName: s.a.name, hW: s.hW, aW: s.aW, conf: s.conf }))
     });
-    if(playoffBracket.round === 4) { 
-        if(w[0]) currentCupChamp = w[0].name; 
-        runEndOfSeasonAwards(); 
+    if(playoffBracket.round === 4) {
+        if(w[0]) currentCupChamp = w[0].name;
+        openAwardsVoting();
         
         // !! Spawn the button to jump straight into the next year!
         if (!document.getElementById('btnStartNextSeason')) {
@@ -5414,9 +4388,8 @@ function processOffseasonGrowth() {
         } else if (p.age >= 31) {
             let sev = p.age >= 35 ? 2 : 1; let r = Math.random(); oChg = -(Math.floor(r * 2) + sev); dChg = -(Math.floor(r * 2) + (sev - 1)); pChg = -(Math.floor(r * 1.5) + sev);
         }
-        if (p.pos === 'G') { 
-            p.attr.gDef = Math.max(20, Math.min(99, p.attr.gDef + dChg)); 
-            p.attr.ovr = Math.max(20, Math.min(99, p.attr.ovr + dChg)); // Preserves your custom Matrix OVR!
+        if (p.pos === 'G') {
+            p.attr.gDef = Math.max(20, Math.min(99, (parseInt(p.attr.gDef) || 70) + dChg));
         }
         else { p.attr.off = Math.max(20, Math.min(99, p.attr.off + oChg)); p.attr.def = Math.max(20, Math.min(99, p.attr.def + dChg)); p.attr.ovr = getPlayerWeightedStats(p.name).ovr; }
         if (awardConfig.headlines) {
@@ -5437,8 +4410,16 @@ async function beginNewYear() {
     });
 
     processOffseasonGrowth();
-    
-    Object.values(playerStats).forEach(p => { 
+    assignTeamCaptains();
+
+    // Capture preseason OVR baseline for GM Report Card grading
+    preseasonOvrSnapshot = {};
+    league.forEach(t => {
+        const rpl = (rosters[t.nrm] || []).map(p => getPlayerWeightedStats(p.name).ovr).filter(v => v > 0);
+        preseasonOvrSnapshot[t.nrm] = rpl.length ? Math.round(rpl.reduce((a, b) => a + b, 0) / rpl.length) : 75;
+    });
+
+    Object.values(playerStats).forEach(p => {
         // Safety net: Give existing players the careerPlayoff tracker if they don't have it yet
         if (!p.careerPlayoff) {
             if (p.pos === 'G') p.careerPlayoff = {gp:0, w:0, l:0, t:0, so:0, sv:0, sa:0};
@@ -5466,7 +4447,7 @@ async function beginNewYear() {
             p.season = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0}; 
             p.playoff = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0};
         }
-        p.streakType = 'stable'; p.hasScored = false; 
+        p.streakType = 'stable'; p.hasScored = false; p.seasonTicks = 0;
     });
     
     takeMonthSnapshot(); 
@@ -5718,73 +4699,6 @@ async function simPlayoffs() {
 }
 
 // 2. Draw the buttons on the screen (Upgraded with Explicit Positional Slots)
-function updateUIDisplay() {
-    const container = document.getElementById('lines-display');
-    if (!container) return; 
-    
-    container.innerHTML = ''; // Wipe the slate clean
-
-    // ==========================================
-    //  DRAW FORWARDS (Enforces LW, C, RW layout)
-    // ==========================================
-    let fHtml = `<h3>Forwards</h3>`;
-    currentEditableLines.f.forEach((line, index) => {
-        fHtml += `<div class="hockey-line"><strong>L${index + 1}: </strong>`;
-        
-        // The AI Builder stores players as: [0] Center, [1] Left Wing, [2] Right Wing
-        // We map them here to visually display in the classic EA order: LW -> C -> RW
-        let displayLine = [
-            { slot: 'LW', p: line[1] },
-            { slot: 'C',  p: line[0] },
-            { slot: 'RW', p: line[2] }
-        ].filter(item => item.p); // Failsafe to remove empty slots if roster is short
-
-        displayLine.forEach(item => {
-            let isSelected = (currentlySelectedPlayer === item.p.name) ? 'selected-player' : '';
-            fHtml += `<button class="player-btn ${isSelected}" onclick="handlePlayerClick('${item.p.name}')">
-                        ${item.slot}: ${item.p.name}
-                     </button>`;
-        });
-        fHtml += `</div>`;
-    });
-    container.innerHTML += fHtml;
-
-    // ==========================================
-    //  DRAW DEFENSE (Enforces LD, RD layout)
-    // ==========================================
-    let dHtml = `<h3>Defense</h3>`;
-    currentEditableLines.d.forEach((line, index) => {
-        dHtml += `<div class="hockey-line"><strong>D${index + 1}: </strong>`;
-        
-        let displayD = [
-            { slot: 'LD', p: line[0] },
-            { slot: 'RD', p: line[1] }
-        ].filter(item => item.p);
-
-        displayD.forEach(item => {
-            let isSelected = (currentlySelectedPlayer === item.p.name) ? 'selected-player' : '';
-            dHtml += `<button class="player-btn ${isSelected}" onclick="handlePlayerClick('${item.p.name}')">
-                        ${item.slot}: ${item.p.name}
-                     </button>`;
-        });
-        dHtml += `</div>`;
-    });
-    container.innerHTML += dHtml;
-
-    // ==========================================
-    //  DRAW GOALIES (Enforces Starter, Backup)
-    // ==========================================
-    let gHtml = `<h3>Goalies</h3><div class="hockey-line"><strong>G: </strong>`;
-    currentEditableLines.g.forEach((player, index) => {
-         let isSelected = (currentlySelectedPlayer === player.name) ? 'selected-player' : '';
-         let slotLabel = index === 0 ? 'START' : 'BACKUP';
-         gHtml += `<button class="player-btn ${isSelected}" onclick="handlePlayerClick('${player.name}')">
-                      ${slotLabel}: ${player.name}
-                   </button>`;
-    });
-    gHtml += `</div>`;
-    container.innerHTML += gHtml;
-}
 
 function renderLeagueTeamStats() {
     const el = document.getElementById('leagueTeamStatsTable');
@@ -6019,7 +4933,7 @@ function renderTeamStats() {
     h += `<div style="font-size:7px; color:#aaa; margin-top:5px; display:flex; justify-content:space-between; align-items:center;"><span>PULLED GOALIE UNIT</span> <button onclick="openSpecialTeamsMenu('${tk}', 'EXA', 1)" style="background:#222; color:#fff; border:1px solid #666; padding:2px 6px; cursor:pointer; font-size:7px;">EDIT</button></div>`;
     h += `<div style="display:flex; justify-content:space-around; flex-wrap:wrap; padding:10px 0;">`;
     h += exaU.map(p => `<div style="cursor:pointer; background:#111; padding:5px 10px; border:1px solid #333; border-radius:4px; text-align:center; min-width:80px; margin-bottom:5px;" onclick="showPlayerCard('${p.name}')">
-        <div style="font-size:10px; color:#fff;">${playerStats[p.name].injury>0?'[INJ]':''}${p.name} ${getArchetypeBadge(p.name)}</div>
+        <div style="font-size:10px; color:#fff;">${playerStats[p.name].injury?.daysRemaining>0?'[INJ]':''}${p.name} ${getArchetypeBadge(p.name)}</div>
         <div style="font-size:8px; color:#FF55FF; margin-top:3px;">OVR: ${getPlayerWeightedStats(p.name).ovr}</div>
         </div>`).join('');
     h += `</div></div><div class="grid-2" style="margin-top:20px;"><div>`; 
@@ -6028,7 +4942,7 @@ function renderTeamStats() {
     const bench = (rosters[tk] || []).filter(p => !activeNames.includes(p.name));
     if (bench.length > 0) {
         h += `<div class="unit-header" style="color:var(--silver-mid);">BENCH / SCRATCHES</div><table style="width:100%;">`;
-        h += bench.map(b => `<tr><td style="cursor:pointer;" onclick="showPlayerCard('${b.name}')"><button style="${yStyle}" onclick="openSubMenu('${tk}', '${b.name}', '${b.pos}'); event.stopPropagation();">EDIT</button>${playerStats[b.name].injury>0?'[INJ]':''}${b.name} ${getArchetypeBadge(b.name)} (${b.pos}) ${getEmoji(b.name)}</td><td style="text-align:right;"><span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(b.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(b.name)}</span></td></tr>`).join('');
+        h += bench.map(b => `<tr><td style="cursor:pointer;" onclick="showPlayerCard('${b.name}')"><button style="${yStyle}" onclick="openSubMenu('${tk}', '${b.name}', '${b.pos}'); event.stopPropagation();">EDIT</button>${playerStats[b.name].injury?.daysRemaining>0?'[INJ]':''}${b.name} ${getArchetypeBadge(b.name)} (${b.pos}) ${getEmoji(b.name)}</td><td style="text-align:right;"><span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(b.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(b.name)}</span></td></tr>`).join('');
         h += `</table>`;
     }
 
@@ -6111,10 +5025,13 @@ function getLiveLineOvr(line) {
     if (awardConfig.chemistry) {
         const names = new Set(line.map(p => p.name));
         let chemBonus = 0;
-        for (const duo of dynamicDuos) {
-            // Count how many members of this duo group are on the line
+        for (const duo of getAllDuos()) {
             const present = duo.filter(n => names.has(n));
-            if (present.length >= 2) chemBonus += 2;
+            if (present.length >= 2) {
+                const isCustom = customDuos.includes(duo);
+                const score = isCustom ? getChemScore(duo) : 100;
+                chemBonus += score >= 75 ? 2 : score >= 50 ? 1 : 0;
+            }
         }
         return base + chemBonus;
     }
@@ -6125,18 +5042,6 @@ function getLiveLineOvr(line) {
  * Distributes 60 minutes of ice time dynamically
  * @param {Array} linesArray - The structure containing all lines (e.g., struct.f)
  */
-function distributeIceTime(linesArray) {
-    // 1. Get Live Strengths
-    let strengths = linesArray.map(line => getLiveLineOvr(line));
-    
-    // 2. Exponential weight: Stronger lines pull away
-    // Line 1 is index 0. If L1 is 85 and L2 is 80, L1 gets disproportionately more ice.
-    let weights = strengths.map(ovr => Math.pow(ovr / 70, 3)); 
-    let totalWeight = weights.reduce((a, b) => a + b, 0);
-    
-    // 3. Map to 60 minutes
-    return weights.map(w => Math.round((w / totalWeight) * 60));
-}
 
     /**
  * Calculates ice time distribution based on differences between lines.
@@ -6144,89 +5049,13 @@ function distributeIceTime(linesArray) {
  * @param {number} totalMins - Total available minutes for that unit (e.g., 60 for forwards)
  * @param {boolean} isPlayoff - Whether to use playoff caps
  */
-function calculateLineIceTime(ovrs, totalMins, isPlayoff) {
-    const numLines = ovrs.length;
-    let weights = new Array(numLines).fill(1);
 
-    // 1. Calculate differences between adjacent lines
-    for (let i = 1; i < numLines; i++) {
-        let diff = ovrs[i - 1] - ovrs[i];
-        if (Math.abs(diff) <= 2) {
-            weights[i] = weights[i - 1]; // Parity
-        } else {
-            // Apply exponential weight
-            weights[i] = weights[i - 1] * Math.pow(0.85, diff); 
-        }
-    }
-
-    let totalWeight = weights.reduce((a, b) => a + b, 0);
-
-    // 2.  THE MISSING CAP: Apply your throttle to the stat sheet!
-    let maxPercent = isPlayoff ? 0.433 : 0.383;
-    
-    if (weights.length > 0 && (weights[0] / totalWeight) > maxPercent) {
-        let remainingWeight = totalWeight - weights[0];
-        let allowedL1Weight = remainingWeight * (maxPercent / (1 - maxPercent));
-        weights[0] = allowedL1Weight;
-        
-        // Recalculate the total weight pool with the new capped value
-        totalWeight = weights.reduce((a, b) => a + b, 0); 
-    }
-
-    // 3. Normalize to fit total minutes and set a safe floor of 5 mins for the 4th line
-    return weights.map(w => {
-        let rawMins = Math.round((w / totalWeight) * totalMins);
-        return Math.max(5, rawMins); // Ensures no line gets less than 5 minutes
-    });
-}
-
-function processGameIceTime(struct, k) {
-    const isPlayoff = (k === 'playoff' || k.startsWith('playoff'));
-
-    // 1. Get Overalls
-    const fOvrs = [getLineOvr(struct.f[0]), getLineOvr(struct.f[1]), getLineOvr(struct.f[2]), getLineOvr(struct.f[3])];
-    const dOvrs = [getPairOvr(struct.d[0]), getPairOvr(struct.d[1]), getPairOvr(struct.d[2])];
-
-    // 2. Calculate Minutes (Pass the isPlayoff flag!)
-    const fMins = calculateLineIceTime(fOvrs, 60, isPlayoff);
-    const dMins = calculateLineIceTime(dOvrs, 60, isPlayoff);
-
-    // 3. Apply to Forwards
-    for (let i = 0; i < 4; i++) {
-        struct.f[i].forEach(player => {
-            if (playerStats[player.name]) {
-                playerStats[player.name][k].toi = (playerStats[player.name][k].toi || 0) + fMins[i];
-            }
-        });
-    }
-
-    // 4. Apply to Defense
-    for (let i = 0; i < 3; i++) {
-        struct.d[i].forEach(player => {
-            if (playerStats[player.name]) {
-                playerStats[player.name][k].toi = (playerStats[player.name][k].toi || 0) + dMins[i];
-            }
-        });
-    }
-}
 
 /**
  * Calculates the overall rating for a defensive pair
  * @param {Array} pair - An array of two player objects
  * @returns {number} - The average overall rating of the pair
  */
-function getPairOvr(pair) {
-    if (!pair || pair.length === 0) return 0;
-    
-    // Calculate total OVR of the pair
-    let totalOvr = pair.reduce((sum, p) => {
-        // Use your existing OVR getter for an individual player
-        return sum + (typeof getLiveIceOvr === 'function' ? getLiveIceOvr(p.name) : 50);
-    }, 0);
-    
-    // Return the average
-    return Math.round(totalOvr / pair.length);
-}
 
 function getLineOvr(line) {
     if (!line || line.length === 0) return 0;
@@ -6590,8 +5419,7 @@ function startWatchLive() {
     document.getElementById('wgBugAwayScore').innerText = '0'; document.getElementById('wgBugHomeScore').innerText = '0';
     document.getElementById('wgBugClock').innerText = 'P1 20:00';
     document.getElementById('wgMomAway').innerText = g.a.code; document.getElementById('wgMomHome').innerText = g.h.code;
-    document.getElementById('wgMomFill').style.width = '50%'; document.getElementById('wgMomFill').style.left = '0';
-    document.getElementById('wgMomFill').style.background = '#555';
+    document.getElementById('wgMomFill').style.cssText = 'position:absolute;top:0;height:100%;width:50%;left:0;right:auto;background:#555;border-radius:2px;transition:width .4s,left .4s,right .4s,background .4s;';
     
     // Ticker initialization
     document.getElementById('wgTicker').innerHTML = '<div style="color:var(--ea-yellow); text-align:center; font-size:12px; margin-bottom:10px;">PUCK DROP! WELCOME TO THE BROADCAST...</div>';
@@ -6655,6 +5483,7 @@ function startWatchLive() {
     let currentPeriod = 1;
     const watchGoalsByPlayer = {};
     let watchMaxDeficit = { [g.h.code]: 0, [g.a.code]: 0 };
+    let watchLastGoalTime = null; // { p, m } of last goal for momentum-swing detection
     
     watchInterval = setInterval(() => {
         if (watchQueue.length === 0) {
@@ -6675,15 +5504,29 @@ function startWatchLive() {
         document.getElementById('wgBugClock').innerText = clockStr;
         document.getElementById('wgBugAwayScore').innerText = watchCurrentScore.a;
         document.getElementById('wgBugHomeScore').innerText = watchCurrentScore.h;
-        if (!ev.isFiller && (ev.hMom !== undefined || ev.aMom !== undefined)) {
-            const hm = ev.hMom || 0, am = ev.aMom || 0, total = hm + am || 1;
-            const homePct = Math.round((hm / total) * 100);
+        // Update momentum bar on every event — explicit goal momentum if available, score proxy otherwise
+        {
             const fill = document.getElementById('wgMomFill');
             if (fill) {
+                let hm, am;
+                if (ev.hMom !== undefined) {
+                    hm = ev.hMom; am = ev.aMom || 0;
+                } else {
+                    // Score differential proxy: leading team shows slight lean
+                    const diff = watchCurrentScore.h - watchCurrentScore.a;
+                    hm = 5 + Math.max(-4, Math.min(4, diff));
+                    am = 10 - hm;
+                }
+                const total = hm + am || 1;
+                const homePct = (hm / total) * 100;
                 const awayPct = 100 - homePct;
-                fill.style.width = `${awayPct}%`;
-                fill.style.left = '0';
-                fill.style.background = awayPct > 60 ? '#55FFFF' : homePct > 60 ? '#FF6600' : '#888';
+                const dominant = homePct > awayPct ? 'home' : 'away';
+                const dominantPct = Math.max(homePct, awayPct);
+                fill.style.width = `${Math.round(dominantPct)}%`;
+                fill.style.left = dominant === 'away' ? '0' : 'auto';
+                fill.style.right = dominant === 'home' ? '0' : 'auto';
+                fill.style.background = dominant === 'away' && dominantPct > 60 ? '#00CCFF'
+                    : dominant === 'home' && dominantPct > 60 ? '#FF6600' : '#888';
             }
         }
         
@@ -6694,8 +5537,28 @@ function startWatchLive() {
             document.getElementById('wgTicker').innerHTML += `<div style="background:#1a0000;border:2px solid #FF4444;padding:10px 12px;margin:8px 0;text-align:center;"><div style="color:#FF4444;font-size:10px;margin-bottom:4px;">🥊 BENCH CLEARING BRAWL 🥊</div><div style="color:#ff9999;font-size:7px;">${ev.txt}</div></div>`;
         } else if (ev.isFiller) {
             document.getElementById('wgTicker').innerHTML += `<div><span style="color:#555; margin-right:10px;">[${ev.tm}]</span> <span style="color:#ccc;">${ev.txt}</span></div>`;
+        } else if (ev.isNote) {
+            document.getElementById('wgTicker').innerHTML += `<div style="background:#0a0a14;border:2px solid #888;padding:8px 10px;margin:6px 0;text-align:center;"><div style="color:#ccc;font-size:8px;">🥅 ${ev.txt}</div></div>`;
         } else {
             if (!ev.isPenalty) {
+                // Momentum swing: back-to-back goals within 2 minutes
+                if (watchLastGoalTime) {
+                    const periodDiff = (ev.p - watchLastGoalTime.p) * 20 * 60;
+                    const timeDiffSec = periodDiff + (ev.m - watchLastGoalTime.m) * 60 + ((ev.s || 0) - (watchLastGoalTime.s || 0));
+                    if (timeDiffSec <= 120 && timeDiffSec >= 0) {
+                        const swingTeam = ev.tm;
+                        document.getElementById('wgTicker').innerHTML += `<div style="background:#1a0014;border:2px solid #FF00FF;padding:8px 12px;margin:6px 0;text-align:center;animation:none;"><div style="color:#FF44FF;font-size:10px;">🔥 MOMENTUM SWING — ${swingTeam}!</div><div style="color:#884488;font-size:6px;margin-top:2px;">BACK-TO-BACK GOALS</div></div>`;
+                        // Spike momentum bar
+                        const fill = document.getElementById('wgMomFill');
+                        if (fill) {
+                            fill.style.width = '85%';
+                            fill.style.left = swingTeam === g.a.code ? '0' : 'auto';
+                            fill.style.right = swingTeam === g.h.code ? '0' : 'auto';
+                            fill.style.background = '#FF00FF';
+                        }
+                    }
+                }
+                watchLastGoalTime = { p: ev.p, m: ev.m };
                 if (ev.tm === g.a.code) {
                     const prevDeficit = watchCurrentScore.h - watchCurrentScore.a;
                     if (prevDeficit >= 2) watchMaxDeficit[g.a.code] = Math.max(watchMaxDeficit[g.a.code], prevDeficit);
@@ -6724,21 +5587,31 @@ function startWatchLive() {
                         document.getElementById('wgTicker').innerHTML += `<div style="background:#1a1400;border:2px solid #FFD700;padding:10px 12px;margin:8px 0;text-align:center;"><div style="color:#FFD700;font-size:11px;">🎩 HAT TRICK — ${ev.scorer}!</div><div style="color:#aa8800;font-size:7px;margin-top:3px;">The hats are on the ice!</div></div>`;
                         if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `HAT TRICK: ${ev.scorer} (${ev.tm}) scores three in the broadcast!` });
                     }
+                    // HOT streak callout on first goal of the watch
+                    if (watchGoalsByPlayer[ev.scorer] === 1) {
+                        const sPs = playerStats[ev.scorer];
+                        if (sPs) {
+                            if (sPs.macro_streak === 'HOT') document.getElementById('wgTicker').innerHTML += `<div style="background:#1a0800;border:1px solid #FF6600;padding:5px 8px;margin:3px 0;text-align:center;"><span style="color:#FF6600;font-size:6px;">🔥 ${ev.scorer} IS ON FIRE — MACRO HOT STREAK CONTINUES</span></div>`;
+                            else if (sPs.micro_streak === 'HOT') document.getElementById('wgTicker').innerHTML += `<div style="background:#140800;border:1px solid #FF9900;padding:5px 8px;margin:3px 0;text-align:center;"><span style="color:#FF9900;font-size:6px;">🔥 ${ev.scorer} LOOKING HOT TONIGHT</span></div>`;
+                        }
+                    }
                 }
             }
             if (ev.isPenalty) {
                 document.getElementById('wgTicker').innerHTML += `<div style="background:#0d0800;border:1px solid #554400;padding:6px 8px;margin:4px 0;"><span style="color:#886600;margin-right:8px;">[${ev.tm||''}]</span><span style="color:#aaa;">${ev.txt||'Penalty called.'}</span></div>`;
             } else {
-                const isPP = ev.isPP, isSH = ev.isSH;
-                const goalBg = isPP ? '#1a1400' : '#0a1500';
-                const goalBorder = isPP ? '#FFD700' : (ev.cl||'#0f0');
-                const specialTag = isPP ? ' <span style="background:#FFD700;color:#000;font-size:6px;padding:1px 4px;margin-left:6px;">PP</span>'
+                const isPP = ev.isPP, isSH = ev.isSH, isEN = ev.isEN;
+                const goalBg = isEN ? '#1a0a00' : isPP ? '#1a1400' : '#0a1500';
+                const goalBorder = isEN ? '#FF8800' : isPP ? '#FFD700' : (ev.cl||'#0f0');
+                const specialTag = isEN ? ' <span style="background:#FF8800;color:#000;font-size:6px;padding:1px 4px;margin-left:6px;">EN</span>'
+                                 : isPP ? ' <span style="background:#FFD700;color:#000;font-size:6px;padding:1px 4px;margin-left:6px;">PP</span>'
                                  : isSH ? ' <span style="background:#00FFFF;color:#000;font-size:6px;padding:1px 4px;margin-left:6px;">SH</span>' : '';
+                const goalLabel = isEN ? '🥅 EMPTY NET GOAL' : '⚡ GOAL';
                 if (isPP) {
                     const bug = document.getElementById('wgScoreBug');
                     if (bug) { bug.style.background = '#332200'; setTimeout(() => { bug.style.background = '#000'; }, 1200); }
                 }
-                document.getElementById('wgTicker').innerHTML += `<div style="background:${goalBg};border:2px solid ${goalBorder};padding:8px 10px;margin:6px 0;"><div style="color:${ev.cl||'#fff'};font-size:9px;margin-bottom:3px;">⚡ GOAL — ${ev.tm||''}${specialTag}</div><div style="color:#fff;font-size:7px;">${ev.txt || ev.scorer || ''}</div></div>`;
+                document.getElementById('wgTicker').innerHTML += `<div style="background:${goalBg};border:2px solid ${goalBorder};padding:8px 10px;margin:6px 0;"><div style="color:${ev.cl||'#fff'};font-size:9px;margin-bottom:3px;">${goalLabel} — ${ev.tm||''}${specialTag}</div><div style="color:#fff;font-size:7px;">${ev.txt || ev.scorer || ''}</div></div>`;
             }
         }
         let t = document.getElementById('wgTicker'); t.scrollTop = t.scrollHeight;
@@ -6755,7 +5628,8 @@ function skipWatchGame() {
     document.getElementById('wgBugHomeScore').innerText = watchGameObj.result.hG;
     let h = '<div style="color:var(--ea-yellow); text-align:center; margin-bottom:15px;">--- FAST FORWARDED TO END ---</div>';
     watchGameObj.result.boxLog.forEach(ev => {
-        if (ev.isPenalty) { h += `<div style="background:#111; border:1px solid ${ev.cl}; padding:4px; margin:4px 0;"><span style="color:${ev.cl}; font-weight:bold; margin-right:10px;">[${ev.tm}]</span> <span style="color:#fff;">[SUS] ${ev.txt}</span></div>`; } 
+        if (ev.isPenalty) { h += `<div style="background:#111; border:1px solid ${ev.cl}; padding:4px; margin:4px 0;"><span style="color:${ev.cl}; font-weight:bold; margin-right:10px;">[${ev.tm}]</span> <span style="color:#fff;">[SUS] ${ev.txt}</span></div>`; }
+        else if (ev.isNote) { h += `<div style="background:#111; border:1px solid #888; padding:4px; margin:4px 0;"><span style="color:#ccc;">🥅 ${ev.txt}</span></div>`; }
         else {
             h += `<div style="background:#111; border:1px solid ${ev.cl||'#555'}; padding:4px; margin:4px 0;"><span style="color:${ev.cl||'#fff'}; font-weight:bold; margin-right:10px;">[${ev.tm||''}]</span> <span style="color:#fff;">!! GOAL! ${ev.txt || ev.scorer || ''}</span></div>`; }
     });
@@ -6970,21 +5844,6 @@ function leClearLines(tk) {
     renderLineEditor(tk);
 }
 
-function openLineEditorFromRoster() {
-    // Grab the team code directly from the dropdown menu
-    let tk = document.getElementById('teamViewSelect').value;
-    
-    if (!tk) {
-        alert("Please select a team from the dropdown first!");
-        return;
-    }
-
-    // Open the overlay
-    document.getElementById('lineEditorOverlay').style.display = 'flex';
-    
-    // Run the engine we built earlier to draw the interactive buttons
-    renderLineEditor(tk); 
-}
 
 function openSubMenu(tk, pName, posGroup) {
     const roster = rosters[tk]; if (!roster) return;
@@ -7156,56 +6015,6 @@ function exportCSV() {
 // --- THE MISSING ENGINE: TRADES, AWARDS & ARCHIVES ---
 // =========================================================
 
-function checkMonthlyAwards() {
-    if (isPlayoffs || isASG) return;
-    if (currentDay % 30 === 0 && currentDay > 0) {
-        let monthPerformances = Object.values(playerStats).map(p => {
-            let past = monthSnapshot[p.name] || {g:0, a:0, w:0, gp:0, sv:0, sa:0}; 
-            let svDiff = p.season.sv - (past.sv||0); 
-            let saDiff = p.season.sa - (past.sa||0); 
-            let tObj = league.find(t => t.code === p.teamCode); 
-            let pConf = tObj ? tObj.conf.toLowerCase() : '';
-            return { name: p.name, pos: p.pos, teamCode: p.teamCode, conf: pConf, g: p.season.g - past.g, a: p.season.a - past.a, pts: (p.season.g + p.season.a) - (past.g + past.a), w: p.season.w - past.w, gp: p.season.gp - past.gp, svp: saDiff > 0 ? (svDiff / saDiff) : 0 };
-        });
-        const getBest = (confStr, posFilter, sortFn) => monthPerformances.filter(p => p.conf.includes(confStr) && posFilter(p) && p.gp > 0).sort(sortFn)[0];
-        const isF = p => p.pos !== 'G' && p.pos !== 'D'; const isD = p => p.pos === 'D'; const isG = p => p.pos === 'G' && p.gp >= 4; 
-        const sortSkater = (a, b) => b.pts - a.pts || b.g - a.g; const sortGoalie = (a, b) => b.w - a.w || b.svp - a.svp;
-        
-        const eastF = getBest('east', isF, sortSkater); const eastD = getBest('east', isD, sortSkater); const eastG = getBest('east', isG, sortGoalie);
-        const westF = getBest('west', isF, sortSkater); const westD = getBest('west', isD, sortSkater); const westG = getBest('west', isG, sortGoalie);
-        let monthNum = Math.floor(currentDay / 30);
-        
-        let eF = eastF ? eastF.name : 'N/A'; let eD = eastD ? eastD.name : 'N/A'; let eG = eastG ? eastG.name : 'N/A';
-        let wF = westF ? westF.name : 'N/A'; let wD = westD ? westD.name : 'N/A'; let wG = westG ? westG.name : 'N/A';
-
-        // Team of the Month — best pts over the last 30 days
-        const teamMonthPts = {};
-        for (let d = Math.max(0, currentDay - 30); d < currentDay; d++) {
-            (calendar[d] || []).forEach(g => {
-                if (!g || !g.result) return;
-                if (g.result.hG > g.result.aG) { teamMonthPts[g.h.nrm] = (teamMonthPts[g.h.nrm]||0) + 2; }
-                else if (g.result.aG > g.result.hG) { teamMonthPts[g.a.nrm] = (teamMonthPts[g.a.nrm]||0) + 2; }
-                else { teamMonthPts[g.h.nrm] = (teamMonthPts[g.h.nrm]||0) + 1; teamMonthPts[g.a.nrm] = (teamMonthPts[g.a.nrm]||0) + 1; }
-            });
-        }
-        const teamOfMonth = Object.entries(teamMonthPts).sort((a,b) => b[1]-a[1])[0];
-        const tomTeam = teamOfMonth ? (league.find(t => t.nrm === teamOfMonth[0]) || {}) : null;
-        const tomStr = tomTeam ? `${tomTeam.code || teamOfMonth[0]} (${teamOfMonth[1]}pts)` : 'N/A';
-
-        document.getElementById('jumboMessage').innerHTML = `<span style="color:var(--ea-yellow)">[AWD] MONTH ${monthNum} EAST AWARDS [AWD]</span><br>F: ${eF} | D: ${eD} | G: ${eG}<br><span style="color:var(--ea-yellow)">[AWD] MONTH ${monthNum} WEST AWARDS [AWD]</span><br>F: ${wF} | D: ${wD} | G: ${wG}<br><span style="color:var(--neon-cyan)">TEAM OF THE MONTH: ${tomStr}</span>`;
-
-        // Push to news ticker
-        const day = `DAY ${currentDay + 1}`;
-        if (awardConfig.headlines) {
-            tradeLog.unshift({ day, details: `MONTH ${monthNum} AWARDS — EAST: F:${eF} D:${eD} G:${eG} | WEST: F:${wF} D:${wD} G:${wG}` });
-            if (tomTeam) tradeLog.unshift({ day, details: `TEAM OF THE MONTH: ${tomStr} — hottest team in the league over the last 30 days.` });
-            if (eastF) tradeLog.unshift({ day, details: `PLAYER OF THE MONTH (EAST): ${eF} — ${eastF.g}G ${eastF.a}A ${eastF.pts}PTS this month.` });
-            if (westF) tradeLog.unshift({ day, details: `PLAYER OF THE MONTH (WEST): ${wF} — ${westF.g}G ${westF.a}A ${westF.pts}PTS this month.` });
-        }
-
-        takeMonthSnapshot(); renderTradeLog();
-    }
-}
 
 function takeMonthSnapshot() { 
     monthSnapshot = {}; 
@@ -7538,6 +6347,22 @@ function getConnSmytheScore(p) {
     }
 }
     
+    // Trade log headlines for major awards
+    if (awardConfig.headlines) {
+        const logAward = (tName, label) => {
+            const winner = allPlayers.find(p => p.trophies && p.trophies.some(t => t.year === currentSeason && t.name === tName));
+            if (winner) tradeLog.unshift({ day: `SEASON ${currentSeason}`, details: `AWARD: ${winner.name} wins the ${label} — ${winnerStats[tName] || ''}` });
+        };
+        logAward('Hart', 'Hart Trophy (MVP)');
+        logAward('Conn Smythe', 'Conn Smythe Trophy (Playoff MVP)');
+        logAward('Vezina', 'Vezina Trophy (Best Goalie)');
+        logAward('Norris', 'Norris Trophy (Best Defenceman)');
+        logAward('Selke', 'Selke Trophy (Defensive Forward)');
+        logAward('Art Ross', 'Art Ross Trophy (Scoring Leader)');
+        logAward('Rocket Richard', 'Rocket Richard Trophy (Goal Leader)');
+        if (currentCupChamp) tradeLog.unshift({ day: `SEASON ${currentSeason}`, details: `STANLEY CUP CHAMPION: ${currentCupChamp} hoists the Cup!` });
+    }
+
     const getWinner = (tN) => { const wAll = allPlayers.filter(p => p.trophies && p.trophies.some(t => t.year === currentSeason && t.name === tN)); return wAll.length === 0 ? 'N/A' : wAll.map(w => w.name).join(', '); };
 
     const awardCard = (label, desc, awardKey, accent) => {
@@ -7643,7 +6468,7 @@ function updateTradeDropdowns() {
     const tl = league.map(t => `<option value="${t.nrm}">${t.name}</option>`).join(''); 
     if(!document.getElementById('tradeTeam1').innerHTML) { document.getElementById('tradeTeam1').innerHTML = tl; document.getElementById('tradeTeam2').innerHTML = tl; } 
     const t1 = document.getElementById('tradeTeam1').value; const t2 = document.getElementById('tradeTeam2').value; 
-    const getOptions = (tk) => rosters[tk] ? '<option value="">-- SELECT --</option>' + rosters[tk].map(p => `<option value="${p.name}">${p.name} (${p.pos})</option>`).join('') : '<option value="">-- EMPTY --</option>';
+    const getOptions = (tk) => rosters[tk] ? '<option value="">-- SELECT --</option>' + rosters[tk].map(p => `<option value="${p.name}">${p.name} (${p.pos}) TV:${getTradeValue(p.name)}</option>`).join('') : '<option value="">-- EMPTY --</option>';
     for(let i=1; i<=5; i++) { 
         let d1 = document.getElementById(`tradePlayer1_${i}`); if (d1) d1.innerHTML = getOptions(t1); 
         let d2 = document.getElementById(`tradePlayer2_${i}`); if (d2) d2.innerHTML = getOptions(t2); 
@@ -7662,8 +6487,14 @@ function executeTrade() {
     const s1 = [1,2,3,4,5].map(i => { let e = document.getElementById(`tradePlayer1_${i}`); return e ? e.value : ""; }).filter(v => v !== "");
     const s2 = [1,2,3,4,5].map(i => { let e = document.getElementById(`tradePlayer2_${i}`); return e ? e.value : ""; }).filter(v => v !== "");
     
-    if(!s1.length && !s2.length) return alert("Select players to trade."); 
+    if(!s1.length && !s2.length) return alert("Select players to trade.");
     const t1o = league.find(t => t.nrm === t1c); const t2o = league.find(t => t.nrm === t2c);
+    const tv1 = s1.reduce((sum, n) => sum + getTradeValue(n), 0);
+    const tv2 = s2.reduce((sum, n) => sum + getTradeValue(n), 0);
+    if (s1.length && s2.length && Math.abs(tv1 - tv2) > 20) {
+        const winner = tv1 > tv2 ? t2o?.code : t1o?.code;
+        if (!confirm(`UNBALANCED TRADE WARNING\n${t1o?.code} value: ${tv1}  vs  ${t2o?.code} value: ${tv2}\n${winner?.toUpperCase()} wins this deal.\nExecute anyway?`)) return;
+    }
     
     s1.forEach(n => { const i = rosters[t1c].findIndex(p => p.name === n); if(i !== -1) { rosters[t2c].push(rosters[t1c].splice(i, 1)[0]); if(playerStats[n] && t2o) { playerStats[n].team = t2o.name; playerStats[n].teamCode = t2o.code; } } });
     s2.forEach(n => { const i = rosters[t2c].findIndex(p => p.name === n); if(i !== -1) { rosters[t1c].push(rosters[t2c].splice(i, 1)[0]); if(playerStats[n] && t1o) { playerStats[n].team = t1o.name; playerStats[n].teamCode = t1o.code; } } });
@@ -7718,10 +6549,10 @@ function approveProposal(id) {
         let t2o = league.find(l=>l.nrm===t.t2); if(t2o) t2o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
         tradeLog.unshift({ day: currentDay, details: ` BLOCKBUSTER: ${t.p1} traded to ${t.t2Name} for ${t.p2}!` });
     }
-    pendingTrades = pendingTrades.filter(x => x.id !== id); openProposalsModal(); updateUI(); saveGame();
+    pendingTrades = pendingTrades.filter(x => x.id !== id); openProposalsModal(); updateUI(); refreshTradeBadge(); saveGame();
 }
 
-function rejectProposal(id) { pendingTrades = pendingTrades.filter(x => x.id !== id); openProposalsModal(); updateUI(); saveGame(); }
+function rejectProposal(id) { pendingTrades = pendingTrades.filter(x => x.id !== id); openProposalsModal(); updateUI(); refreshTradeBadge(); saveGame(); }
 
 function renderTradeLog() {
     let el = document.getElementById('tradeLogTable'); if (!el) return;
@@ -7763,6 +6594,442 @@ function showHistoricalStandings(y) {
     }; 
     renderT('historyEastStand', 'east'); renderT('historyWestStand', 'west'); 
     document.getElementById('historyOverlay').style.display = 'flex';
+}
+
+function openScoutingReport(day, gIdx) {
+    const g = (calendar[day] || [])[gIdx];
+    if (!g) return;
+    const hNrm = g.h?.nrm, aNrm = g.a?.nrm;
+    const hCode = g.h?.code || g.h?.name || 'HOME';
+    const aCode = g.a?.code || g.a?.name || 'AWAY';
+
+    // Goalie intel
+    const goalieCard = (tkNrm, tkCode) => {
+        const gp = getProjectedGoalie(tkNrm);
+        if (!gp) return `<div style="color:#333;font-size:6px;">No goalie data.</div>`;
+        const ps = playerStats[gp.name];
+        const svp = ps?.season?.sa > 0 ? ((ps.season.sv / ps.season.sa) * 100).toFixed(1) : '--';
+        const streak = ps ? (ps.macro_streak || ps.micro_streak || 'STABLE') : 'STABLE';
+        const streakColor = streak === 'HOT' ? '#FF6600' : streak === 'COLD' ? '#55FFFF' : '#555';
+        const b2b = playedYesterday(tkNrm) ? '<span style="color:#FFAA44;font-size:5px;"> [B2B]</span>' : '';
+        return `<div style="font-size:6px;">
+            <span style="color:#ccc;">${gp.name}</span>${b2b}
+            <span style="color:var(--neon-cyan);margin-left:8px;">SV% ${svp}</span>
+            <span style="color:${streakColor};margin-left:8px;">${streak}</span>
+            <span style="color:#555;margin-left:8px;">${ps?.season?.w||0}W-${ps?.season?.l||0}L</span>
+        </div>`;
+    };
+
+    // Team captain
+    const captainCard = (tkNrm) => {
+        const capName = teamCaptains[tkNrm];
+        if (!capName) return '';
+        const score = Math.round(getLeadershipScore(capName));
+        const capPs = playerStats[capName];
+        const capInjured = capPs?.injury?.daysRemaining > 0;
+        const borderStyle = capInjured ? 'border:1px dashed #FF4444;padding:4px 6px;border-radius:3px;' : '';
+        const injTag = capInjured ? ` <span style="color:#FF4444;font-size:5px;">CAPTAIN OUT (${capPs.injury.daysRemaining}d)</span>` : '';
+        return `<div style="font-size:5px;color:#555;margin-top:8px;margin-bottom:3px;">CAPTAIN</div>
+            <div style="font-size:6px;color:${capInjured?'#884444':'#FFD700'};${borderStyle}">[C] ${capName}${injTag} <span style="color:#888;font-size:5px;">LEADERSHIP ${score}</span></div>`;
+    };
+
+    // Top line chemistry
+    const lineCard = (tkNrm) => {
+        if (!rosters || !rosters[tkNrm]) return '';
+        const fwds = (rosters[tkNrm] || []).filter(p => p.pos !== 'G' && p.pos !== 'D').slice(0, 3);
+        if (fwds.length === 0) return '';
+        const chemBonus = fwds.filter((p, _, arr) => getAllDuos().some(d => d.includes(p.name) && arr.some(q => q.name !== p.name && d.includes(q.name)))).length;
+        const line = fwds.map(p => {
+            const ps = playerStats[p.name];
+            const pts = ps ? (ps.season.g||0) + (ps.season.a||0) : 0;
+            return `<span style="color:#ccc;">${p.name}${isTeamCaptain(p.name) ? ' [C]' : ''} <span style="color:var(--neon-cyan);font-size:5px;">${pts}pts</span></span>`;
+        }).join(' · ');
+        const chemTag = chemBonus > 0 ? `<span style="color:#FF69B4;font-size:5px;margin-left:6px;">+${chemBonus*2} CHEM</span>` : '';
+        return `<div style="font-size:6px;margin-top:4px;">${line}${chemTag}</div>`;
+    };
+
+    // Active injuries
+    const injuryLine = (tkNrm) => {
+        if (!rosters?.[tkNrm]) return '';
+        const inj = (rosters[tkNrm] || []).filter(p => playerStats[p.name]?.injury?.daysRemaining > 0)
+            .map(p => `<span style="color:#FF4444;">${p.name} (${playerStats[p.name].injury.daysRemaining}d)</span>`).join(', ');
+        return inj ? `<div style="font-size:5px;margin-top:4px;color:#555;">IR: ${inj}</div>` : '';
+    };
+
+    // Hot/cold players
+    const hotColdLine = (tkNrm) => {
+        if (!rosters?.[tkNrm]) return '';
+        const hot = [], cold = [];
+        (rosters[tkNrm] || []).forEach(p => {
+            const ps = playerStats[p.name]; if (!ps) return;
+            const s = ps.macro_streak || ps.micro_streak || ps.streakType;
+            if (s === 'HOT' || s === 'hot') hot.push(p.name);
+            else if (s === 'COLD' || s === 'cold') cold.push(p.name);
+        });
+        if (!hot.length && !cold.length) return '';
+        let out = '<div style="margin-top:6px;">';
+        if (hot.length) out += `<div style="font-size:5px;color:#FF6600;">🔥 HOT: ${hot.join(', ')}</div>`;
+        if (cold.length) out += `<div style="font-size:5px;color:#55FFFF;">❄ COLD: ${cold.join(', ')}</div>`;
+        return out + '</div>';
+    };
+
+    let html = `<div style="text-align:center;font-size:10px;color:#fff;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #222;">
+        ${aCode} <span style="color:#444;font-size:8px;">@</span> ${hCode}
+    </div>`;
+
+    html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">`;
+
+    // Away team
+    html += `<div style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:10px;">
+        <div style="font-size:6px;color:#888;letter-spacing:.12em;margin-bottom:8px;">${aCode} — AWAY</div>
+        <div style="font-size:5px;color:#555;margin-bottom:3px;">STARTING GOALIE</div>
+        ${goalieCard(aNrm, aCode)}
+        ${captainCard(aNrm)}
+        <div style="font-size:5px;color:#555;margin-top:8px;margin-bottom:3px;">TOP LINE</div>
+        ${lineCard(aNrm)}
+        ${hotColdLine(aNrm)}
+        ${injuryLine(aNrm)}
+    </div>`;
+
+    // Home team
+    html += `<div style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:10px;">
+        <div style="font-size:6px;color:#888;letter-spacing:.12em;margin-bottom:8px;">${hCode} — HOME</div>
+        <div style="font-size:5px;color:#555;margin-bottom:3px;">STARTING GOALIE</div>
+        ${goalieCard(hNrm, hCode)}
+        ${captainCard(hNrm)}
+        <div style="font-size:5px;color:#555;margin-top:8px;margin-bottom:3px;">TOP LINE</div>
+        ${lineCard(hNrm)}
+        ${hotColdLine(hNrm)}
+        ${injuryLine(hNrm)}
+    </div>`;
+
+    html += `</div>`;
+
+    // Comeback arc banner — user team on 3+ losing streak
+    if (selectedTeam) {
+        const userTeamObj = league.find(t => t.nrm === selectedTeam);
+        if (userTeamObj && userTeamObj.loseStreak >= 3) {
+            html += `<div style="margin-top:10px;background:#0a0014;border:2px solid #AA44FF;padding:8px 12px;text-align:center;">
+                <div style="color:#AA44FF;font-size:8px;letter-spacing:.1em;">🔥 BACKS AGAINST THE WALL</div>
+                <div style="color:#7733BB;font-size:6px;margin-top:3px;">${userTeamObj.loseStreak}-GAME SKID — resolve boost active this game</div>
+            </div>`;
+        }
+    }
+
+    // Coaching adjustments preview
+    const fLabel = ['DEFENSIVE','NEUTRAL','AGGRESSIVE'][coachAdj.forecheck + 1];
+    const ppLabel = ['CYCLE','BALANCED','SHOOT'][coachAdj.pp + 1];
+    const fColor = coachAdj.forecheck === 1 ? '#FF6600' : coachAdj.forecheck === -1 ? '#55FFFF' : '#555';
+    const ppColor = coachAdj.pp === 1 ? '#FF6600' : coachAdj.pp === -1 ? '#55FFFF' : '#555';
+    html += `<div style="margin-top:12px;background:#080808;border:1px solid #1a1a1a;border-left:3px solid #FFA500;border-radius:6px;padding:10px;">
+        <div style="font-size:6px;color:#FFA500;letter-spacing:.12em;margin-bottom:8px;">YOUR COACHING ADJUSTMENTS</div>
+        <div style="display:flex;gap:16px;font-size:6px;">
+            <span>FORECHECK: <span style="color:${fColor};">${fLabel}</span></span>
+            <span>PP STYLE: <span style="color:${ppColor};">${ppLabel}</span></span>
+            <span>LINE MATCH: <span style="color:${coachAdj.lineMatch?'#FFA500':'#555'};">${coachAdj.lineMatch?'ON':'OFF'}</span></span>
+        </div>
+        <button onclick="openCoachingPanel()" style="margin-top:8px;font-size:5px;padding:3px 10px;border-color:#FFA500;color:#FFA500;">ADJUST ▶</button>
+    </div>`;
+
+    document.getElementById('scoutingContent').innerHTML = html;
+    document.getElementById('scoutingOverlay').style.display = 'flex';
+}
+
+function openCoachingPanel() {
+    const fLabels = ['DEFENSIVE', 'NEUTRAL', 'AGGRESSIVE'];
+    const ppLabels = ['CYCLE', 'BALANCED', 'SHOOT'];
+    const fIdx = coachAdj.forecheck + 1; // -1→0, 0→1, 1→2
+    const ppIdx = coachAdj.pp + 1;
+
+    const btnRow = (key, labels, current, setter) => labels.map((lbl, i) => {
+        const active = i === current;
+        return `<button onclick="${setter}(${i-1})" style="flex:1;font-size:5px;padding:6px 4px;
+            border-color:${active?'#FFA500':'#333'};color:${active?'#FFA500':'#555'};
+            background:${active?'#0d0800':'#000'};">${lbl}</button>`;
+    }).join('');
+
+    const html = `
+    <div style="margin-bottom:14px;">
+        <div style="font-size:6px;color:#888;letter-spacing:.12em;margin-bottom:6px;">FORECHECK STYLE</div>
+        <div style="font-size:5px;color:#444;margin-bottom:4px;">Aggressive opens the game (more shots both ways). Defensive tightens it.</div>
+        <div style="display:flex;gap:6px;">${btnRow('forecheck', fLabels, fIdx, '_setForecheck')}</div>
+    </div>
+    <div style="margin-bottom:14px;">
+        <div style="font-size:6px;color:#888;letter-spacing:.12em;margin-bottom:6px;">POWER PLAY STYLE</div>
+        <div style="font-size:5px;color:#444;margin-bottom:4px;">Shoot boosts PP shot volume. Cycle boosts PP shot quality.</div>
+        <div style="display:flex;gap:6px;">${btnRow('pp', ppLabels, ppIdx, '_setPP')}</div>
+    </div>
+    <div style="margin-bottom:14px;">
+        <div style="font-size:6px;color:#888;letter-spacing:.12em;margin-bottom:6px;">LINE MATCHING</div>
+        <div style="font-size:5px;color:#444;margin-bottom:4px;">Home team deploys top line vs opponent's best — slight OVR edge.</div>
+        <div style="display:flex;gap:6px;">
+            <button onclick="_setLineMatch(false)" style="flex:1;font-size:5px;padding:6px 4px;
+                border-color:${!coachAdj.lineMatch?'#FFA500':'#333'};color:${!coachAdj.lineMatch?'#FFA500':'#555'};
+                background:${!coachAdj.lineMatch?'#0d0800':'#000'};">OFF</button>
+            <button onclick="_setLineMatch(true)" style="flex:1;font-size:5px;padding:6px 4px;
+                border-color:${coachAdj.lineMatch?'#FFA500':'#333'};color:${coachAdj.lineMatch?'#FFA500':'#555'};
+                background:${coachAdj.lineMatch?'#0d0800':'#000'};">ON</button>
+        </div>
+    </div>
+    <div style="font-size:5px;color:#333;margin-top:8px;text-align:center;">Settings persist across games. Reset to NEUTRAL/OFF for balanced sim.</div>
+    <div style="margin-top:14px;border-top:1px solid #1a1a1a;padding-top:10px;">
+        <div style="font-size:6px;color:#888;letter-spacing:.12em;margin-bottom:6px;">COACH CONFIDENCE</div>
+        <div style="background:#111;border-radius:3px;height:6px;overflow:hidden;margin-bottom:5px;">
+            <div style="height:100%;width:${coachTrust}%;background:${coachTrust >= 70 ? '#00FF88' : coachTrust >= 40 ? '#FFA500' : '#FF4444'};transition:width .3s;border-radius:3px;"></div>
+        </div>
+        <div style="font-size:6px;color:${coachTrust >= 70 ? '#00FF88' : coachTrust >= 40 ? '#FFA500' : '#FF4444'};">${coachTrust >= 70 ? 'TRUSTED — players responding well' : coachTrust >= 40 ? 'NEUTRAL — steady but unproven' : 'QUESTIONED — locker room tension'}</div>
+    </div>`;
+
+    document.getElementById('coachingContent').innerHTML = html;
+    document.getElementById('coachingOverlay').style.display = 'flex';
+}
+
+window._setForecheck = v => { coachAdj.forecheck = v; saveGame(); openCoachingPanel(); };
+window._setPP = v => { coachAdj.pp = v; saveGame(); openCoachingPanel(); };
+window._setLineMatch = v => { coachAdj.lineMatch = v; saveGame(); openCoachingPanel(); };
+
+function showGMReportCard() {
+    const totalGames = league[0]?.season?.gp || 0;
+    if (totalGames < 10) return;
+
+    const sorted = [...league].sort((a, b) => b.season.pts - a.season.pts);
+    const topTeam = sorted[0];
+    const avgPts = league.reduce((s, t) => s + t.season.pts, 0) / league.length;
+
+    const grade = score => score >= 90 ? 'A+' : score >= 80 ? 'A' : score >= 70 ? 'B' : score >= 60 ? 'C' : score >= 50 ? 'D' : 'F';
+    const color = g => g.startsWith('A') ? 'var(--gold-leaf)' : g === 'B' ? 'var(--neon-cyan)' : g === 'C' ? '#FFA500' : 'var(--line-red)';
+
+    // Preseason projection: rank teams by preseason OVR snapshot, compare to actual pts rank
+    const hasSnapshot = Object.keys(preseasonOvrSnapshot).length > 0;
+    let projectionScore = 65; // neutral fallback
+    let projectionNote = 'No preseason baseline (start a new season to track)';
+    if (hasSnapshot) {
+        const preRanked = [...league].sort((a, b) => (preseasonOvrSnapshot[b.nrm] || 75) - (preseasonOvrSnapshot[a.nrm] || 75));
+        const actualRanked = sorted;
+        // Score based on how well the projected top-6 ended up in the actual top-6
+        const top6pre = new Set(preRanked.slice(0, 6).map(t => t.nrm));
+        const top6act = actualRanked.slice(0, 6).map(t => t.nrm);
+        const hits = top6act.filter(nrm => top6pre.has(nrm)).length;
+        projectionScore = Math.round((hits / 6) * 100);
+        const preLeader = preRanked[0]; const actLeader = actualRanked[0];
+        projectionNote = `Pre-season favourite: ${preLeader?.code} (OVR ${preseasonOvrSnapshot[preLeader?.nrm]}). Actual leader: ${actLeader?.code} (${actLeader?.season.pts}pts). ${hits}/6 projected teams in top 6.`;
+    }
+
+    // Injury management
+    const totalInjDays = Object.values(playerStats).reduce((s, p) => s + (p.injuryHistory || []).reduce((a, h) => a + (h.daysMissed || 0), 0), 0);
+    const injScore = Math.max(0, 100 - totalInjDays * 0.5);
+
+    // Chemistry usage
+    const chemTeams = league.filter(t => {
+        const fwds = (rosters[t.nrm] || []).filter(p => p.pos !== 'G' && p.pos !== 'D');
+        return getAllDuos().some(d => fwds.filter(p => d.includes(p.name)).length >= 2);
+    }).length;
+    const chemScore = Math.round((chemTeams / Math.max(1, league.length)) * 100) + Math.min(20, customDuos.length * 5);
+
+    const dims = [
+        { label: 'PRESEASON PROJECTION ACCURACY', score: projectionScore, note: projectionNote },
+        { label: 'INJURY MANAGEMENT', score: Math.round(injScore), note: `${totalInjDays} total injury days across the league` },
+        { label: 'CHEMISTRY DEPLOYMENT', score: Math.min(100, chemScore), note: `${chemTeams}/${league.length} teams with active line duos` },
+        { label: 'FEATURE ENGAGEMENT', score: Math.min(100, Object.values(awardConfig).filter(Boolean).length * 8), note: `${Object.values(awardConfig).filter(Boolean).length} features active` },
+    ];
+
+    const overall = Math.round(dims.reduce((s, d) => s + Math.min(100, d.score), 0) / dims.length);
+    const overallGrade = grade(overall);
+
+    let html = `<div style="text-align:center;padding:10px 0 16px;">
+        <div style="font-size:8px;color:#888;letter-spacing:.16em;">SEASON ${currentSeason} GM REPORT CARD</div>
+        <div style="font-size:32px;color:${color(overallGrade)};margin:10px 0;text-shadow:2px 2px 0 #000;">${overallGrade}</div>
+        <div style="font-size:6px;color:#555;">Overall Score: ${overall}/100</div>
+    </div>`;
+
+    dims.forEach(d => {
+        const g = grade(Math.min(100, d.score));
+        html += `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #111;">
+            <div style="font-size:22px;color:${color(g)};min-width:32px;text-align:center;">${g}</div>
+            <div style="flex:1;">
+                <div style="font-size:6px;color:#888;letter-spacing:.1em;">${d.label}</div>
+                <div style="font-size:5px;color:#444;margin-top:2px;">${d.note}</div>
+            </div>
+            <div style="font-size:7px;color:#333;">${Math.min(100,d.score)}/100</div>
+        </div>`;
+    });
+
+    html += `<button onclick="document.getElementById('gmReportCardOverlay').style.display='none'" style="width:100%;margin-top:14px;border-color:var(--line-red);color:var(--line-red);">CLOSE</button>`;
+
+    document.getElementById('gmReportCardContent').innerHTML = html;
+    document.getElementById('gmReportCardOverlay').style.display = 'flex';
+}
+
+// Awards voting — shown before final ceremony; voting is theatrical (doesn't affect outcome)
+function openAwardsVoting() {
+    const maxGP = Math.max(1, ...league.map(t => t.season.gp));
+    const minSkaterGP = Math.max(1, Math.floor(maxGP * 0.40));
+    const minGoalieGP = Math.max(1, Math.floor(maxGP * 0.30));
+    const allPlayers = Object.values(playerStats);
+    const skaters = allPlayers.filter(p => p.pos !== 'G' && p.season.gp >= minSkaterGP);
+    const goalies = allPlayers.filter(p => p.pos === 'G' && p.season.gp >= minGoalieGP);
+
+    // Build nominee lists (top 3 per award, read-only — actual winners computed in runEndOfSeasonAwards)
+    const hartCands = [...skaters]
+        .map(p => ({ name: p.name, stat: `${p.season.g}G  ${p.season.a}A  ${p.season.g+p.season.a}PTS`, score: p.season.g+p.season.a }))
+        .concat(goalies.map(p => ({ name: p.name, stat: `${p.season.w||0}W  ${p.season.so||0}SO`, score: (p.season.w||0)*2.2+(p.season.so||0)*3 })))
+        .sort((a,b) => b.score - a.score).slice(0, 3);
+    const vezinaCands = [...goalies]
+        .map(p => ({ name: p.name, stat: `${p.season.w||0}W  SV% ${p.season.sa>0?((p.season.sv/p.season.sa)*100).toFixed(1):'--'}`, score: (p.season.w||0)+(p.season.sa>0?(p.season.sv/p.season.sa)*100:0) }))
+        .sort((a,b) => b.score - a.score).slice(0, 3);
+    const norrisCands = [...skaters].filter(p => p.pos === 'D' || (p.attr && p.attr.def >= 80))
+        .map(p => ({ name: p.name, stat: `${p.season.g}G  ${p.season.a}A  ${p.season.pm>=0?'+':''}${p.season.pm||0}`, score: (p.season.g+p.season.a)+(p.season.pm||0) }))
+        .sort((a,b) => b.score - a.score).slice(0, 3);
+    const calderCands = [...allPlayers].filter(p => (p.career.gp||0) <= (p.pos==='G'?38:28) && p.season.gp >= (p.pos==='G'?minGoalieGP:minSkaterGP))
+        .map(p => ({ name: p.name, stat: p.pos==='G'?`${p.season.w||0}W  ${p.season.so||0}SO`:`${p.season.g}G  ${p.season.a}A`, score: p.pos==='G'?(p.season.w||0)*4+(p.season.so||0)*10:(p.season.g+p.season.a) }))
+        .sort((a,b) => b.score - a.score).slice(0, 3);
+
+    const votingState = { Hart: null, Vezina: null, Norris: null, Calder: null };
+
+    const renderVoting = () => {
+        const awards = [
+            { key: 'Hart', label: 'HART TROPHY — MVP', color: 'var(--gold-leaf)', cands: hartCands },
+            { key: 'Vezina', label: 'VEZINA TROPHY — BEST GOALIE', color: 'var(--neon-cyan)', cands: vezinaCands },
+            { key: 'Norris', label: 'NORRIS TROPHY — BEST DEFENCEMAN', color: 'var(--neon-cyan)', cands: norrisCands },
+            { key: 'Calder', label: 'CALDER TROPHY — BEST ROOKIE', color: 'var(--neon-cyan)', cands: calderCands },
+        ];
+
+        let html = `<div style="font-size:7px;color:#666;letter-spacing:.1em;margin-bottom:14px;text-align:center;">Cast your votes for each award, then reveal the winners.</div>`;
+
+        awards.forEach(aw => {
+            const voted = votingState[aw.key];
+            html += `<div style="background:#0a0a0a;border:1px solid #1a1a1a;border-left:3px solid ${aw.color};border-radius:6px;padding:10px;margin-bottom:10px;">
+                <div style="font-size:6px;color:${aw.color};letter-spacing:.12em;margin-bottom:8px;">${aw.label}</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">`;
+            aw.cands.forEach((c, i) => {
+                const isVoted = voted === c.name;
+                const rank = ['①','②','③'][i];
+                html += `<button onclick="_castVote('${aw.key}','${c.name}')"
+                    style="flex:1;min-width:120px;padding:8px 6px;font-size:5px;text-align:left;
+                    border-color:${isVoted ? aw.color : '#333'};
+                    color:${isVoted ? '#fff' : '#666'};
+                    background:${isVoted ? '#0d0d20' : '#000'};
+                    box-shadow:${isVoted ? `0 0 6px ${aw.color}44` : 'none'};">
+                    <div style="color:${isVoted?aw.color:'#444'};margin-bottom:3px;">${rank} ${c.name}</div>
+                    <div style="color:var(--neon-cyan);font-size:5px;">${c.stat}</div>
+                </button>`;
+            });
+            html += `</div>${voted ? `<div style="font-size:5px;color:#555;margin-top:5px;">YOUR VOTE: <span style="color:${aw.color};">${voted}</span></div>` : ''}</div>`;
+        });
+
+        const allVoted = Object.values(votingState).every(v => v !== null);
+        html += `<button onclick="_revealAwardWinners()" style="width:100%;margin-top:10px;font-size:8px;
+            border-color:var(--gold-leaf);color:var(--gold-leaf);padding:12px;
+            ${allVoted ? '' : 'opacity:0.45;pointer-events:none;'}">
+            ${allVoted ? '🏆 REVEAL ALL WINNERS' : 'VOTE FOR ALL 4 AWARDS TO REVEAL'}
+        </button>`;
+
+        document.getElementById('awardsVotingContent').innerHTML = html;
+        window._votingState = votingState;
+    };
+
+    window._castVote = (key, name) => {
+        window._votingState[key] = name;
+        Object.assign(votingState, window._votingState);
+        renderVoting();
+    };
+
+    window._revealAwardWinners = () => {
+        document.getElementById('awardsVotingOverlay').style.display = 'none';
+        runEndOfSeasonAwards();
+    };
+
+    document.getElementById('votingSeasonLabel').textContent = currentSeason || '';
+    renderVoting();
+    document.getElementById('awardsVotingOverlay').style.display = 'flex';
+}
+
+function openChemEditor() {
+    renderChemEditor();
+    document.getElementById('chemEditorOverlay').style.display = 'flex';
+}
+
+function renderChemEditor() {
+    const allNames = Object.keys(playerStats).sort();
+    const pairTag = (pair, isCustom, idx) => {
+        const rmBtn = isCustom
+            ? `<button onclick="removeCustomDuo(${idx})" style="font-size:6px;border-color:#FF4444;color:#FF4444;padding:2px 6px;margin-left:8px;">✕</button>`
+            : `<span style="font-size:6px;color:#444;margin-left:8px;">[BUILT-IN]</span>`;
+        return `<div style="display:flex;align-items:center;padding:5px 0;border-bottom:1px solid #111;font-size:8px;">
+            <span style="color:#FF69B4;min-width:16px;">${isCustom ? '★' : '·'}</span>
+            <span style="color:#ccc;flex:1;">${pair.join(' · ')}</span>
+            ${rmBtn}
+        </div>`;
+    };
+
+    let h = `<div style="color:#888;font-size:6px;letter-spacing:.12em;margin-bottom:8px;">
+        Each pair/group on the same line grants +2 OVR chemistry bonus per sim step.
+        Built-in pairs are permanent. Custom pairs are saved to your game file.
+    </div>`;
+
+    // Add new pair form
+    const opts = allNames.map(n => `<option value="${n}">${n}</option>`).join('');
+    h += `<div style="background:#0d0d0d;border:1px solid #222;border-radius:8px;padding:14px;margin-bottom:16px;">
+        <div style="font-size:7px;color:#888;letter-spacing:.12em;margin-bottom:10px;">ADD CUSTOM PAIR / GROUP</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+            <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="font-size:6px;color:#666;">PLAYER 1</label>
+                <select id="chemP1" style="font-family:'Press Start 2P',cursive;font-size:6px;background:#000;color:#fff;border:1px solid #333;padding:4px 6px;">${opts}</select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="font-size:6px;color:#666;">PLAYER 2</label>
+                <select id="chemP2" style="font-family:'Press Start 2P',cursive;font-size:6px;background:#000;color:#fff;border:1px solid #333;padding:4px 6px;">${opts}</select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="font-size:6px;color:#555;">PLAYER 3 (opt)</label>
+                <select id="chemP3" style="font-family:'Press Start 2P',cursive;font-size:6px;background:#000;color:#555;border:1px solid #222;padding:4px 6px;">
+                    <option value="">-- none --</option>${opts}
+                </select>
+            </div>
+            <button onclick="addCustomDuo()" style="font-size:7px;border-color:#FF69B4;color:#FF69B4;padding:6px 12px;height:fit-content;">ADD PAIR</button>
+        </div>
+    </div>`;
+
+    // Custom duos
+    if (customDuos.length > 0) {
+        h += `<div style="font-size:6px;color:#FF69B4;letter-spacing:.12em;margin-bottom:6px;">CUSTOM PAIRS (${customDuos.length})</div>`;
+        h += customDuos.map((pair, i) => {
+            const score = getChemScore(pair);
+            const barColor = score >= 75 ? '#FF69B4' : score >= 50 ? '#FFA500' : '#FF4444';
+            const chemLabel = score >= 75 ? `+2 CHEM` : score >= 50 ? `+1 CHEM` : `FADING`;
+            const decayBar = `<div style="margin-top:4px;background:#1a1a1a;border-radius:2px;height:3px;overflow:hidden;">
+                <div style="height:100%;width:${score}%;background:${barColor};border-radius:2px;transition:width .3s;"></div>
+            </div>
+            <div style="font-size:5px;color:${barColor};margin-top:2px;">${chemLabel} — Chemistry ${score}%</div>`;
+            return pairTag(pair, true, i) + decayBar;
+        }).join('');
+        h += `<div style="margin-bottom:16px;"></div>`;
+    }
+
+    // Built-in duos
+    h += `<div style="font-size:6px;color:#555;letter-spacing:.12em;margin-bottom:6px;">BUILT-IN PAIRS (${dynamicDuos.length})</div>`;
+    h += dynamicDuos.map(pair => pairTag(pair, false, -1)).join('');
+
+    document.getElementById('chemEditorContent').innerHTML = h;
+}
+
+function addCustomDuo() {
+    const p1 = document.getElementById('chemP1')?.value;
+    const p2 = document.getElementById('chemP2')?.value;
+    const p3 = document.getElementById('chemP3')?.value;
+    if (!p1 || !p2 || p1 === p2) return alert('Select two different players.');
+    const pair = p3 && p3 !== p1 && p3 !== p2 ? [p1, p2, p3] : [p1, p2];
+    const already = getAllDuos().some(d => pair.every(n => d.includes(n)));
+    if (already) return alert('This pair already exists.');
+    customDuos.push(pair);
+    saveGame();
+    renderChemEditor();
+}
+
+function removeCustomDuo(idx) {
+    customDuos.splice(idx, 1);
+    saveGame();
+    renderChemEditor();
 }
 
 function openStatLeaders() {
@@ -7835,35 +7102,8 @@ function resetLeague() {
 // --- MISSING UI HELPER FUNCTIONS ---
 // =========================================================
 // Add this helper to your update logic
-function trackIceTime(playersOnIce, minutes) {
-    playersOnIce.forEach(p => {
-        if (playerStats[p.name]) {
-            playerStats[p.name].season.toi += minutes;
-        }
-    });
-}
 
 // !! NEW HELPER: Syncs individual rounds back to the master Playoff bucket
-function syncAggregatePlayoffs(pName) {
-    let p = playerStats[pName];
-    if (!p) return;
-    
-    let keys = p.pos === 'G' 
-        ? ['gp','g','a','pm','so','sv','sa','w','l','t','pim','ppg','toi','svg'] 
-        : ['gp','g','a','pm','pim','ppg','shg','gwg','s','toi','svg'];
-        
-    p.playoff = {};
-    keys.forEach(key => p.playoff[key] = 0);
-    
-    [1,2,3,4].forEach(r => {
-        let rnd = p[`playoff_${r}`];
-        if (rnd) {
-            keys.forEach(key => {
-                p.playoff[key] += (rnd[key] || 0);
-            });
-        }
-    });
-}
 
 function populateTeamSelect() {
     const sel = document.getElementById('teamViewSelect');
@@ -8034,17 +7274,6 @@ const PC_COLORS = {
     VAN:['#008852','#001F5B'], WSH:['#041E42','#C8102E'], WIN:['#003E7E','#7B3F6E'],
 };
 
-const PC_LOGOS = {
-    ANA:'Team Logos/Ducks.png',     BOS:'Team Logos/Bruins.png',    BUF:'Team Logos/sabres.png',
-    CGY:'Team Logos/Flames.png',    CHI:'Team Logos/blackhawks.png',DAL:'Team Logos/North_Stars.png',
-    DET:'Team Logos/Red_Wings.png', EDM:'Team Logos/Oilers.png',    FLA:'Team Logos/Panthers.png',
-    HFD:'Team Logos/whalers.png',   LAK:'Team Logos/kings.png',     MIN:'Team Logos/North_Stars.png',
-    MTL:'Team Logos/Canadiens.png', NJD:'Team Logos/Devils.png',    NYI:'Team Logos/islanders.png',
-    NYR:'Team Logos/Rangers.png',   OTT:'Team Logos/Senators.png',  PHI:'Team Logos/Flyers.png',
-    PIT:'Team Logos/Penguins.png',  QUE:'Team Logos/Nordiques.png', SJS:'Team Logos/sharks.png',
-    STL:'Team Logos/blues.png',     TBL:'Team Logos/tampa.png',     TOR:'Team Logos/maple_leafs.png',
-    VAN:'Team Logos/canucks.png',   WSH:'Team Logos/capitals.png',  WIN:'Team Logos/jets.png',
-};
 
 // Pose files: 3 skater poses (blue-jersey rows from reference sheet)
 //             2 goalie poses (butterfly + standing V)
@@ -8138,32 +7367,6 @@ function pcDrawGoalieSprite(ctx, canvasW, canvasH, pri, sec, pName) {
     img.src = src;
 }
 
-function pcDrawLogo(ctx, size, code) {
-    const colors = PC_COLORS[code] || ['#003366','#CCAA00'];
-    ctx.fillStyle = colors[0];
-    ctx.beginPath(); ctx.arc(size/2,size/2,size/2,0,Math.PI*2); ctx.fill();
-    const logoPath = PC_LOGOS[code];
-    if (logoPath) {
-        const img = new Image();
-        img.onload = () => {
-            ctx.save();
-            ctx.beginPath(); ctx.arc(size/2,size/2,size/2-1,0,Math.PI*2); ctx.clip();
-            const pad = size * 0.12;
-            ctx.drawImage(img, pad, pad, size-pad*2, size-pad*2);
-            ctx.restore();
-        };
-        img.onerror = () => {
-            ctx.fillStyle='#fff'; ctx.font=`bold ${Math.floor(size*.3)}px monospace`;
-            ctx.textAlign='center'; ctx.textBaseline='middle';
-            ctx.fillText(code.slice(0,3), size/2, size/2);
-        };
-        img.src = logoPath;
-    } else {
-        ctx.fillStyle='#fff'; ctx.font=`bold ${Math.floor(size*.3)}px monospace`;
-        ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.fillText(code.slice(0,3), size/2, size/2);
-    }
-}
 
 function pcBuildStats(pName, tab) {
     const p = playerStats[pName];
@@ -8347,154 +7550,6 @@ function showPlayerCard(pName) {
     document.getElementById('playerCardOverlay').style.display = 'flex';
 }
 
-// --- dead old body below  -  replaced by Pro Set card above ---------------------
-function _pcOldBodyPlaceholder() { // never called  -  keeps linter happy if needed
-    let h=''; const p={},c={},ovr=0,tag='',badge='',fatigue=0;
-    // CORNER LOGO
-    h += `<div style="position:absolute; top:10px; right:10px; font-size:10px; color:var(--ea-yellow); text-shadow:1px 1px 0 #000;">${p.teamCode}</div>`;
-    
-    h += `<div style="display:flex; align-items:center; gap:20px; border-bottom:2px solid #333; padding-bottom:15px; margin-bottom:15px;">`;
-    
-    // ICON BOX
-    h += `<div style="width:80px; height:80px; background:#222; border:2px solid #444; display:flex; align-items:center; justify-content:center; font-size:32px;">${p.pos==='G'?'':''}</div>`;
-    
-    // HEADER INFO
-    h += `<div>`;
-    h += `<div style="font-size:24px; color:#fff; font-family:'Press Start 2P', cursive; margin-bottom:5px;">${p.name.toUpperCase()}</div>`;
-    
-    // ARCHETYPE TAG
-    h += `<div style="color:var(--ea-yellow); font-size:10px; margin-bottom:8px; font-weight:bold; letter-spacing:1px;">${tag} ${badge}</div>`;
-
-    // STATUS BADGES
-    h += buildStatusBadges(pName);
-    
-    h += `<div style="color:#aaa; font-size:10px;">${p.pos} | AGE: ${p.age}</div>`;
-    h += `<div style="color:var(--neon-cyan); font-size:14px; margin-top:5px;">LIVE OVR: ${ovr}</div>`;
-    h += `</div></div>`;
-
-    // --- REMAINDER OF THE CARD TABLES (ATTRIBUTES, SEASON, CAREER, PLAYOFF) ---
-    h += `<div><div class="unit-header">ATTRIBUTES</div><table style="width:100%; font-size:8px; text-align:left;">`;
-    if(p.pos === 'G') {
-        h += `<tr><td style="color:#aaa;">DEF AWARE:</td><td>${p.attr.def || '--'}</td><td style="color:#aaa;">PUCK CTRL:</td><td>${p.attr.stkHnd || '--'}</td></tr>`;
-        h += `<tr><td style="color:#aaa;">AGILITY:</td><td>${p.attr.agil || '--'}</td><td style="color:#aaa;">SPEED:</td><td>${p.attr.speed || '--'}</td></tr>`;
-        h += `<tr><td colspan="4" style="color:var(--neon-cyan); padding-top:4px; border-bottom:1px solid #333;">CUSTOM PAD MATRIX</td></tr>`;
-        h += `<tr><td style="color:#aaa;">GLOVE (L):</td><td>${p.attr.gloveL || '--'}</td><td style="color:#aaa;">GLOVE (R):</td><td>${p.attr.gloveR || '--'}</td></tr>`;
-        h += `<tr><td style="color:#aaa;">STICK (L):</td><td>${p.attr.stickL || '--'}</td><td style="color:#aaa;">STICK (R):</td><td>${p.attr.stickR || '--'}</td></tr>`;
-    } else {
-        h += `<tr><td style="color:#aaa;">OFFENSE:</td><td>${p.attr.off || '--'}</td><td style="color:#aaa;">DEFENSE:</td><td>${p.attr.def || '--'}</td></tr>`;
-        h += `<tr><td style="color:#aaa;">SHOT PWR:</td><td>${p.attr.shotPwr || '--'}</td><td style="color:#aaa;">SHOT ACC:</td><td>${p.attr.shotAcc || '--'}</td></tr>`;
-        h += `<tr><td style="color:#aaa;">PASSING:</td><td>${p.attr.pass || '--'}</td><td style="color:#aaa;">STICK:</td><td>${p.attr.stkHnd || '--'}</td></tr>`;
-        h += `<tr><td style="color:#aaa;">SPEED:</td><td>${p.attr.speed || '--'}</td><td style="color:#aaa;">AGILITY:</td><td>${p.attr.agil || '--'}</td></tr>`;
-        h += `<tr><td style="color:#aaa;">CHECKING:</td><td>${p.attr.check || '--'}</td><td style="color:#aaa;">ROUGH:</td><td>${p.attr.rough || '--'}</td></tr>`;
-    }
-    h += `</table></div>`;
-
-    // --- SEASON STATS TABLE ---
-    h += `<div class="unit-header" style="margin-top:10px;">SEASON STATS</div><table style="width:100%; font-size:8px; text-align:center;">`;
-    if(p.pos === 'G') {
-        h += `<tr><th>GP</th><th>W</th><th>L</th><th>SO</th><th>SV%</th><th>GAA</th><th>SVG</th><th>TOI</th></tr>`;
-        let sGP = p.season.gp || 0;
-        let sW = p.season.w || 0;
-        let sL = p.season.l || 0;
-        let sSO = p.season.so || 0;
-        let sSA = p.season.sa || 0;
-        let sSV = p.season.sv || 0;
-        let sGA = Math.max(0, sSA - sSV);
-        let sTOI = p.season.toi || 0;
-        let sSVG = p.season.svg || 0;
-        h += `<tr><td>${sGP}</td><td>${sW}</td><td>${sL}</td><td>${sSO}</td><td>${sSA>0?(sSV/sSA).toFixed(3):'.000'}</td><td>${sGP>0?(sGA/sGP).toFixed(2):'0.00'}</td><td>${sSVG}</td><td>${sTOI}</td></tr>`;
-    } else {
-        h += `<tr><th>GP</th><th>G</th><th>A</th><th>PTS</th><th>+/-</th><th>PIM</th><th>SOG</th><th>GWG</th><th>SVG</th><th>TOI</th></tr>`;
-        let sGP = p.season.gp || 0;
-        let sG = p.season.g || 0;
-        let sA = p.season.a || 0;
-        let sPts = sG + sA;
-        let sPM = p.season.pm || 0;
-        let sPIM = p.season.pim || 0;
-        let sSOG = p.season.s || 0;
-        let sGWG = p.season.gwg || 0;
-        let sTOI = p.season.toi || 0;
-        let sSVG = p.season.svg || 0;
-        h += `<tr><td>${sGP}</td><td>${sG}</td><td>${sA}</td><td class="pts-hl">${sPts}</td><td>${sPM>0?'+'+sPM:sPM}</td><td>${sPIM}</td><td>${sSOG}</td><td>${sGWG}</td><td>${sSVG}</td><td>${sTOI}</td></tr>`;
-    }
-    h += `</table>`;
-
-    // --- CAREER STATS TABLE (Historical Career, excluding current season) ---
-    h += `<div class="unit-header" style="margin-top:10px;">CAREER STATS (PRE-SEASON)</div><table style="width:100%; font-size:8px; text-align:center;">`;
-    if(p.pos === 'G') {
-        h += `<tr><th>GP</th><th>W</th><th>L</th><th>SO</th><th>SV%</th><th>GAA</th></tr>`;
-        let crGP = c.gp || 0;
-        let crW = c.w || 0;
-        let crL = c.l || 0;
-        let crSO = c.so || 0;
-        let crSA = c.sa || 0;
-        let crSV = c.sv || 0;
-        let crGA = Math.max(0, crSA - crSV);
-        h += `<tr><td>${crGP}</td><td>${crW}</td><td>${crL}</td><td>${crSO}</td><td>${crSA>0?(crSV/crSA).toFixed(3):'.000'}</td><td>${crGP>0?(crGA/crGP).toFixed(2):'0.00'}</td></tr>`;
-    } else {
-        h += `<tr><th>GP</th><th>G</th><th>A</th><th>PTS</th><th>+/-</th><th>PIM</th><th>SOG</th><th>GWG</th></tr>`;
-        let crGP = c.gp || 0;
-        let crG = c.g || 0;
-        let crA = c.a || 0;
-        let crPts = c.pts || 0;
-        let crPM = (c.pm !== undefined ? c.pm : (c.plusMinus || 0)) || 0;
-        let crPIM = c.pim || 0;
-        let crSOG = c.s || 0;
-        let crGWG = c.gwg || 0;
-        h += `<tr><td>${crGP}</td><td>${crG}</td><td>${crA}</td><td class="pts-hl">${crPts}</td><td>${crPM>0?'+'+crPM:crPM}</td><td>${crPIM}</td><td>${crSOG}</td><td>${crGWG}</td></tr>`;
-    }
-    h += `</table>`;
-
-    // --- PLAYOFF STATS TABLE (Only shown if playoffs active) ---
-    if(isPlayoffs || isASG) {
-        h += `<div class="unit-header" style="margin-top:10px; color:var(--neon-cyan);">PLAYOFF STATS</div><table style="width:100%; font-size:8px; text-align:center;">`;
-        let plStats = p.careerPlayoff || { gp:0, g:0, a:0, pts:0, pm:0, pim:0, s:0, gwg:0, w:0, l:0, so:0, sv:0, sa:0, toi:0, svg:0 };
-        if(p.pos === 'G') {
-            h += `<tr><th>GP</th><th>W</th><th>L</th><th>SO</th><th>SV%</th><th>GAA</th><th>SVG</th><th>TOI</th></tr>`;
-            let plGP = plStats.gp || 0;
-            let plW = plStats.w || 0;
-            let plL = plStats.l || 0;
-            let plSO = plStats.so || 0;
-            let plSA = plStats.sa || 0;
-            let plSV = plStats.sv || 0;
-            let plGA = Math.max(0, plSA - plSV);
-            let plTOI = plStats.toi || 0;
-            let plSVG = plStats.svg || 0;
-            h += `<tr><td>${plGP}</td><td>${plW}</td><td>${plL}</td><td>${plSO}</td><td>${plSA>0?(plSV/plSA).toFixed(3):'.000'}</td><td>${plGP>0?(plGA/plGP).toFixed(2):'0.00'}</td><td>${plSVG}</td><td>${plTOI}</td></tr>`;
-        } else {
-            h += `<tr><th>GP</th><th>G</th><th>A</th><th>PTS</th><th>+/-</th><th>PIM</th><th>SOG</th><th>GWG</th><th>SVG</th><th>TOI</th></tr>`;
-            let plGP = plStats.gp || 0;
-            let plG = plStats.g || 0;
-            let plA = plStats.a || 0;
-            let plPts = plStats.pts || 0;
-            let plPM = plStats.pm || 0;
-            let plPIM = plStats.pim || 0;
-            let plSOG = plStats.s || 0;
-            let plGWG = plStats.gwg || 0;
-            let plTOI = plStats.toi || 0;
-            let plSVG = plStats.svg || 0;
-            h += `<tr><td>${plGP}</td><td>${plG}</td><td>${plA}</td><td class="pts-hl">${plPts}</td><td>${plPM>0?'+'+plPM:plPM}</td><td>${plPIM}</td><td>${plSOG}</td><td>${plGWG}</td><td>${plSVG}</td><td>${plTOI}</td></tr>`;
-        }
-        h += `</table>`;
-    }
-    h += `</div>`;
-    
-    // --- NEW: DISPLAY MILESTONES ---
-    if(p.milestones && p.milestones.length > 0) {
-        h += `<div class="unit-header" style="margin-top:15px; color:var(--neon-cyan);">CAREER MILESTONES</div><div style="font-size:8px; color:#fff; display:flex; flex-wrap:wrap; gap:10px;">`;
-        p.milestones.forEach(m => { h += `<div style="background:#000; padding:5px; border:1px solid var(--neon-cyan);"> ${m}</div>`; });
-        h += `</div>`;
-    }
-
-    if(p.trophies && p.trophies.length > 0) {
-        h += `<div class="unit-header" style="margin-top:15px; color:var(--ea-yellow);">TROPHY CABINET</div><div style="font-size:8px; color:#fff; display:flex; flex-wrap:wrap; gap:10px;">`;
-        p.trophies.forEach(t => { h += `<div style="background:#000; padding:5px; border:1px solid var(--ea-yellow);">[AWD] ${t.year} ${t.name}</div>`; });
-        h += `</div>`;
-    }
-    if(p.asgAppearances > 0) h += `<div style="margin-top:10px; font-size:8px; color:var(--neon-cyan);">[MVP] ${p.asgAppearances}x All-Star</div>`;
-    h += `</div>`;
-} // end _pcOldBodyPlaceholder
-
 function runDraftLottery() {
     // Weighted odds for top-3 picks: worst team 14%, 2nd worst 11%, 3rd worst 8%, others share rest
     const sorted = [...league].sort((a,b) => {
@@ -8565,7 +7620,7 @@ function runDraftLottery() {
 function closeLottery() { document.getElementById('lotteryOverlay').style.display = 'none'; }
 // --- WINDOW EVENTS ---
 window.onclick = function(event) {
-    const modals = ['lotteryOverlay', 'allTimeOverlay', 'awardOverlay', 'recapOverlay', 'seriesRecapOverlay', 'statLeadersOverlay', 'leagueSettingsOverlay', 'arenaSettingsOverlay', 'tradeOverlay', 'subOverlay', 'historyOverlay', 'playerCardOverlay', 'boxScoreOverlay', 'advEditorOverlay', 'gpChecklistOverlay', 'watchGameOverlay', 'stOverlay', 'proposalOverlay'];
+    const modals = ['lotteryOverlay', 'allTimeOverlay', 'awardOverlay', 'recapOverlay', 'seriesRecapOverlay', 'statLeadersOverlay', 'leagueSettingsOverlay', 'arenaSettingsOverlay', 'tradeOverlay', 'subOverlay', 'historyOverlay', 'playerCardOverlay', 'boxScoreOverlay', 'advEditorOverlay', 'gpChecklistOverlay', 'watchGameOverlay', 'stOverlay', 'proposalOverlay', 'scoutingOverlay', 'chemEditorOverlay', 'coachingOverlay', 'gmReportCardOverlay', 'awardsVotingOverlay'];
     modals.forEach(id => { const modal = document.getElementById(id); if (event.target === modal && modal) modal.style.display = "none"; });
 };
 
@@ -8669,79 +7724,19 @@ function applyPostGameFatigue(awayTeamCode, homeTeamCode, awayGoalieName, homeGo
 
 // 2. THE MIDNIGHT LOOP (Runs at the end of the day)
 function processDailyUpdates() {
-    // A. Find out which teams played today
-    let teamsPlayedToday = new Set();
-    let todaysGames = calendar[currentDay] || [];
-    
-    todaysGames.forEach(g => {
-        teamsPlayedToday.add(g.a.nrm);
-        teamsPlayedToday.add(g.h.nrm);
-    });
-
-    // B. Loop through every team in the league
-    for (let tk in rosters) {
-        let playedToday = teamsPlayedToday.has(tk);
-
-        rosters[tk].forEach(p => {
-            if (!p.status) return;
-
-            // 1. INJURY RECOVERY: Heal 1 day
-            if (p.status.injuryDays > 0) p.status.injuryDays--;
-
-            // 2. SUSPENSION: Drops by 1 *only* if the team played a game today
-            if (playedToday && p.status.suspension > 0) p.status.suspension--;
-
-            // 3. FATIGUE RECOVERY: If the team had an off-day, sleep it off!
-            if (!playedToday) {
-                p.status.fatigue = Math.max(0, p.status.fatigue - 25); // Recovers 25 fatigue
-            // Check if the league needs to announce the Trade Deadline
-            checkTradeDeadlineAnnouncements();
-            // =========================================================
-    //  AI TRADE GENERATOR
-    // =========================================================
-    // Grab the current multiplier (0 if deadline passed, 5 if deadline day, 1 if normal)
-    let tradeMult = getTradeProbabilityMultiplier();
-    
-    // Multiply the base trade chance by the multiplier!
-    if (awardConfig.trades && Math.random() < (0.05 * tradeMult)) {
-        
-        // 1. Pick two random teams
-        let activeTeams = Object.keys(rosters);
-        let teamA = activeTeams[Math.floor(Math.random() * activeTeams.length)];
-        let teamB = activeTeams[Math.floor(Math.random() * activeTeams.length)];
-        
-        // 2. Make sure they aren't the same team, and both have enough players
-        if (teamA !== teamB && rosters[teamA] && rosters[teamB] && rosters[teamA].length > 15 && rosters[teamB].length > 15) {
-
-            // 3. Grab a random player from each team to swap
-            let playerA = rosters[teamA][Math.floor(Math.random() * rosters[teamA].length)];
-            let playerB = rosters[teamB][Math.floor(Math.random() * rosters[teamB].length)];
-            if (!playerA || !playerB) return;
-            
-            // 4. Execute the Trade! (Swap their team tags)
-            playerA.team = teamB;
-            playerB.team = teamA;
-            
-            // 5. Swap them in the actual roster arrays
-            rosters[teamA] = rosters[teamA].filter(p => p.name !== playerA.name);
-            rosters[teamA].push(playerB);
-            
-            rosters[teamB] = rosters[teamB].filter(p => p.name !== playerB.name);
-            rosters[teamB].push(playerA);
-            
-            // 6. Broadcast the blockbuster to the news feed!
-            tradeLog.unshift({ 
-                day: currentDay, 
-                details: `EDIT BLOCKBUSTER: ${teamA.toUpperCase()} trades ${playerA.name} to ${teamB.toUpperCase()} in exchange for ${playerB.name}.` 
+    // Expire pending trades older than 7 days
+    if (pendingTrades.length > 0) {
+        const TRADE_EXPIRE_DAYS = 7;
+        const expired = pendingTrades.filter(t => t.day == null || (currentDay - t.day) >= TRADE_EXPIRE_DAYS);
+        if (expired.length > 0) {
+            expired.forEach(t => {
+                tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `TRADE EXPIRED: ${t.t1.toUpperCase()} ↔ ${t.t2.toUpperCase()} offer (${t.p1} / ${t.p2}) went unanswered and has been withdrawn.` });
             });
+            pendingTrades = pendingTrades.filter(t => t.day != null && (currentDay - t.day) < TRADE_EXPIRE_DAYS);
+            refreshTradeBadge();
         }
     }
-        }
-        });
-    }
-}
 
-function processDailyUpdates() {
     let teamsPlayedToday = new Set();
     let todaysGames = calendar[currentDay] || [];
     todaysGames.forEach(g => { teamsPlayedToday.add(g.a.nrm); teamsPlayedToday.add(g.h.nrm); });
@@ -8759,27 +7754,122 @@ function processDailyUpdates() {
     //  MOVE THESE OUTSIDE THE LOOPS!
     checkTradeDeadlineAnnouncements();
 
+    // Rivalry preview headlines — fire when two teams meet for the 3rd+ time this season
+    if (awardConfig.rivalries && !isPlayoffs && calendar[currentDay]) {
+        calendar[currentDay].forEach(g => {
+            if (!g || !g.h || !g.a) return;
+            const meetings = g.h.season?.meetings?.[g.a.nrm] || 0;
+            if (meetings === 2) { // about to be their 3rd meeting
+                const hPts = g.h.season?.pts || 0, aPts = g.a.season?.pts || 0;
+                const leader = hPts >= aPts ? g.h.code : g.a.code;
+                tradeLog.unshift({ day: currentDay, details: `RIVALRY: ${g.h.code} vs ${g.a.code} — THIRD MEETING this season. ${leader} leads the season series. Bad blood guaranteed.` });
+            } else if (meetings === 3) {
+                tradeLog.unshift({ day: currentDay, details: `RIVALRY: ${g.h.code} vs ${g.a.code} — Fourth meeting. This rivalry is personal now.` });
+            }
+        });
+    }
+
     let tradeMult = getTradeProbabilityMultiplier();
+    let daysUntilDeadline = Math.floor(calendar.length * 0.75) - currentDay;
+    let isDeadlineWindow = tradeMult > 1.0 && daysUntilDeadline >= 0;
+
     if (awardConfig.trades && Math.random() < (0.05 * tradeMult)) {
         let activeTeams = Object.keys(rosters);
         let teamA = activeTeams[Math.floor(Math.random() * activeTeams.length)];
         let teamB = activeTeams[Math.floor(Math.random() * activeTeams.length)];
-        
+
         if (teamA !== teamB && rosters[teamA].length > 15 && rosters[teamB].length > 15) {
-            let playerA = rosters[teamA][Math.floor(Math.random() * rosters[teamA].length)];
-            let playerB = rosters[teamB][Math.floor(Math.random() * rosters[teamB].length)];
-            
+            let playerA, playerB, dealTag = 'BLOCKBUSTER';
+
+            if (isDeadlineWindow) {
+                // Buyer/Seller logic: sellers ship veterans for futures, contenders ship prospects for proven players
+                const aIsContender = isContenderTeam(teamA);
+                const bIsContender = isContenderTeam(teamB);
+                if (aIsContender !== bIsContender) {
+                    const sellerKey = aIsContender ? teamB : teamA;
+                    const buyerKey = aIsContender ? teamA : teamB;
+                    const sellerSkaters = rosters[sellerKey].filter(p => p.pos !== 'G');
+                    const buyerSkaters = rosters[buyerKey].filter(p => p.pos !== 'G');
+                    if (sellerSkaters.length && buyerSkaters.length) {
+                        // Seller moves its oldest, highest-OVR veteran for a future
+                        const veteran = [...sellerSkaters].sort((p1, p2) => {
+                            const age1 = playerStats[p1.name]?.age || 25, age2 = playerStats[p2.name]?.age || 25;
+                            return (age2 * 2 + getPlayerWeightedStats(p2.name).ovr) - (age1 * 2 + getPlayerWeightedStats(p1.name).ovr);
+                        })[0];
+                        // Buyer gives up its youngest, lowest-OVR prospect in return
+                        const prospect = [...buyerSkaters].sort((p1, p2) => {
+                            const age1 = playerStats[p1.name]?.age || 25, age2 = playerStats[p2.name]?.age || 25;
+                            return (age1 * 2 - getPlayerWeightedStats(p1.name).ovr) - (age2 * 2 - getPlayerWeightedStats(p2.name).ovr);
+                        })[0];
+                        if (veteran && prospect && veteran.name !== prospect.name) {
+                            playerA = (sellerKey === teamA) ? veteran : prospect;
+                            playerB = (sellerKey === teamA) ? prospect : veteran;
+                            dealTag = `DEADLINE DEAL: Seller ${sellerKey.toUpperCase()} sends veteran ${veteran.name} to contender ${buyerKey.toUpperCase()} for prospect ${prospect.name}`;
+                        }
+                    }
+                }
+            }
+
+            if (!playerA || !playerB) {
+                playerA = rosters[teamA][Math.floor(Math.random() * rosters[teamA].length)];
+                playerB = rosters[teamB][Math.floor(Math.random() * rosters[teamB].length)];
+                dealTag = `BLOCKBUSTER: ${teamA.toUpperCase()} trades ${playerA.name} to ${teamB.toUpperCase()} for ${playerB.name}`;
+            }
+
             playerA.team = teamB; playerB.team = teamA;
-            
+
             rosters[teamA] = rosters[teamA].filter(p => p.name !== playerA.name);
             rosters[teamA].push(playerB);
-            
+
             rosters[teamB] = rosters[teamB].filter(p => p.name !== playerB.name);
             rosters[teamB].push(playerA);
-            
-            tradeLog.unshift({ day: currentDay, details: `EDIT BLOCKBUSTER: ${teamA.toUpperCase()} trades ${playerA.name} to ${teamB.toUpperCase()} in exchange for ${playerB.name}.` });
+
+            if (awardConfig.tradeBlock) {
+                pendingTrades.push({ id: Date.now() + Math.random(), t1: teamA, t2: teamB, t1Name: teamA, t2Name: teamB, p1: playerA.name, p2: playerB.name, day: currentDay });
+                tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `TRADE OFFER: ${teamA.toUpperCase()} ↔ ${teamB.toUpperCase()} — pending approval.` });
+                refreshTradeBadge();
+            } else {
+                tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `${dealTag}.` });
+            }
+
+            // Flag rival contenders for a countermove window (deadline deals only)
+            if (isDeadlineWindow && dealTag.startsWith('DEADLINE DEAL')) {
+                const involvedNrms = new Set([teamA, teamB]);
+                league.forEach(t => {
+                    if (!involvedNrms.has(t.nrm) && isContenderTeam(t.nrm)) {
+                        deadlineCountermove[t.nrm] = currentDay + 1;
+                        tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `COUNTERMOVE WINDOW: ${t.name.toUpperCase()} has 24h to respond to the market shift.` });
+                    }
+                });
+            }
         }
     }
+
+    // Countermove — flagged contenders get a boosted trade roll for 1 day
+    const activeCountermove = Object.entries(deadlineCountermove).filter(([, expiry]) => currentDay <= expiry);
+    activeCountermove.forEach(([nrm]) => {
+        if (awardConfig.trades && Math.random() < 0.18) {
+            const teamA = nrm;
+            const others = Object.keys(rosters).filter(k => k !== teamA);
+            const teamB = others[Math.floor(Math.random() * others.length)];
+            if (rosters[teamA]?.length > 15 && rosters[teamB]?.length > 15) {
+                const skA = rosters[teamA].filter(p => p.pos !== 'G');
+                const skB = rosters[teamB].filter(p => p.pos !== 'G');
+                if (skA.length && skB.length) {
+                    const pA = skA[Math.floor(Math.random() * skA.length)];
+                    const pB = skB[Math.floor(Math.random() * skB.length)];
+                    if (pA.name !== pB.name) {
+                        pA.team = teamB; pB.team = teamA;
+                        rosters[teamA] = rosters[teamA].filter(p => p.name !== pA.name); rosters[teamA].push(pB);
+                        rosters[teamB] = rosters[teamB].filter(p => p.name !== pB.name); rosters[teamB].push(pA);
+                        tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `COUNTERMOVE: ${teamA.toUpperCase()} responds — acquires ${pB.name} from ${teamB.toUpperCase()} for ${pA.name}.` });
+                    }
+                }
+            }
+        }
+        // Clear expired flags
+        if (currentDay > deadlineCountermove[nrm]) delete deadlineCountermove[nrm];
+    });
 }
 
 // =========================================================
@@ -8789,19 +7879,19 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
     for (let pName in matchStats) {
         let stats = matchStats[pName];
         
-        // Only review players who racked up heavy PIMs in a single game (5+ implies a major or multiple minors)
-        if (stats.pim >= 5) {
+        // Only review players who accumulated serious PIMs (10+ = brawl / multiple majors)
+        if (stats.pim >= 10) {
             let player = playerStats[pName];
-            
+
             // Failsafe to ensure they have the status backpack
             if (!player || !player.status) continue;
-            
-            // The more PIMs they got, the higher the base chance of a suspension hearing
-            let baseChance = (stats.pim - 4) * 0.05; // 5 PIMs = 5% chance, 10 PIMs = 30% chance
-            
+
+            // Flat 8% chance per game at this threshold — rare but meaningful
+            let baseChance = 0.08;
+
             // "Repeat Offender" Tax: Enforcers get scrutinized more harshly by the league
             let isEnforcer = getPlayerWeightedStats(pName).tag.includes('ENFORCER');
-            if (isEnforcer) baseChance += 0.10;
+            if (isEnforcer) baseChance += 0.04;
             
             // Roll the dice! Does the league suspend them?
             if (Math.random() < baseChance) {
@@ -8832,6 +7922,53 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
 // =========================================================
 // [INJ] INJURY ENGINE
 // =========================================================
+// Mid-game injury system — fires during the sim tick loop (called per game, not per tick)
+// Low base rate; goalie injuries trigger backup pull event and get logged prominently
+function rollInGameInjuries(homeCode, awayCode) {
+    if (!awardConfig.injuries) return;
+    const SKATER_CHANCE = 0.022; // ~2 skater injuries per 10 games
+    const GOALIE_CHANCE = 0.008; // ~1 goalie pull per 12 games
+
+    [homeCode, awayCode].forEach(tk => {
+        if (!rosters[tk]) return;
+        const skaters = rosters[tk].filter(p => p.pos !== 'G' && playerStats[p.name] && playerStats[p.name].injury?.daysRemaining === 0);
+        const goalies = rosters[tk].filter(p => p.pos === 'G' && playerStats[p.name] && playerStats[p.name].injury?.daysRemaining === 0);
+
+        // Skater injury
+        skaters.forEach(p => {
+            const ps = playerStats[p.name];
+            if (!ps) return;
+            const fatigueBonus = (ps.fatigue || 0) > 65 ? 0.005 : 0;
+            const aggrBonus = getAggr(p.name) > 70 ? 0.004 : 0; // physical players hurt more often
+            if (Math.random() < SKATER_CHANCE + fatigueBonus + aggrBonus) {
+                const roll = Math.random();
+                let days;
+                if      (roll < 0.45) days = 0;  // shaken up, plays through
+                else if (roll < 0.75) days = 1;
+                else if (roll < 0.92) days = Math.floor(Math.random() * 4) + 2;
+                else                  days = Math.floor(Math.random() * 5) + 6;
+                days = Math.min(days, 12);
+                if (days > 0) ps.injury = { severity: days, daysRemaining: days };
+                const label = days === 0 ? 'shaken up — playing through' : `out ${days} game${days > 1 ? 's' : ''}`;
+                tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `[INJ] IN-GAME: ${p.name} (${tk.toUpperCase()}) — ${label}.` });
+            }
+        });
+
+        // Goalie injury — triggers backup pull event
+        goalies.forEach(p => {
+            const ps = playerStats[p.name];
+            if (!ps) return;
+            if (Math.random() < GOALIE_CHANCE) {
+                const days = Math.floor(Math.random() * 4) + 1; // 1-4 game goalie injury
+                ps.injury = { severity: days, daysRemaining: days };
+                const backupG = rosters[tk].find(b => b.pos === 'G' && b.name !== p.name && playerStats[b.name]?.injury?.daysRemaining === 0);
+                const backupNote = backupG ? ` ${backupG.name} enters in relief.` : ' No healthy backup available.';
+                tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `🚨 GOALIE PULLED (INJURY): ${p.name} (${tk.toUpperCase()}) — out ${days} game${days > 1 ? 's' : ''}.${backupNote}` });
+            }
+        });
+    });
+}
+
 function triggerGameInjuries(matchStats, homeCode, awayCode) {
     if (!awardConfig.injuries) return;
     const BASE_CHANCE = 0.015; // lowered overall rate; short injuries now dominate volume
@@ -8873,7 +8010,10 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
             }
 
             if (days > 0) ps.injury = { severity: days, daysRemaining: days };
-            tradeLog.unshift({ day: currentDay, details: note });
+            tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: note });
+            if (days > 0 && isTeamCaptain(pName)) {
+                tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `⚠ CAPTAIN DOWN: ${pName} (${teamCode.toUpperCase()}) — ${label}. Leadership void in the locker room.` });
+            }
         }
     }
 }
@@ -8903,6 +8043,14 @@ function getTradeProbabilityMultiplier() {
     return 1.0; 
 }
 
+// Top-8 in conference by points = "contender" (buyer); everyone else = "seller" as the deadline nears
+function isContenderTeam(nrm) {
+    const t = league.find(l => l.nrm === nrm);
+    if (!t) return true;
+    const confTeams = league.filter(l => l.conf === t.conf).sort((a, b) => b.season.pts - a.season.pts).slice(0, 8);
+    return confTeams.some(l => l.nrm === nrm);
+}
+
 function checkTradeDeadlineAnnouncements() {
     let totalDays = calendar.length;
     if (!totalDays) return;
@@ -8926,6 +8074,20 @@ function checkTradeDeadlineAnnouncements() {
 }
 
 // --- UI RENDERERS ---
+function refreshTradeBadge() {
+    const btn = document.getElementById('btnTrade');
+    if (!btn) return;
+    const existing = btn.querySelector('.trade-badge');
+    if (existing) existing.remove();
+    if (awardConfig.tradeBlock && pendingTrades.length > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'trade-badge';
+        badge.textContent = pendingTrades.length;
+        badge.style.cssText = 'display:inline-block;background:#FF4444;color:#fff;border-radius:50%;font-size:5px;min-width:12px;height:12px;line-height:12px;text-align:center;margin-left:4px;padding:0 2px;vertical-align:middle;';
+        btn.appendChild(badge);
+    }
+}
+
 function updateUI() {
     if (activeIdx !== null && !getGameAt(currentDay, activeIdx)) activeIdx = null;
 
@@ -8943,7 +8105,8 @@ function updateUI() {
     const tickerEl = document.getElementById('tickerScroll');
     if (tickerEl) tickerEl.innerText = (isAsgDayNow ? 'HOT ALL-STAR GAME DAY! HOT | ' : '') + m + " | LATEST SCORE: " + ss;
     refreshScheduleDashboardUI();
-    
+    refreshTradeBadge();
+
     const mn = document.getElementById('gameMenuList');
     if (mn) {
         mn.innerHTML = '';
@@ -8989,7 +8152,7 @@ function updateUI() {
 
     const renderLeaderboard = (id, ti, d, sf, vf, lim) => {    
         let h = `<div style="background:#111; padding:10px; text-align:center; color:var(--ea-yellow); text-shadow:2px 2px 0px #000;">${ti}</div><table><tr style="background:#222;"><th>#</th><th>PLAYER</th><th>VAL</th></tr>`; 
-        d.sort(sf).slice(0,lim).forEach((p,idx) => { h += `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')"><td>${idx+1}</td><td>${p.injury > 0 ? '[INJ] ' : ''}${p.name} <span class="team-hl">${p.teamCode}</span></td><td class="pts-hl">${vf(p)}</td></tr>`; }); h += `</table>`; document.getElementById(id).innerHTML = h; 
+        d.sort(sf).slice(0,lim).forEach((p,idx) => { h += `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')"><td>${idx+1}</td><td>${p.injury?.daysRemaining > 0 ? '[INJ] ' : ''}${p.name} <span class="team-hl">${p.teamCode}</span></td><td class="pts-hl">${vf(p)}</td></tr>`; }); h += `</table>`; document.getElementById(id).innerHTML = h; 
     };
     
     renderLeaderboard('pointsContainer', 'POINTS', [...sks], (a,b) => ((b[k].g+b[k].a) - (a[k].g+a[k].a)), x => x[k].g+x[k].a, 25); 
@@ -9017,10 +8180,6 @@ function updateUI() {
     if (typeof updateScheduleView === 'function') updateScheduleView();
 }
 
-function handlePlayerClick(playerName) {
-    // Your logic for selecting/swapping players in the line editor
-    console.log(`Player clicked: ${playerName}`);
-}
 
 function triggerLoadBackup() {
     const fileInput = document.getElementById('saveFileInput');
@@ -9033,27 +8192,44 @@ function triggerLoadBackup() {
 }
 
 function exportSaveData() {
-    // NOTE: Replace 'leagueState' with the actual global object or localStorage key 
-    // holding your simulator's current state.
-    const saveData = {
-        timestamp: new Date().toISOString(),
-        // state: leagueState 
-    };
+    const payload = buildSavePayload();
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload));
+    const a = document.createElement('a');
+    a.setAttribute("href", dataStr);
+    const ts = new Date().toISOString().slice(0, 10);
+    a.setAttribute("download", `nhl94_dynasty_backup_${ts}.json`);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
 
-    // Convert the data to a JSON string
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(saveData));
-    
-    // Create a temporary anchor link to trigger the download
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", "nhl94_dynasty_backup.json");
-    
-    // Append, click, and remove the anchor
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-    
-    console.log("Save data exported successfully.");
+function importSaveData(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const parsed = JSON.parse(e.target.result);
+            const normalized = normalizeSavePackage(parsed);
+            if (!normalized || !isSupportedSaveVersion(normalized.meta.version))
+                return displaySaveStateInfo('Unsupported save version — cannot import.', 'error');
+            if (!isValidSaveData(normalized.payload))
+                return displaySaveStateInfo('Invalid save file — data missing or corrupted.', 'error');
+            applyLoadedSave(normalized.payload);
+            saveGame({ force: true });
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('appContainer').style.display = 'block';
+            document.getElementById('seasonYearDisplay').innerText = currentSeason;
+            updateUI();
+            renderSaveSlotHistory();
+            if (isPlayoffs) initPlayoffsUI();
+            displaySaveStateInfo('Backup imported successfully.', 'success');
+        } catch (err) {
+            displaySaveStateInfo(`Import failed: ${err.message}`, 'error');
+        }
+        event.target.value = '';
+    };
+    reader.readAsText(file);
 }
 
 function clearSaveSlot() {
@@ -9077,50 +8253,25 @@ function clearSaveSlot() {
 }
 
 function loadDefaultGoogleSheets(event) {
-    // Prevent default form submission behavior if an event is passed
     if (event) event.preventDefault();
-    
-    // Array of the URL input IDs from your HTML
+
     const sheetInputs = [
         'teamSheetUrl', 
         'playerSheetUrl', 
         'scheduleSheetUrl', 
         'eventLogSheetUrl'
     ];
-    
-    // Clear out each input field
+
     sheetInputs.forEach(id => {
         const inputElement = document.getElementById(id);
         if (inputElement) {
             inputElement.value = '';
         }
     });
-    
+
     console.log("Sheet URLs reset. Engine will default to sample data.");
-    
-    // If you have a status update function, call it here
+
     if (typeof resetSheetUrlsToDefault === 'function') {
         resetSheetUrlsToDefault();
     }
-function loadDefaultGoogleSheets(event) {
-    if (event) event.preventDefault();
-
-    const sheetInputs = [
-        'teamSheetUrl', 
-        'playerSheetUrl', 
-        'scheduleSheetUrl', 
-        'eventLogSheetUrl'
-    ];
-
-    sheetInputs.forEach(id => {
-        const inputElement = document.getElementById(id);
-        if (inputElement) {
-            inputElement.value = '';
-        }
-    });
-
-    console.log("Sheet URLs reset. Engine will default to sample data.");
-
-    if (typeof resetSheetUrlsToDefault === 'function') {
-        resetSheetUrlsToDefault();
-    }}}
+}
