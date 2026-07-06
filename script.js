@@ -504,6 +504,13 @@ function applyLoadedSave(data) {
     if (typeof data.deadlineCountermove === 'object' && data.deadlineCountermove) deadlineCountermove = data.deadlineCountermove;
     if (typeof data.chemScores === 'object' && data.chemScores) chemScores = data.chemScores;
     if (typeof data.preseasonOvrSnapshot === 'object' && data.preseasonOvrSnapshot) preseasonOvrSnapshot = data.preseasonOvrSnapshot;
+    // Fix 2: populate snapshot for old saves that predate this feature
+    if (!Object.keys(preseasonOvrSnapshot).length && league.length) {
+        league.forEach(t => {
+            const rpl = (rosters[t.nrm] || []).map(p => { const ws = getPlayerWeightedStats(p.name); return ws ? ws.ovr : 0; }).filter(v => v > 0);
+            preseasonOvrSnapshot[t.nrm] = rpl.length ? Math.round(rpl.reduce((a, b) => a + b, 0) / rpl.length) : 75;
+        });
+    }
     teamCaptains = (typeof data.teamCaptains === 'object' && data.teamCaptains) ? data.teamCaptains : {};
     if (!Object.keys(teamCaptains).length) assignTeamCaptains();
     realDatesMap = Array.isArray(data.realDatesMap) ? data.realDatesMap : [];
@@ -1914,8 +1921,12 @@ function getLiveIceOvr(pName) {
     let live = getPlayerWeightedStats(pName).baseOvr;
     
     // 2. Apply Macro/Micro Streaks
-    if (p.streakType === 'hot') live += 10; 
-    if (p.streakType === 'cold') live -= 10;
+    if (p.macro_streak === 'HOT') live += 10;
+    else if (p.micro_streak === 'HOT') live += 5;
+    if (p.macro_streak === 'COLD') live -= 10;
+    else if (p.micro_streak === 'COLD') live -= 5;
+    // Return-from-injury penalty: eases off over several games
+    if (p.returnFromInjury && p.returnFromInjury > 0) live = Math.round(live * 0.93);
     
     // 3. Apply Fatigue Penalty
     live -= getPlayerFatigueAmount(pName);
@@ -3018,12 +3029,19 @@ function simGame(idx) {
             if(playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining > 0) {
                 playerStats[p.name].injury.daysRemaining--;
                 if(playerStats[p.name].injury.daysRemaining === 0) {
+                    const sev = playerStats[p.name].injury.severity || 0;
                     if (!playerStats[p.name].injuryHistory) playerStats[p.name].injuryHistory = [];
                     playerStats[p.name].injuryHistory.push({
                         date: currentDay,
-                        daysMissed: playerStats[p.name].injury.severity || 0 
+                        daysMissed: sev,
+                        gamesOut: sev,
+                        season: currentSeason,
+                        grade: sev >= 8 ? 'serious' : sev >= 3 ? 'moderate' : 'minor'
                     });
+                    if (sev >= 3) playerStats[p.name].returnFromInjury = Math.ceil(sev / 2);
                     playerStats[p.name].injury = { severity: 0, daysRemaining: 0 };
+                } else if (playerStats[p.name].returnFromInjury > 0) {
+                    playerStats[p.name].returnFromInjury--;
                 }
             }
         }); 
@@ -3094,7 +3112,7 @@ function simGame(idx) {
         hWallMod += fMod; aWallMod += fMod;
         // Coach trust: high trust slightly boosts user team's goalie, low trust slightly hurts
         if (selectedTeam) {
-            const trustMod = (coachTrust - 50) * 0.0004; // ±0.02 at extremes
+            const trustMod = (coachTrust - 50) * 0.003; // ±0.15 at extremes
             if (g.h.nrm === selectedTeam) hWallMod -= trustMod;
             if (g.a.nrm === selectedTeam) aWallMod -= trustMod;
         }
@@ -3408,7 +3426,9 @@ function simGame(idx) {
                 if (penTeamObj) penTeamObj.season.pka = (penTeamObj.season.pka || 0) + 1;
 
                 // Resolve the powerplay using team PP/PK ratings (not a flat 20%)
-                const ppConvRate = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm);
+                // PP strategy: CYCLE (-1) = patient setup, higher conversion; SHOOT (1) = quick shots, lower conversion
+                const ppStratMod = advTeam.nrm === selectedTeam ? (coachAdj.pp === -1 ? 1.10 : coachAdj.pp === 1 ? 0.90 : 1.0) : 1.0;
+                const ppConvRate = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm) * ppStratMod;
                 const ppRoll = Math.random();
                 const ppUnit = advTeam.nrm === g.h.nrm ? hOnIce : aOnIce;
                 const pkUnit = advTeam.nrm === g.h.nrm ? aOnIce : hOnIce;
@@ -6513,8 +6533,15 @@ function getConnSmytheScore(p) {
         let ind = []; 
         Object.values(playerStats).forEach(p => { 
             let roll = Math.random(); 
-            if((p.age > 36 && roll < 0.25) || ((p.attr.off+p.attr.def)/2 >= 90 && roll < 0.05)) { 
-                ind.push(p.name); 
+            const carG = (p.career.g || 0) + (p.season.g || 0);
+            const carA = (p.career.a || 0) + (p.season.a || 0);
+            const carPts = carG + carA;
+            const carGP = (p.career.gp || 0) + (p.season.gp || 0);
+            const carW = (p.career.w || 0) + (p.season.w || 0);
+            const isGoalie = p.pos === 'G';
+            const meetsCareerBar = isGoalie ? (carGP >= 250 || carW >= 100) : (carPts >= 150 || carGP >= 350);
+            if(meetsCareerBar && ((p.age > 36 && roll < 0.25) || ((p.attr.off+p.attr.def)/2 >= 90 && roll < 0.05))) {
+                ind.push(p.name);
                 hallOfFame.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: p.season.gp, g: p.season.g, a: p.season.a, pts: p.season.g+p.season.a, w: p.season.w, so: p.season.so, mvp: p.asgMvp }); 
                 retiredPlayers.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: (p.career.gp || 0) + (p.season.gp || 0), g: (p.career.g || 0) + (p.season.g || 0), a: (p.career.a || 0) + (p.season.a || 0), pts: (p.career.pts || 0) + (p.season.pts || 0), w: (p.career.w || 0) + (p.season.w || 0), pim: (p.career.pim || 0) + (p.season.pim || 0), ppg: (p.career.ppg || 0) + (p.season.ppg || 0) });
                 const tkObj = league.find(t=>t.name===p.team); const tk = tkObj ? tkObj.nrm : null; 
@@ -6665,14 +6692,15 @@ function rejectProposal(id) { pendingTrades = pendingTrades.filter(x => x.id !==
 function renderTradeLog() {
     let el = document.getElementById('tradeLogTable'); if (!el) return;
     let h = `<tr><th>DAY</th><th>DETAILS</th></tr>`;
-    tradeLog.slice(0, 30).forEach(l => { h += `<tr><td>${l.day}</td><td>${l.details}</td></tr>`; });
+    tradeLog.slice(0, 200).forEach(l => { h += `<tr><td>${l.day}</td><td>${l.details}</td></tr>`; });
     el.innerHTML = h;
 }
 
 function renderLeagueHistory() {
     let el = document.getElementById('historyTable'); if (!el) return;
-    let h = `<tr><th>YR</th><th>PRESIDENTS'</th><th>STANLEY CUP</th></tr>`;
-    leagueHistory.forEach(s => { h += `<tr style="cursor:pointer;" onclick="showHistoricalStandings(${s.year})"><td class="archive-hl">${s.year}</td><td>${s.presidents}</td><td style="color:var(--ea-yellow);">${s.cup}</td></tr>`; });
+    let h = `<tr><th>YR</th><th>PRESIDENTS' TROPHY</th><th>STANLEY CUP CHAMPION</th></tr>`;
+    if (leagueHistory.length) h += `<tr><td colspan="3" style="color:#444;font-size:5px;text-align:center;padding:2px;letter-spacing:.06em;">CLICK ANY ROW — FULL STANDINGS SNAPSHOT</td></tr>`;
+    leagueHistory.forEach(s => { h += `<tr style="cursor:pointer;" title="Click to view full ${s.year} standings" onclick="showHistoricalStandings(${s.year})"><td class="archive-hl">${s.year}</td><td>${s.presidents}</td><td style="color:var(--ea-yellow);">${s.cup}</td></tr>`; });
     el.innerHTML = h;
 }
 
