@@ -2210,8 +2210,13 @@ const getRosterStructure = (tk) => {
     if (customLines[tk]) {
         const cl = customLines[tk];
         const byName = n => r.find(p => p.name === n);
-        const resolveGroup = (nameArrays, fallback) =>
-            nameArrays.map(slots => slots.map(n => byName(n)).filter(Boolean));
+        // Dedupe across the whole group — a player may only occupy ONE slot
+        const resolveGroup = (nameArrays, fallback) => {
+            const seen = new Set();
+            return nameArrays.map(slots => slots
+                .filter(n => { if (seen.has(n)) return false; seen.add(n); return true; })
+                .map(n => byName(n)).filter(Boolean));
+        };
         const customF = cl.f ? resolveGroup(cl.f) : null;
         const customD = cl.d ? resolveGroup(cl.d) : null;
         const customG = cl.g ? cl.g.map(n => byName(n)).filter(Boolean) : null;
@@ -2672,7 +2677,26 @@ const getRosterStructure = (tk) => {
         return getPos(p) === 'G' && ps && (!ps.injury || ps.injury.daysRemaining === 0);
     }).sort((a,b) => getOvr(b) - getOvr(a));
     
-    const struct = { f: fLines, d: dPairs, g: gPool };
+    // FINAL DEDUPE PASS — a skater may only appear on ONE forward line and
+    // ONE defense pair. Keeps the first (highest) slot, drops any clones that
+    // slipped through synergy rebalancing or duplicate roster entries.
+    const seenSkaters = new Set();
+    const dedupeGroup = (group) => group.map(line =>
+        line.filter(p => {
+            if (!p || !p.name) return false;
+            if (seenSkaters.has(p.name)) return false;
+            seenSkaters.add(p.name);
+            return true;
+        })
+    );
+    const cleanF = dedupeGroup(fLines);
+    const cleanD = dedupeGroup(dPairs);
+    // Backfill any holes the dedupe opened with best unused healthy skaters
+    const spareF = fPool.filter(p => !seenSkaters.has(p.name)).sort((a,b) => getOvr(b) - getOvr(a));
+    cleanF.forEach(line => { while (line.length < 3 && spareF.length) { const p = spareF.shift(); line.push(p); seenSkaters.add(p.name); } });
+    const spareD = dPool.filter(p => !seenSkaters.has(p.name)).sort((a,b) => getOvr(b) - getOvr(a));
+    cleanD.forEach(pair => { while (pair.length < 2 && spareD.length) { const p = spareD.shift(); pair.push(p); seenSkaters.add(p.name); } });
+    const struct = { f: cleanF, d: cleanD, g: gPool };
     _structCache[tk] = struct;
     return struct;
 }
@@ -2689,10 +2713,13 @@ function getSpecialTeamsUnit(tk, type, unitNum, isEN = false) {
 
     let unit = [];
 
+    // Dedupe pools by name so a player can only land on ONE PP and ONE PK unit
+    const uniqByName = (arr) => { const s = new Set(); return arr.filter(p => { if (!p || !p.name || s.has(p.name)) return false; s.add(p.name); return true; }); };
+
     if (type === 'PP') {
         // Pool ALL available forwards and defensemen for evaluation
-        let allForwards = [...struct.f.flat()].filter(Boolean);
-        let allDefense = [...struct.d.flat()].filter(Boolean);
+        let allForwards = uniqByName(struct.f.flat());
+        let allDefense = uniqByName(struct.d.flat());
 
         // Sort pools by offensive capability (highest off first)
         allForwards.sort((a, b) => getOffAttr(b) - getOffAttr(a));
@@ -2720,8 +2747,8 @@ function getSpecialTeamsUnit(tk, type, unitNum, isEN = false) {
     }
 
     else if (type === 'PK') {
-        let pkForwards = [...(struct.f[2] || []), ...(struct.f[3] || [])].filter(Boolean);
-        let allDefense = [...struct.d.flat()].filter(Boolean);
+        let pkForwards = uniqByName([...(struct.f[2] || []), ...(struct.f[3] || [])]);
+        let allDefense = uniqByName(struct.d.flat());
 
         pkForwards.sort((a, b) => (playerStats[b.name]?.attr?.def || 0) - (playerStats[a.name]?.attr?.def || 0));
         allDefense.sort((a, b) => (playerStats[b.name]?.attr?.def || 0) - (playerStats[a.name]?.attr?.def || 0));
