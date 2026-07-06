@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nhl94-sprites",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server"],
+      "port": 8800,
+      "autoPort": true
+    }
+  ]
+}

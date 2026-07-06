@@ -15,10 +15,10 @@
 | Hill, Sean | 31 | 2 | 6 | 8 | HIGH |
 | Douris, Peter | 148 | 24 | 25 | 49 | HIGH |
 | Sweeney, Tim | 67 | 9 | 18 | 27 | HIGH |
-| Dollas, Bobby | 160 | 6 | 11 | 17 | LOW |
+| Dollas, Bobby | 170 | 6 | 14 | 20 | HIGH |
 | Valk, Garry | 172 | 24 | 35 | 59 | HIGH |
 | Loney, Troy | 532 | 69 | 100 | 169 | HIGH |
-| King, Steven | 70 | 14 | 12 | 26 | LOW |
+| King, Steven | 24 | 7 | 5 | 12 | HIGH |
 | Ladouceur, Randy | 617 | 23 | 87 | 110 | HIGH |
 | Carnback, Patrik | 6 | 0 | 0 | 0 | HIGH |
 | Houlder, Bill | 111 | 6 | 23 | 29 | HIGH |
@@ -257,7 +257,7 @@
 | Belanger, Jesse | 23 | 4 | 2 | 6 | HIGH |
 | Severyn, Brent | 35 | 0 | 2 | 2 | HIGH |
 | Andersson, Peter | 31 | 4 | 11 | 15 | HIGH |
-| Bennett, Adam | 3 | 0 | 0 | 0 | LOW |
+| Bennett, Adam | 21 | 0 | 2 | 2 | HIGH |
 | Laus, Paul | 0 | 0 | 0 | 0 | N/A |
 | Lindsay, Bill | 67 | 6 | 13 | 19 | HIGH |
 | Niedermayer, Rob | 0 | 0 | 0 | 0 | N/A |
