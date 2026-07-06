@@ -130,15 +130,17 @@ function getWeightLbs(grade) {
 function numToGrade(n) {
     const v = parseInt(n);
     if (isNaN(v)) return n || '--';
-    if (v >= 85) return 'A+';
-    if (v >= 75) return 'A';
-    if (v >= 65) return 'B+';
-    if (v >= 55) return 'B';
-    if (v >= 45) return 'C+';
-    if (v >= 40) return 'C';
-    if (v >= 35) return 'D+';
-    if (v >= 30) return 'D';
-    if (v >= 20) return 'F+';
+    if (v >= 95) return 'A+';
+    if (v >= 90) return 'A';
+    if (v >= 85) return 'A-';
+    if (v >= 80) return 'B+';
+    if (v >= 75) return 'B';
+    if (v >= 70) return 'B-';
+    if (v >= 63) return 'C+';
+    if (v >= 56) return 'C';
+    if (v >= 50) return 'C-';
+    if (v >= 40) return 'D';
+    if (v >= 30) return 'F+';
     return 'F';
 }
 
