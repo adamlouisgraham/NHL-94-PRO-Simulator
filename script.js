@@ -3804,11 +3804,11 @@ function simGame(idx) {
             if (!tObj || !tObj.chem || !tObj.chem.lastUnit) return;
             tObj.chem.lastUnit.f.forEach((line, i) => {
                 const lineScored = line.some(p => p && scorerSet.has(p.name));
-                tObj.chem.f[i] = Math.max(0, Math.min(15, (tObj.chem.f[i]||0) + (lineScored ? 1 : -0.25)));
+                tObj.chem.f[i] = Math.max(0, Math.min(15, (tObj.chem.f[i]||0) + (lineScored ? 1 : -0.75)));
             });
             tObj.chem.lastUnit.d.forEach((pair, i) => {
                 const pairScored = pair.some(p => p && scorerSet.has(p.name));
-                tObj.chem.d[i] = Math.max(0, Math.min(15, (tObj.chem.d[i]||0) + (pairScored ? 0.5 : -0.1)));
+                tObj.chem.d[i] = Math.max(0, Math.min(15, (tObj.chem.d[i]||0) + (pairScored ? 0.5 : -0.35)));
             });
         });
     }
