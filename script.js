@@ -4571,7 +4571,14 @@ function advanceCalendar() {
     currentDay++;
     
     if (currentDay === Math.floor(calendar.length / 2) && !isPlayoffs && !isASG && awardConfig.streaks) { initAllStarGame(); return false; }
-    if (isASG && calendar[currentDay] && !calendar[currentDay].some(g => g.isASG_game)) isASG = false;
+    if (isASG && calendar[currentDay] && !calendar[currentDay].some(g => g.isASG_game)) {
+        isASG = false;
+        // Remove the temporary All-Star rosters so trade/injury/roster logic
+        // can never treat WALES/CAMPBELL as real teams (players would end up
+        // on two rosters and double-accrue stats)
+        delete rosters['wales'];
+        delete rosters['campbell'];
+    }
 
     if (!getGameAt(currentDay, activeIdx)) {
         activeIdx = null;
@@ -7827,7 +7834,8 @@ function processDailyUpdates() {
     let isDeadlineWindow = tradeMult > 1.0 && daysUntilDeadline >= 0;
 
     if (awardConfig.trades && Math.random() < (0.05 * tradeMult)) {
-        let activeTeams = Object.keys(rosters);
+        // Only real league teams — never the temporary WALES/CAMPBELL ASG rosters
+        let activeTeams = Object.keys(rosters).filter(k => league.some(t => t.nrm === k));
         let teamA = activeTeams[Math.floor(Math.random() * activeTeams.length)];
         let teamB = activeTeams[Math.floor(Math.random() * activeTeams.length)];
 
@@ -7903,7 +7911,7 @@ function processDailyUpdates() {
     activeCountermove.forEach(([nrm]) => {
         if (awardConfig.trades && Math.random() < 0.18) {
             const teamA = nrm;
-            const others = Object.keys(rosters).filter(k => k !== teamA);
+            const others = Object.keys(rosters).filter(k => k !== teamA && league.some(t => t.nrm === k));
             const teamB = others[Math.floor(Math.random() * others.length)];
             if (rosters[teamA]?.length > 15 && rosters[teamB]?.length > 15) {
                 const skA = rosters[teamA].filter(p => p.pos !== 'G');
