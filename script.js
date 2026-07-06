@@ -2059,8 +2059,8 @@ function getPlayerPosition(player) {
     // 1. Get raw value
     let p = String(player.pos || '').toUpperCase().trim();
     
-    // 2. Debug: If you see F, check the console
-    if (p !== 'C' && p !== 'LW' && p !== 'RW' && p !== 'D' && p !== 'G') {
+    // 2. Debug: warn only on truly unknown values (F is a valid roster CSV position)
+    if (p !== 'C' && p !== 'LW' && p !== 'RW' && p !== 'D' && p !== 'G' && p !== 'F') {
         console.log(`âš ï¸ POSITION WARNING: Player "${player.name}" has unmapped pos: "${p}"`);
     }
 
@@ -3091,6 +3091,11 @@ function simGame(idx) {
     let asgBoost = isASG ? 1.8 : 1.0;
     let homeCrowdEnergy = 1.03;
 
+    // RIVALRY — historical rivals play with extra intensity from game 1; organic (3+ meetings) adds more
+    const hMeetings = !isPlayoffs ? ((g.h.season.meetings || {})[g.a.nrm] || 0) : 0;
+    const isHistoricRival = awardConfig.rivalries && !!(rivals[g.h.nrm]?.includes(g.a.nrm));
+    const rivalBonus = !awardConfig.rivalries ? 0 : isHistoricRival ? (hMeetings >= 3 ? 3 : 1) : (hMeetings >= 3 ? 2 : 0);
+
     // CHAOS — globalChaos drives all random variance; scaled by context
     // Rivalry games and playoffs get extra chaos; wall mod randomness uses same scale
     const chaosScale = gameStatus.globalChaos * (isHistoricRival ? 1.4 : 1.0) * (isPlayoffs ? 1.2 : 1.0);
@@ -3120,11 +3125,6 @@ function simGame(idx) {
         if (g.series.hW === 3) hPressureMod -= 1.5;
         if (g.series.aW === 3) aPressureMod -= 1.5;
     }
-
-    // RIVALRY — historical rivals play with extra intensity from game 1; organic (3+ meetings) adds more
-    const hMeetings = !isPlayoffs ? ((g.h.season.meetings || {})[g.a.nrm] || 0) : 0;
-    const isHistoricRival = awardConfig.rivalries && !!(rivals[g.h.nrm]?.includes(g.a.nrm));
-    const rivalBonus = !awardConfig.rivalries ? 0 : isHistoricRival ? (hMeetings >= 3 ? 3 : 1) : (hMeetings >= 3 ? 2 : 0);
 
     // TEAM STREAK MORALE — hot/cold streaks shift line OVR up to ±3
     let hStreakMod = g.h.winStreak >= 5 ? 3 : g.h.winStreak >= 3 ? 1.5 : g.h.loseStreak >= 5 ? -3 : g.h.loseStreak >= 3 ? -1.5 : 0;
