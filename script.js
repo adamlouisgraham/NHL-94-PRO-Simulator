@@ -587,7 +587,9 @@ function getGameAt(day = currentDay, idx = activeIdx) {
 
 function getProjectedGoalie(nrm) {
     const gs = (rosters[nrm] || [])
-        .filter(p => p.pos === 'G' && playerStats[p.name] && (!playerStats[p.name].injury || playerStats[p.name].injury.daysRemaining === 0))
+        .filter(p => p.pos === 'G' && playerStats[p.name]
+            && (!playerStats[p.name].injury || playerStats[p.name].injury.daysRemaining === 0)
+            && (!playerStats[p.name].suspended || playerStats[p.name].suspended.days === 0))
         .sort((a, b) => getPlayerWeightedStats(b.name).ovr - getPlayerWeightedStats(a.name).ovr);
     if (!gs.length) return null;
     // On a back-to-back with a close backup, likely sit the starter
@@ -1942,9 +1944,9 @@ function getLiveIceOvr(pName) {
                 if (tObj.chem.dYears && tObj.chem.dYears[pairIdx] >= 2) isTelepathic = true; 
             } 
         }
-        if (chemVal === 10 && isTelepathic) live += 5; 
-        else if (chemVal === 10) live += 3; 
-        else if (chemVal >= 5) live += 1;                    
+        if (chemVal >= 10 && isTelepathic) live += 5;
+        else if (chemVal >= 10) live += 3;
+        else if (chemVal >= 5) live += 1;
     }
     
     return Math.round(live);
@@ -3179,6 +3181,12 @@ function simGame(idx) {
     let hStruct = getRosterStructure(g.h.nrm);
     let aStruct = getRosterStructure(g.a.nrm);
 
+    // Snapshot current unit so per-line chemistry can track which line scored
+    const hTeamObj = league.find(t => t.nrm === g.h.nrm);
+    const aTeamObj = league.find(t => t.nrm === g.a.nrm);
+    if (hTeamObj && hTeamObj.chem) hTeamObj.chem.lastUnit = { f: hStruct.f, d: hStruct.d };
+    if (aTeamObj && aTeamObj.chem) aTeamObj.chem.lastUnit = { f: aStruct.f, d: aStruct.d };
+
     function buildLineSchedule(minsArray) {
         // Weighted random draw: each step picks a line proportional to its minute share.
         // Guarantees L1 plays more than L2, L2 more than L3, etc. — never shuffled flat.
@@ -3786,6 +3794,23 @@ function simGame(idx) {
             );
             chemScores[key] = Math.max(40, Math.min(100, current + (connected ? 5 : -1)));
         }
+    }
+
+    // Per-line chemistry build/decay — increment when a line scores together, decay when quiet
+    if (!isASG) {
+        const scorerSet = new Set(allGoals.filter(ev=>ev.scorer&&!ev.isPenalty).flatMap(ev=>[ev.scorer,ev.pAssist,ev.sAssist].filter(Boolean)));
+        [g.h.nrm, g.a.nrm].forEach(tk => {
+            const tObj = league.find(t=>t.nrm===tk);
+            if (!tObj || !tObj.chem || !tObj.chem.lastUnit) return;
+            tObj.chem.lastUnit.f.forEach((line, i) => {
+                const lineScored = line.some(p => p && scorerSet.has(p.name));
+                tObj.chem.f[i] = Math.max(0, Math.min(15, (tObj.chem.f[i]||0) + (lineScored ? 1 : -0.25)));
+            });
+            tObj.chem.lastUnit.d.forEach((pair, i) => {
+                const pairScored = pair.some(p => p && scorerSet.has(p.name));
+                tObj.chem.d[i] = Math.max(0, Math.min(15, (tObj.chem.d[i]||0) + (pairScored ? 0.5 : -0.1)));
+            });
+        });
     }
 
     // Update coach trust after user-team games
@@ -4819,8 +4844,10 @@ function renderTeamStats() {
     // Get morale and status badges
     const getMoraleEmoji = (pName) => {
         const morale = playerStats[pName]?.morale || 100;
-        if (morale >= 125) return '';
-        if (morale < 75) return '';
+        if (morale >= 125) return '<span style="color:#00FF88;font-size:6px;" title="Sky-high morale">▲▲</span>';
+        if (morale >= 110) return '<span style="color:#88FF44;font-size:6px;" title="High morale">▲</span>';
+        if (morale < 60)   return '<span style="color:#FF3333;font-size:6px;" title="Very low morale">▼▼</span>';
+        if (morale < 80)   return '<span style="color:#FF8844;font-size:6px;" title="Low morale">▼</span>';
         return '';
     };
     const getStatusBadge = (pName) => {
@@ -6555,15 +6582,30 @@ function executeTrade() {
     
     if(!s1.length && !s2.length) return alert("Select players to trade.");
     const t1o = league.find(t => t.nrm === t1c); const t2o = league.find(t => t.nrm === t2c);
+
+    // Roster viability guard — simulate post-trade rosters and reject if critically short
+    const postT1 = rosters[t1c].map(p=>p.name).filter(n=>!s1.includes(n)).concat(s2);
+    const postT2 = rosters[t2c].map(p=>p.name).filter(n=>!s2.includes(n)).concat(s1);
+    const hasGoalie = (names) => names.some(n => playerStats[n]?.pos === 'G');
+    const hasCenter = (names) => names.some(n => playerStats[n]?.pos === 'C');
+    if (!hasGoalie(postT1)) return alert(`TRADE BLOCKED: ${t1o?.code} would have no goalie.`);
+    if (!hasGoalie(postT2)) return alert(`TRADE BLOCKED: ${t2o?.code} would have no goalie.`);
+    if (!hasCenter(postT1)) return alert(`TRADE BLOCKED: ${t1o?.code} would have no centre.`);
+    if (!hasCenter(postT2)) return alert(`TRADE BLOCKED: ${t2o?.code} would have no centre.`);
+
     const tv1 = s1.reduce((sum, n) => sum + getTradeValue(n), 0);
     const tv2 = s2.reduce((sum, n) => sum + getTradeValue(n), 0);
     if (s1.length && s2.length && Math.abs(tv1 - tv2) > 20) {
         const winner = tv1 > tv2 ? t2o?.code : t1o?.code;
         if (!confirm(`UNBALANCED TRADE WARNING\n${t1o?.code} value: ${tv1}  vs  ${t2o?.code} value: ${tv2}\n${winner?.toUpperCase()} wins this deal.\nExecute anyway?`)) return;
     }
-    
-    s1.forEach(n => { const i = rosters[t1c].findIndex(p => p.name === n); if(i !== -1) { rosters[t2c].push(rosters[t1c].splice(i, 1)[0]); if(playerStats[n] && t2o) { playerStats[n].team = t2o.name; playerStats[n].teamCode = t2o.code; } } });
-    s2.forEach(n => { const i = rosters[t2c].findIndex(p => p.name === n); if(i !== -1) { rosters[t1c].push(rosters[t2c].splice(i, 1)[0]); if(playerStats[n] && t1o) { playerStats[n].team = t1o.name; playerStats[n].teamCode = t1o.code; } } });
+
+    const resetGoalieTracking = (name) => {
+        const ps = playerStats[name];
+        if (ps && ps.pos === 'G') { ps.consStarts = 0; ps.lastStart = -1; ps.goalieDays = 0; }
+    };
+    s1.forEach(n => { const i = rosters[t1c].findIndex(p => p.name === n); if(i !== -1) { rosters[t2c].push(rosters[t1c].splice(i, 1)[0]); if(playerStats[n] && t2o) { playerStats[n].team = t2o.name; playerStats[n].teamCode = t2o.code; resetGoalieTracking(n); } } });
+    s2.forEach(n => { const i = rosters[t2c].findIndex(p => p.name === n); if(i !== -1) { rosters[t1c].push(rosters[t2c].splice(i, 1)[0]); if(playerStats[n] && t1o) { playerStats[n].team = t1o.name; playerStats[n].teamCode = t1o.code; resetGoalieTracking(n); } } });
     
     if(t1o) t1o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null}; if(t2o) t2o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
     
@@ -6608,8 +6650,8 @@ function approveProposal(id) {
     if (i1 !== -1 && i2 !== -1) {
         rosters[t.t2].push(rosters[t.t1].splice(i1, 1)[0]); rosters[t.t1].push(rosters[t.t2].splice(i2, 1)[0]);
         const t2lg = league.find(l=>l.nrm===t.t2); const t1lg = league.find(l=>l.nrm===t.t1);
-        if (playerStats[t.p1]) { playerStats[t.p1].team = t.t2Name; if (t2lg) playerStats[t.p1].teamCode = t2lg.code; }
-        if (playerStats[t.p2]) { playerStats[t.p2].team = t.t1Name; if (t1lg) playerStats[t.p2].teamCode = t1lg.code; }
+        if (playerStats[t.p1]) { playerStats[t.p1].team = t.t2Name; if (t2lg) playerStats[t.p1].teamCode = t2lg.code; if (playerStats[t.p1].pos === 'G') { playerStats[t.p1].consStarts = 0; playerStats[t.p1].lastStart = -1; playerStats[t.p1].goalieDays = 0; } }
+        if (playerStats[t.p2]) { playerStats[t.p2].team = t.t1Name; if (t1lg) playerStats[t.p2].teamCode = t1lg.code; if (playerStats[t.p2].pos === 'G') { playerStats[t.p2].consStarts = 0; playerStats[t.p2].lastStart = -1; playerStats[t.p2].goalieDays = 0; } }
         
         let t1o = league.find(l=>l.nrm===t.t1); if(t1o) t1o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
         let t2o = league.find(l=>l.nrm===t.t2); if(t2o) t2o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
