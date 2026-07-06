@@ -799,7 +799,7 @@ function renderScheduleDashboard() {
                     <button onclick="openCoachingPanel()" style="font-size:5px;padding:2px 6px;border-color:#FFA500;color:#FFA500;">COACH</button>
                 </div>
             </div>
-            <div style="color:#555;font-size:5px;">${away} ${aRec} &nbsp;|&nbsp; ${home} ${hRec}</div>
+            <div style="color:#aaa;font-size:7px;margin-top:2px;">${away} <span style="color:var(--neon-cyan);font-weight:bold;">${aRec}</span> &nbsp;|&nbsp; ${home} <span style="color:var(--neon-cyan);font-weight:bold;">${hRec}</span></div>
             ${h2hLine}
             ${allTimeLine}
         </div>`;
@@ -3536,9 +3536,9 @@ function simGame(idx) {
 
     //  5. OVERTIME RESOLUTION
     let otPeriods = 0;
-    // REGULAR SEASON OT — 5-minute sudden death (93-94 rules): ~35% of OT games
-    // produce a winner, the rest stand as ties (65% OT resolution)
-    if (!isPlayoffs && !isASG && hG === aG && Math.random() < 0.65) {
+    // REGULAR SEASON OT — 5-minute sudden death (93-94 rules): ~60% of OT games
+    // remain ties, ~40% resolve — targets real 93-94 tie rate of ~11%
+    if (!isPlayoffs && !isASG && hG === aG && Math.random() < 0.40) {
         otPeriods = 1;
         const otLine = (struct) => [...(struct.f[0]||[]), ...(struct.d[0]||[])];
         const otBest = (struct) => {
@@ -4443,9 +4443,13 @@ function processOffseasonGrowth() {
 async function beginNewYear() {
     clearWpCache();
     currentSeason++; isPlayoffs = false;
-    league.forEach(t => { 
-        t.season = {gp:0, w:0, l:0, t:0, pts:0, gf:0, ga:0, ppo:0, ppg:0, ts:0, ppga:0}; t.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null}; 
-        t.specialTeams = { pp1:[], pp2:[], pk1:[], pk2:[], exa:[] }; 
+    league.forEach(t => {
+        t.season = {gp:0, w:0, l:0, t:0, pts:0, gf:0, ga:0, ppo:0, ppg:0, ts:0, ppga:0}; t.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
+        // Preserve user-set PP/PK lines but drop any players no longer on this roster
+        const rosterNames = new Set((rosters[t.nrm] || []).map(p => p.name));
+        const filterUnit = (unit) => (unit || []).filter(p => p && rosterNames.has(p.name));
+        const st = t.specialTeams || {};
+        t.specialTeams = { pp1: filterUnit(st.pp1), pp2: filterUnit(st.pp2), pk1: filterUnit(st.pk1), pk2: filterUnit(st.pk2), exa: filterUnit(st.exa) };
         t.winStreak = 0; t.loseStreak = 0; t.teamMeeting = false; t.coachFired = false; t.undefeated=0; t.winless=0;
     });
 
