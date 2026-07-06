@@ -4180,7 +4180,7 @@ function showSeasonRecap() {
 
     // Playoff seeds
     h += `<div style="color:#666;font-size:6px;letter-spacing:.14em;margin:14px 0 8px;">PLAYOFF SEEDS</div>
-    <div style="display:flex;gap:16px;">${seedCol('EASTERN CONF', eastSeeds)}${seedCol('WESTERN CONF', westSeeds)}</div>`;
+    <div style="display:flex;gap:16px;">${seedCol('WALES CONF', eastSeeds)}${seedCol('CAMPBELL CONF', westSeeds)}</div>`;
 
     document.getElementById('recapContent').innerHTML = h;
     document.getElementById('recapOverlay').style.display = 'flex';
