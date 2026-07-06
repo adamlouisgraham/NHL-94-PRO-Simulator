@@ -2029,7 +2029,7 @@ const dynamicDuos = [
     ['Brett Hull', 'Craig Janney', 'Vitali Prokhorov'],
     ['Doug Gilmour', 'Wendel Clark', 'Mike Gartner'],
     ['Ray Sheppard', 'Steve Yzerman', 'Dino Ciccarelli'],
-    ['Niklas Lidstrom', 'Vladimir Konstantinov'],
+    ['Nicklas Lidstrom', 'Vladimir Konstantinov'],
     ['Pavel Bure', 'Trevor Linden', 'Greg Adams'],
     ['Mike Keane', 'Guy Carbonneau'],
     ['Denis Savard', 'Rob Zamuner'],
@@ -3257,8 +3257,8 @@ function simGame(idx) {
         // SCORE EFFECT — trailing team presses harder (more shots, more risk)
         // Leading team plays conservative (fewer shots, tighter D)
         const scoreDiff = hG - aG;
-        const scoreEffectH = scoreDiff * -0.012; // trailing home team gets boost
-        const scoreEffectA = scoreDiff *  0.012; // trailing away team gets boost
+        const scoreEffectH = scoreDiff * -0.007; // trailing home team gets boost
+        const scoreEffectA = scoreDiff *  0.007; // trailing away team gets boost
 
         // Shot generation — activeChaos scales with period and game closeness
         // 3rd period in a tied/1-goal game = peak chaos; blowouts dampen it
@@ -3311,9 +3311,9 @@ function simGame(idx) {
             // Conversion Roll  -  base 7.2%, sniper gets +14% multiplier, softer diff scaling
             // (tuned so ES + PP + EN goals land near the 93-94 real avg of ~6.5 total/game)
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
-            const hSniperMod = hShooterTag === 'SNIPER' ? 1.14 : hShooterTag === 'SUPERSTAR' ? 1.05 : 1.0;
+            const hSniperMod = hShooterTag === 'SNIPER' ? 1.24 : hShooterTag === 'SUPERSTAR' ? 1.18 : 1.0;
             const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.072 + (diff * 0.0018)) * aWallMod * hSniperMod * hChaosMod;
+            let scoringProb = (0.063 + (diff * 0.0018)) * aWallMod * hSniperMod * hChaosMod;
             if (Math.random() < Math.max(0.025, Math.min(0.18, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
@@ -3344,9 +3344,9 @@ function simGame(idx) {
             trk(hG_name, 'sa', 1);     // Record Goalie Shot Against
 
             const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
-            const aSniperMod = aShooterTag === 'SNIPER' ? 1.14 : aShooterTag === 'SUPERSTAR' ? 1.05 : 1.0;
+            const aSniperMod = aShooterTag === 'SNIPER' ? 1.24 : aShooterTag === 'SUPERSTAR' ? 1.18 : 1.0;
             const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.072 - (diff * 0.0018)) * hWallMod * aSniperMod * aChaosMod;
+            let scoringProb = (0.063 - (diff * 0.0018)) * hWallMod * aSniperMod * aChaosMod;
             if (Math.random() < Math.max(0.025, Math.min(0.18, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
@@ -3415,6 +3415,9 @@ function simGame(idx) {
                         ppEv.txt = buildGoalText(ppEv.scorer, ppEv.pAssist, ppEv.sAssist, null, true, false, false, 0, 0, 0);
                         allGoals.push(ppEv);
                         if (advTeam.nrm === g.h.nrm) hG++; else aG++;
+                        // Charge the penalised team's goalie with the shot + goal
+                        const pkGoalie = penTeam.nrm === g.h.nrm ? hG_name : aG_name;
+                        trk(pkGoalie, 'sa', 1); trk(pkGoalie, 'ga', 1);
                         trk(ppEv.scorer, 'g', 1);
                         if (ppEv.pAssist) trk(ppEv.pAssist, 'a', 1);
                         if (ppEv.sAssist) trk(ppEv.sAssist, 'a', 1);
@@ -3437,6 +3440,9 @@ function simGame(idx) {
                         shEv.txt = buildGoalText(shEv.scorer, shEv.pAssist, shEv.sAssist, null, false, true, false, 0, 0, 0);
                         allGoals.push(shEv);
                         if (penTeam.nrm === g.h.nrm) hG++; else aG++;
+                        // SH goal is charged to the advantaged team's goalie
+                        const ppGoalie = advTeam.nrm === g.h.nrm ? hG_name : aG_name;
+                        trk(ppGoalie, 'sa', 1); trk(ppGoalie, 'ga', 1);
                         trk(shEv.scorer, 'g', 1);
                         if (shEv.pAssist) trk(shEv.pAssist, 'a', 1);
                         if (shEv.sAssist) trk(shEv.sAssist, 'a', 1);
@@ -3476,7 +3482,7 @@ function simGame(idx) {
                         trk(enEv.scorer, 'g', 1);
                         if (enEv.pAssist) trk(enEv.pAssist, 'a', 1);
                         if (enEv.sAssist) trk(enEv.sAssist, 'a', 1);
-                        if (enGoalie) trk(enGoalie, 'ga', 1);
+                        // NHL rules: empty-net goals do NOT count against the pulled goalie
                     }
                 } else {
                     // Trailing team gets a shot on empty net (rare tying goal)
@@ -3528,6 +3534,38 @@ function simGame(idx) {
 
     //  5. OVERTIME RESOLUTION
     let otPeriods = 0;
+    // REGULAR SEASON OT — 5-minute sudden death (93-94 rules): ~35% of OT games
+    // produce a winner, the rest stand as ties (50% OT resolution)
+    if (!isPlayoffs && !isASG && hG === aG && Math.random() < 0.50) {
+        otPeriods = 1;
+        const otLine = (struct) => [...(struct.f[0]||[]), ...(struct.d[0]||[])];
+        const otBest = (struct) => {
+            const line = otLine(struct);
+            if (!line.length) return { ovr: 75, name: null };
+            const best = line.reduce((a,b) => (getPlayerWeightedStats(b.name).ovr||70) > (getPlayerWeightedStats(a.name).ovr||70) ? b : a);
+            const tag = getPlayerWeightedStats(best.name)?.tag;
+            return { ovr: (getPlayerWeightedStats(best.name).ovr||70) + (tag === 'SNIPER' ? 3 : tag === 'SUPERSTAR' ? 5 : 0), name: best.name };
+        };
+        const hStar = otBest(hStruct), aStar = otBest(aStruct);
+        const hWinProb = Math.max(0.25, Math.min(0.75, 0.52 + (hStar.ovr - aStar.ovr) * 0.005));
+        const otSec = Math.floor(Math.random()*300);
+        const otM = Math.floor(otSec/60)+1, otS = otSec%60;
+        if (Math.random() < hWinProb) {
+            hG++; hShots++;
+            trk(aG_name,'sa',1); trk(aG_name,'ga',1);
+            if (hStar.name) { trk(hStar.name,'g',1); trk(hStar.name,'s',1); }
+            allGoals.push({ p:4, m:otM, s:otS, str:`OT ${otM}:${otS<10?'0'+otS:otS}`, tm:g.h.code,
+                cl:teamColors[g.h.nrm]?.[0]||'#fff',
+                txt:buildGoalText(hStar.name, null, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:hStar.name, code:g.h.code });
+        } else {
+            aG++; aShots++;
+            trk(hG_name,'sa',1); trk(hG_name,'ga',1);
+            if (aStar.name) { trk(aStar.name,'g',1); trk(aStar.name,'s',1); }
+            allGoals.push({ p:4, m:otM, s:otS, str:`OT ${otM}:${otS<10?'0'+otS:otS}`, tm:g.a.code,
+                cl:teamColors[g.a.nrm]?.[0]||'#fff',
+                txt:buildGoalText(aStar.name, null, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:aStar.name, code:g.a.code });
+        }
+    }
     if(isPlayoffs && hG === aG) {
         // OT uses top lines + star player modifier — not a coin flip
         const otShooterOvr = (struct) => {
@@ -3793,10 +3831,10 @@ function selectShooter(unit) {
         // Archetype multiplier
         weight *= (arch.shotRate || 1.0);
 
-        // Position modifier  -  ALL forwards equal base (1.0), D penalized less than before
+        // Position modifier  -  wingers shoot a bit more, centers distribute, D ~20% less
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
-        weight *= isD ? 0.80 : 1.0;  // D ~20% less likely to score than a forward
+        weight *= isD ? 0.80 : (pos === 'LW' || pos === 'RW') ? 1.08 : (pos === 'C') ? 0.95 : 1.0;
 
         // Hot/cold modifier
         if (ps.isHot)  weight *= 1.20;
@@ -3847,10 +3885,10 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         // Archetype modifier
         weight *= (arch.assistRate || 1.0);
 
-        // Position modifier  -  all forwards equal base, D penalized ~30%
+        // Position modifier  -  centers are primary distributors, D penalized ~30%
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
-        weight *= isD ? 0.70 : 1.0;
+        weight *= isD ? 0.70 : (pos === 'C') ? 1.15 : 1.0;
 
         // Hot/cold streak modifier
         if (ps.isHot)  weight *= 1.15;
@@ -5743,6 +5781,20 @@ function renderLineEditor(tk) {
     });
     gHTML += `</div>`;
 
+    // -- Special teams (auto-coach, read-only) -------------------------------
+    let stHTML = `<div style="color:#FFD700; font-size:9px; font-weight:bold; margin-bottom:8px; letter-spacing:2px; margin-top:12px;"> SPECIAL TEAMS (AUTO-COACH)</div>`;
+    const stUnit = (label, players, color) => {
+        const names = players.map(p => `${p.name} <span style="color:#666;">${ovr(p.name)}</span>`).join('<span style="color:#444;"> / </span>');
+        return `<div style="background:#0d0d0d; border-left:3px solid ${color}; border-radius:2px; padding:5px 8px; margin-bottom:5px;">
+            <span style="color:${color}; font-size:7px; font-weight:bold;">${label}</span>
+            <div style="font-size:8px; color:#ccc; margin-top:2px;">${names || '<span style=\"color:#555\">--</span>'}</div>
+        </div>`;
+    };
+    stHTML += stUnit('PP1', getSpecialTeamsUnit(tk, 'PP', 1), 'var(--ea-yellow)');
+    stHTML += stUnit('PP2', getSpecialTeamsUnit(tk, 'PP', 2), '#b89a00');
+    stHTML += stUnit('PK1', getSpecialTeamsUnit(tk, 'PK', 1), '#00FFFF');
+    stHTML += stUnit('PK2', getSpecialTeamsUnit(tk, 'PK', 2), '#008899');
+
     // -- Legend & action buttons --------------------------------------------
     const legendHTML = `
     <div style="margin-top:10px; padding:6px 8px; background:#0a0a0a; border:1px solid #222; border-radius:3px; font-size:7px; color:#666;">
@@ -5761,7 +5813,7 @@ function renderLineEditor(tk) {
     </div>
     <div style="margin-top:6px; text-align:center;">${modeLabel}</div>`;
 
-    container.innerHTML = fHTML + dHTML + gHTML + legendHTML + btnRow;
+    container.innerHTML = fHTML + dHTML + gHTML + stHTML + legendHTML + btnRow;
 }
 
 // -- Swap dropdown -------------------------------------------------------------
@@ -6039,7 +6091,8 @@ function initAllStarGame() {
         }); 
 
         let selectedPlayers = []; let repNames = new Set();
-        const getScore = (p) => p.pos === 'G' ? (p.season.w * 2) + p.season.so : p.season.g + p.season.a;
+        // Season production + legacy weight: past All-Star appearances nudge repeat selections
+        const getScore = (p) => (p.pos === 'G' ? (p.season.w * 2) + p.season.so : p.season.g + p.season.a) + ((p.career?.asg || 0) * 1.5);
 
         confTeams.forEach(team => {
             const teamPlayers = pL.filter(p => p.teamCode === team.code).sort((a, b) => getScore(b) - getScore(a));
