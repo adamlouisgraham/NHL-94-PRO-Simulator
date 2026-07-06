@@ -3281,12 +3281,13 @@ function simGame(idx) {
             trk(shooter.name, 's', 1); // Record Skater Shot
             trk(aG_name, 'sa', 1);     // Record Goalie Shot Against
 
-            // Conversion Roll  -  base 10.5%, sniper gets +14% multiplier, softer diff scaling
+            // Conversion Roll  -  base 7.2%, sniper gets +14% multiplier, softer diff scaling
+            // (tuned so ES + PP + EN goals land near the 93-94 real avg of ~6.5 total/game)
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const hSniperMod = hShooterTag === 'SNIPER' ? 1.14 : hShooterTag === 'SUPERSTAR' ? 1.05 : 1.0;
             const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.105 + (diff * 0.0018)) * aWallMod * hSniperMod * hChaosMod;
-            if (Math.random() < Math.max(0.03, Math.min(0.26, scoringProb))) {
+            let scoringProb = (0.072 + (diff * 0.0018)) * aWallMod * hSniperMod * hChaosMod;
+            if (Math.random() < Math.max(0.025, Math.min(0.18, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
                 let ev = processSingleGoal(g.h.nrm, g.h.code, shooter, hOnIce, timeStr, period, (minute % 20 || 20), sec);
@@ -3318,8 +3319,8 @@ function simGame(idx) {
             const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const aSniperMod = aShooterTag === 'SNIPER' ? 1.14 : aShooterTag === 'SUPERSTAR' ? 1.05 : 1.0;
             const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.105 - (diff * 0.0018)) * hWallMod * aSniperMod * aChaosMod;
-            if (Math.random() < Math.max(0.03, Math.min(0.26, scoringProb))) {
+            let scoringProb = (0.072 - (diff * 0.0018)) * hWallMod * aSniperMod * aChaosMod;
+            if (Math.random() < Math.max(0.025, Math.min(0.18, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
                 let ev = processSingleGoal(g.a.nrm, g.a.code, shooter, aOnIce, timeStr, period, (minute % 20 || 20), sec);
@@ -3342,8 +3343,8 @@ function simGame(idx) {
         }
 
         // Quick Penalty Roll  -  triggers a real powerplay opportunity
-        // 0.075 per 30-sec step  ~9 penalties/game (realistic NHL rate)
-        if (Math.random() < 0.075) {
+        // 0.055 per 30-sec step  ~6.6 penalties/game (keeps PP goals near ~1.3/game)
+        if (Math.random() < 0.055) {
             let penTeam = Math.random() > 0.5 ? g.h : g.a;
             let advTeam = penTeam.nrm === g.h.nrm ? g.a : g.h;
             let activeSkaters = penTeam.nrm === g.h.nrm ? hOnIce : aOnIce;
