@@ -2024,28 +2024,52 @@ function getPlayerFatigueAmount(pName) {
 //  DYNAMIC DUO REGISTRY
 // Forces the auto-coach to draft these players onto the same line if both are healthy
 const dynamicDuos = [
-    ['Adam Oates', 'Cam Neely', 'Glen Murray'],
-    ['Andrew Cassels', 'Pat Verbeek', 'Geoff Sanderson'],
-    ['Mario Lemieux', 'Jaromir Jagr', 'Rick Tocchet'],
+    // BOS
+    ['Ray Bourque', 'Adam Oates', 'Cam Neely', 'Glen Murray'],
+    // HFD
+    ['Andrew Cassels', 'Brendan Shanahan', 'Pat Verbeek', 'Geoff Sanderson'],
+    // PIT
+    ['Mario Lemieux', 'Jaromir Jagr', 'Rick Tocchet', 'Ron Francis', 'Kevin Stevens', 'Tomas Sandstrom'],
+    // ANA
     ['Paul Kariya', 'Teemu Selanne'],
+    // LAK
     ['Wayne Gretzky', 'Jari Kurri', 'Luc Robitaille'],
-    ['Mark Messier', 'Glenn Anderson', 'Adam Graves'],
+    // NYR — top line + D pair
+    ['Mark Messier', 'Steve Larmer', 'Alexei Kovalev', 'Adam Graves'],
+    ['Brian Leetch', 'Sergei Zubov'],
+    // NYI
     ['Derek King', 'Pierre Turgeon'],
+    // PHI
     ['Eric Lindros', 'Mark Recchi', 'John LeClair', 'Brent Fedyk'],
+    // QUE
     ['Andrei Kovalenko', 'Mats Sundin', 'Valeri Kamensky'],
     ['Joe Sakic', 'Owen Nolan', 'Mike Ricci'],
-    ['Gary Roberts','Joe Nieuwendyk', 'German Titov'],
-    ['Alexander Mogilny', 'Dale Hawerchuk', 'Jason Dawe'],
-    ['Jeremy Roenick', 'Tony Amonte', 'Dirk Graham'],
+    // CGY
+    ['Theoren Fleury', 'Gary Roberts', 'Joe Nieuwendyk'],
+    // BUF — LaFontaine is the center, Mogilny the wing
+    ['Pat LaFontaine', 'Alexander Mogilny', 'Dale Hawerchuk'],
+    // CHI
+    ['Jeremy Roenick', 'Tony Amonte', 'Chris Chelios', 'Dirk Graham'],
+    // MTL
     ['Vincent Damphousse', 'Brian Bellows', 'Benoit Brunet'],
-    ['Brett Hull', 'Craig Janney', 'Vitali Prokhorov'],
-    ['Doug Gilmour', 'Wendel Clark', 'Mike Gartner'],
-    ['Ray Sheppard', 'Steve Yzerman', 'Dino Ciccarelli'],
-    ['Nicklas Lidstrom', 'Vladimir Konstantinov'],
-    ['Pavel Bure', 'Trevor Linden', 'Greg Adams'],
     ['Mike Keane', 'Guy Carbonneau'],
+    // STL — Housley ran the PP with Hull
+    ['Brett Hull', 'Craig Janney', 'Phil Housley', 'Vitali Prokhorov'],
+    // TOR
+    ['Doug Gilmour', 'Wendel Clark', 'Mike Gartner'],
+    // DET — Fedorov was the franchise center
+    ['Sergei Fedorov', 'Steve Yzerman', 'Dino Ciccarelli'],
+    ['Nicklas Lidstrom', 'Vladimir Konstantinov', 'Paul Coffey'],
+    // VAN
+    ['Pavel Bure', 'Trevor Linden', 'Greg Adams'],
+    // TBL
     ['Denis Savard', 'Rob Zamuner'],
-    ['Ron Francis', 'Kevin Stevens', 'Tomas Sandstrom'],
+    // MIN
+    ['Mike Modano', 'Russ Courtnall', 'Dave Gagner'],
+    // NJD
+    ['Scott Stevens', 'Scott Niedermayer'],
+    // WAS
+    ['Joe Juneau', 'Peter Bondra', 'Dimitri Khristich'],
 ];
 
 function getAllDuos() { return [...dynamicDuos, ...customDuos]; }
