@@ -504,12 +504,9 @@ function applyLoadedSave(data) {
     if (typeof data.deadlineCountermove === 'object' && data.deadlineCountermove) deadlineCountermove = data.deadlineCountermove;
     if (typeof data.chemScores === 'object' && data.chemScores) chemScores = data.chemScores;
     if (typeof data.preseasonOvrSnapshot === 'object' && data.preseasonOvrSnapshot) preseasonOvrSnapshot = data.preseasonOvrSnapshot;
-    // Fix 2: populate snapshot for old saves that predate this feature
+    // Fix 2: seed snapshot for old saves that predate this feature (neutral baseline)
     if (!Object.keys(preseasonOvrSnapshot).length && league.length) {
-        league.forEach(t => {
-            const rpl = (rosters[t.nrm] || []).map(p => { const ws = getPlayerWeightedStats(p.name); return ws ? ws.ovr : 0; }).filter(v => v > 0);
-            preseasonOvrSnapshot[t.nrm] = rpl.length ? Math.round(rpl.reduce((a, b) => a + b, 0) / rpl.length) : 75;
-        });
+        league.forEach(t => { preseasonOvrSnapshot[t.nrm] = 75; });
     }
     teamCaptains = (typeof data.teamCaptains === 'object' && data.teamCaptains) ? data.teamCaptains : {};
     if (!Object.keys(teamCaptains).length) assignTeamCaptains();
@@ -3564,37 +3561,40 @@ function simGame(idx) {
 
     //  5. OVERTIME RESOLUTION
     let otPeriods = 0;
-    // REGULAR SEASON OT — 5-minute sudden death (93-94 rules): ~72% of OT games
-    // remain ties, ~28% resolve — targets ~9% tie rate
-    if (!isPlayoffs && !isASG && hG === aG && Math.random() < 0.28) {
+    // REGULAR SEASON OT — 5-minute sudden death (93-94 rules): all tied games go to OT,
+    // ~63% resolve, ~37% remain tied — targets ~11% tie rate
+    if (!isPlayoffs && !isASG && hG === aG) {
         otPeriods = 1;
-        const otLine = (struct) => [...(struct.f[0]||[]), ...(struct.d[0]||[])];
-        const otBest = (struct) => {
-            const line = otLine(struct);
-            if (!line.length) return { ovr: 75, name: null };
-            const best = line.reduce((a,b) => (getPlayerWeightedStats(b.name).ovr||70) > (getPlayerWeightedStats(a.name).ovr||70) ? b : a);
-            const tag = getPlayerWeightedStats(best.name)?.tag;
-            return { ovr: (getPlayerWeightedStats(best.name).ovr||70) + (tag === 'SNIPER' ? 3 : tag === 'SUPERSTAR' ? 5 : 0), name: best.name };
-        };
-        const hStar = otBest(hStruct), aStar = otBest(aStruct);
-        const hWinProb = Math.max(0.25, Math.min(0.75, 0.52 + (hStar.ovr - aStar.ovr) * 0.005));
-        const otSec = Math.floor(Math.random()*300);
-        const otM = Math.floor(otSec/60)+1, otS = otSec%60;
-        if (Math.random() < hWinProb) {
-            hG++; hShots++;
-            trk(aG_name,'sa',1); trk(aG_name,'ga',1);
-            if (hStar.name) { trk(hStar.name,'g',1); trk(hStar.name,'s',1); }
-            allGoals.push({ p:4, m:otM, s:otS, str:`OT ${otM}:${otS<10?'0'+otS:otS}`, tm:g.h.code,
-                cl:teamColors[g.h.nrm]?.[0]||'#fff',
-                txt:buildGoalText(hStar.name, null, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:hStar.name, code:g.h.code });
-        } else {
-            aG++; aShots++;
-            trk(hG_name,'sa',1); trk(hG_name,'ga',1);
-            if (aStar.name) { trk(aStar.name,'g',1); trk(aStar.name,'s',1); }
-            allGoals.push({ p:4, m:otM, s:otS, str:`OT ${otM}:${otS<10?'0'+otS:otS}`, tm:g.a.code,
-                cl:teamColors[g.a.nrm]?.[0]||'#fff',
-                txt:buildGoalText(aStar.name, null, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:aStar.name, code:g.a.code });
+        if (Math.random() < 0.63) {
+            const otLine = (struct) => [...(struct.f[0]||[]), ...(struct.d[0]||[])];
+            const otBest = (struct) => {
+                const line = otLine(struct);
+                if (!line.length) return { ovr: 75, name: null };
+                const best = line.reduce((a,b) => (getPlayerWeightedStats(b.name).ovr||70) > (getPlayerWeightedStats(a.name).ovr||70) ? b : a);
+                const tag = getPlayerWeightedStats(best.name)?.tag;
+                return { ovr: (getPlayerWeightedStats(best.name).ovr||70) + (tag === 'SNIPER' ? 3 : tag === 'SUPERSTAR' ? 5 : 0), name: best.name };
+            };
+            const hStar = otBest(hStruct), aStar = otBest(aStruct);
+            const hWinProb = Math.max(0.25, Math.min(0.75, 0.52 + (hStar.ovr - aStar.ovr) * 0.005));
+            const otSec = Math.floor(Math.random()*300);
+            const otM = Math.floor(otSec/60)+1, otS = otSec%60;
+            if (Math.random() < hWinProb) {
+                hG++; hShots++;
+                trk(aG_name,'sa',1); trk(aG_name,'ga',1);
+                if (hStar.name) { trk(hStar.name,'g',1); trk(hStar.name,'s',1); }
+                allGoals.push({ p:4, m:otM, s:otS, str:`OT ${otM}:${otS<10?'0'+otS:otS}`, tm:g.h.code,
+                    cl:teamColors[g.h.nrm]?.[0]||'#fff',
+                    txt:buildGoalText(hStar.name, null, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:hStar.name, code:g.h.code });
+            } else {
+                aG++; aShots++;
+                trk(hG_name,'sa',1); trk(hG_name,'ga',1);
+                if (aStar.name) { trk(aStar.name,'g',1); trk(aStar.name,'s',1); }
+                allGoals.push({ p:4, m:otM, s:otS, str:`OT ${otM}:${otS<10?'0'+otS:otS}`, tm:g.a.code,
+                    cl:teamColors[g.a.nrm]?.[0]||'#fff',
+                    txt:buildGoalText(aStar.name, null, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:aStar.name, code:g.a.code });
+            }
         }
+        // else: OT not resolved — game remains a tie
     }
     if(isPlayoffs && hG === aG) {
         // OT uses top lines + star player modifier — not a coin flip
