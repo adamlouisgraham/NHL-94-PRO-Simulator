@@ -6443,8 +6443,16 @@ function runEndOfSeasonAwards() {
         winnerStats["Norris"] = `${norrisSorted[0].season.g}G  ${norrisSorted[0].season.a}A  ${norrisSorted[0].season.pm>=0?'+':''}${norrisSorted[0].season.pm||0}`;
     }
     
-    // 10. VEZINA
-    const vezinaSorted = goalies.sort((a, b) => { const svpA = a.season.sa > 0 ? a.season.sv / a.season.sa : 0; const svpB = b.season.sa > 0 ? b.season.sv / b.season.sa : 0; return (svpB - svpA) || (b.season.w - a.season.w); });
+    // 10. VEZINA — SV% and GAA weighted heavily, wins as minor modifier
+    const vezinaScore = g => {
+        const svp = g.season.sa > 0 ? g.season.sv / g.season.sa : 0;
+        const gaa = g.season.gp > 0 ? (g.season.sa - g.season.sv) / g.season.gp : 99;
+        const svBonus = svp > 0.880 ? (svp - 0.880) * 2000 : 0; // heavily weighted
+        const gaaBonus = gaa < 4.0 ? (4.0 - gaa) * 8 : 0;       // heavily weighted
+        const wMod = (g.season.w || 0) * 0.4;                    // wins: minor modifier
+        return svBonus + gaaBonus + wMod;
+    };
+    const vezinaSorted = goalies.sort((a, b) => vezinaScore(b) - vezinaScore(a));
     if (vezinaSorted.length > 0) {
         awardTrophy(vezinaSorted[0].name, currentSeason, "Vezina");
         runnersUp["Vezina"] = vezinaSorted.slice(1, 4).map(p => p.name).join(', ');
@@ -7061,7 +7069,14 @@ function openAwardsVoting() {
         .concat(goalies.filter(p => hartPlayoffQual.has(p.team)).map(p => ({ name: p.name, stat: `${p.season.w||0}W  ${p.season.so||0}SO`, score: (p.season.w||0)*2.2+(p.season.so||0)*3 })))
         .sort((a,b) => b.score - a.score).slice(0, 3);
     const vezinaCands = [...goalies]
-        .map(p => ({ name: p.name, stat: `${p.season.w||0}W  SV% ${p.season.sa>0?((p.season.sv/p.season.sa)*100).toFixed(1):'--'}`, score: (p.season.w||0)+(p.season.sa>0?(p.season.sv/p.season.sa)*100:0) }))
+        .map(p => {
+            const svp = p.season.sa > 0 ? p.season.sv / p.season.sa : 0;
+            const gaa = p.season.gp > 0 ? (p.season.sa - p.season.sv) / p.season.gp : 99;
+            const score = (svp > 0.880 ? (svp - 0.880) * 2000 : 0) + (gaa < 4.0 ? (4.0 - gaa) * 8 : 0) + (p.season.w||0) * 0.4;
+            const svpStr = p.season.sa > 0 ? (svp).toFixed(3) : '--.---';
+            const gaaStr = p.season.gp > 0 ? gaa.toFixed(2) : '--';
+            return { name: p.name, stat: `${p.season.w||0}W  SV% ${svpStr}  GAA ${gaaStr}`, score };
+        })
         .sort((a,b) => b.score - a.score).slice(0, 3);
     const norrisCands = [...skaters].filter(p => p.pos === 'D' && hartPlayoffQual.has(p.team))
         .map(p => ({ name: p.name, stat: `${p.season.g}G  ${p.season.a}A  ${p.season.pm>=0?'+':''}${p.season.pm||0}`, score: (p.season.g+p.season.a)+(p.season.pm||0) }))
