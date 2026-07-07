@@ -6128,9 +6128,47 @@ function exportCSV() {
 // =========================================================
 
 
-function takeMonthSnapshot() { 
-    monthSnapshot = {}; 
-    Object.values(playerStats).forEach(p => { monthSnapshot[p.name] = { g: p.season.g, a: p.season.a, w: p.season.w, gp: p.season.gp, sv: p.season.sv, sa: p.season.sa }; }); 
+function takeMonthSnapshot() {
+    monthSnapshot = { _day: currentDay };
+    Object.values(playerStats).forEach(p => { monthSnapshot[p.name] = { g: p.season.g, a: p.season.a, w: p.season.w, gp: p.season.gp, sv: p.season.sv, sa: p.season.sa }; });
+    saveGame();
+}
+
+function renderMonthlyProgress() {
+    const snap = monthSnapshot;
+    const hasSnap = snap && Object.keys(snap).length > 0;
+    const skaters = Object.values(playerStats).filter(p => p.season && p.season.gp > 0 && p.pos !== 'G');
+    const goalies  = Object.values(playerStats).filter(p => p.season && p.season.gp > 0 && p.pos === 'G');
+    const delta = (p, field) => (p.season[field]||0) - ((hasSnap && snap[p.name]) ? (snap[p.name][field]||0) : 0);
+    const top = (arr, sortFn, n=8) => [...arr].sort(sortFn).slice(0, n);
+    const row = (p, val, color='#fff') => `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')">
+        <td style="color:#888;font-size:6px;padding:2px 5px;">${p.teamCode||''}</td>
+        <td style="padding:2px 5px;font-size:7px;">${p.name}</td>
+        <td style="text-align:right;color:${color};font-weight:bold;padding:2px 8px;font-size:7px;">${val}</td></tr>`;
+    const tbl = (title, rows, color) => `<div style="margin-bottom:12px;">
+        <div style="font-size:5px;color:#888;text-transform:uppercase;letter-spacing:.14em;border-bottom:1px solid #222;padding-bottom:3px;margin-bottom:5px;">${title}</div>
+        <table style="width:100%;font-size:7px;border-collapse:collapse;">${rows}</table></div>`;
+    const label = hasSnap ? `SINCE DAY ${(snap._day||'?')}` : 'SEASON TOTALS (NO CHECKPOINT SET)';
+    const goalieSvpDelta = p => {
+        const curSA = p.season.sa||0, curSV = p.season.sv||0;
+        const snapSA = (hasSnap&&snap[p.name]) ? (snap[p.name].sa||0) : 0;
+        const snapSV = (hasSnap&&snap[p.name]) ? (snap[p.name].sv||0) : 0;
+        const dSA = curSA-snapSA, dSV = curSV-snapSV;
+        return dSA >= 5 ? dSV/dSA : 0;
+    };
+    let h = `<div style="margin-top:10px;border-top:1px solid #222;padding-top:10px;">`;
+    h += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">`;
+    h += `<div style="font-size:6px;color:var(--neon-cyan);letter-spacing:.1em;">MONTHLY PROGRESS — ${label}</div>`;
+    h += `<button onclick="takeMonthSnapshot();openStatLeaders();" style="font-size:5px;padding:2px 6px;background:#0a1a2a;border:1px solid var(--neon-cyan);color:var(--neon-cyan);cursor:pointer;border-radius:2px;">SET CHECKPOINT (DAY ${currentDay})</button>`;
+    h += `</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">`;
+    h += `<div>`;
+    h += tbl('Points Since Chk', top(skaters,(a,b)=>(delta(b,'g')+delta(b,'a'))-(delta(a,'g')+delta(a,'a'))).map(p=>row(p,(delta(p,'g')+delta(p,'a')),'var(--ea-yellow)')).join(''));
+    h += tbl('Goals Since Chk',  top(skaters,(a,b)=>delta(b,'g')-delta(a,'g')).map(p=>row(p,delta(p,'g'),'#FF6666')).join(''));
+    h += `</div><div>`;
+    h += tbl('Assists Since Chk',top(skaters,(a,b)=>delta(b,'a')-delta(a,'a')).map(p=>row(p,delta(p,'a'),'var(--neon-cyan)')).join(''));
+    h += tbl('SV% Since Chk', top(goalies,(a,b)=>goalieSvpDelta(b)-goalieSvpDelta(a)).filter(p=>((p.season.sa||0)-((hasSnap&&snap[p.name]&&snap[p.name].sa)||0))>=5).map(p=>row(p,goalieSvpDelta(p).toFixed(3),'var(--neon-cyan)')).join(''));
+    h += `</div></div></div>`;
+    return h;
 }
 
 function initAllStarGame() {
@@ -6542,8 +6580,9 @@ function getConnSmytheScore(p) {
             const meetsCareerBar = isGoalie ? (carGP >= 250 || carW >= 100) : (carPts >= 150 || carGP >= 350);
             if(meetsCareerBar && ((p.age > 36 && roll < 0.25) || ((p.attr.off+p.attr.def)/2 >= 90 && roll < 0.05))) {
                 ind.push(p.name);
-                hallOfFame.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: p.season.gp, g: p.season.g, a: p.season.a, pts: p.season.g+p.season.a, w: p.season.w, so: p.season.so, mvp: p.asgMvp }); 
-                retiredPlayers.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: (p.career.gp || 0) + (p.season.gp || 0), g: (p.career.g || 0) + (p.season.g || 0), a: (p.career.a || 0) + (p.season.a || 0), pts: (p.career.pts || 0) + (p.season.pts || 0), w: (p.career.w || 0) + (p.season.w || 0), pim: (p.career.pim || 0) + (p.season.pim || 0), ppg: (p.career.ppg || 0) + (p.season.ppg || 0) });
+                const hofCarGP = (p.career.gp||0)+(p.season.gp||0), hofCarG = (p.career.g||0)+(p.season.g||0), hofCarA = (p.career.a||0)+(p.season.a||0), hofCarW = (p.career.w||0)+(p.season.w||0), hofCarSO = (p.career.so||0)+(p.season.so||0);
+                hallOfFame.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: hofCarGP, g: hofCarG, a: hofCarA, pts: hofCarG+hofCarA, w: hofCarW, so: hofCarSO, mvp: p.asgMvp });
+                retiredPlayers.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: hofCarGP, g: hofCarG, a: hofCarA, pts: (p.career.pts||0)+(p.season.g+p.season.a), w: hofCarW, pim: (p.career.pim||0)+(p.season.pim||0), ppg: (p.career.ppg||0)+(p.season.ppg||0)+(p.careerPlayoff&&p.careerPlayoff.ppg||0)+(p.playoff&&p.playoff.ppg||0) });
                 const tkObj = league.find(t=>t.name===p.team); const tk = tkObj ? tkObj.nrm : null; 
                 if(tk && rosters[tk]) rosters[tk] = rosters[tk].filter(r => r.name !== p.name); 
                 tradeLog.unshift({ day: 'POST', details: `RETIRED: Legend ${p.name} inducted.` }); 
@@ -7195,6 +7234,7 @@ function openStatLeaders() {
     h += tbl('SV%',   top(goalies,  (a,b)=>goalieSvp(b)-goalieSvp(a)).filter(p=>p[k].sa>=10).map(p=>row(p,goalieSvp(p).toFixed(3),'var(--neon-cyan)')).join(''));
     h += `</div></div>`;
 
+    h += renderMonthlyProgress();
     document.getElementById('statLeadersContent').innerHTML = h;
     document.getElementById('statLeadersOverlay').style.display = 'flex';
 }
