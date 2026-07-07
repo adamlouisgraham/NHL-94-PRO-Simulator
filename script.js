@@ -2024,9 +2024,8 @@ function getPlayerFatigueAmount(pName) {
 //  DYNAMIC DUO REGISTRY
 // Forces the auto-coach to draft these players onto the same line if both are healthy
 const dynamicDuos = [
-    // BOS — forward line + D pair
+    // BOS
     ['Adam Oates', 'Cam Neely', 'Glen Murray'],
-    ['Ray Bourque', 'Glen Wesley'],
     // HFD
     ['Andrew Cassels', 'Brendan Shanahan', 'Pat Verbeek', 'Geoff Sanderson'],
     // PIT — two separate lines
@@ -2041,34 +2040,33 @@ const dynamicDuos = [
     ['Steve Larmer', 'Alexei Kovalev', 'Esa Tikkanen'],
     // NYI
     ['Derek King', 'Pierre Turgeon'],
-    // PHI — Renberg was actual 93-94 Lindros linemate
-    ['Eric Lindros', 'Mikael Renberg', 'Mark Recchi', 'John LeClair'],
+    // PHI
+    ['Eric Lindros', 'Mark Recchi', 'John LeClair', 'Brent Fedyk'],
     // QUE
     ['Andrei Kovalenko', 'Mats Sundin', 'Valeri Kamensky'],
     ['Joe Sakic', 'Owen Nolan', 'Mike Ricci'],
-    // CGY — two lines + D pair
+    // CGY — two lines
     ['Gary Roberts', 'Joe Nieuwendyk', 'German Titov'],
     ['Theoren Fleury', 'Robert Reichel'],
-    ['Al MacInnis', 'Zarley Zalapski'],
     // BUF — LaFontaine and Mogilny on separate lines
     ['Pat LaFontaine', 'Yuri Khmylev', 'Donald Audette'],
     ['Alexander Mogilny', 'Dale Hawerchuk', 'Jason Dawe'],
-    // CHI — forward line + D pair
+    // CHI
     ['Jeremy Roenick', 'Tony Amonte', 'Dirk Graham'],
-    ['Chris Chelios', 'Gary Suter'],
-    // MTL — Muller centered a separate line from Damphousse
+    // MTL — three lines
     ['Vincent Damphousse', 'Brian Bellows', 'Benoit Brunet'],
-    ['Kirk Muller', 'Mike Keane', 'Guy Carbonneau'],
+    ['Kirk Muller', 'John LeClair'],
+    ['Guy Carbonneau', 'Mike Keane', 'Ron Wilson'],
     // STL
     ['Brett Hull', 'Craig Janney', 'Vitali Prokhorov'],
-    // TOR — Andreychuk scored 53 goals on Gilmour's wing
-    ['Doug Gilmour', 'Dave Andreychuk', 'Wendel Clark', 'Mike Gartner'],
+    // TOR — two lines
+    ['Doug Gilmour', 'Dave Andreychuk'],
+    ['Wendel Clark', 'Mike Gartner'],
     // DET — Fedorov centered his own line separate from Yzerman
     ['Sergei Fedorov', 'Vachslav Kozlov'],
     ['Ray Sheppard', 'Steve Yzerman', 'Dino Ciccarelli'],
-    ['Nicklas Lidstrom', 'Vladimir Konstantinov'],
-    // VAN — Ronning was Bure's center (85 pts in 93-94)
-    ['Pavel Bure', 'Cliff Ronning', 'Trevor Linden', 'Greg Adams'],
+    // VAN
+    ['Pavel Bure', 'Trevor Linden', 'Greg Adams'],
     // TBL — two lines
     ['Denis Savard', 'Rob Zamuner'],
     ['Brian Bradley', 'Petr Klima'],
@@ -2078,8 +2076,11 @@ const dynamicDuos = [
     ['Stephane Richer', 'Valeri Zelepukin', 'Claude Lemieux'],
     // WAS
     ['Joe Juneau', 'Peter Bondra', 'Dimitri Khristich'],
-    // SJS — Russian trio
-    ['Igor Larionov', 'Sergei Makarov', 'Ulf Dahlen'],
+    // SJS
+    ['Igor Larionov', 'Sergei Makarov', 'Ray Whitney'],
+    // EDM — two lines
+    ['Jason Arnott', 'Zdeno Ciger'],
+    ['Doug Weight', 'Shayne Corson'],
 ];
 
 function getAllDuos() { return [...dynamicDuos, ...customDuos]; }
