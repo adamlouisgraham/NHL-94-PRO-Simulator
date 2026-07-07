@@ -1405,8 +1405,8 @@ async function startNewGame(useCustomRoster = false) {
                 suspended: { days: 0, reason: "" },
                 goalieDays: 0,
                 lastStart: -1,
-                asgAppearances: 0,
-                
+                asgAppearances: parseInt(getCol(r, ["GOALIE CAREER ALLSTAR GAMES", "GOALIE CAREER ALLSTAR"], -1)) || 0,
+
                 // !! INJECT THE CALCULATED STATS DIRECTLY !!
                 attr: { 
                     off: gradeToNum(getCol(r, ["GOALIE OFFENSE AWARENESS", "OFFENSE"], 10)) || 20, 
@@ -7052,7 +7052,7 @@ function openAwardsVoting() {
     const vezinaCands = [...goalies]
         .map(p => ({ name: p.name, stat: `${p.season.w||0}W  SV% ${p.season.sa>0?((p.season.sv/p.season.sa)*100).toFixed(1):'--'}`, score: (p.season.w||0)+(p.season.sa>0?(p.season.sv/p.season.sa)*100:0) }))
         .sort((a,b) => b.score - a.score).slice(0, 3);
-    const norrisCands = [...skaters].filter(p => p.pos === 'D' || (p.attr && p.attr.def >= 80))
+    const norrisCands = [...skaters].filter(p => p.pos === 'D')
         .map(p => ({ name: p.name, stat: `${p.season.g}G  ${p.season.a}A  ${p.season.pm>=0?'+':''}${p.season.pm||0}`, score: (p.season.g+p.season.a)+(p.season.pm||0) }))
         .sort((a,b) => b.score - a.score).slice(0, 3);
     const calderCands = [...allPlayers].filter(p => (p.career.gp||0) <= (p.pos==='G'?38:28) && p.season.gp >= (p.pos==='G'?minGoalieGP:minSkaterGP))
