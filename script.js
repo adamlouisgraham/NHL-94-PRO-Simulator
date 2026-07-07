@@ -3562,10 +3562,10 @@ function simGame(idx) {
     //  5. OVERTIME RESOLUTION
     let otPeriods = 0;
     // REGULAR SEASON OT — 5-minute sudden death (93-94 rules): all tied games go to OT,
-    // ~63% resolve, ~37% remain tied — targets ~11% tie rate
+    // ~37% resolve, ~63% remain tied — targets ~9% tie rate
     if (!isPlayoffs && !isASG && hG === aG) {
         otPeriods = 1;
-        if (Math.random() < 0.63) {
+        if (Math.random() < 0.37) {
             const otLine = (struct) => [...(struct.f[0]||[]), ...(struct.d[0]||[])];
             const otBest = (struct) => {
                 const line = otLine(struct);
