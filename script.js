@@ -2024,8 +2024,7 @@ function getPlayerFatigueAmount(pName) {
 //  DYNAMIC DUO REGISTRY
 // Forces the auto-coach to draft these players onto the same line if both are healthy
 const dynamicDuos = [
-    // ANA — forwards + D pairs
-    ['Paul Kariya', 'Teemu Selanne'],
+    // ANA — D pairs
     ['Bobby Dollas', 'Sean Hill'],
     ['Bill Houlder', 'Randy Ladouceur'],
     // BOS
@@ -2052,8 +2051,8 @@ const dynamicDuos = [
     // EDM
     ['Jason Arnott', 'Zdeno Ciger'],
     ['Doug Weight', 'Shayne Corson'],
-    ['Igor Kravchuk', 'Fredrik Olausson'],
-    ['Bob Beers', 'Boris Mironov'],
+    ['Igor Kravchuk', 'Boris Mironov'],
+    ['Bob Beers', 'Fredrik Olausson'],
     // FLA
     ['Gord Murphy', 'Peter Andersson'],
     ['Geoff Smith', 'Brian Benning'],
@@ -2066,7 +2065,7 @@ const dynamicDuos = [
     ['Rob Blake', 'Alexei Zhitnik'],
     ['Darryl Sydor', 'Marty McSorley'],
     // MIN
-    ['Mike Modano', 'Russ Courtnall', 'Dave Gagner'],
+    ['Mike Modano', 'Russ Courtnall', 'Trent Klatt'],
     ['Mark Tinordi', 'Paul Cavallini'],
     ['Derian Hatcher', 'Doug Zmolek'],
     // MTL
@@ -2077,7 +2076,7 @@ const dynamicDuos = [
     ['Patrice Brisebois', 'Eric Desjardins'],
     ['Lyle Odelein', 'Kevin Haller'],
     // NJD
-    ['Stephane Richer', 'Valeri Zelepukin', 'Claude Lemieux'],
+    ['Stephane Richer', 'Bernie Nicholls', 'Claude Lemieux'],
     ['Scott Niedermayer', 'Vachslav Fetisov'],
     // NYI
     ['Derek King', 'Pierre Turgeon'],
@@ -2107,12 +2106,12 @@ const dynamicDuos = [
     ['Tommy Sjodin', 'Garth Butcher'],
     // SJS
     ['Igor Larionov', 'Sergei Makarov', 'Ray Whitney'],
-    ['Sandis Ozolinsh', 'Jeff Norton'],
-    ['Jay More', 'Mike Rathje'],
+    ['Sandis Ozolinsh', 'Mike Rathje'],
+    ['Jeff Norton', 'Jay More'],
     // STL
     ['Brett Hull', 'Craig Janney', 'Vitali Prokhorov'],
-    ['Phil Housley', 'Steve Duchesne'],
-    ['Alexei Kasatonov', 'Doug Crossman'],
+    ['Phil Housley', 'Alexei Kasatonov'],
+    ['Steve Duchesne', 'Doug Crossman'],
     // TBL
     ['Denis Savard', 'Rob Zamuner'],
     ['Brian Bradley', 'Petr Klima'],
@@ -2121,8 +2120,8 @@ const dynamicDuos = [
     // TOR
     ['Doug Gilmour', 'Dave Andreychuk'],
     ['Wendel Clark', 'Mike Gartner'],
-    ['Dave Ellett', 'Jamie Macoun'],
-    ['Todd Gill', 'Dmitri Mironov'],
+    ['Dave Ellett', 'Todd Gill'],
+    ['Jamie Macoun', 'Dmitri Mironov'],
     // VAN
     ['Pavel Bure', 'Trevor Linden', 'Greg Adams'],
     ['Jeff Brown', 'Gerald Diduck'],
@@ -2132,6 +2131,8 @@ const dynamicDuos = [
     ['Kevin Hatcher', 'John Slaney'],
     ['Calle Johansson', 'Joe Reekie'],
     // WPG
+    ['Teemu Selanne', 'Alexei Zhamnov'],
+    ['Thomas Steen', 'Keith Tkachuk'],
     ['Igor Ulanov', 'Dave Manson'],
     ['Teppo Numminen', 'Stephane Quintal'],
 ];
