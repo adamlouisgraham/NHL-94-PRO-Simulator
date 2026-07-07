@@ -1,7 +1,7 @@
 ﻿Goalie Name,Goalie Defense Rating,Team Code,Team Name,Last Name,Offense Rating,Defense Rating,Position,First Name,Shot Power,Passing,Aggression,Roughness,Endurance,Checking,Shot Accuracy,Stick Handling,Agility,Speed,Overall Rating,Age,All Star App.,Career GP,Career G,Career A,Career Pts,Career PPG,Career +/-,Career GWG,Career Playoff GP,Career Playoff G,Career Playoff A,Career Playoff Pts,Goalie First Name,Career W,Career L,Career SO,Career Playoff W,Career Playoff SO,Career T,Career SV,Career SA,Career Playoff L,Career Playoff SV,Career Playoff SA,Goalie Career Allstar Games
-Hebert,60,ANA,Anaheim Ducks,Yake,79,47,LW,Terry,C,C,D,D,B,C,B,C,C,B,65,26,0,24,24,36,60,0.58,15,8,0,5,7,12,Guy,8,8,0,0,0,2,592,670,0,0,0,0
+Hebert,60,ANA,Anaheim Ducks,Yake,79,47,LW,Terry,C,C,D,D,B,C,B,C,C,B,65,26,0,37,24,36,60,0.58,15,8,1,5,7,12,Guy,13,13,1,0,0,3,592,670,0,0,0,0
 Shtalenkov,53,ANA,Anaheim Ducks,Semenov,56,64,C,Anatoli,C,C,D,F-,B,D,C,C,C,B,64,31,0,0,47,75,122,0.64,-10,3,0,8,15,23,Mikhail,0,0,0,0,0,0,0,0,0,0,0,0
-Rick Wamsley,38,ANA,Anaheim Ducks,Lebeau,64,49,RW,Stephan,C,C,F,D,B,D,B,C,C,C,64,25,0,407,96,138,234,0.83,8,10,36,8,14,22,,204,131,43,15,1,46,10156,11568,16,854,976,0
+Rick Wamsley,38,ANA,Anaheim Ducks,Lebeau,64,49,RW,Stephan,C,C,F,D,B,D,B,C,C,C,64,25,0,407,96,138,234,0.83,8,10,27,8,14,22,,204,131,12,7,0,46,10156,11568,18,854,976,0
 ,,ANA,Anaheim Ducks,Corkum,58,54,C,Bob,C,D,D,A,C,C,C,C,C,C,56,26,0,96,10,8,18,0.19,-5,2,0,0,0,0,,,,,,,,,,,,,
 ,,ANA,Anaheim Ducks,Sacco,51,42,RW,Joe,C,D,D,C,C,C,C,C,C,C,59,24,0,83,11,13,24,0.29,-8,2,5,0,1,1,,,,,,,,,,,,,
 ,,ANA,Anaheim Ducks,Hill,44,45,D,Sean,D,D,B,C,C,D,D,C,C,C,48,23,0,31,2,6,8,0.26,-3,1,0,0,0,0,,,,,,,,,,,,,
@@ -20,8 +20,8 @@ Rick Wamsley,38,ANA,Anaheim Ducks,Lebeau,64,49,RW,Stephan,C,C,F,D,B,D,B,C,C,C,64
 ,,ANA,Anaheim Ducks,Ferner,39,40,D,Mark,D,D,D,C,D,D,D,D,D,F,45,28,0,24,0,4,4,0.17,-10,1,0,0,0,0,,,,,,,,,,,,,
 ,,ANA,Anaheim Ducks,Ewen,41,33,RW,Todd,D,F,A,C,D,C,D,D,F,F,42,27,0,317,19,27,46,0.15,-18,3,18,1,2,3,,,,,,,,,,,,,
 ,,ANA,Anaheim Ducks,Grimson,25,44,LW,Stu,F,F,A,A,D,D,F,F,F,F,36,28,0,171,3,4,7,0.04,-22,2,12,0,1,1,,,,,,,,,,,,,
-Casey,69,BOS,Boston Bruins,Bourque,98,81,D,Ray,A ,A,D,B,A+,B,A,A,A ,B,97,33,13,343,302,871,1173,1.14,365,80,41,36,112,148,Jon,156,120,12,20,1,44,8526,9662,18,1051,1185,1
-Riendeau,42,BOS,Boston Bruins,Iafrate,64,65,D,Al,A+,B,B,C,C,B,D,B,B,B,76,27,2,160,151,247,398,0.75,-5,25,17,8,14,22,Vincent,78,54,5,6,0,16,3894,4434,7,432,490,0
+Casey,69,BOS,Boston Bruins,Bourque,98,81,D,Ray,A ,A,D,B,A+,B,A,A,A ,B,97,33,13,325,302,871,1173,1.14,365,80,41,36,112,148,Jon,128,126,12,20,2,42,8526,9662,18,1051,1185,1
+Riendeau,42,BOS,Boston Bruins,Iafrate,64,65,D,Al,A+,B,B,C,C,B,D,B,B,B,76,27,2,147,151,247,398,0.75,-5,25,23,8,14,22,Vincent,73,49,4,10,1,18,3894,4434,11,432,490,0
 ,,BOS,Boston Bruins,Smolinski,67,47,C,Bryan,C,C,C,B,C,D,C,B,B,B,70,22,0,9,1,3,4,0.44,2,2,0,0,0,0,,,,,,,,,,,,,
 ,,BOS,Boston Bruins,Kvartalnov,79,30,LW,Dmitri,C,B,F,D,B,F,B,B,B,B,67,27,0,73,30,42,72,0.99,-4,3,0,0,0,0,,,,,,,,,,,,,
 ,,BOS,Boston Bruins,Oates,99,96,C,Adam,F,A+,F,F-,A,C,B,D,A ,B,84,31,2,618,201,442,643,1.04,90,50,73,19,61,80,,,,,,,,,,,,,
@@ -42,8 +42,8 @@ Riendeau,42,BOS,Boston Bruins,Iafrate,64,65,D,Al,A+,B,B,C,C,B,D,B,B,B,76,27,2,16
 ,,BOS,Boston Bruins,Stumpel,38,40,C,Jozef,D,C,F,D,C,F,C,C,D,D,48,21,0,17,2,3,5,0.29,2,2,5,0,2,2,,,,,,,,,,,,,
 ,,BOS,Boston Bruins,Roberts,29,58,D,Gordie,F,D,C,F-,C,C,C,F,C,D,45,36,0,1018,61,313,374,0.37,-40,10,65,4,14,18,,,,,,,,,,,,,
 ,,BOS,Boston Bruins,McKim,38,40,LW,Andrew,F,D,F,C,D,F,D,D,D,D,44,23,0,7,1,3,4,0.57,0,0,0,0,0,0,,,,,,,,,,,,,
-Hasek,94,BUF,Buffalo Sabres,Mogilny,99,48,RW,Alexander,A+,C,F,B,B,F,B,B,A+,A+,86,24,0,48,127,107,234,1.19,30,30,4,2,4,6,Dominik,21,11,3,1,0,6,1215,1359,1,105,117,0
-Fuhr,83,BUF,Buffalo Sabres,Hawerchuk,85,76,C,Dale,C,A,D,F-,B,D,C,A,A+,B,84,30,4,540,484,805,1289,1.27,55,105,92,30,69,99,Grant,296,150,15,62,4,62,14254,16198,25,2485,2785,6
+Hasek,94,BUF,Buffalo Sabres,Mogilny,99,48,RW,Alexander,A+,C,F,B,B,F,B,B,A+,A+,86,24,0,53,127,107,234,1.19,30,30,7,2,4,6,Dominik,24,14,1,1,0,6,1215,1359,2,105,117,0
+Fuhr,83,BUF,Buffalo Sabres,Hawerchuk,85,76,C,Dale,C,A,D,F-,B,D,C,A,A+,B,84,30,4,547,484,805,1289,1.27,55,105,119,30,69,99,Grant,275,174,12,77,3,65,14254,16198,36,2485,2785,6
 ,,BUF,Buffalo Sabres,LaFontaine,99,67,C,Pat,B,A+,D,D,A+,D,B,A,A ,B,90,28,3,665,349,445,794,1.19,45,90,51,26,38,64,,,,,,,,,,,,,
 ,,BUF,Buffalo Sabres,Plante,75,59,C,Derek,C,B,F,D,C,D,C,B,B,B,70,22,0,0,0,0,0,0.00,0,0,0,0,0,0,,,,,,,,,,,,,
 ,,BUF,Buffalo Sabres,Khmylev,63,75,LW,Yuri,B,C,D,C,B,C,B,B,B,C,74,29,0,68,20,19,39,0.57,-2,2,0,0,0,0,,,,,,,,,,,,,
@@ -64,7 +64,7 @@ Fuhr,83,BUF,Buffalo Sabres,Hawerchuk,85,76,C,Dale,C,A,D,F-,B,D,C,A,A+,B,84,30,4,
 ,,BUF,Buffalo Sabres,Muni,32,91,D,Craig,D,D,C,D,B,B,F,C,D,D,48,31,0,512,24,89,113,0.22,55,15,137,10,28,38,,,,,,,,,,,,,
 ,,BUF,Buffalo Sabres,Moller,41,35,D,Randy,D,D,B,F,F,C,F,D,C,D,43,30,0,720,43,166,209,0.29,-25,10,30,2,4,6,,,,,,,,,,,,,
 ,,BUF,Buffalo Sabres,Barnaby,43,32,LW,Matthew,D,D,B,C,C,C,D,D,D,D,44,20,0,0,0,0,0,0.00,0,0,0,0,0,0,,,,,,,,,,,,,
-Vernon,68,CGY,Calgary Flames,Fleury,64,67,RW,Theoren,B,C,C,C,B,B,B,B,A ,A,82,25,0,397,152,163,315,0.99,60,45,71,23,36,59,Mike,209,114,12,40,3,46,9874,11182,27,1844,2080,4
+Vernon,68,CGY,Calgary Flames,Fleury,64,67,RW,Theoren,B,C,C,C,B,B,B,B,A ,A,82,25,0,420,152,163,315,0.99,60,45,74,23,36,59,Mike,222,139,6,40,3,46,9874,11182,27,1844,2080,4
 Kidd,56,CGY,Calgary Flames,Roberts,90,66,LW,Gary,B,B,A,C,A,B,A,B,C,B,84,27,0,2,153,147,300,0.81,55,60,0,25,34,59,Trevor,1,1,0,0,0,0,51,60,0,0,0,0
 ,,CGY,Calgary Flames,Reichel,79,53,C,Robert,A ,B,D,C,C,D,A,B,B,C,74,22,0,223,79,104,183,0.82,5,8,7,2,1,3,,,,,,,,,,,,,
 ,,CGY,Calgary Flames,MacInnis,67,71,D,Al,A+,B,C,C,A,C,D,B,B,B,77,35,4,681,199,478,677,0.99,185,80,107,31,72,103,,,,,,,,,,,,,
@@ -86,8 +86,8 @@ Kidd,56,CGY,Calgary Flames,Roberts,90,66,LW,Gary,B,B,A,C,A,B,A,B,C,B,84,27,0,2,1
 ,,CGY,Calgary Flames,Stern,43,37,RW,Ronnie,D,D,A,C,D,C,D,D,D,D,46,26,0,252,29,33,62,0.25,-15,6,21,2,2,4,,,,,,,,,,,,,
 ,,CGY,Calgary Flames,Schlegel,33,42,D,Brad,D,D,D,B,C,D,F,D,D,D,42,25,0,22,0,2,2,0.09,-3,1,0,0,0,0,,,,,,,,,,,,,
 ,,CGY,Calgary Flames,McCarthy,38,46,RW,Sandy,D,D,A,B,C,C,D,D,F,F,44,21,0,0,0,0,0,0.00,0,0,0,0,0,0,,,,,,,,,,,,,
-Belfour,99,CHI,Chicago Blackhawks,Roenick,89,73,C,Jeremy,A ,A,C,D,A,C,A,A,A ,A,91,23,3,214,168,219,387,1.27,97,28,40,53,70,123,Ed,118,65,15,21,2,22,5564,6267,17,1072,1203,2
-Hacket,34,CHI,Chicago Blackhawks,Suter,70,74,D,Gary,B,B,B,D,A,B,D,B,A ,B,79,29,1,131,82,228,310,0.74,52,19,0,12,34,46,Jeff,34,75,1,0,0,10,3485,3965,0,0,0,0
+Belfour,99,CHI,Chicago Blackhawks,Roenick,89,73,C,Jeremy,A ,A,C,D,A,C,A,A,A ,A,91,23,3,220,168,219,387,1.27,97,28,37,53,70,123,Ed,109,67,16,18,1,31,5564,6267,14,1072,1203,2
+Hacket,34,CHI,Chicago Blackhawks,Suter,70,74,D,Gary,B,B,B,D,A,B,D,B,A ,B,79,29,1,121,82,228,310,0.74,52,19,0,12,34,46,Jeff,22,82,0,0,0,3,3485,3965,0,0,0,0
 ,,CHI,Chicago Blackhawks,Chelios,80,99,D,Chris,A ,B,A,D,A+,B,D,B,B,B,83,31,7,645,131,388,519,0.80,213,31,189,27,89,116,,,,,,,,,,,,,
 ,,CHI,Chicago Blackhawks,Murphy,63,55,RW,Joe,B,B,C,C,B,C,C,C,B,A,74,26,0,331,90,128,218,0.66,26,13,72,27,34,61,,,,,,,,,,,,,
 ,,CHI,Chicago Blackhawks,Amonte,79,48,RW,Tony,B,C,D,A,B,F,C,C,B,A,71,23,0,161,73,80,153,0.95,13,4,14,7,7,14,,,,,,,,,,,,,
@@ -108,8 +108,8 @@ Hacket,34,CHI,Chicago Blackhawks,Suter,70,74,D,Gary,B,B,B,D,A,B,D,B,A ,B,79,29,1
 ,,CHI,Chicago Blackhawks,Shantz,47,34,C,Jeff,D,C,D,D,C,D,D,C,D,C,49,20,0,0,0,0,0,0.00,0,0,0,0,0,0,,,,,,,,,,,,,
 ,,CHI,Chicago Blackhawks,Kimble,44,32,RW,Darin,F,F,A,C,F,C,B,F,F,F,40,25,0,232,19,18,37,0.16,-7,1,8,0,0,0,,,,,,,,,,,,,
 ,,CHI,Chicago Blackhawks,Smyth,34,30,D,Greg,F-,F-,A,B,F,F,F,F,F,F,33,27,0,143,3,12,15,0.10,-19,1,26,2,0,2,,,,,,,,,,,,,
-Moog,67,MIN,Minnesota North Stars,Modano,99,77,C,Mike,A ,B,D,C,A,D,B,A,A ,A,91,23,1,556,98,172,270,1.01,-14,28,100,18,28,46,Andy,298,162,22,56,4,64,13654,15356,36,2490,2814,3
-Wakaluk,59,MIN,Minnesota North Stars,Courtnall,70,49,RW,Russ,B,B,D,C,B,D,C,B,A ,A+,77,28,0,49,247,296,543,0.87,26,34,1,27,43,70,Darcy,15,19,1,0,0,5,1160,1319,0,18,21,0
+Moog,67,MIN,Minnesota North Stars,Modano,99,77,C,Mike,A ,B,D,C,A,D,B,A,A ,A,91,23,1,496,98,172,270,1.01,-14,28,107,18,28,46,Andy,279,128,17,59,3,57,13654,15356,41,2490,2814,3
+Wakaluk,59,MIN,Minnesota North Stars,Courtnall,70,49,RW,Russ,B,B,D,C,B,D,C,B,A ,A+,77,28,0,87,247,296,543,0.87,26,34,2,27,43,70,Darcy,28,39,2,0,0,9,1160,1319,1,18,21,0
 ,,MIN,Minnesota North Stars,Gagner,80,57,C,Dave,C,B,B,B,B,D,B,B,B,B,73,29,0,566,195,273,468,0.83,-56,42,55,17,22,39,,,,,,,,,,,,,
 ,,MIN,Minnesota North Stars,Eklund,69,58,C,Pelle,C,B,F,F-,B,D,C,B,A ,C,69,30,0,594,152,358,510,0.86,41,22,55,14,27,41,,,,,,,,,,,,,
 ,,MIN,Minnesota North Stars,Broten,62,83,C,Neal,C,B,F,D,B,D,D,C,C,B,64,34,1,876,249,547,796,0.91,68,58,121,42,60,102,,,,,,,,,,,,,
@@ -131,7 +131,7 @@ Wakaluk,59,MIN,Minnesota North Stars,Courtnall,70,49,RW,Russ,B,B,D,C,B,D,C,B,A ,
 ,,MIN,Minnesota North Stars,Churla,44,46,RW,Shane,F,D,A,F,D,B,D,D,D,D,46,28,0,291,15,28,43,0.15,-67,5,71,4,5,9,,,,,,,,,,,,,
 ,,MIN,Minnesota North Stars,Ludwig,36,70,D,Craig,D,D,B,C,C,C,F-,D,D,D,46,32,0,788,18,143,161,0.20,96,5,173,11,24,35,,,,,,,,,,,,,
 Osgood,77,DET,Detroit Red Wings,Fedorov,99,92,C,Sergei,B,A,C,D,A,D,A,A,A+,A+,99,24,1,0,107,152,259,1.18,88,13,0,19,39,58,Chris,0,0,0,0,0,0,0,0,0,0,0,0
-Essesna,56,DET,Detroit Red Wings,Yzerman,88,70,C,Steve,C,A,F,F,A+,F,B,A,A+,A,93,28,9,219,451,600,1051,1.43,80,49,9,50,97,147,Bob,86,96,11,3,0,25,5864,6603,5,265,296,0
+Essesna,56,DET,Detroit Red Wings,Yzerman,88,70,C,Steve,C,A,F,F,A+,F,B,A,A+,A,93,28,9,225,451,600,1051,1.43,80,49,11,50,97,147,Bob,97,84,13,4,0,26,5864,6603,5,265,296,0
 ,,DET,Detroit Red Wings,Coffey,72,47,D,Paul,B,A+,C,F,A,D,D,A,A+,A,83,32,12,876,339,769,1108,1.26,266,73,194,59,137,196,,,,,,,,,,,,,
 ,,DET,Detroit Red Wings,Ciccarelli,88,38,LW,Dino,A ,C,B,C,B,D,A,C,A ,C,73,33,6,907,518,481,999,1.10,57,56,141,54,73,127,,,,,,,,,,,,,
 ,,DET,Detroit Red Wings,Kozlov,64,41,LW,Vachslav,B,C,D,A,C,F,B,B,B,C,63,21,0,24,4,3,7,0.29,11,1,11,1,2,3,,,,,,,,,,,,,
@@ -152,7 +152,7 @@ Essesna,56,DET,Detroit Red Wings,Yzerman,88,70,C,Steve,C,A,F,F,A+,F,B,A,A+,A,93,
 ,,DET,Detroit Red Wings,Bautin,33,50,D,Sergei,C,D,F,D,D,F,F,D,C,D,43,26,0,71,5,18,23,0.32,2,0,6,0,0,0,,,,,,,,,,,,,
 ,,DET,Detroit Red Wings,Halkidis,33,56,D,Bob,D,D,B,D,C,C,D,D,F,D,44,27,0,189,6,24,30,0.16,-19,2,30,0,0,0,,,,,,,,,,,,,
 ,,DET,Detroit Red Wings,Carkner,31,49,D,Terry,D,D,B,F-,C,C,F,D,F,D,43,27,0,491,34,140,174,0.35,-35,4,57,10,5,15,,,,,,,,,,,,,
-Ranford,69,EDM,Edmonton Oilers ,Kravchuk,49,70,D,Igor,B,C,D,C,B,C,D,B,A ,C,68,27,0,301,11,25,36,0.49,5,4,45,7,5,12,Bill,123,121,6,24,3,37,8254,9337,18,1295,1447,1
+Ranford,69,EDM,Edmonton Oilers ,Kravchuk,49,70,D,Igor,B,C,D,C,B,C,D,B,A ,C,68,27,0,330,11,25,36,0.49,5,4,45,7,5,12,Bill,132,136,7,25,3,34,8254,9337,20,1295,1447,1
 Brathwaite,42,EDM,Edmonton Oilers ,Arnott,80,65,C,Jason,B,B,C,C,C,C,B,B,C,C,72,19,0,0,0,0,0,0.00,0,0,0,0,0,0,Fred,0,0,0,0,0,0,0,0,0,0,0,0
 ,,EDM,Edmonton Oilers ,Marchant,43,39,C,Todd,C,C,D,D,C,F-,C,C,B,B,54,20,0,0,0,0,0,0.00,0,0,0,0,0,0,,,,,,,,,,,,,
 ,,EDM,Edmonton Oilers ,Grieve,46,44,LW,Brent,C,D,D,C,C,C,B,C,C,B,59,24,0,0,0,0,0,0.00,0,0,0,0,0,0,,,,,,,,,,,,,
@@ -174,8 +174,8 @@ Brathwaite,42,EDM,Edmonton Oilers ,Arnott,80,65,C,Jason,B,B,C,C,C,C,B,B,C,C,72,1
 ,,EDM,Edmonton Oilers ,Rice,48,39,RW,Steven,D,D,C,D,D,D,D,D,D,D,46,22,0,42,3,6,9,0.21,-8,3,38,2,1,3,,,,,,,,,,,,,
 ,,EDM,Edmonton Oilers ,DeBrusk,45,38,LW,Louie,D,F,A,A,F,C,C,D,F,F,41,22,0,76,10,3,13,0.17,-12,2,35,1,0,1,,,,,,,,,,,,,
 ,,EDM,Edmonton Oilers ,Bennett,37,40,D,Adam,F,F,D,C,F,D,F-,D,D,D,39,22,0,21,0,2,2,0.10,-4,0,14,0,0,0,,,,,,,,,,,,,
-Vanbiesbrouck,84,FLA,Florida Panthers,Niedermayer,46,41,C,Rob,C,D,D,B,C,C,C,C,B,A,62,19,0,378,0,0,0,0.00,0,0,33,0,0,0,John,166,134,12,13,1,44,10254,11545,18,902,1024,0
-Fitzpatrick,43,FLA,Florida Panthers,Murphy,60,49,D,Gord,B,C,C,C,C,C,D,C,A ,B,63,26,0,108,39,115,154,0.44,-13,11,8,11,20,31,Mark,40,43,3,2,0,14,2754,3105,3,195,221,0
+Vanbiesbrouck,84,FLA,Florida Panthers,Niedermayer,46,41,C,Rob,C,D,D,B,C,C,C,C,B,A,62,19,0,449,0,0,0,0.00,0,0,38,0,0,0,John,200,177,16,13,2,47,10254,11545,20,902,1024,0
+Fitzpatrick,43,FLA,Florida Panthers,Murphy,60,49,D,Gord,B,C,C,C,C,C,D,C,A ,B,63,26,0,146,39,115,154,0.44,-13,11,7,11,20,31,Mark,57,60,3,0,0,20,2754,3105,3,195,221,0
 Daniel Berthiaume,42,FLA,Florida Panthers,Belanger,74,59,C,Jesse,C,B,F,D,C,D,B,B,C,B,68,24,0,213,4,2,6,0.26,1,2,20,0,0,0,,81,90,7,6,0,19,5421,6189,10,452,521,0
 ,,FLA,Florida Panthers,Lomakin,50,58,LW,Andrei,C,B,D,D,C,F,C,B,B,C,61,29,0,108,22,28,50,0.46,2,4,28,0,0,0,,,,,,,,,,,,,
 ,,FLA,Florida Panthers,Skrudland,43,82,C,Brian,D,C,B,C,B,B,C,C,B,C,66,30,0,524,99,138,237,0.45,22,19,139,32,40,72,,,,,,,,,,,,,
@@ -196,9 +196,9 @@ Daniel Berthiaume,42,FLA,Florida Panthers,Belanger,74,59,C,Jesse,C,B,F,D,C,D,B,B
 ,,FLA,Florida Panthers,Hull,43,59,RW,Jody,D,D,F,C,C,C,D,D,D,D,47,24,0,217,41,57,98,0.45,-11,9,85,4,12,16,,,,,,,,,,,,,
 ,,FLA,Florida Panthers,Laus,25,44,D,Paul,D,D,A,C,C,B,F,F,C,D,43,23,0,0,0,0,0,0.00,0,0,0,0,0,0,,,,,,,,,,,,,
 ,,FLA,Florida Panthers,Lindsay,45,57,LW,Bill,D,D,D,C,D,D,F,D,F,D,42,22,0,67,6,13,19,0.28,-7,2,32,1,0,1,,,,,,,,,,,,,
-Burke,62,HFD,Hartford Whalers,Sanderson,64,51,LW,Geoff,B,C,F,C,B,D,B,C,B,A,73,21,0,210,51,45,96,0.81,-11,6,19,1,2,3,Sean,81,93,7,7,0,25,5620,6355,12,520,594,1
-Reese,54,HFD,Hartford Whalers,Verbeek,71,54,RW,Pat,B,B,B,B,B,C,B,B,C,B,74,29,2,91,349,340,689,0.96,63,48,3,40,38,78,Jeff,28,33,4,1,0,11,2245,2551,1,65,75,0
-Pietrangelo,33,HFD,Hartford Whalers,Turcotte,74,57,C,Darren,B,C,F,C,B,D,D,B,B,B,67,25,0,112,123,164,287,0.87,-21,18,7,5,7,12,Frank,38,45,2,4,1,6,2841,3241,3,185,210,0
+Burke,62,HFD,Hartford Whalers,Sanderson,64,51,LW,Geoff,B,C,F,C,B,D,B,C,B,A,73,21,0,212,51,45,96,0.81,-11,6,19,1,2,3,Sean,78,93,4,7,0,26,5620,6355,12,520,594,1
+Reese,54,HFD,Hartford Whalers,Verbeek,71,54,RW,Pat,B,B,B,B,B,C,B,B,C,B,74,29,2,112,349,340,689,0.96,63,48,6,40,38,78,Jeff,36,38,3,2,0,12,2245,2551,4,65,75,0
+Pietrangelo,33,HFD,Hartford Whalers,Turcotte,74,57,C,Darren,B,C,F,C,B,D,D,B,B,B,67,25,0,122,123,164,287,0.87,-21,18,12,5,7,12,Frank,41,48,1,7,1,5,2841,3241,5,185,210,0
 ,,HFD,Hartford Whalers,Ranheim,61,47,LW,Paul,C,C,F,B,C,F,D,C,B,A,61,27,0,287,84,86,170,0.59,21,10,30,4,5,9,,,,,,,,,,,,,
 ,,HFD,Hartford Whalers,Lemieux,49,54,RW,Jocelyn,B,F,B,C,C,C,D,C,B,B,62,26,0,375,47,60,107,0.29,-19,5,52,5,7,12,,,,,,,,,,,,,
 ,,HFD,Hartford Whalers,Drury,42,52,C,Ted,D,C,D,D,C,C,D,B,B,B,60,22,0,0,0,0,0,0.00,0,0,0,0,0,0,,,,,,,,,,,,,
@@ -217,9 +217,9 @@ Pietrangelo,33,HFD,Hartford Whalers,Turcotte,74,57,C,Darren,B,C,F,C,B,D,D,B,B,B,
 ,,HFD,Hartford Whalers,Marchment,41,65,D,Bryan,D,F,A,D,C,B,F,D,C,C,52,27,0,173,12,29,41,0.24,-31,2,24,2,2,4,,,,,,,,,,,,,
 ,,HFD,Hartford Whalers,McCrimmon,30,75,D,Brad,D,C,C,F,C,B,F-,D,C,D,46,27,0,932,81,322,403,0.43,-18,14,169,12,53,65,,,,,,,,,,,,,
 ,,HFD,Hartford Whalers,Sandlak,46,58,RW,Jim,C,D,B,C,C,D,D,D,F,D,46,32,0,476,100,115,215,0.45,-27,9,38,6,8,14,,,,,,,,,,,,,
-Hrudey,65,LAK,Los Angeles Kings,Robitaille,87,53,LW,Luc,A ,B,C,B,A,D,A+,B,B,B,82,29,5,486,335,368,703,1.34,15,93,63,37,47,84,Kelly,204,187,12,30,0,66,13421,15214,31,1825,2058,0
-Stauber,61,LAK,Los Angeles Kings,Gretzky,99,73,C,Wayne,C,A+,F-,F,A+,F,B,A,A+,B,91,21,18,35,837,1528,2365,1.89,520,91,4,110,236,346,Robb,16,9,0,3,0,4,892,1015,1,110,125,0
-Tom Draper,44,LAK,Los Angeles Kings,Granato,67,70,RW,Tony,C,C,A,C,C,C,B,B,B,A,78,24,0,47,115,107,222,0.74,-16,24,7,16,17,33,,16,19,1,3,0,3,1185,1345,4,185,212,0
+Hrudey,65,LAK,Los Angeles Kings,Robitaille,87,53,LW,Luc,A ,B,C,B,A,D,A+,B,B,B,82,29,5,466,335,368,703,1.34,15,93,84,37,47,84,Kelly,208,166,15,36,0,59,13421,15214,46,1825,2058,0
+Stauber,61,LAK,Los Angeles Kings,Gretzky,99,73,C,Wayne,C,A+,F-,F,A+,F,B,A,A+,B,91,21,18,33,837,1528,2365,1.89,520,91,4,110,236,346,Robb,15,9,0,3,0,4,892,1015,1,110,125,0
+Tom Draper,44,LAK,Los Angeles Kings,Granato,67,70,RW,Tony,C,C,A,C,C,C,B,B,B,A,78,24,0,45,115,107,222,0.74,-16,24,7,16,17,33,,18,20,1,3,0,5,1185,1345,4,185,212,0
 ,,LAK,Los Angeles Kings,Zhitnik,56,54,D,Alexei,C,B,C,F,B,C,D,B,A ,B,70,33,0,78,12,36,48,0.62,0,3,6,1,2,3,,,,,,,,,,,,,
 ,,LAK,Los Angeles Kings,Blake,73,74,D,Rob,B,B,B,C,B,B,D,B,B,B,75,30,0,132,17,59,76,0.58,-3,9,18,4,6,10,,,,,,,,,,,,,
 ,,LAK,Los Angeles Kings,Kurri,80,78,RW,Jari,A,C,D,D,B,D,B,B,B,C,73,21,8,886,544,596,1140,1.29,283,99,185,106,127,233,,,,,,,,,,,,,
@@ -238,9 +238,9 @@ Tom Draper,44,LAK,Los Angeles Kings,Granato,67,70,RW,Tony,C,C,A,C,C,C,B,B,B,A,78
 ,,LAK,Los Angeles Kings,Houda,32,38,D,Doug,D,F,B,B,D,C,F,D,D,D,43,34,0,304,11,39,50,0.16,-26,1,16,0,2,2,,,,,,,,,,,,,
 ,,LAK,Los Angeles Kings,Shuchuk,45,30,C,Gary,F,D,D,C,F,D,D,D,D,D,42,26,0,31,3,6,9,0.29,-2,2,6,0,1,1,,,,,,,,,,,,,
 ,,LAK,Los Angeles Kings,Watters,34,40,D,Tim,F,D,D,F,D,D,F-,F,D,D,39,29,0,680,25,122,147,0.22,-47,5,75,5,12,17,,,,,,,,,,,,,
-Roy,86,MTL,Montreal Canadiens,Damphousse,86,44,C,Vincent,B,B,D,D,B,F,A,A,B,B,78,27,1,419,211,336,547,0.96,-34,52,90,22,47,69,Patrick,227,123,22,56,6,52,11254,12605,33,2420,2685,4
-Tugnutt,51,MTL,Montreal Canadiens,Bellows,79,42,LW,Brian,B,B,D,C,B,D,B,B,B,B,71,24,2,104,441,458,899,1.04,73,86,2,52,68,120,Ron,26,55,0,0,0,12,2741,3134,1,45,52,0
-Andre Racicot,46,MTL,Montreal Canadiens,Muller,74,70,C,Kirk,B,B,B,F,B,B,C,B,B,B,79,24,2,53,246,393,639,0.90,-14,56,3,37,59,96,,23,11,2,0,0,5,1254,1420,0,40,45,0
+Roy,86,MTL,Montreal Canadiens,Damphousse,86,44,C,Vincent,B,B,D,D,B,F,A,A,B,B,78,27,1,418,211,336,547,0.96,-34,52,108,22,47,69,Patrick,225,129,20,67,5,48,11254,12605,39,2420,2685,4
+Tugnutt,51,MTL,Montreal Canadiens,Bellows,79,42,LW,Brian,B,B,D,C,B,D,B,B,B,B,71,24,2,182,441,458,899,1.04,73,86,2,52,68,120,Ron,45,96,1,0,0,21,2741,3134,0,45,52,0
+Andre Racicot,46,MTL,Montreal Canadiens,Muller,74,70,C,Kirk,B,B,B,F,B,B,C,B,B,B,79,24,2,57,246,393,639,0.90,-14,56,4,37,59,96,,24,17,2,0,0,6,1254,1420,0,40,45,0
 ,,MTL,Montreal Canadiens,Schneider,80,67,D,Matt,B,B,C,C,B,D,D,C,B,B,70,24,0,214,35,113,148,0.69,6,11,31,5,11,16,,,,,,,,,,,,,
 ,,MTL,Montreal Canadiens,LeClair,57,52,LW,John,A ,D,D,F,C,C,D,C,C,B,62,26,0,143,44,49,93,0.65,9,10,32,10,9,19,,,,,,,,,,,,,
 ,,MTL,Montreal Canadiens,Desjardins,65,81,D,Eric,B,C,C,C,B,B,D,C,B,C,68,28,0,343,50,163,213,0.62,68,22,60,12,24,36,,,,,,,,,,,,,
@@ -260,9 +260,9 @@ Andre Racicot,46,MTL,Montreal Canadiens,Muller,74,70,C,Kirk,B,B,B,F,B,B,C,B,B,B,
 ,,MTL,Montreal Canadiens,Ronan,40,30,RW,Ed,D,D,F,B,F,C,D,F,D,D,43,24,0,56,5,7,12,0.21,0,1,6,0,0,0,,,,,,,,,,,,,
 ,,MTL,Montreal Canadiens,Roberge,37,36,RW,Mario,D,F,B,C,F,C,D,D,F,F,38,27,0,75,6,5,11,0.15,-18,1,18,0,2,2,,,,,,,,,,,,,
 ,,MTL,Montreal Canadiens,Fogarty,41,38,D,Bryan,F,F,F,F-,F,D,F-,C,F,F,38,25,0,122,16,48,64,0.52,-27,11,0,0,0,0,,,,,,,,,,,,,
-Terreri,68,NJD,New Jersey Devils,Richer,77,49,RW,Stephane,A ,C,D,B,B,D,B,A,B,B,77,25,1,165,283,254,537,0.87,26,72,19,20,35,55,Chris,68,57,4,8,0,17,4256,4820,10,485,550,0
-Brodeur,79,NJD,New Jersey Devils,Millen,63,41,C,Corey,D,C,C,D,C,F,B,B,C,A,67,29,0,4,47,42,89,0.83,2,6,0,4,7,11,Martin,2,1,0,0,0,0,85,95,0,0,0,0
-Mario Gosselin,46,NJD,New Jersey Devils,Zelepukin,67,68,LW,Valeri,C,C,D,D,C,F,B,B,B,B,68,23,0,235,36,59,95,0.78,10,5,20,1,2,3,,90,105,7,8,0,17,5892,6741,9,510,580,0
+Terreri,68,NJD,New Jersey Devils,Richer,77,49,RW,Stephane,A ,C,D,B,B,D,B,A,B,B,77,25,1,205,283,254,537,0.87,26,72,22,20,35,55,Chris,80,83,4,9,0,26,4256,4820,12,485,550,0
+Brodeur,79,NJD,New Jersey Devils,Millen,63,41,C,Corey,D,C,C,D,C,F,B,B,C,A,67,29,0,4,47,42,89,0.83,2,6,1,4,7,11,Martin,2,1,0,0,0,0,85,95,1,0,0,0
+Mario Gosselin,46,NJD,New Jersey Devils,Zelepukin,67,68,LW,Valeri,C,C,D,D,C,F,B,B,B,B,68,23,0,234,36,59,95,0.78,10,5,32,1,2,3,,91,102,6,16,0,14,5892,6741,15,510,580,0
 ,,NJD,New Jersey Devils,Stevens,48,99,D,Scott,B,B,A,F,A,A,C,C,B,B,81,28,7,770,133,403,536,0.70,393,73,159,26,74,100,,,,,,,,,,,,,
 ,,NJD,New Jersey Devils,Guerin,62,58,RW,Bill,A ,D,B,A,C,B,B,C,B,C,67,27,0,65,14,20,34,0.52,0,1,0,0,0,0,,,,,,,,,,,,,
 ,,NJD,New Jersey Devils,Lemieux,61,63,RW,Claude,B,C,B,C,B,B,D,C,B,B,66,20,0,534,213,200,413,0.77,-28,18,57,10,14,24,,,,,,,,,,,,,
@@ -282,9 +282,9 @@ Mario Gosselin,46,NJD,New Jersey Devils,Zelepukin,67,68,LW,Valeri,C,C,D,D,C,F,B,
 ,,NJD,New Jersey Devils,Carpenter,40,78,C,Bob,D,C,C,C,C,D,F,D,C,D,49,28,0,698,218,219,437,0.63,-28,24,83,13,14,27,,,,,,,,,,,,,
 ,,NJD,New Jersey Devils,Daneyko,41,98,D,Ken,F,F,B,B,B,A,F-,D,C,D,47,24,0,536,28,91,119,0.22,28,7,74,3,10,13,,,,,,,,,,,,,
 ,,NJD,New Jersey Devils,Peluso,30,42,LW,Mike,D,F,A,B,B,B,F,F,F,D,44,27,0,199,27,14,41,0.21,-10,4,14,2,0,2,,,,,,,,,,,,,
-Hextall,63,NYI,New York Islanders,Turgeon,93,61,C,Pierre,C,B,F-,F,B,F-,A,B,B,B,75,30,2,325,218,284,502,1.03,42,62,47,17,42,59,Ron,160,111,15,26,2,36,8451,9601,19,1254,1425,1
+Hextall,63,NYI,New York Islanders,Turgeon,93,61,C,Pierre,C,B,F-,F,B,F-,A,B,B,B,75,30,2,335,218,284,502,1.03,42,62,54,17,42,59,Ron,159,126,4,27,2,36,8451,9601,26,1254,1425,1
 McLennan,43,NYI,New York Islanders,Hogue,78,53,LW,Benoit,B,B,C,F,B,F,B,C,B,A,71,29,0,0,99,139,238,0.68,3,17,0,4,5,9,Jamie,0,0,0,0,0,0,0,0,0,0,0,0
-Brian Hayward,38,NYI,New York Islanders,Thomas,71,55,LW,Steve,B,C,B,D,B,B,B,C,B,B,73,27,1,357,236,246,482,0.86,28,65,35,18,34,52,,143,156,14,14,0,46,9421,10714,16,845,960,0
+Brian Hayward,38,NYI,New York Islanders,Thomas,71,55,LW,Steve,B,C,B,D,B,B,B,C,B,B,73,27,1,357,236,246,482,0.86,28,65,37,18,34,52,,143,156,8,11,0,37,9421,10714,18,845,960,0
 ,,NYI,New York Islanders,Ferraro,55,63,C,Ray,B,C,C,B,B,D,C,B,C,C,62,25,0,561,213,232,445,0.79,10,49,94,17,31,48,,,,,,,,,,,,,
 ,,NYI,New York Islanders,Volek,59,47,RW,Dave,D,C,D,A,B,F,D,C,B,B,57,21,0,259,87,95,182,0.70,8,13,10,2,2,4,,,,,,,,,,,,,
 ,,NYI,New York Islanders,Malakhov,72,52,D,Vladimir,B,C,C,C,B,D,D,C,B,C,63,26,0,77,14,49,63,0.82,12,3,4,0,2,2,,,,,,,,,,,,,
@@ -304,8 +304,8 @@ Brian Hayward,38,NYI,New York Islanders,Thomas,71,55,LW,Steve,B,C,B,D,B,B,B,C,B,
 ,,NYI,New York Islanders,Vukota,26,30,RW,Mick,F,F,A,B,D,C,F,D,D,D,41,26,0,337,26,30,56,0.17,-20,4,6,0,0,0,,,,,,,,,,,,,
 ,,NYI,New York Islanders,Maley,31,30,LW,David,D,F,B,B,F,C,F-,D,F,F,38,26,0,277,35,57,92,0.33,-8,5,4,0,0,0,,,,,,,,,,,,,
 ,,NYI,New York Islanders,Vaske,40,33,D,Dennis,D,F,C,F,F,D,F,D,F,F,39,30,0,124,5,25,30,0.24,6,2,4,0,0,0,,,,,,,,,,,,,
-Richter,79,NYR,New York Rangers,Kovalev,77,30,RW,Alexei,A ,C,C,B,C,D,B,A,A+,A,80,28,0,136,20,18,38,0.58,4,7,18,2,5,7,Mike,65,46,1,9,2,16,3654,4112,6,480,540,0
-Healy,55,NYR,New York Rangers,Tikkanen,54,63,LW,Esa,A ,B,B,B,B,B,D,B,A ,B,75,25,0,238,199,264,463,0.80,165,109,18,72,76,148,Glenn,89,101,5,9,0,29,6124,6984,9,485,554,0
+Richter,79,NYR,New York Rangers,Kovalev,77,30,RW,Alexei,A ,C,C,B,C,D,B,A,A+,A,80,28,0,147,20,18,38,0.58,4,7,20,2,5,7,Mike,69,49,4,9,2,17,3654,4112,9,480,540,0
+Healy,55,NYR,New York Rangers,Tikkanen,54,63,LW,Esa,A ,B,B,B,B,B,D,B,A ,B,75,25,0,259,199,264,463,0.80,165,109,29,72,76,148,Glenn,103,116,5,11,0,24,6124,6984,14,485,554,0
 ,,NYR,New York Rangers,Leetch,87,79,D,Brian,B,A,D,D,A,D,D,A,A+,C,81,32,5,486,115,349,464,0.95,32,96,89,14,61,75,,,,,,,,,,,,,
 ,,NYR,New York Rangers,Messier,74,62,C,Mark,C,A,C,D,B,B,C,B,A ,B,79,32,15,851,473,680,1153,1.35,247,105,236,109,186,295,,,,,,,,,,,,,
 ,,NYR,New York Rangers,Larmer,68,99,RW,Steve,B,B,D,C,A+,B,B,C,B,B,86,23,3,776,352,396,748,0.96,115,198,140,50,69,119,,,,,,,,,,,,,
@@ -326,8 +326,8 @@ Healy,55,NYR,New York Rangers,Tikkanen,54,63,LW,Esa,A ,B,B,B,B,B,D,B,A ,B,75,25,
 ,,NYR,New York Rangers,Beukeboom,47,76,D,Jeff,D,D,B,F-,C,B,F,C,D,D,50,29,0,418,16,87,103,0.25,108,18,114,24,27,51,,,,,,,,,,,,,
 ,,NYR,New York Rangers,Kocur,32,49,RW,Joey,D,D,B,B,D,C,F,D,D,D,44,34,0,493,79,82,161,0.33,32,36,82,15,8,23,,,,,,,,,,,,,
 ,,NYR,New York Rangers,Wells,35,49,D,Jay,D,D,B,F,D,B,F-,D,D,D,44,18,0,695,28,136,164,0.24,-16,14,66,6,8,14,,,,,,,,,,,,,
-Billington,42,OTW,Ottawa Senators,Daigle,67,37,RW,Alexandre,B,B,D,D,C,F,B,A,B,B,70,26,0,98,0,0,0,0.00,0,0,5,0,0,0,Craig,30,44,2,1,0,11,2451,2814,1,110,126,0
-LaForest,38,OTW,Ottawa Senators,Davydov,61,45,LW,Evgeny,B,C,F,A,C,F,C,C,A ,B,61,20,0,103,28,36,64,0.56,-4,5,2,0,0,0,Mark,25,55,1,0,0,7,2654,3021,1,45,54,0
+Billington,42,OTW,Ottawa Senators,Daigle,67,37,RW,Alexandre,B,B,D,D,C,F,B,A,B,B,70,26,0,111,0,0,0,0.00,0,0,2,0,0,0,Craig,43,46,4,0,0,8,2451,2814,1,110,126,0
+LaForest,38,OTW,Ottawa Senators,Davydov,61,45,LW,Evgeny,B,C,F,A,C,F,C,C,A ,B,61,20,0,103,28,36,64,0.56,-4,5,2,0,0,0,Mark,25,57,3,1,0,5,2654,3021,0,45,54,0
 Pat Jablonski,42,OTW,Ottawa Senators,Yashin,71,33,C,Alexei,B,B,D,D,C,D,C,B,B,B,65,28,0,54,30,49,79,1.00,-20,5,0,0,0,0,,10,26,1,0,0,6,1354,1540,0,0,0,0
 ,,OTW,Ottawa Senators,Turgeon,80,39,LW,Sylvain,B,D,C,A,C,F-,C,D,B,B,55,29,0,669,269,226,495,0.74,-102,90,27,2,5,7,,,,,,,,,,,,,
 ,,OTW,Ottawa Senators,Maciver,78,40,D,Norm,C,C,C,F,B,D,D,B,C,C,60,31,0,281,30,148,178,0.63,-14,7,0,0,0,0,,,,,,,,,,,,,
@@ -370,8 +370,8 @@ Soderstrom,70,PHI,Philadelphia Flyers,Lindros,73,78,C,Eric,A ,B,B,C,A,A,A+,B,B,C
 ,,PHI,Philadelphia Flyers,Finley,36,39,D,Jeff,D,D,D,B,D,D,F-,C,D,D,42,23,0,157,4,20,24,0.15,-17,2,5,0,1,1,,,,,,,,,,,,,
 ,,PHI,Philadelphia Flyers,Malgunas,30,39,D,Stewart,F,D,D,B,C,C,F-,C,D,D,43,31,0,0,0,0,0,0.00,0,0,0,0,0,0,,,,,,,,,,,,,
 ,,PHI,Philadelphia Flyers,Brown,27,50,RW,Dave,F,F,B,A,D,D,F-,D,F,F,36,28,0,411,31,34,65,0.16,-4,2,37,3,2,5,,,,,,,,,,,,,
-Barrasso,72,PIT,Pittsburgh Penguins,Lemieux,99,54,C,Mario,B,A+,D,F,A+,D,A+,A,A ,B,95,21,9,450,494,770,1264,2.11,114,74,65,70,113,183,Tom,223,153,24,34,2,52,12451,14152,26,1845,2095,1
-Wreggett,52,PIT,Pittsburgh Penguins,Jagr,95,46,RW,Jaromir,A,A,D,F,A+,B,C,A,A ,B,87,29,0,340,115,150,265,1.15,43,20,16,25,20,45,Ken,118,149,4,6,0,38,8954,10185,6,410,465,0
+Barrasso,72,PIT,Pittsburgh Penguins,Lemieux,99,54,C,Mario,B,A+,D,F,A+,D,A+,A,A ,B,95,21,9,502,494,770,1264,2.11,114,74,76,70,113,183,Tom,244,181,19,45,4,55,12451,14152,29,1845,2095,1
+Wreggett,52,PIT,Pittsburgh Penguins,Jagr,95,46,RW,Jaromir,A,A,D,F,A+,B,C,A,A ,B,87,29,0,341,115,150,265,1.15,43,20,31,25,20,45,Ken,115,169,2,15,2,28,8954,10185,13,410,465,0
 ,,PIT,Pittsburgh Penguins,Sandstrom,83,56,RW,Tomas,B,C,B,B,B,D,C,C,B,B,71,28,2,592,258,321,579,0.98,28,27,48,16,22,38,,,,,,,,,,,,,
 ,,PIT,Pittsburgh Penguins,Stevens,73,42,LW,Kevin,A ,B,B,B,A,C,A,C,C,C,73,30,2,391,209,214,423,1.08,42,31,63,34,41,75,,,,,,,,,,,,,
 ,,PIT,Pittsburgh Penguins,Francis,80,85,C,Ron,C,A+,D,F,A,B,C,B,B,C,81,21,1,893,334,620,954,1.07,84,58,148,60,93,153,,,,,,,,,,,,,
@@ -392,7 +392,7 @@ Wreggett,52,PIT,Pittsburgh Penguins,Jagr,95,46,RW,Jaromir,A,A,D,F,A+,B,C,A,A ,B,
 ,,PIT,Pittsburgh Penguins,Ramsey,25,52,D,Mike,D,D,C,F,C,B,F,D,C,F,43,30,0,905,79,266,345,0.38,71,13,115,7,15,22,,,,,,,,,,,,,
 ,,PIT,Pittsburgh Penguins,Taglianetti,33,58,D,Peter,C,D,B,B,B,B,F-,D,F,D,43,24,0,378,16,61,77,0.20,16,3,37,3,6,9,,,,,,,,,,,,,
 ,,PIT,Pittsburgh Penguins,McKenzie,43,33,LW,Jim,D,F,A,C,C,C,F,D,F,F,39,22,0,177,12,10,22,0.12,-8,2,15,0,1,1,,,,,,,,,,,,,
-Fiset,62,QUE,Quebec Nordiques,Sundin,82,66,C,Mats,B,A,C,F,B,F,A,B,B,B,78,27,1,56,114,148,262,1.07,7,22,1,6,4,10,Stephane,16,26,1,0,0,8,1425,1621,1,25,29,0
+Fiset,62,QUE,Quebec Nordiques,Sundin,82,66,C,Mats,B,A,C,F,B,F,A,B,B,B,78,27,1,69,114,148,262,1.07,7,22,1,6,4,10,Stephane,25,26,1,0,0,8,1425,1621,0,25,29,0
 Thibault,64,QUE,Quebec Nordiques,Kamensky,78,47,LW,Valeri,A ,B,D,F,B,D,B,B,B,B,74,24,0,0,56,82,138,1.00,4,6,0,0,0,0,Jocelyn,0,0,0,0,0,0,0,0,0,0,0,0
 ,,QUE,Quebec Nordiques,Sakic,88,78,C,Joe,C,A+,D,D,A,D,A,A,B,C,84,26,1,390,174,287,461,1.18,3,28,40,16,26,42,,,,,,,,,,,,,
 ,,QUE,Quebec Nordiques,Young,50,72,RW,Scott,A ,C,F,B,C,F,C,C,C,A,65,23,0,307,93,126,219,0.71,9,12,51,13,21,34,,,,,,,,,,,,,
@@ -414,9 +414,9 @@ Thibault,64,QUE,Quebec Nordiques,Kamensky,78,47,LW,Valeri,A ,B,D,F,B,D,B,B,B,B,7
 ,,QUE,Quebec Nordiques,Karpa,45,53,D,Dave,D,D,B,C,C,C,D,D,D,D,47,21,0,16,0,1,1,0.06,-7,2,0,0,0,0,,,,,,,,,,,,,
 ,,QUE,Quebec Nordiques,Simon,33,43,LW,Chris,F,D,A,A,F-,C,F,D,D,F,39,25,0,16,1,1,2,0.12,-2,0,0,0,0,0,,,,,,,,,,,,,
 ,,QUE,Quebec Nordiques,Twist,35,28,LW,Tony,F,F,B,B,F,C,F-,F,F,F,34,35,0,130,0,3,3,0.02,-4,1,0,0,0,0,,,,,,,,,,,,,
-Irbe,74,SJS,San Jose Sharks,Makarov,79,62,RW,Sergei,C,A,D,D,C,F,A,B,A ,B,75,33,2,49,86,152,238,1.04,13,16,0,3,6,9,Arturs,34,24,1,0,0,4,1254,1421,0,0,0,0
-Waite,42,SJS,San Jose Sharks,Larionov,80,52,C,Igor,C,B,F,B,C,F,A,B,A ,C,71,21,3,72,84,196,280,1.02,29,18,0,8,11,19,Jimmy,21,30,3,0,0,6,1845,2105,0,0,0,0
-Peter Sidorkiewicz,40,SJS,San Jose Sharks,Ozolinsh,68,60,D,Sandis,B,B,D,D,B,D,B,B,C,B,70,26,0,233,7,16,23,0.62,-4,4,15,0,0,0,,78,118,8,5,0,26,5941,6754,10,385,435,1
+Irbe,74,SJS,San Jose Sharks,Makarov,79,62,RW,Sergei,C,A,D,D,C,F,A,B,A ,B,75,33,2,49,86,152,238,1.04,13,16,0,3,6,9,Arturs,9,32,1,0,0,3,1254,1421,0,0,0,0
+Waite,42,SJS,San Jose Sharks,Larionov,80,52,C,Igor,C,B,F,B,C,F,A,B,A ,C,71,21,3,53,84,196,280,1.02,29,18,0,8,11,19,Jimmy,13,21,2,0,0,6,1845,2105,0,0,0,0
+Peter Sidorkiewicz,40,SJS,San Jose Sharks,Ozolinsh,68,60,D,Sandis,B,B,D,D,B,D,B,B,C,B,70,26,0,242,7,16,23,0.62,-4,4,15,0,0,0,,79,125,8,5,0,27,5941,6754,10,385,435,1
 ,,SJS,San Jose Sharks,Dahlen,72,59,LW,Ulf,B,B,F-,C,A,C,B,B,B,C,76,29,0,327,118,127,245,0.75,-12,9,14,2,4,6,,,,,,,,,,,,,
 ,,SJS,San Jose Sharks,Errey,39,69,LW,Bob,D,D,C,A,B,B,D,C,A ,B,64,21,0,491,129,152,281,0.57,13,15,81,17,19,36,,,,,,,,,,,,,
 ,,SJS,San Jose Sharks,Falloon,80,39,RW,Pat,B,C,F-,A,B,F,C,C,B,B,61,28,0,162,59,62,121,0.75,-16,5,0,0,0,0,,,,,,,,,,,,,
@@ -435,8 +435,8 @@ Peter Sidorkiewicz,40,SJS,San Jose Sharks,Ozolinsh,68,60,D,Sandis,B,B,D,D,B,D,B,
 ,,SJS,San Jose Sharks,Pederson,50,48,D,Tom,D,C,D,C,D,D,D,C,F,D,47,24,0,44,7,13,20,0.45,-4,3,0,0,0,0,,,,,,,,,,,,,
 ,,SJS,San Jose Sharks,Odgers,39,45,RW,Jeff,D,F,A,B,C,D,C,D,F,D,45,30,0,127,19,19,38,0.30,-8,2,0,0,0,0,,,,,,,,,,,,,
 ,,SJS,San Jose Sharks,Cronin,29,30,D,Shawn,F,F,B,A,F,D,D,F,F,F,34,29,0,229,3,14,17,0.07,-13,1,2,0,0,0,,,,,,,,,,,,,
-Joseph,93,STL,St. Louis Blues,Housley,81,47,D,Phil,C,A+,D,F-,B,D,D,A,A+,A,84,24,7,178,241,566,807,1.04,-27,54,16,26,97,123,Curtis,74,72,3,7,1,21,4854,5510,9,415,472,0
-Hrivnak,42,STL,St. Louis Blues,Hull,94,54,RW,Brett,A+,C,D,B,B,C,B,B,B,B,81,26,10,70,434,346,780,1.28,105,183,0,99,116,215,Jim,24,31,0,0,0,7,1785,2025,0,0,0,0
+Joseph,93,STL,St. Louis Blues,Housley,81,47,D,Phil,C,A+,D,F-,B,D,D,A,A+,A,84,24,7,173,241,566,807,1.04,-27,54,23,26,97,123,Curtis,81,63,3,13,2,22,4854,5510,9,415,472,0
+Hrivnak,42,STL,St. Louis Blues,Hull,94,54,RW,Brett,A+,C,D,B,B,C,B,B,B,B,81,26,10,62,434,346,780,1.28,105,183,0,99,116,215,Jim,30,20,0,0,0,0,1785,2025,0,0,0,0
 ,,STL,St. Louis Blues,Shanahan,92,78,LW,Brendan,A ,B,B,D,B,C,A,B,C,C,78,28,1,479,218,226,444,0.93,-10,38,41,19,23,42,,,,,,,,,,,,,
 ,,STL,St. Louis Blues,Janney,93,77,C,Craig,D,A+,F-,F-,B,D,B,A,B,C,80,22,0,390,112,295,407,1.04,38,28,54,17,42,59,,,,,,,,,,,,,
 ,,STL,St. Louis Blues,Duchesne,77,80,D,Steve,B,B,D,D,B,F,D,B,B,B,70,37,0,507,149,299,448,0.88,18,32,71,15,32,47,,,,,,,,,,,,,
@@ -457,8 +457,8 @@ Hrivnak,42,STL,St. Louis Blues,Hull,94,54,RW,Brett,A+,C,D,B,B,C,B,B,B,B,81,26,10
 ,,STL,St. Louis Blues,McRae,35,44,LW,Basil,D,F,A,B,C,C,F,D,D,D,42,26,0,367,35,42,77,0.21,-44,3,44,4,4,8,,,,,,,,,,,,,
 ,,STL,St. Louis Blues,Tilley,31,38,D,Tom,F,D,F,B,D,D,D,D,D,D,43,29,0,126,3,31,34,0.27,-5,2,8,1,2,3,,,,,,,,,,,,,
 ,,STL,St. Louis Blues,Chase,38,35,RW,Kelly,F,F,A,B,D,D,F,D,F,F,37,32,0,140,5,10,15,0.11,-28,5,24,2,4,6,,,,,,,,,,,,,
-Puppa,71,TBL,Tampa Bay Lightning,Klima,69,36,RW,Petr,B,C,C,A,B,F,A,B,A ,A,74,28,1,258,256,234,490,0.88,2,42,13,27,26,53,Daren,105,96,11,4,0,27,6421,7325,6,310,354,0
-Young,39,TBL,Tampa Bay Lightning,Savard,73,48,C,Denis,C,B,C,F-,C,D,C,A,A ,C,72,26,8,187,471,814,1285,1.30,65,77,6,66,109,175,Wendell,59,86,2,0,0,21,4851,5521,4,150,172,0
+Puppa,71,TBL,Tampa Bay Lightning,Klima,69,36,RW,Petr,B,C,C,A,B,F,A,B,A ,A,74,28,1,223,256,234,490,0.88,2,42,12,27,26,53,Daren,102,70,7,3,0,28,6421,7325,6,310,354,0
+Young,39,TBL,Tampa Bay Lightning,Savard,73,48,C,Denis,C,B,C,F-,C,D,C,A,A ,C,72,26,8,168,471,814,1285,1.30,65,77,2,66,109,175,Wendell,54,77,1,0,0,11,4851,5521,1,150,172,0
 J.C. Bergeron,40,TBL,Tampa Bay Lightning,Bradley,71,54,C,Brian,B,B,C,D,B,D,B,C,B,B,71,27,1,4,182,260,442,0.92,-35,30,0,11,16,27,,0,2,0,0,0,0,85,98,0,0,0,0
 ,,TBL,Tampa Bay Lightning,Cole,48,50,RW,Danton,C,D,F,B,B,D,C,C,C,C,55,26,0,187,33,32,65,0.35,-12,4,6,1,1,2,,,,,,,,,,,,,
 ,,TBL,Tampa Bay Lightning,Andersson,40,57,LW,Mikael,D,C,F,A,B,D,D,C,D,B,53,24,0,341,55,104,159,0.47,-12,11,22,3,10,13,,,,,,,,,,,,,
@@ -477,7 +477,7 @@ J.C. Bergeron,40,TBL,Tampa Bay Lightning,Bradley,71,54,C,Brian,B,B,C,D,B,D,B,C,B
 ,,TBL,Tampa Bay Lightning,Ciccone,33,44,D,Enrico,F,F,A,B,C,D,F,F,D,F,38,23,0,42,0,1,1,0.02,-10,1,0,0,0,0,,,,,,,,,,,,,
 ,,TBL,Tampa Bay Lightning,Charron,36,44,D,Eric,F,F,B,B,D,D,F,F,D,F,38,30,0,3,0,0,0,0.00,-8,2,0,0,0,0,,,,,,,,,,,,,
 ,,TBL,Tampa Bay Lightning,Cummins,32,32,RW,Jim,F,F,A,B,D,D,F,F,F,F,35,34,0,8,1,1,2,0.25,-14,2,10,1,0,1,,,,,,,,,,,,,
-Potvin,89,TOR,Toronto Maple Leafs,Gilmour,94,81,C,Doug,C,A,C,F-,A+,B,B,A,A ,B,91,29,6,48,230,463,693,0.96,96,81,21,48,77,125,Felix,25,15,2,11,1,7,1325,1455,10,610,685,0
+Potvin,89,TOR,Toronto Maple Leafs,Gilmour,94,81,C,Doug,C,A,C,F-,A+,B,B,A,A ,B,91,29,6,52,230,463,693,0.96,96,81,21,48,77,125,Felix,25,17,2,11,1,8,1325,1455,10,610,685,0
 Rhodes,58,TOR,Toronto Maple Leafs,Gartner,79,46,RW,Mike,A ,B,D,A,A,D,C,C,A ,A,74,28,5,1,531,481,1012,0.94,26,90,0,46,44,90,Damian,1,0,0,0,0,0,24,25,0,0,0,0
 ,,TOR,Toronto Maple Leafs,Ellett,59,71,D,Dave,A ,B,D,D,B,C,F,B,A ,B,71,28,1,588,105,292,397,0.68,6,39,78,14,37,51,,,,,,,,,,,,,
 ,,TOR,Toronto Maple Leafs,Borshevsky,68,39,RW,Nikolai,C,B,F,D,B,D,B,B,B,B,70,30,0,78,34,40,74,0.95,7,9,0,0,0,0,,,,,,,,,,,,,
@@ -499,8 +499,8 @@ Rhodes,58,TOR,Toronto Maple Leafs,Gartner,79,46,RW,Mike,A ,B,D,A,A,D,C,C,A ,A,74
 ,,TOR,Toronto Maple Leafs,Berehowsky,46,60,D,Drake,D,D,C,F,C,C,D,D,D,D,47,27,0,50,4,16,20,0.40,-4,1,0,0,0,0,,,,,,,,,,,,,
 ,,TOR,Toronto Maple Leafs,Lefebvre,33,56,D,Sylvain,F,C,C,B,B,C,F-,C,D,D,46,22,0,281,13,54,67,0.24,4,5,42,6,10,16,,,,,,,,,,,,,
 ,,TOR,Toronto Maple Leafs,Baumgartner,25,45,LW,Ken,D,D,A,C,D,C,F,F,D,D,40,28,0,340,6,18,24,0.07,-44,4,46,2,2,4,,,,,,,,,,,,,
-McLean,73,VAN,Vancouver Canucks,Bure,99,43,RW,Pavel,A+,C,D,A,B,D,A,A,A+,A+,94,31,1,333,131,114,245,1.13,21,60,30,12,21,33,Kirk,141,130,13,13,0,45,8541,9695,16,850,964,2
-Whitmore,87,VAN,Vancouver Canucks,Ronning,73,50,C,Cliff,D,B,F,F,A,F,C,C,A ,A,78,27,0,116,145,231,376,0.77,4,35,4,14,24,38,Kay,43,47,3,0,0,15,3025,3424,2,95,110,0
+McLean,73,VAN,Vancouver Canucks,Bure,99,43,RW,Pavel,A+,C,D,A,B,D,A,A,A+,A+,94,31,1,312,131,114,245,1.13,21,60,32,12,21,33,Kirk,130,136,13,15,2,33,8541,9695,17,850,964,2
+Whitmore,87,VAN,Vancouver Canucks,Ronning,73,50,C,Cliff,D,B,F,F,A,F,C,C,A ,A,78,27,0,106,145,231,376,0.77,4,35,3,14,24,38,Kay,41,41,4,0,0,14,3025,3424,2,95,110,0
 ,,VAN,Vancouver Canucks,Courtnall,69,73,LW,Geoff,B,B,B,C,C,F,D,C,A ,A,71,30,1,624,261,280,541,0.87,-12,58,62,18,26,44,,,,,,,,,,,,,
 ,,VAN,Vancouver Canucks,Brown,67,77,D,Jeff,A ,A,D,F,A,D,C,B,B,C,73,25,1,395,97,239,336,0.85,20,61,69,18,40,58,,,,,,,,,,,,,
 ,,VAN,Vancouver Canucks,Adams,63,48,LW,Greg,C,C,D,F,B,C,B,C,B,B,71,23,0,560,194,193,387,0.69,4,57,62,16,28,44,,,,,,,,,,,,,
@@ -521,9 +521,9 @@ Whitmore,87,VAN,Vancouver Canucks,Ronning,73,50,C,Cliff,D,B,F,F,A,F,C,C,A ,A,78,
 ,,VAN,Vancouver Canucks,Hunter,30,42,RW,Tim,D,D,A,C,D,C,D,D,D,D,44,23,0,593,54,62,116,0.20,-34,7,67,4,9,13,,,,,,,,,,,,,
 ,,VAN,Vancouver Canucks,Hedican,42,46,D,Bret,D,D,D,C,C,D,F-,C,D,D,45,25,0,46,1,8,9,0.20,0,1,0,0,0,0,,,,,,,,,,,,,
 ,,VAN,Vancouver Canucks,Antoski,32,30,LW,Shawn,D,D,A,C,D,C,F,F,F,F,38,25,0,8,0,0,0,0.00,-8,3,8,0,0,0,,,,,,,,,,,,,
-Beaupre,68,WAS,Washington Capitals,Bondra,77,60,RW,Peter,A,C,D,B,B,F,B,A,B,A+,76,30,0,518,87,82,169,0.86,-2,30,69,12,10,22,Don,222,203,13,32,4,63,13854,15754,32,1850,2105,1
-Tabaracci,53,WAS,Washington Capitals,Juneau,79,48,C,Joe,B,A,F,F-,B,D,C,B,B,A,82,24,0,71,60,128,188,1.27,16,12,0,8,14,22,Rick,18,34,1,0,0,7,1854,2112,0,0,0,0
-Dafoe,52,WAS,Washington Capitals,Ridley,69,52,C,Mike,C,B,D,F-,B,D,A,B,B,B,75,27,1,2,244,362,606,0.92,30,60,0,24,33,57,Byron,0,1,0,0,0,1,45,52,0,0,0,0
+Beaupre,68,WAS,Washington Capitals,Bondra,77,60,RW,Peter,A,C,D,B,B,F,B,A,B,A+,76,30,0,531,87,82,169,0.86,-2,30,62,12,10,22,Don,230,205,13,28,2,64,13854,15754,29,1850,2105,1
+Tabaracci,53,WAS,Washington Capitals,Juneau,79,48,C,Joe,B,A,F,F-,B,D,C,B,B,A,82,24,0,68,60,128,188,1.27,16,12,11,8,14,22,Rick,18,28,3,4,0,7,1854,2112,7,0,0,0
+Dafoe,52,WAS,Washington Capitals,Ridley,69,52,C,Mike,C,B,D,F-,B,D,A,B,B,B,75,27,1,1,244,362,606,0.92,30,60,0,24,33,57,Byron,0,0,0,0,0,0,45,52,0,0,0,0
 ,,WAS,Washington Capitals,Khristich,69,57,RW,Dimitri,B,B,D,D,B,C,A+,A,C,C,74,30,0,241,101,121,222,0.92,2,42,42,12,13,25,,,,,,,,,,,,,
 ,,WAS,Washington Capitals,Pivonka,78,47,LW,Michal,C,B,D,F-,C,C,C,B,C,B,70,24,0,493,136,237,373,0.76,24,41,87,18,31,49,,,,,,,,,,,,,
 ,,WAS,Washington Capitals,Miller,54,56,LW,Kelly,C,B,D,F,B,D,C,C,B,B,64,27,0,630,148,179,327,0.52,56,65,87,18,22,40,,,,,,,,,,,,,
@@ -542,8 +542,8 @@ Dafoe,52,WAS,Washington Capitals,Ridley,69,52,C,Mike,C,B,D,F-,B,D,A,B,B,B,75,27,
 ,,WAS,Washington Capitals,Johnson,37,70,D,Jim,A ,C,B,B,A,B,F,C,B,B,65,25,0,584,22,134,156,0.27,-18,12,60,12,20,32,,,,,,,,,,,,,
 ,,WAS,Washington Capitals,Reekie,46,55,D,Joe,B,C,B,B,B,B,B,B,C,C,73,23,0,397,16,77,93,0.23,-4,8,8,1,2,3,,,,,,,,,,,,,
 ,,WAS,Washington Capitals,Anderson,36,45,D,Shawn,C,A,C,F-,C,C,B,B,C,C,67,26,0,254,11,50,61,0.24,-14,5,8,0,1,1,,,,,,,,,,,,,
-Cheveldae,64,WPG,Winnipeg Jets,Selanne,94,41,RW,Teemu,C,C,D,F,B,C,D,C,B,C,63,24,1,210,76,56,132,1.57,4,56,22,0,0,0,Tim,95,78,7,9,0,25,5421,6165,11,580,660,1
-O'Neill,39,WPG,Winnipeg Jets,Emerson,70,54,RW,Nelson,D,D,B,C,B,B,D,B,C,C,62,23,0,20,104,152,256,0.78,-2,22,0,3,7,10,Mike,0,9,0,0,0,3,451,515,0,0,0,0
+Cheveldae,64,WPG,Winnipeg Jets,Selanne,94,41,RW,Teemu,C,C,D,F,B,C,D,C,B,C,63,24,1,234,76,56,132,1.57,4,56,25,0,0,0,Tim,112,84,8,9,2,29,5421,6165,15,580,660,1
+O'Neill,39,WPG,Winnipeg Jets,Emerson,70,54,RW,Nelson,D,D,B,C,B,B,D,B,C,C,62,23,0,3,104,152,256,0.78,-2,22,0,3,7,10,Mike,0,0,0,0,0,1,451,515,0,0,0,0
 ,,WPG,Winnipeg Jets,Drake,61,75,RW,Dallas,D,C,F,D,C,D,C,C,C,C,52,26,0,72,18,26,44,0.61,-4,2,0,0,0,0,,,,,,,,,,,,,
 ,,WPG,Winnipeg Jets,Zhamnov,76,51,C,Alexei,D,D,C,F,A,B,D,C,C,C,55,21,0,68,25,47,72,1.06,0,3,0,0,0,0,,,,,,,,,,,,,
 ,,WPG,Winnipeg Jets,Manson,62,49,D,Dave,C,D,A+,F,B,C,C,C,C,D,53,33,1,492,59,148,207,0.42,-118,36,69,16,20,36,,,,,,,,,,,,,
