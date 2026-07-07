@@ -6435,7 +6435,7 @@ function runEndOfSeasonAwards() {
     }
 
     // 9. NORRIS
-    const defense = skaters.filter(p => p.pos === 'D');
+    const defense = skaters.filter(p => p.pos === 'D' && playoffQualifiers.has(p.team));
     const norrisSorted = defense.sort((a, b) => ((b.season.g * 2 + b.season.a) + ((b.season.pm || 0) * 1.5)) - ((a.season.g * 2 + a.season.a) + ((a.season.pm || 0) * 1.5)));
     if (norrisSorted.length > 0) { 
         awardTrophy(norrisSorted[0].name, currentSeason, "Norris");
@@ -7063,7 +7063,7 @@ function openAwardsVoting() {
     const vezinaCands = [...goalies]
         .map(p => ({ name: p.name, stat: `${p.season.w||0}W  SV% ${p.season.sa>0?((p.season.sv/p.season.sa)*100).toFixed(1):'--'}`, score: (p.season.w||0)+(p.season.sa>0?(p.season.sv/p.season.sa)*100:0) }))
         .sort((a,b) => b.score - a.score).slice(0, 3);
-    const norrisCands = [...skaters].filter(p => p.pos === 'D')
+    const norrisCands = [...skaters].filter(p => p.pos === 'D' && hartPlayoffQual.has(p.team))
         .map(p => ({ name: p.name, stat: `${p.season.g}G  ${p.season.a}A  ${p.season.pm>=0?'+':''}${p.season.pm||0}`, score: (p.season.g+p.season.a)+(p.season.pm||0) }))
         .sort((a,b) => b.score - a.score).slice(0, 3);
     const calderCands = [...allPlayers].filter(p => (p.career.gp||0) <= (p.pos==='G'?38:28) && p.season.gp >= (p.pos==='G'?minGoalieGP:minSkaterGP))
