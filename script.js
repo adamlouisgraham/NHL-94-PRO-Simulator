@@ -2024,63 +2024,116 @@ function getPlayerFatigueAmount(pName) {
 //  DYNAMIC DUO REGISTRY
 // Forces the auto-coach to draft these players onto the same line if both are healthy
 const dynamicDuos = [
+    // ANA — forwards + D pairs
+    ['Paul Kariya', 'Teemu Selanne'],
+    ['Bobby Dollas', 'Sean Hill'],
+    ['Bill Houlder', 'Randy Ladouceur'],
     // BOS
     ['Adam Oates', 'Cam Neely', 'Glen Murray'],
-    // HFD
-    ['Andrew Cassels', 'Brendan Shanahan', 'Pat Verbeek', 'Geoff Sanderson'],
-    // PIT — two separate lines
-    ['Mario Lemieux', 'Jaromir Jagr', 'Rick Tocchet'],
-    ['Ron Francis', 'Kevin Stevens', 'Tomas Sandstrom'],
-    // ANA
-    ['Paul Kariya', 'Teemu Selanne'],
-    // LAK
-    ['Wayne Gretzky', 'Jari Kurri', 'Luc Robitaille'],
-    // NYR — two forward lines
-    ['Mark Messier', 'Glenn Anderson', 'Adam Graves'],
-    ['Steve Larmer', 'Alexei Kovalev', 'Esa Tikkanen'],
-    // NYI
-    ['Derek King', 'Pierre Turgeon'],
-    // PHI
-    ['Eric Lindros', 'Mark Recchi', 'John LeClair', 'Brent Fedyk'],
-    // QUE
-    ['Andrei Kovalenko', 'Mats Sundin', 'Valeri Kamensky'],
-    ['Joe Sakic', 'Owen Nolan', 'Mike Ricci'],
-    // CGY — two lines
-    ['Gary Roberts', 'Joe Nieuwendyk', 'German Titov'],
-    ['Theoren Fleury', 'Robert Reichel'],
-    // BUF — LaFontaine and Mogilny on separate lines
+    ['Ray Bourque', 'Al Iafrate'],
+    ['Glen Wesley', 'Don Sweeney'],
+    // BUF
     ['Pat LaFontaine', 'Yuri Khmylev', 'Donald Audette'],
     ['Alexander Mogilny', 'Dale Hawerchuk', 'Jason Dawe'],
+    ['Doug Bodger', 'Richard Smehlik'],
+    ['Petr Svoboda', 'Philippe Boucher'],
+    // CGY
+    ['Gary Roberts', 'Joe Nieuwendyk', 'German Titov'],
+    ['Theoren Fleury', 'Robert Reichel'],
+    ['Zarley Zalapski', 'James Patrick'],
     // CHI
     ['Jeremy Roenick', 'Tony Amonte', 'Dirk Graham'],
-    // MTL — three lines
+    ['Chris Chelios', 'Eric Weinrich'],
+    ['Gary Suter', 'Steve Smith'],
+    // DET
+    ['Sergei Fedorov', 'Vachslav Kozlov'],
+    ['Ray Sheppard', 'Steve Yzerman', 'Dino Ciccarelli'],
+    ['Nicklas Lidstrom', 'Vladimir Konstantinov'],
+    // EDM
+    ['Jason Arnott', 'Zdeno Ciger'],
+    ['Doug Weight', 'Shayne Corson'],
+    ['Igor Kravchuk', 'Fredrik Olausson'],
+    ['Bob Beers', 'Boris Mironov'],
+    // FLA
+    ['Gord Murphy', 'Peter Andersson'],
+    ['Geoff Smith', 'Brian Benning'],
+    // HFD
+    ['Andrew Cassels', 'Brendan Shanahan', 'Pat Verbeek', 'Geoff Sanderson'],
+    ['Chris Pronger', 'Adam Burt'],
+    ['Frantisek Kucera', 'Alexander Godynyuk'],
+    // LAK
+    ['Wayne Gretzky', 'Jari Kurri', 'Luc Robitaille'],
+    ['Rob Blake', 'Alexei Zhitnik'],
+    ['Darryl Sydor', 'Marty McSorley'],
+    // MIN
+    ['Mike Modano', 'Russ Courtnall', 'Dave Gagner'],
+    ['Mark Tinordi', 'Paul Cavallini'],
+    ['Derian Hatcher', 'Doug Zmolek'],
+    // MTL
     ['Vincent Damphousse', 'Brian Bellows', 'Benoit Brunet'],
     ['Kirk Muller', 'John LeClair'],
     ['Guy Carbonneau', 'Mike Keane', 'Ron Wilson'],
-    // STL
-    ['Brett Hull', 'Craig Janney', 'Vitali Prokhorov'],
-    // TOR — two lines
-    ['Doug Gilmour', 'Dave Andreychuk'],
-    ['Wendel Clark', 'Mike Gartner'],
-    // DET — Fedorov centered his own line separate from Yzerman
-    ['Sergei Fedorov', 'Vachslav Kozlov'],
-    ['Ray Sheppard', 'Steve Yzerman', 'Dino Ciccarelli'],
-    // VAN
-    ['Pavel Bure', 'Trevor Linden', 'Greg Adams'],
-    // TBL — two lines
-    ['Denis Savard', 'Rob Zamuner'],
-    ['Brian Bradley', 'Petr Klima'],
-    // MIN
-    ['Mike Modano', 'Russ Courtnall', 'Dave Gagner'],
-    // NJD — forward line
+    ['Matt Schneider', 'J.J. Daigneault'],
+    ['Patrice Brisebois', 'Eric Desjardins'],
+    ['Lyle Odelein', 'Kevin Haller'],
+    // NJD
     ['Stephane Richer', 'Valeri Zelepukin', 'Claude Lemieux'],
-    // WAS
-    ['Joe Juneau', 'Peter Bondra', 'Dimitri Khristich'],
+    ['Scott Niedermayer', 'Vachslav Fetisov'],
+    // NYI
+    ['Derek King', 'Pierre Turgeon'],
+    ['Vladimir Malakhov', 'Uwe Krupp'],
+    ['Darius Kasparaitis', 'Scott Lachance'],
+    // NYR
+    ['Mark Messier', 'Glenn Anderson', 'Adam Graves'],
+    ['Steve Larmer', 'Alexei Kovalev', 'Esa Tikkanen'],
+    ['Brian Leetch', 'Alex Karpotsev'],
+    ['Sergei Zubov', 'Jeff Beukeboom'],
+    // OTW
+    ['Norm Maciver', 'Kerry Huffman'],
+    ['Brad Shaw', 'Steve Konroyd'],
+    // PHI
+    ['Eric Lindros', 'Mark Recchi', 'John LeClair', 'Brent Fedyk'],
+    ['Dimitri Yushkevich', 'Yves Racine'],
+    ['Garry Galley', 'Rob Ramage'],
+    // PIT
+    ['Mario Lemieux', 'Jaromir Jagr', 'Rick Tocchet'],
+    ['Ron Francis', 'Kevin Stevens', 'Tomas Sandstrom'],
+    ['Larry Murphy', 'Kjell Samuelsson'],
+    ['Greg Hawgood', 'Ulf Samuelsson'],
+    // QUE
+    ['Andrei Kovalenko', 'Mats Sundin', 'Valeri Kamensky'],
+    ['Joe Sakic', 'Owen Nolan', 'Mike Ricci'],
+    ['Curtis Leschyshyn', 'Alexei Gusarov'],
+    ['Tommy Sjodin', 'Garth Butcher'],
     // SJS
     ['Igor Larionov', 'Sergei Makarov', 'Ray Whitney'],
-    // EDM — two lines
-    ['Jason Arnott', 'Zdeno Ciger'],
-    ['Doug Weight', 'Shayne Corson'],
+    ['Sandis Ozolinsh', 'Jeff Norton'],
+    ['Jay More', 'Mike Rathje'],
+    // STL
+    ['Brett Hull', 'Craig Janney', 'Vitali Prokhorov'],
+    ['Phil Housley', 'Steve Duchesne'],
+    ['Alexei Kasatonov', 'Doug Crossman'],
+    // TBL
+    ['Denis Savard', 'Rob Zamuner'],
+    ['Brian Bradley', 'Petr Klima'],
+    ['Chris Joseph', 'Shawn Chambers'],
+    ['Roman Hamrlik', 'Marc Bergevin'],
+    // TOR
+    ['Doug Gilmour', 'Dave Andreychuk'],
+    ['Wendel Clark', 'Mike Gartner'],
+    ['Dave Ellett', 'Jamie Macoun'],
+    ['Todd Gill', 'Dmitri Mironov'],
+    // VAN
+    ['Pavel Bure', 'Trevor Linden', 'Greg Adams'],
+    ['Jeff Brown', 'Gerald Diduck'],
+    ['Jyrki Lumme', 'Jiri Slegr'],
+    // WAS
+    ['Joe Juneau', 'Peter Bondra', 'Dimitri Khristich'],
+    ['Kevin Hatcher', 'John Slaney'],
+    ['Calle Johansson', 'Joe Reekie'],
+    // WPG
+    ['Igor Ulanov', 'Dave Manson'],
+    ['Teppo Numminen', 'Stephane Quintal'],
 ];
 
 function getAllDuos() { return [...dynamicDuos, ...customDuos]; }
