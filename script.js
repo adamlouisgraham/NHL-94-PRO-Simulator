@@ -2025,18 +2025,18 @@ function getPlayerFatigueAmount(pName) {
 // Forces the auto-coach to draft these players onto the same line if both are healthy
 const dynamicDuos = [
     // BOS
-    ['Ray Bourque', 'Adam Oates', 'Cam Neely', 'Glen Murray'],
+    ['Adam Oates', 'Cam Neely', 'Glen Murray'],
     // HFD
     ['Andrew Cassels', 'Brendan Shanahan', 'Pat Verbeek', 'Geoff Sanderson'],
-    // PIT
-    ['Mario Lemieux', 'Jaromir Jagr', 'Rick Tocchet', 'Ron Francis', 'Kevin Stevens', 'Tomas Sandstrom'],
+    // PIT — two separate lines
+    ['Mario Lemieux', 'Jaromir Jagr', 'Rick Tocchet'],
+    ['Ron Francis', 'Kevin Stevens', 'Tomas Sandstrom'],
     // ANA
     ['Paul Kariya', 'Teemu Selanne'],
     // LAK
     ['Wayne Gretzky', 'Jari Kurri', 'Luc Robitaille'],
-    // NYR — top line + D pair
-    ['Mark Messier', 'Steve Larmer', 'Alexei Kovalev', 'Adam Graves'],
-    ['Brian Leetch', 'Sergei Zubov'],
+    // NYR
+    ['Mark Messier', 'Glenn Anderson', 'Adam Graves'],
     // NYI
     ['Derek King', 'Pierre Turgeon'],
     // PHI
@@ -2045,29 +2045,28 @@ const dynamicDuos = [
     ['Andrei Kovalenko', 'Mats Sundin', 'Valeri Kamensky'],
     ['Joe Sakic', 'Owen Nolan', 'Mike Ricci'],
     // CGY
-    ['Theoren Fleury', 'Gary Roberts', 'Joe Nieuwendyk'],
-    // BUF — LaFontaine is the center, Mogilny the wing
-    ['Pat LaFontaine', 'Alexander Mogilny', 'Dale Hawerchuk'],
+    ['Gary Roberts', 'Joe Nieuwendyk', 'German Titov'],
+    // BUF — LaFontaine and Mogilny on separate lines
+    ['Pat LaFontaine', 'Yuri Khmylev', 'Donald Audette'],
+    ['Alexander Mogilny', 'Dale Hawerchuk', 'Jason Dawe'],
     // CHI
-    ['Jeremy Roenick', 'Tony Amonte', 'Chris Chelios', 'Dirk Graham'],
+    ['Jeremy Roenick', 'Tony Amonte', 'Dirk Graham'],
     // MTL
     ['Vincent Damphousse', 'Brian Bellows', 'Benoit Brunet'],
     ['Mike Keane', 'Guy Carbonneau'],
-    // STL — Housley ran the PP with Hull
-    ['Brett Hull', 'Craig Janney', 'Phil Housley', 'Vitali Prokhorov'],
+    // STL
+    ['Brett Hull', 'Craig Janney', 'Vitali Prokhorov'],
     // TOR
     ['Doug Gilmour', 'Wendel Clark', 'Mike Gartner'],
-    // DET — Fedorov was the franchise center
-    ['Sergei Fedorov', 'Steve Yzerman', 'Dino Ciccarelli'],
-    ['Nicklas Lidstrom', 'Vladimir Konstantinov', 'Paul Coffey'],
+    // DET
+    ['Ray Sheppard', 'Steve Yzerman', 'Dino Ciccarelli'],
+    ['Nicklas Lidstrom', 'Vladimir Konstantinov'],
     // VAN
     ['Pavel Bure', 'Trevor Linden', 'Greg Adams'],
     // TBL
     ['Denis Savard', 'Rob Zamuner'],
     // MIN
     ['Mike Modano', 'Russ Courtnall', 'Dave Gagner'],
-    // NJD
-    ['Scott Stevens', 'Scott Niedermayer'],
     // WAS
     ['Joe Juneau', 'Peter Bondra', 'Dimitri Khristich'],
 ];
