@@ -6312,8 +6312,14 @@ function runEndOfSeasonAwards() {
         teamTopScorers[tm].sort((a, b) => b - a); 
     }
 
+    const playoffQualifiers = new Set([
+        ...league.filter(t=>t.conf==='Eastern').sort((a,b)=>b.season.pts-a.season.pts).slice(0,8).map(t=>t.name),
+        ...league.filter(t=>t.conf==='Western').sort((a,b)=>b.season.pts-a.season.pts).slice(0,8).map(t=>t.name)
+    ]);
+
     let mvpCandidates = [];
     skaters.forEach(p => {
+        if (!playoffQualifiers.has(p.team)) return;
         let pts = p.season.g + p.season.a;
         let tm = p.team || "FA";
         let teamStats = teamTopScorers[tm];
@@ -6322,10 +6328,11 @@ function runEndOfSeasonAwards() {
     });
 
     goalies.forEach(g => {
+        if (!playoffQualifiers.has(g.team)) return;
         let w = g.season.w || 0;
         let so = g.season.so || 0;
         let svPct = g.season.gp > 0 ? (g.season.sv / g.season.sa) : 0;
-        let svBonus = svPct > 0.900 ? (svPct - 0.900) * 1000 : 0; 
+        let svBonus = svPct > 0.900 ? (svPct - 0.900) * 1000 : 0;
         mvpCandidates.push({ name: g.name, score: (w * 2.2) + (so * 3) + svBonus });
     });
 
@@ -7045,9 +7052,13 @@ function openAwardsVoting() {
     const goalies = allPlayers.filter(p => p.pos === 'G' && p.season.gp >= minGoalieGP);
 
     // Build nominee lists (top 3 per award, read-only — actual winners computed in runEndOfSeasonAwards)
-    const hartCands = [...skaters]
+    const hartPlayoffQual = new Set([
+        ...league.filter(t=>t.conf==='Eastern').sort((a,b)=>b.season.pts-a.season.pts).slice(0,8).map(t=>t.name),
+        ...league.filter(t=>t.conf==='Western').sort((a,b)=>b.season.pts-a.season.pts).slice(0,8).map(t=>t.name)
+    ]);
+    const hartCands = [...skaters].filter(p => hartPlayoffQual.has(p.team))
         .map(p => ({ name: p.name, stat: `${p.season.g}G  ${p.season.a}A  ${p.season.g+p.season.a}PTS`, score: p.season.g+p.season.a }))
-        .concat(goalies.map(p => ({ name: p.name, stat: `${p.season.w||0}W  ${p.season.so||0}SO`, score: (p.season.w||0)*2.2+(p.season.so||0)*3 })))
+        .concat(goalies.filter(p => hartPlayoffQual.has(p.team)).map(p => ({ name: p.name, stat: `${p.season.w||0}W  ${p.season.so||0}SO`, score: (p.season.w||0)*2.2+(p.season.so||0)*3 })))
         .sort((a,b) => b.score - a.score).slice(0, 3);
     const vezinaCands = [...goalies]
         .map(p => ({ name: p.name, stat: `${p.season.w||0}W  SV% ${p.season.sa>0?((p.season.sv/p.season.sa)*100).toFixed(1):'--'}`, score: (p.season.w||0)+(p.season.sa>0?(p.season.sv/p.season.sa)*100:0) }))
