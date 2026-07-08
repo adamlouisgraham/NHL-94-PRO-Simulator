@@ -8334,7 +8334,7 @@ function rollInGameInjuries(homeCode, awayCode) {
                 days = Math.min(days, 12);
                 // Cap if no healthy scratches available to dress
                 const isF = p.pos !== 'G' && p.pos !== 'D' && p.pos !== 'LD' && p.pos !== 'RD';
-                if (getBenchDepth(tk, isF) === 0) days = Math.min(days, 2);
+                if (getBenchDepth(tk, isF) === 0) days = 0; // no scratches to dress — injury limited to this game only
                 if (days > 0) ps.injury = { severity: days, daysRemaining: days };
                 const label = days === 0 ? 'shaken up — playing through' : `out ${days} game${days > 1 ? 's' : ''}`;
                 tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `[INJ] IN-GAME: ${p.name} (${tk.toUpperCase()}) — ${label}.` });
@@ -8384,7 +8384,7 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
             const teamCode = (rosters[homeCode] || []).find(p => p.name === pName) ? homeCode : awayCode;
             // Cap if no healthy scratches of same position group available
             const isF = ps.pos !== 'G' && ps.pos !== 'D' && ps.pos !== 'LD' && ps.pos !== 'RD';
-            if (getBenchDepth(teamCode, isF) === 0) days = Math.min(days, 2);
+            if (getBenchDepth(teamCode, isF) === 0) days = 0; // no scratches to dress — injury limited to this game only
 
             const note = days === 0
                 ? `[INJ] INJURY NOTE: ${pName} (${teamCode.toUpperCase()}) was shaken up  -  out for a period.`
