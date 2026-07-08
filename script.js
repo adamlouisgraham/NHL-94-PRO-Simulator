@@ -2941,7 +2941,7 @@ function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
 }
 
 // Helper function to build the Special Teams HTML dynamically
-function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.08, Math.min(0.27, 0.165 + diff * 0.0028 * pace)); }
+function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.12, Math.min(0.27, 0.165 + diff * 0.0028 * pace)); }
 
 // --- GAME MATH & STATS ---
 function checkMilestones(pName) {
