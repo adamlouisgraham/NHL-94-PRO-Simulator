@@ -1623,8 +1623,8 @@ function getPlayerWeightedStats(pName) {
         
         let endurance = parseInt(p.attr.endurance || p.attr.END || p.attr.end) || 70;
         
-        let maxPenaltyPercent = 0.10; // Reducing this to 10% will stop star players from "bottoming out"
-        let endResistance = 1.2 - (endurance / 100); 
+        let maxPenaltyPercent = 0.05; // Max 5% OVR penalty at full fatigue
+        let endResistance = 1.2 - (endurance / 100);
         let penaltyPct = (fatigue / 100) * maxPenaltyPercent * endResistance;
         
         finalOvr = Math.round(baseOvr * (1 - penaltyPct));
@@ -3401,8 +3401,8 @@ function simGame(idx) {
         hOnIce.forEach(p => { gameIceTicks[p.name] = (gameIceTicks[p.name] || 0) + 1; });
         aOnIce.forEach(p => { gameIceTicks[p.name] = (gameIceTicks[p.name] || 0) + 1; });
 
-        // In-game fatigue penalty: free for first 20 ticks (10 min), then 0.25 OVR per tick
-        const inGameFatigue = (name) => Math.max(0, ((gameIceTicks[name] || 0) - 20) * 0.25);
+        // In-game fatigue penalty: free for first 20 ticks (10 min), then 0.10 OVR per tick
+        const inGameFatigue = (name) => Math.max(0, ((gameIceTicks[name] || 0) - 20) * 0.10);
         const hFatiguePen = hOnIce.reduce((s,p) => s + inGameFatigue(p.name), 0) / Math.max(1, hOnIce.length);
         const aFatiguePen = aOnIce.reduce((s,p) => s + inGameFatigue(p.name), 0) / Math.max(1, aOnIce.length);
 
@@ -8121,16 +8121,16 @@ function applyPostGameFatigue(awayTeamCode, homeTeamCode, awayGoalieName, homeGo
         rosters[tk].forEach(p => {
             if (!p.status) p.status = { fatigue: 0, morale: 0, injuryDays: 0, suspension: 0, consecutiveStarts: 0 };
 
-            // Skaters gain 15 fatigue per game
+            // Skaters gain 8 fatigue per game
             if (p.pos !== 'G' && p.status.injuryDays === 0) {
-                p.status.fatigue = Math.min(100, p.status.fatigue + 15);
-            } 
-            // Goalies 
+                p.status.fatigue = Math.min(100, p.status.fatigue + 8);
+            }
+            // Goalies
             else if (p.pos === 'G') {
                 if (p.name === startingGoalies[index]) {
-                    p.status.fatigue = Math.min(100, p.status.fatigue + 25); // Starter gets exhausted
+                    p.status.fatigue = Math.min(100, p.status.fatigue + 15); // Starter gets exhausted
                 } else {
-                    p.status.fatigue = Math.max(0, p.status.fatigue - 10); // Backup rests on the bench
+                    p.status.fatigue = Math.max(0, p.status.fatigue - 8); // Backup rests on the bench
                 }
             }
         });
