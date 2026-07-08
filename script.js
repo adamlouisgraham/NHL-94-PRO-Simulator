@@ -1639,8 +1639,8 @@ function getPlayerWeightedStats(pName) {
         else if (ps.micro_streak === 'HOT')  finalOvr = Math.round(finalOvr * 1.06);
         if (ps.macro_streak === 'COLD')      finalOvr = Math.round(finalOvr * 0.88);
         else if (ps.micro_streak === 'COLD') finalOvr = Math.round(finalOvr * 0.94);
-        // dailySwing: pre-game per-player variance (+8/-8 flat, set by applyDailyRandomSwing)
-        if (ps.dailySwing) finalOvr = Math.max(40, Math.min(99, finalOvr + ps.dailySwing));
+        // dailySwing: pre-game per-player variance (±8% of ovr, set by applyDailyRandomSwing)
+        if (ps.dailySwing) finalOvr = Math.max(40, Math.min(99, Math.round(finalOvr * (1 + ps.dailySwing))));
     }
 
     const result = { ovr: finalOvr, tag: tag, baseOvr: baseOvr };
@@ -3266,6 +3266,18 @@ function simGame(idx) {
         }
     }
     let asgBoost = isASG ? 1.8 : 1.0;
+
+    // HOME LAST-CHANGE ADVANTAGE — home team always has last line change in real hockey,
+    // letting them match up favorable lines. Gives a structural flat OVR bonus each tick.
+    const homeLastChangeMod = isASG ? 0 : 1.5;
+
+    // PARITY BOOST — home underdogs get extra crowd/desperation lift.
+    // The further behind in team OVR, the bigger the boost (caps at +4).
+    const hAvgOvr = getDynamicTeamOvr(g.h.nrm) || 75;
+    const aAvgOvr = getDynamicTeamOvr(g.a.nrm) || 75;
+    const ovrGap  = aAvgOvr - hAvgOvr; // positive = home team is underdog
+    const parityBoost = isASG ? 0 : Math.min(4, Math.max(0, ovrGap * 0.35));
+
     let homeCrowdEnergy = 1.03;
 
     // RIVALRY — historical rivals play with extra intensity from game 1; organic (3+ meetings) adds more
@@ -3405,7 +3417,7 @@ function simGame(idx) {
 
         // Live Dynamic Matchup Overalls (momentum adds up to +3 OVR for ~4 min after a goal)
         const lineMatchBonus = (!isPlayoffs && !isASG && coachAdj.lineMatch) ? 1.0 : 0;
-        let hLiveOvr = (getLiveLineOvr(hOnIce) + lineMatchBonus - hFatiguePen + hPressureMod + hStreakMod + rivalBonus + hMomentum * 0.375) * hAuraMod * homeCrowdEnergy;
+        let hLiveOvr = (getLiveLineOvr(hOnIce) + lineMatchBonus + homeLastChangeMod + parityBoost - hFatiguePen + hPressureMod + hStreakMod + rivalBonus + hMomentum * 0.375) * hAuraMod * homeCrowdEnergy;
         let aLiveOvr = (getLiveLineOvr(aOnIce) - aFatiguePen + aPressureMod + aStreakMod + rivalBonus + aMomentum * 0.375) * aAuraMod;
 
         let diff = hLiveOvr - aLiveOvr + chaosOffset;
@@ -4135,9 +4147,9 @@ function applyDailyRandomSwing(tk) {
     const hotPlayer  = pick(starters, hotW);
     const coldPlayer = pick(starters.filter(p => p !== hotPlayer), coldW);
 
-    // dailySwing feeds into getPlayerWeightedStats OVR (+8 hot / -8 cold)
-    playerStats[hotPlayer.name].dailySwing  =  8;
-    playerStats[coldPlayer.name].dailySwing = -8;
+    // dailySwing feeds into getPlayerWeightedStats OVR (±8% of baseOvr — percentage so stars don't crater)
+    playerStats[hotPlayer.name].dailySwing  =  0.08;
+    playerStats[coldPlayer.name].dailySwing = -0.08;
 }
 
 // =========================================================
@@ -4927,20 +4939,50 @@ async function simPlayoffs() {
 
 // 2. Draw the buttons on the screen (Upgraded with Explicit Positional Slots)
 
+let _teamStatsSortCol = 'pts';
+let _teamStatsSortDir = -1; // -1 = desc, 1 = asc
+
+window.sortLeagueTeamStats = function(col) {
+    if (_teamStatsSortCol === col) _teamStatsSortDir *= -1;
+    else { _teamStatsSortCol = col; _teamStatsSortDir = -1; }
+    renderLeagueTeamStats();
+};
+
 function renderLeagueTeamStats() {
     const el = document.getElementById('leagueTeamStatsTable');
     if (!el) return;
+
+    const getVal = (t) => {
+        const gp = t.season.gp || 1;
+        const gf = t.season.gf || 0; const ga = t.season.ga || 0;
+        const sf = t.season.sf || 0; const sa = t.season.sa || 0;
+        const ppg = t.season.ppg || 0; const ppo = t.season.ppo || 0;
+        const pka = t.season.pka || 0; const pkg = t.season.pkg || 0;
+        return {
+            pts: t.season.pts, w: t.season.w, l: t.season.l, t_: t.season.t,
+            gp, gf, ga, gd: gf - ga,
+            gfgp: gf / gp, gagp: ga / gp,
+            sfgp: sf / gp, sagp: sa / gp,
+            shp: sf > 0 ? gf / sf * 100 : 0,
+            svp: sa > 0 ? (sa - ga) / sa * 100 : 0,
+            pdo: sf > 0 && sa > 0 ? (gf/sf*100) + ((sa-ga)/sa*100) : 0,
+            pp: ppo > 0 ? ppg / ppo * 100 : 0,
+            pk: pka > 0 ? (pka - pkg) / pka * 100 : 0,
+            strk: t.winStreak > 0 ? t.winStreak : -(t.loseStreak || 0),
+        };
+    };
+
     const sorted = [...league].sort((a, b) => {
-        if (b.season.pts !== a.season.pts) return b.season.pts - a.season.pts;
-        if (b.season.w   !== a.season.w)   return b.season.w   - a.season.w;
-        const aH = (a.season.h2h && a.season.h2h[b.nrm]) || 0;
-        const bH = (b.season.h2h && b.season.h2h[a.nrm]) || 0;
-        if (bH !== aH) return bH - aH;
-        return (b.season.gf - b.season.ga) - (a.season.gf - a.season.ga);
+        const av = getVal(a)[_teamStatsSortCol === 't' ? 't_' : _teamStatsSortCol] ?? 0;
+        const bv = getVal(b)[_teamStatsSortCol === 't' ? 't_' : _teamStatsSortCol] ?? 0;
+        return (bv - av) * _teamStatsSortDir;
     });
-    const th = (t, tip='') => `<th title="${tip}" style="background:#111;color:#aaa;padding:5px 8px;border-bottom:2px solid #333;white-space:nowrap;cursor:default;">${t}</th>`;
+
+    const arrow = (col) => _teamStatsSortCol === col ? (_teamStatsSortDir === -1 ? ' ▼' : ' ▲') : '';
+    const th = (t, col, tip='') => `<th title="${tip}" onclick="sortLeagueTeamStats('${col}')" style="background:#111;color:${_teamStatsSortCol===col?'var(--neon-cyan)':'#aaa'};padding:5px 8px;border-bottom:2px solid #333;white-space:nowrap;cursor:pointer;user-select:none;">${t}${arrow(col)}</th>`;
+    const thS = (t) => `<th style="background:#111;color:#aaa;padding:5px 8px;border-bottom:2px solid #333;white-space:nowrap;">${t}</th>`;
     const td = (v, hi, color='') => `<td style="padding:4px 8px;border-bottom:1px solid #222;${hi?`color:${color||'var(--neon-cyan)'};font-weight:bold;`:''}">${v}</td>`;
-    let h = `<tr>${th('#')}${th('TEAM')}${th('GP')}${th('W')}${th('L')}${th('T')}${th('PTS')}${th('GF')}${th('GA')}${th('GD','Goal differential')}${th('GF/GP','Goals for per game')}${th('GA/GP','Goals against per game')}${th('SF/GP','Shots for per game')}${th('SA/GP','Shots against per game')}${th('Sh%','Team shooting percentage')}${th('SV%','Team save percentage')}${th('PP%','Power play percentage')}${th('PK%','Penalty kill percentage')}${th('PDO','Sh% + SV% — values above 100% indicate hot streak')}${th('STRK','Current win/loss streak')}</tr>`;
+    let h = `<tr>${thS('#')}${thS('TEAM')}${th('GP','gp')}${th('W','w')}${th('L','l')}${th('T','t')}${th('PTS','pts')}${th('GF','gf')}${th('GA','ga')}${th('GD','gd','Goal differential')}${th('GF/GP','gfgp','Goals for per game')}${th('GA/GP','gagp','Goals against per game')}${th('SF/GP','sfgp','Shots for per game')}${th('SA/GP','sagp','Shots against per game')}${th('Sh%','shp','Team shooting percentage')}${th('SV%','svp','Team save percentage')}${th('PP%','pp','Power play percentage')}${th('PK%','pk','Penalty kill percentage')}${th('PDO','pdo','Sh% + SV% — values above 100% indicate hot streak')}${th('STRK','strk','Current win/loss streak')}</tr>`;
     sorted.forEach((t, i) => {
         const gp  = t.season.gp || 1;
         const gf  = t.season.gf || 0;
