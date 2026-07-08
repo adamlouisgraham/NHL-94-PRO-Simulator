@@ -3430,8 +3430,8 @@ function simGame(idx) {
         const closeMult  = absDiff === 0 ? 1.4 : absDiff === 1 ? 1.15 : absDiff >= 3 ? 0.6 : 1.0;
         const activeChaos = chaosScale * periodMult * closeMult;
         const chaosSpike = (Math.random() - 0.5) * activeChaos * 0.12;
-        let hShotChance = 0.26 + (diff * 0.0014) * asgBoost + scoreEffectH + chaosSpike;
-        let aShotChance = 0.26 - (diff * 0.0014) * asgBoost + scoreEffectA - chaosSpike;
+        let hShotChance = 0.28 + (diff * 0.0014) * asgBoost + scoreEffectH + chaosSpike;
+        let aShotChance = 0.28 - (diff * 0.0014) * asgBoost + scoreEffectA - chaosSpike;
         
         period = minute <= 20 ? 1 : (minute <= 40 ? 2 : 3);
         let sec = Math.floor(Math.random() * 60);
@@ -3471,12 +3471,12 @@ function simGame(idx) {
             trk(shooter.name, 's', 1); // Record Skater Shot
             trk(aG_name, 'sa', 1);     // Record Goalie Shot Against
 
-            // Conversion Roll  -  base 6.5%, sniper gets +24% multiplier, softer diff scaling
-            // (tuned so ES + PP + EN goals land near ~6.9 total/game)
+            // Conversion Roll  -  base 8.0%, sniper gets +24% multiplier, softer diff scaling
+            // (tuned so ES + PP + EN goals land near ~8.5 total/game)
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const hSniperMod = hShooterTag === 'SNIPER' ? 1.24 : hShooterTag === 'SUPERSTAR' ? 1.18 : 1.0;
             const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.065 + (diff * 0.0018)) * aWallMod * hSniperMod * hChaosMod;
+            let scoringProb = (0.080 + (diff * 0.0018)) * aWallMod * hSniperMod * hChaosMod;
             if (Math.random() < Math.max(0.025, Math.min(0.18, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
@@ -3509,7 +3509,7 @@ function simGame(idx) {
             const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const aSniperMod = aShooterTag === 'SNIPER' ? 1.24 : aShooterTag === 'SUPERSTAR' ? 1.18 : 1.0;
             const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.065 - (diff * 0.0018)) * hWallMod * aSniperMod * aChaosMod;
+            let scoringProb = (0.080 - (diff * 0.0018)) * hWallMod * aSniperMod * aChaosMod;
             if (Math.random() < Math.max(0.025, Math.min(0.18, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
