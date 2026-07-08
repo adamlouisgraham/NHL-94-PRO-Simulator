@@ -6520,10 +6520,11 @@ function runEndOfSeasonAwards() {
         winnerStats["Art Ross"] = `${artSorted[0].season.g}G  ${artSorted[0].season.a}A  ${artSorted[0].season.g+artSorted[0].season.a}PTS`;
     }
 
-    // 3. CALDER
-    const SKATER_ROOKIE_LIMIT = 28; const GOALIE_ROOKIE_LIMIT = 38;
-    const calderEligible = allPlayers.filter(p => { const cGP = p.career.gp || 0; return p.pos === 'G' ? (cGP <= GOALIE_ROOKIE_LIMIT && p.season.gp >= minGoalieGP) : (cGP <= SKATER_ROOKIE_LIMIT && p.season.gp >= minSkaterGP); });
-    const calderSorted = [...calderEligible].sort((a, b) => { const gs = p => p.pos==='G' ? (p.season.w*4)+(p.season.so*10) : (p.season.g+p.season.a); return gs(b) - gs(a); });
+    // 3. CALDER — eligible: career GP < 32 (all positions)
+    const ROOKIE_GP_LIMIT = 31;
+    const calderScore = p => p.pos === 'G' ? (p.season.w * 1.5) + (p.season.so * 3) : (p.season.g + p.season.a);
+    const calderEligible = allPlayers.filter(p => { const cGP = p.career.gp || 0; return p.pos === 'G' ? (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minGoalieGP) : (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minSkaterGP); });
+    const calderSorted = [...calderEligible].sort((a, b) => calderScore(b) - calderScore(a));
     if (calderSorted.length > 0) {
         awardTrophy(calderSorted[0].name, currentSeason, "Calder");
         runnersUp["Calder"] = calderSorted.slice(1, 4).map(p => p.name).join(', ');
@@ -7249,8 +7250,8 @@ function openAwardsVoting() {
     const norrisCands = [...skaters].filter(p => p.pos === 'D' && hartPlayoffQual.has(p.team))
         .map(p => ({ name: p.name, stat: `${p.season.g}G  ${p.season.a}A  ${p.season.pm>=0?'+':''}${p.season.pm||0}`, score: (p.season.g+p.season.a)+(p.season.pm||0) }))
         .sort((a,b) => b.score - a.score).slice(0, 3);
-    const calderCands = [...allPlayers].filter(p => (p.career.gp||0) <= (p.pos==='G'?38:28) && p.season.gp >= (p.pos==='G'?minGoalieGP:minSkaterGP))
-        .map(p => ({ name: p.name, stat: p.pos==='G'?`${p.season.w||0}W  ${p.season.so||0}SO`:`${p.season.g}G  ${p.season.a}A`, score: p.pos==='G'?(p.season.w||0)*4+(p.season.so||0)*10:(p.season.g+p.season.a) }))
+    const calderCands = [...allPlayers].filter(p => (p.career.gp||0) <= 31 && p.season.gp >= (p.pos==='G'?minGoalieGP:minSkaterGP))
+        .map(p => ({ name: p.name, stat: p.pos==='G'?`${p.season.w||0}W  ${p.season.so||0}SO`:`${p.season.g}G  ${p.season.a}A`, score: p.pos==='G'?(p.season.w||0)*1.5+(p.season.so||0)*3:(p.season.g+p.season.a) }))
         .sort((a,b) => b.score - a.score).slice(0, 3);
 
     const votingState = { Hart: null, Vezina: null, Norris: null, Calder: null };
