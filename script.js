@@ -3476,7 +3476,7 @@ function simGame(idx) {
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const hSniperMod = hShooterTag === 'SNIPER' ? 1.24 : hShooterTag === 'SUPERSTAR' ? 1.18 : 1.0;
             const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.080 + (diff * 0.0018)) * aWallMod * hSniperMod * hChaosMod;
+            let scoringProb = (0.072 + (diff * 0.0018)) * aWallMod * hSniperMod * hChaosMod;
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
@@ -3509,7 +3509,7 @@ function simGame(idx) {
             const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const aSniperMod = aShooterTag === 'SNIPER' ? 1.24 : aShooterTag === 'SUPERSTAR' ? 1.18 : 1.0;
             const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.080 - (diff * 0.0018)) * hWallMod * aSniperMod * aChaosMod;
+            let scoringProb = (0.072 - (diff * 0.0018)) * hWallMod * aSniperMod * aChaosMod;
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
