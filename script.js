@@ -2941,7 +2941,7 @@ function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
 }
 
 // Helper function to build the Special Teams HTML dynamically
-function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.10, Math.min(0.46, 0.215 + diff * 0.0028 * pace)); }
+function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.08, Math.min(0.27, 0.165 + diff * 0.0028 * pace)); }
 
 // --- GAME MATH & STATS ---
 function checkMilestones(pName) {
@@ -3594,7 +3594,7 @@ function simGame(idx) {
                         // PP goal = PK goal against for the penalised team
                         if (penTeamObj) penTeamObj.season.pkg = (penTeamObj.season.pkg || 0) + 1;
                     }
-                } else if (ppRoll < 0.24 && pkUnit.length > 0) {
+                } else if (ppRoll < 0.185 && pkUnit.length > 0) {
                     // SHORTHANDED GOAL (~4% of PP opp result in SHG)
                     const shShooter = selectShooter(pkUnit);
                     const shEv = processSingleGoal(penTeam.nrm, penTeam.code, shShooter, pkUnit, timeStr, period, (minute % 20 || 20), sec);
