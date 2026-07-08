@@ -2111,7 +2111,6 @@ const dynamicDuos = [
     // OTW
     ['Alexei Yashin', 'Sylvain Turgeon'],
     ['Alexandre Daigle', 'Evgeny Davydov'],
-    ['Troy Murray', 'Phil Bourque'],
     ['Norm Maciver', 'Kerry Huffman'],
     ['Brad Shaw', 'Steve Konroyd'],
     // PHI
