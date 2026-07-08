@@ -4458,17 +4458,32 @@ function initPlayoffs() {
         // Final tiebreaker: goal differential
         return (b.season.gf - b.season.ga) - (a.season.gf - a.season.ga);
     };
-    const eastTeams = league.filter(t => t.conf === 'Eastern'); const westTeams = league.filter(t => t.conf === 'Western');
+    // Real 93-94 format: top 4 per division, 1v4 and 2v3 within each division
+    const divTop4 = (div) => league.filter(t => t.div === div).sort(sortTeams).slice(0, 4);
+    const atl = divTop4('Atlantic');
+    const ne  = divTop4('Northeast');
+    const cen = divTop4('Central');
+    const pac = divTop4('Pacific');
 
-    const atlanticWinner = eastTeams.filter(t => t.div === 'Atlantic').sort(sortTeams)[0]; const northeastWinner = eastTeams.filter(t => t.div === 'Northeast').sort(sortTeams)[0];
-    let eastSeeds = [atlanticWinner, northeastWinner].sort(sortTeams); const eastRest = eastTeams.filter(t => t.nrm !== eastSeeds[0].nrm && t.nrm !== eastSeeds[1].nrm).sort(sortTeams); eastSeeds = eastSeeds.concat(eastRest.slice(0, 6));
-
-    const centralWinner = westTeams.filter(t => t.div === 'Central').sort(sortTeams)[0]; const pacificWinner = westTeams.filter(t => t.div === 'Pacific').sort(sortTeams)[0];
-    let westSeeds = [centralWinner, pacificWinner].sort(sortTeams); const westRest = westTeams.filter(t => t.nrm !== westSeeds[0].nrm && t.nrm !== westSeeds[1].nrm).sort(sortTeams); westSeeds = westSeeds.concat(westRest.slice(0, 6));
+    const mkS = (t1, t2, conf, div, slot) => {
+        const home = t1.season.pts >= t2.season.pts ? t1 : t2;
+        const away = t1.season.pts >= t2.season.pts ? t2 : t1;
+        return { h: home, a: away, hW: 0, aW: 0, conf, div, slot, games: [] };
+    };
 
     playoffBracket = { round: 1,
-        east: [ { h: eastSeeds[0].nrm, a: eastSeeds[7].nrm, hW: 0, aW: 0, games: [] }, { h: eastSeeds[1].nrm, a: eastSeeds[6].nrm, hW: 0, aW: 0, games: [] }, { h: eastSeeds[2].nrm, a: eastSeeds[5].nrm, hW: 0, aW: 0, games: [] }, { h: eastSeeds[3].nrm, a: eastSeeds[4].nrm, hW: 0, aW: 0, games: [] } ],
-        west: [ { h: westSeeds[0].nrm, a: westSeeds[7].nrm, hW: 0, aW: 0, games: [] }, { h: westSeeds[1].nrm, a: westSeeds[6].nrm, hW: 0, aW: 0, games: [] }, { h: westSeeds[2].nrm, a: westSeeds[5].nrm, hW: 0, aW: 0, games: [] }, { h: westSeeds[3].nrm, a: westSeeds[4].nrm, hW: 0, aW: 0, games: [] } ],
+        east: [
+            mkS(atl[0], atl[3], 'WALES',    'Atlantic',  'A'),
+            mkS(atl[1], atl[2], 'WALES',    'Atlantic',  'B'),
+            mkS(ne[0],  ne[3],  'WALES',    'Northeast', 'A'),
+            mkS(ne[1],  ne[2],  'WALES',    'Northeast', 'B'),
+        ],
+        west: [
+            mkS(cen[0], cen[3], 'CAMPBELL', 'Central',   'A'),
+            mkS(cen[1], cen[2], 'CAMPBELL', 'Central',   'B'),
+            mkS(pac[0], pac[3], 'CAMPBELL', 'Pacific',   'A'),
+            mkS(pac[1], pac[2], 'CAMPBELL', 'Pacific',   'B'),
+        ],
         nextEast: [], nextWest: [], finals: null
     };
     buildPlayoffRound(); initPlayoffsUI(); updateUI(); saveGame(); showSeasonRecap();
@@ -4585,11 +4600,40 @@ function _doRoundAdvance() {
         }
         return; 
     }
+    const prevSeries = playoffBracket.series; // keep ref before reset
     playoffBracket.round++; playoffBracket.series = [];
-    if(playoffBracket.round < 4) { 
-        const reseed = (ts, cL) => { let s = ts.sort((a, b) => b.season.pts - a.season.pts); for(let i=0; i < Math.floor(s.length/2); i++) { if(s[i] && s[s.length-1-i]) playoffBracket.series.push({h:s[i], a:s[s.length-1-i], hW:0, aW:0, conf:cL}); } }; 
-        reseed(w.filter(x => x && x.conf.toLowerCase().includes('east')), 'WALES'); reseed(w.filter(x => x && x.conf.toLowerCase().includes('west')), 'CAMPBELL'); 
-    } else { if(w[0] && w[1]) playoffBracket.series.push({h:w[0], a:w[1], hW:0, aW:0, conf:'FINALS'}); }
+
+    const getWinner = s => s.hW === 4 ? s.h : s.a;
+    const mkNext = (t1, t2, conf, div) => {
+        const home = t1.season.pts >= t2.season.pts ? t1 : t2;
+        const away = t1.season.pts >= t2.season.pts ? t2 : t1;
+        return { h: home, a: away, hW: 0, aW: 0, conf, div, games: [] };
+    };
+
+    if (playoffBracket.round === 2) {
+        // Division Finals: A-slot winner vs B-slot winner within same division
+        ['Atlantic', 'Northeast', 'Central', 'Pacific'].forEach(div => {
+            const a = prevSeries.find(s => s.div === div && s.slot === 'A');
+            const b = prevSeries.find(s => s.div === div && s.slot === 'B');
+            if (a && b) {
+                const conf = div === 'Atlantic' || div === 'Northeast' ? 'WALES' : 'CAMPBELL';
+                playoffBracket.series.push(mkNext(getWinner(a), getWinner(b), conf, div));
+            }
+        });
+    } else if (playoffBracket.round === 3) {
+        // Conference Finals: Atlantic champ vs Northeast champ, Central champ vs Pacific champ
+        const atlS = prevSeries.find(s => s.div === 'Atlantic');
+        const neS  = prevSeries.find(s => s.div === 'Northeast');
+        const cenS = prevSeries.find(s => s.div === 'Central');
+        const pacS = prevSeries.find(s => s.div === 'Pacific');
+        if (atlS && neS)  playoffBracket.series.push(mkNext(getWinner(atlS), getWinner(neS),  'WALES',    'WALES FINAL'));
+        if (cenS && pacS) playoffBracket.series.push(mkNext(getWinner(cenS), getWinner(pacS), 'CAMPBELL', 'CAMPBELL FINAL'));
+    } else {
+        // Stanley Cup Finals: Wales champ vs Campbell champ
+        const eS = prevSeries.find(s => s.conf === 'WALES');
+        const wS = prevSeries.find(s => s.conf === 'CAMPBELL');
+        if (eS && wS) playoffBracket.series.push(mkNext(getWinner(eS), getWinner(wS), 'FINALS', 'FINALS'));
+    }
     const btnNR = document.getElementById('btnNextRound'); if(btnNR) btnNR.remove(); 
     genPlayoffSlate();
 }
