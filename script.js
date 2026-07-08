@@ -8296,23 +8296,10 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
 // =========================================================
 // Mid-game injury system — fires during the sim tick loop (called per game, not per tick)
 // Low base rate; goalie injuries trigger backup pull event and get logged prominently
-// Returns how many healthy bench skaters of same position group (F or D) the team has
-// beyond the minimum needed to fill active lines (9 F, 4 D)
-function getBenchDepth(tk, isForward) {
-    if (!rosters[tk]) return 99;
-    const MIN_ACTIVE = isForward ? 9 : 4;
-    const healthy = rosters[tk].filter(p => {
-        const isF = p.pos !== 'G' && p.pos !== 'D' && p.pos !== 'LD' && p.pos !== 'RD';
-        const posMatch = isForward ? isF : !isF && p.pos !== 'G';
-        return posMatch && playerStats[p.name]?.injury?.daysRemaining === 0 && !playerStats[p.name]?.onIR;
-    }).length;
-    return Math.max(0, healthy - MIN_ACTIVE); // spare bench slots
-}
-
 function rollInGameInjuries(homeCode, awayCode) {
     if (!awardConfig.injuries) return;
-    const SKATER_CHANCE = 0.009; // ~1 skater injury per 11 games per team
-    const GOALIE_CHANCE = 0.004; // ~1 goalie injury per 25 games
+    const SKATER_CHANCE = 0.022; // ~2 skater injuries per 10 games
+    const GOALIE_CHANCE = 0.008; // ~1 goalie pull per 12 games
 
     [homeCode, awayCode].forEach(tk => {
         if (!rosters[tk]) return;
@@ -8323,23 +8310,19 @@ function rollInGameInjuries(homeCode, awayCode) {
         skaters.forEach(p => {
             const ps = playerStats[p.name];
             if (!ps) return;
-            const fatigueBonus = (ps.fatigue || 0) > 65 ? 0.003 : 0;
-            const aggrBonus = getAggr(p.name) > 70 ? 0.002 : 0;
+            const fatigueBonus = (ps.fatigue || 0) > 65 ? 0.005 : 0;
+            const aggrBonus = getAggr(p.name) > 70 ? 0.004 : 0; // physical players hurt more often
             if (Math.random() < SKATER_CHANCE + fatigueBonus + aggrBonus) {
                 const roll = Math.random();
                 let days;
-                if      (roll < 0.45) days = 0;
+                if      (roll < 0.45) days = 0;  // shaken up, plays through
                 else if (roll < 0.75) days = 1;
                 else if (roll < 0.92) days = Math.floor(Math.random() * 4) + 2;
                 else                  days = Math.floor(Math.random() * 5) + 6;
                 days = Math.min(days, 12);
-                // Cap duration if bench is depleted — can't afford long absences
-                const isF = p.pos !== 'G' && p.pos !== 'D' && p.pos !== 'LD' && p.pos !== 'RD';
-                const bench = getBenchDepth(tk, isF);
-                if (bench === 0) days = Math.min(days, 2);
                 if (days > 0) ps.injury = { severity: days, daysRemaining: days };
                 const label = days === 0 ? 'shaken up — playing through' : `out ${days} game${days > 1 ? 's' : ''}`;
-                tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `[INJ] IN-GAME: ${p.name} (${tk.toUpperCase()}) — ${label}${bench === 0 ? ' (limited — no bench depth)' : ''}.` });
+                tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `[INJ] IN-GAME: ${p.name} (${tk.toUpperCase()}) — ${label}.` });
             }
         });
 
@@ -8348,11 +8331,10 @@ function rollInGameInjuries(homeCode, awayCode) {
             const ps = playerStats[p.name];
             if (!ps) return;
             if (Math.random() < GOALIE_CHANCE) {
-                const backupG = rosters[tk].find(b => b.pos === 'G' && b.name !== p.name && playerStats[b.name]?.injury?.daysRemaining === 0);
-                // If no backup available, cap to 1 game
-                const days = backupG ? Math.floor(Math.random() * 4) + 1 : 1;
+                const days = Math.floor(Math.random() * 4) + 1; // 1-4 game goalie injury
                 ps.injury = { severity: days, daysRemaining: days };
-                const backupNote = backupG ? ` ${backupG.name} enters in relief.` : ' No healthy backup — capped at 1 game.';
+                const backupG = rosters[tk].find(b => b.pos === 'G' && b.name !== p.name && playerStats[b.name]?.injury?.daysRemaining === 0);
+                const backupNote = backupG ? ` ${backupG.name} enters in relief.` : ' No healthy backup available.';
                 tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `🚨 GOALIE PULLED (INJURY): ${p.name} (${tk.toUpperCase()}) — out ${days} game${days > 1 ? 's' : ''}.${backupNote}` });
             }
         });
@@ -8361,7 +8343,7 @@ function rollInGameInjuries(homeCode, awayCode) {
 
 function triggerGameInjuries(matchStats, homeCode, awayCode) {
     if (!awardConfig.injuries) return;
-    const BASE_CHANCE = 0.008;
+    const BASE_CHANCE = 0.015; // lowered overall rate; short injuries now dominate volume
     for (let pName in matchStats) {
         const ps = playerStats[pName];
         if (!ps || !ps.injury) continue;
@@ -8369,13 +8351,14 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
         const stats = matchStats[pName];
         if (!stats.toi || stats.toi <= 0) continue;
 
-        const fatigueBonus = (ps.fatigue || 0) > 70 ? 0.003 : 0;
-        const physicalBonus = stats.pim >= 2 ? 0.002 : 0;
+        const fatigueBonus = (ps.fatigue || 0) > 70 ? 0.006 : 0;
+        const physicalBonus = stats.pim >= 2 ? 0.004 : 0;
         const chance = BASE_CHANCE + fatigueBonus + physicalBonus;
 
         if (Math.random() < chance) {
             const roll = Math.random();
             let days, label;
+            // Reweighted: heavy bias toward short injuries; 12-15 rare
             if      (roll < 0.30) { days = 0;                                   label = 'out for a period'; }
             else if (roll < 0.58) { days = 1;                                   label = '1-game injury'; }
             else if (roll < 0.78) { days = Math.floor(Math.random() * 4) + 2;  label = `${days}-game injury`; }
@@ -8384,12 +8367,7 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
 
             days = Math.min(days, 15);
 
-            // Cap duration if team has no bench depth for this position
             const teamCode = (rosters[homeCode] || []).find(p => p.name === pName) ? homeCode : awayCode;
-            const isF = ps.pos !== 'G' && ps.pos !== 'D' && ps.pos !== 'LD' && ps.pos !== 'RD';
-            const bench = getBenchDepth(teamCode, isF);
-            if (bench === 0) days = Math.min(days, 2);
-
             const note = days === 0
                 ? `[INJ] INJURY NOTE: ${pName} (${teamCode.toUpperCase()}) was shaken up  -  out for a period.`
                 : `[INJ] INJURY: ${pName} (${teamCode.toUpperCase()})  -  ${label}, out ${days} game${days > 1 ? 's' : ''}.`;
