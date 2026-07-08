@@ -1733,16 +1733,10 @@ function assignMicroStreaks(rosterArray) {
     const coldWeight = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; const pointless = ps.consPointless || 0; const ovr = getPlayerWeightedStats(p.name).ovr || 70; const ovrScale = Math.max(0.5, ovr / 100); return Math.max(0.1, (1 + pointless * 0.25) * ovrScale * (lastPts === 0 ? 1.5 : 0.3)); };
     const pick = (pool, weightFn) => { const w = pool.map(weightFn); const total = w.reduce((a,b)=>a+b,0); let r = Math.random()*total; for(let i=0;i<pool.length;i++){r-=w[i];if(r<=0)return pool[i];} return pool[0]; };
 
-    // Persistence: HOT carries at 60%, COLD carries at 35% (cold tags should fade faster)
-    let hotPick = null, coldPick = null;
-    const prevHot  = eligible.find(p => playerStats[p.name]._prevMicro === 'HOT');
-    const prevCold = eligible.find(p => playerStats[p.name]._prevMicro === 'COLD');
-    if (prevHot  && (playerStats[prevHot.name].recentGames?.slice(-1)[0]?.pts || 0) > 0 && Math.random() < 0.60) hotPick  = prevHot;
-    if (prevCold && (playerStats[prevCold.name].recentGames?.slice(-1)[0]?.pts || 0) === 0 && Math.random() < 0.35) coldPick = prevCold;
-
-    if (!hotPick) hotPick = pick(eligible.filter(p => p !== coldPick), hotWeight);
-    // Only assign a cold micro tag 45% of the time — not every game has a notable slump
-    if (!coldPick && Math.random() < 0.45) coldPick = pick(eligible.filter(p => p !== hotPick), coldWeight);
+    // No persistence — micro streaks are 1 game only, fresh pick each game
+    // Only players without a macro HOT/COLD streak are eligible (filtered above)
+    const hotPick  = pick(eligible, hotWeight);
+    const coldPick = pick(eligible.filter(p => p !== hotPick), coldWeight);
 
     eligible.forEach(p => {
         const ps = playerStats[p.name];
