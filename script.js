@@ -1730,18 +1730,19 @@ function assignMicroStreaks(rosterArray) {
 
     // Weighted selection — biased by recent production, morale, fatigue
     const hotWeight  = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; const morale = ps.status?.morale || 100; const fatigue = ps.status?.fatigue || 0; return Math.max(0.1, (1 + lastPts * 2.5) * (morale / 100) * (1 - fatigue / 250)); };
-    const coldWeight = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; const pointless = ps.consPointless || 0; const fatigue = ps.status?.fatigue || 0; return Math.max(0.1, (1 + pointless * 0.6 + fatigue / 80) * (lastPts === 0 ? 2.5 : 0.4)); };
+    const coldWeight = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; const pointless = ps.consPointless || 0; const ovr = getPlayerWeightedStats(p.name).ovr || 70; const ovrScale = Math.max(0.5, ovr / 100); return Math.max(0.1, (1 + pointless * 0.25) * ovrScale * (lastPts === 0 ? 1.5 : 0.3)); };
     const pick = (pool, weightFn) => { const w = pool.map(weightFn); const total = w.reduce((a,b)=>a+b,0); let r = Math.random()*total; for(let i=0;i<pool.length;i++){r-=w[i];if(r<=0)return pool[i];} return pool[0]; };
 
-    // Persistence: 60% chance HOT/COLD player carries over if they earned it last game
+    // Persistence: HOT carries at 60%, COLD carries at 35% (cold tags should fade faster)
     let hotPick = null, coldPick = null;
     const prevHot  = eligible.find(p => playerStats[p.name]._prevMicro === 'HOT');
     const prevCold = eligible.find(p => playerStats[p.name]._prevMicro === 'COLD');
     if (prevHot  && (playerStats[prevHot.name].recentGames?.slice(-1)[0]?.pts || 0) > 0 && Math.random() < 0.60) hotPick  = prevHot;
-    if (prevCold && (playerStats[prevCold.name].recentGames?.slice(-1)[0]?.pts || 0) === 0 && Math.random() < 0.60) coldPick = prevCold;
+    if (prevCold && (playerStats[prevCold.name].recentGames?.slice(-1)[0]?.pts || 0) === 0 && Math.random() < 0.35) coldPick = prevCold;
 
-    if (!hotPick)  hotPick  = pick(eligible.filter(p => p !== coldPick), hotWeight);
-    if (!coldPick) coldPick = pick(eligible.filter(p => p !== hotPick),  coldWeight);
+    if (!hotPick) hotPick = pick(eligible.filter(p => p !== coldPick), hotWeight);
+    // Only assign a cold micro tag 45% of the time — not every game has a notable slump
+    if (!coldPick && Math.random() < 0.45) coldPick = pick(eligible.filter(p => p !== hotPick), coldWeight);
 
     eligible.forEach(p => {
         const ps = playerStats[p.name];
@@ -1786,21 +1787,22 @@ function processPostGameStreaks(skaters, goalies) {
 
             ps.macro_streak = null; // Reset to stable by default
 
-            // 4 straight pointless games always triggers macro COLD
-            if (ps.consPointless >= 4) {
-                ps.macro_streak = 'COLD';
-            } else if (ovr >= 85) {
-                // STARS (85+ OVR)
+            if (ovr >= 85) {
+                // STARS (85+ OVR) — need genuine drought to be COLD
                 if (pts4 >= 6) ps.macro_streak = 'HOT';
-                else if (pts4 <= 1) ps.macro_streak = 'COLD';
+                else if (pts4 === 0) ps.macro_streak = 'COLD';
             } else if (ovr >= 75) {
                 // TOP 6 / TOP 4 (75-84 OVR)
                 if (pts4 >= 4) ps.macro_streak = 'HOT';
                 else if (pts4 === 0) ps.macro_streak = 'COLD';
-            } else {
-                // DEPTH (<75 OVR)
+            } else if (ovr >= 65) {
+                // MID-TIER (65-74 OVR) — depth scorers; need 6 pointless to go COLD
                 if (pts4 >= 3) ps.macro_streak = 'HOT';
-                else if (pm4 <= -4) ps.macro_streak = 'COLD';
+                else if (ps.consPointless >= 6 && pm4 <= -3) ps.macro_streak = 'COLD';
+            } else {
+                // DEPTH / CHECKERS (<65 OVR) — rarely score; only +/- matters for COLD
+                if (pts4 >= 3) ps.macro_streak = 'HOT';
+                else if (pm4 <= -5) ps.macro_streak = 'COLD';
             }
         }
     });
