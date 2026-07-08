@@ -8296,16 +8296,10 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
 // =========================================================
 // Mid-game injury system — fires during the sim tick loop (called per game, not per tick)
 // Low base rate; goalie injuries trigger backup pull event and get logged prominently
-// Returns count of healthy scratches (p.line === 'BENCH') of the same position group
-function getBenchDepth(tk, isForward) {
-    if (!rosters[tk]) return 99;
-    return rosters[tk].filter(p => {
-        if (p.line !== 'BENCH') return false;
-        if (playerStats[p.name]?.injury?.daysRemaining > 0) return false;
-        if (playerStats[p.name]?.onIR) return false;
-        const posIsF = p.pos !== 'G' && p.pos !== 'D' && p.pos !== 'LD' && p.pos !== 'RD';
-        return isForward ? posIsF : !posIsF && p.pos !== 'G';
-    }).length;
+// Returns count of healthy goalie scratches — used to check if a backup exists mid-game
+function getBenchDepth(tk) {
+    if (!rosters[tk]) return 0;
+    return rosters[tk].filter(p => p.pos === 'G' && p.line === 'BENCH' && (playerStats[p.name]?.injury?.daysRemaining ?? 0) === 0 && !playerStats[p.name]?.onIR).length;
 }
 
 function rollInGameInjuries(homeCode, awayCode) {
@@ -8332,9 +8326,6 @@ function rollInGameInjuries(homeCode, awayCode) {
                 else if (roll < 0.92) days = Math.floor(Math.random() * 4) + 2;
                 else                  days = Math.floor(Math.random() * 5) + 6;
                 days = Math.min(days, 12);
-                // Cap if no healthy scratches available to dress
-                const isF = p.pos !== 'G' && p.pos !== 'D' && p.pos !== 'LD' && p.pos !== 'RD';
-                if (getBenchDepth(tk, isF) === 0) days = 0; // no scratches to dress — injury limited to this game only
                 if (days > 0) ps.injury = { severity: days, daysRemaining: days };
                 const label = days === 0 ? 'shaken up — playing through' : `out ${days} game${days > 1 ? 's' : ''}`;
                 tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `[INJ] IN-GAME: ${p.name} (${tk.toUpperCase()}) — ${label}.` });
@@ -8346,7 +8337,7 @@ function rollInGameInjuries(homeCode, awayCode) {
             const ps = playerStats[p.name];
             if (!ps) return;
             if (Math.random() < GOALIE_CHANCE) {
-                const backupG = rosters[tk].find(b => b.pos === 'G' && b.name !== p.name && playerStats[b.name]?.injury?.daysRemaining === 0);
+                const backupG = rosters[tk].find(b => b.pos === 'G' && b.name !== p.name && (playerStats[b.name]?.injury?.daysRemaining ?? 0) === 0);
                 const days = backupG ? Math.floor(Math.random() * 4) + 1 : 1;
                 ps.injury = { severity: days, daysRemaining: days };
                 const backupNote = backupG ? ` ${backupG.name} enters in relief.` : ' No healthy backup — capped at 1 game.';
@@ -8382,10 +8373,6 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
             days = Math.min(days, 15);
 
             const teamCode = (rosters[homeCode] || []).find(p => p.name === pName) ? homeCode : awayCode;
-            // Cap if no healthy scratches of same position group available
-            const isF = ps.pos !== 'G' && ps.pos !== 'D' && ps.pos !== 'LD' && ps.pos !== 'RD';
-            if (getBenchDepth(teamCode, isF) === 0) days = 0; // no scratches to dress — injury limited to this game only
-
             const note = days === 0
                 ? `[INJ] INJURY NOTE: ${pName} (${teamCode.toUpperCase()}) was shaken up  -  out for a period.`
                 : `[INJ] INJURY: ${pName} (${teamCode.toUpperCase()})  -  ${label}, out ${days} game${days > 1 ? 's' : ''}.`;
