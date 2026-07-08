@@ -1516,19 +1516,18 @@ function getPlayerWeightedStats(pName) {
             );
             baseOvr = Math.round(calcOvr);
         } else {
-            // FORWARD WEIGHTS: Values Offense, Speed, and Scoring (Now with Shot Power!)
+            // FORWARD WEIGHTS: Rewards pure scoring; DEF reduced so goal scorers aren't penalized
             calcOvr = (
-                (off * 0.30) +      // 30% Offense
-                (def * 0.18) +      // 18% Defense
+                (off * 0.33) +      // 33% Offense
+                (def * 0.10) +      // 10% Defense
+                (shotAcc * 0.16) +  // 16% Shot Accuracy
+                (pass * 0.12) +     // 12% Passing
+                (stkHnd * 0.10) +   // 10% Stick Handling
+                (pwr * 0.07) +      // 7% Shot Power
                 (spd * 0.05) +      // 5% Speed
                 (agl * 0.05) +      // 5% Agility
-                (shotAcc * 0.10) +  // 10% Shot Accuracy
-                (pwr * 0.08) +      // 8% Shot Power
-                (pass * 0.10) +     // 10% Passing
-                (stkHnd * 0.10) +   // 10% Stick Handling
-                (check * 0.02) +      // 2% Checking
-                (endur * 0.02)        // 2% Endurance
-
+                (check * 0.01) +    // 1% Checking
+                (endur * 0.01)      // 1% Endurance
             );
             baseOvr = Math.round(calcOvr);
         }
