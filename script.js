@@ -1129,7 +1129,7 @@ async function importEventLogSheet() {
 
 
 let gameStatus = {
-    globalChaos: 0.15, // Base volatility — scales random shot-probability variance each tick
+    globalChaos: 0.28, // Base volatility — scales random shot-probability variance each tick
 };
 
 let momentum = {
@@ -3227,8 +3227,8 @@ function simGame(idx) {
     // B2B goalie fatigue: starting goalie on back-to-back takes a wall modifier hit
     const hB2BPen = (!isPlayoffs && hG_obj && playedYesterday(g.h.nrm)) ? 0.06 : 0;
     const aB2BPen = (!isPlayoffs && aG_obj && playedYesterday(g.a.nrm)) ? 0.06 : 0;
-    let hWallMod = Math.max(0.86, Math.min(1.14, 1.0 + (75 - hGOvr) * 0.013 + hB2BPen));
-    let aWallMod = Math.max(0.86, Math.min(1.14, 1.0 + (75 - aGOvr) * 0.013 + aB2BPen));
+    let hWallMod = Math.max(0.72, Math.min(1.28, 1.0 + (75 - hGOvr) * 0.013 + hB2BPen));
+    let aWallMod = Math.max(0.72, Math.min(1.28, 1.0 + (75 - aGOvr) * 0.013 + aB2BPen));
     // Coaching adjustments: forecheck 1=aggressive(open game), -1=defensive(tight); pp 1=shoot, -1=cycle
     if (!isPlayoffs && !isASG) {
         const fMod = coachAdj.forecheck * 0.025; // aggressive opens scoring both ways
@@ -3288,8 +3288,8 @@ function simGame(idx) {
     const hNight = Math.random() < 0.22 ? (Math.random() - 0.5) * nightMag : 0;
     const aNight = Math.random() < 0.22 ? (Math.random() - 0.5) * nightMag : 0;
     const chaosOffset = hNight - aNight;
-    hWallMod = Math.max(0.78, Math.min(1.22, hWallMod + (Math.random() - 0.5) * wallJitter));
-    aWallMod = Math.max(0.78, Math.min(1.22, aWallMod + (Math.random() - 0.5) * wallJitter));
+    hWallMod = Math.max(0.65, Math.min(1.35, hWallMod + (Math.random() - 0.5) * wallJitter));
+    aWallMod = Math.max(0.65, Math.min(1.35, aWallMod + (Math.random() - 0.5) * wallJitter));
 
     // PLAYOFF PRESSURE — elimination game modifier
     // Facing elimination: veterans (+OVR) dig deep; less experienced players feel it (-OVR)
@@ -3477,7 +3477,7 @@ function simGame(idx) {
             const hSniperMod = hShooterTag === 'SNIPER' ? 1.24 : hShooterTag === 'SUPERSTAR' ? 1.18 : 1.0;
             const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
             let scoringProb = (0.080 + (diff * 0.0018)) * aWallMod * hSniperMod * hChaosMod;
-            if (Math.random() < Math.max(0.025, Math.min(0.18, scoringProb))) {
+            if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
                 let ev = processSingleGoal(g.h.nrm, g.h.code, shooter, hOnIce, timeStr, period, (minute % 20 || 20), sec);
@@ -3510,7 +3510,7 @@ function simGame(idx) {
             const aSniperMod = aShooterTag === 'SNIPER' ? 1.24 : aShooterTag === 'SUPERSTAR' ? 1.18 : 1.0;
             const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
             let scoringProb = (0.080 - (diff * 0.0018)) * hWallMod * aSniperMod * aChaosMod;
-            if (Math.random() < Math.max(0.025, Math.min(0.18, scoringProb))) {
+            if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
                 let ev = processSingleGoal(g.a.nrm, g.a.code, shooter, aOnIce, timeStr, period, (minute % 20 || 20), sec);
@@ -3693,8 +3693,8 @@ function simGame(idx) {
         // Recalculate wall mods for any backup that stepped in
         const newHGOvr = hG_name ? (getPlayerWeightedStats(hG_name).ovr || 75) : 75;
         const newAGOvr = aG_name ? (getPlayerWeightedStats(aG_name).ovr || 75) : 75;
-        hWallMod = Math.max(0.78, Math.min(1.22, 1.0 + (75 - newHGOvr) * 0.013 + (Math.random() - 0.5) * 0.10));
-        aWallMod = Math.max(0.78, Math.min(1.22, 1.0 + (75 - newAGOvr) * 0.013 + (Math.random() - 0.5) * 0.10));
+        hWallMod = Math.max(0.65, Math.min(1.35, 1.0 + (75 - newHGOvr) * 0.013 + (Math.random() - 0.5) * 0.16));
+        aWallMod = Math.max(0.65, Math.min(1.35, 1.0 + (75 - newAGOvr) * 0.013 + (Math.random() - 0.5) * 0.16));
     }
 
     //  5. OVERTIME RESOLUTION
