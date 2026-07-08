@@ -2037,6 +2037,7 @@ const dynamicDuos = [
     // BUF
     ['Pat LaFontaine', 'Yuri Khmylev', 'Donald Audette'],
     ['Alexander Mogilny', 'Dale Hawerchuk', 'Jason Dawe'],
+    ['Brad May', 'Rob Ray', 'Dave Hannan'],
     ['Doug Bodger', 'Richard Smehlik'],
     ['Petr Svoboda', 'Philippe Boucher'],
     // CGY
@@ -2053,20 +2054,24 @@ const dynamicDuos = [
     ['Sergei Fedorov', 'Vachslav Kozlov'],
     ['Ray Sheppard', 'Steve Yzerman', 'Dino Ciccarelli'],
     ['Bob Probert', 'Shawn Burr'],
+    ['Kris Draper', 'Darren McCarty'],
     ['Nicklas Lidstrom', 'Vladimir Konstantinov'],
     // EDM
     ['Jason Arnott', 'Zdeno Ciger'],
     ['Doug Weight', 'Shayne Corson'],
+    ['Kelly Buchberger', 'Kirk Maltby'],
     ['Igor Kravchuk', 'Boris Mironov'],
     ['Bob Beers', 'Fredrik Olausson'],
     // FLA
     ['Jesse Belanger', 'Bob Kudelski'],
     ['Stu Barnes', 'Rob Niedermayer'],
+    ['Tom Fitzgerald', 'Dave Lowry'],
     ['Gord Murphy', 'Peter Andersson'],
     ['Geoff Smith', 'Brian Benning'],
     // HFD
     ['Andrew Cassels', 'Brendan Shanahan', 'Pat Verbeek', 'Geoff Sanderson'],
     ['Darren Turcotte', 'Robert Kron'],
+    ['Mark Janssens', 'Jim Storm'],
     ['Chris Pronger', 'Adam Burt'],
     ['Frantisek Kucera', 'Alexander Godynyuk'],
     // LAK
@@ -2088,26 +2093,31 @@ const dynamicDuos = [
     // NJD
     ['Stephane Richer', 'Bernie Nicholls', 'Claude Lemieux'],
     ['John MacLean', 'Bill Guerin'],
+    ['Bobby Holik', 'Randy McKay'],
     ['Scott Stevens', 'Bruce Driver'],
     ['Scott Niedermayer', 'Vachslav Fetisov'],
     // NYI
     ['Derek King', 'Pierre Turgeon'],
     ['Ray Ferraro', 'Steve Thomas', 'Marty McInnis'],
+    ['Patrick Flatley', 'Dave Volek'],
+    ['Claude Loiselle', 'Mick Vukota'],
     ['Vladimir Malakhov', 'Uwe Krupp'],
     ['Darius Kasparaitis', 'Scott Lachance'],
     // NYR
     ['Mark Messier', 'Glenn Anderson', 'Adam Graves'],
-    ['Steve Larmer', 'Alexei Kovalev', 'Esa Tikkanen'],
+    ['Steve Larmer', 'Alexei Kovalev', 'Sergei Nemchinov'],
     ['Brian Leetch', 'Alex Karpotsev'],
     ['Sergei Zubov', 'Jeff Beukeboom'],
     // OTW
     ['Alexei Yashin', 'Sylvain Turgeon'],
     ['Alexandre Daigle', 'Evgeny Davydov'],
+    ['Troy Murray', 'Phil Bourque'],
     ['Norm Maciver', 'Kerry Huffman'],
     ['Brad Shaw', 'Steve Konroyd'],
     // PHI
     ['Eric Lindros', 'Mark Recchi', 'John LeClair', 'Brent Fedyk'],
     ['Rod BrindAmour', 'Mikael Renberg', 'Josef Beranek'],
+    ['Dave Tippett', 'Dave Brown'],
     ['Dimitri Yushkevich', 'Yves Racine'],
     ['Garry Galley', 'Rob Ramage'],
     // PIT
@@ -2120,11 +2130,13 @@ const dynamicDuos = [
     ['Andrei Kovalenko', 'Mats Sundin', 'Valeri Kamensky'],
     ['Joe Sakic', 'Owen Nolan', 'Mike Ricci'],
     ['Ron Sutter', 'Claude Lapointe'],
+    ['Bob Bassen', 'Chris Simon'],
     ['Curtis Leschyshyn', 'Alexei Gusarov'],
     ['Tommy Sjodin', 'Garth Butcher'],
     // SJS
     ['Igor Larionov', 'Sergei Makarov', 'Ray Whitney'],
     ['Ulf Dahlen', 'Pat Falloon'],
+    ['Jeff Odgers', 'Gaetan Duchesne'],
     ['Sandis Ozolinsh', 'Mike Rathje'],
     ['Jeff Norton', 'Jay More'],
     // STL
@@ -2133,6 +2145,7 @@ const dynamicDuos = [
     ['Peter Stastny', 'Kevin Miller'],
     ['Phil Housley', 'Alexei Kasatonov'],
     ['Steve Duchesne', 'Doug Crossman'],
+    ['Rick Zombo', 'Murray Baron'],
     // TBL
     ['Denis Savard', 'Rob Zamuner'],
     ['Brian Bradley', 'Petr Klima'],
@@ -2141,24 +2154,28 @@ const dynamicDuos = [
     // TOR
     ['Doug Gilmour', 'Dave Andreychuk'],
     ['Wendel Clark', 'Mike Gartner'],
+    ['Rob Pearson', 'Bill Berg'],
     ['Dave Ellett', 'Todd Gill'],
     ['Jamie Macoun', 'Dmitri Mironov'],
     // VAN
     ['Pavel Bure', 'Trevor Linden', 'Greg Adams'],
     ['Cliff Ronning', 'Geoff Courtnall'],
     ['Sergio Momesso', 'Martin Gelinas'],
+    ['Gino Odjick', 'Shawn Antoski'],
     ['Jeff Brown', 'Gerald Diduck'],
     ['Jyrki Lumme', 'Jiri Slegr'],
     // WAS
     ['Joe Juneau', 'Peter Bondra', 'Dimitri Khristich'],
     ['Mike Ridley', 'Michal Pivonka'],
     ['Dale Hunter', 'Kelly Miller'],
+    ['Craig Berube', 'Todd Krygier'],
     ['Kevin Hatcher', 'John Slaney'],
     ['Calle Johansson', 'Joe Reekie'],
     ['Sylvain Cote', 'Shawn Anderson'],
     // WPG
     ['Teemu Selanne', 'Alexei Zhamnov'],
     ['Thomas Steen', 'Keith Tkachuk'],
+    ['Kris King', 'Tie Domi'],
     ['Igor Ulanov', 'Dave Manson'],
     ['Teppo Numminen', 'Stephane Quintal'],
 ];
