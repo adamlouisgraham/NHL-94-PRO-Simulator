@@ -1635,9 +1635,9 @@ function getPlayerWeightedStats(pName) {
     const ps = playerStats[pName];
     if (ps) {
         if (ps.macro_streak === 'HOT')       finalOvr = Math.round(finalOvr * 1.05);
-        else if (ps.micro_streak === 'HOT')  finalOvr = Math.round(finalOvr * 1.03);
+        else if (ps.micro_streak === 'HOT')  finalOvr += 10;
         if (ps.macro_streak === 'COLD')      finalOvr = Math.round(finalOvr * 0.95);
-        else if (ps.micro_streak === 'COLD') finalOvr = Math.round(finalOvr * 0.97);
+        else if (ps.micro_streak === 'COLD') finalOvr -= 10;
         // dailySwing: pre-game per-player variance (±8% of ovr, set by applyDailyRandomSwing)
         if (ps.dailySwing) finalOvr = Math.max(40, Math.min(99, Math.round(finalOvr * (1 + ps.dailySwing))));
     }
