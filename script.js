@@ -1727,23 +1727,53 @@ function assignMicroStreaks(rosterArray) {
     });
     if (eligible.length < 2) return;
 
-    // Weighted selection — biased by recent production, morale, fatigue
-    const hotWeight  = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; const morale = ps.status?.morale || 100; const fatigue = ps.status?.fatigue || 0; return Math.max(0.1, (1 + lastPts * 2.5) * (morale / 100) * (1 - fatigue / 250)); };
-    const coldWeight = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; const pointless = ps.consPointless || 0; const ovr = getPlayerWeightedStats(p.name).ovr || 70; const ovrScale = Math.max(0.5, ovr / 100); return Math.max(0.1, (1 + pointless * 0.25) * ovrScale * (lastPts === 0 ? 1.5 : 0.3)); };
-    const pick = (pool, weightFn) => { const w = pool.map(weightFn); const total = w.reduce((a,b)=>a+b,0); let r = Math.random()*total; for(let i=0;i<pool.length;i++){r-=w[i];if(r<=0)return pool[i];} return pool[0]; };
-
-    // No persistence — micro streaks are 1 game only, fresh pick each game
-    // Only players without a macro HOT/COLD streak are eligible (filtered above)
-    const hotPick  = pick(eligible, hotWeight);
-    const coldPick = pick(eligible.filter(p => p !== hotPick), coldWeight);
-
-    eligible.forEach(p => {
+    // HOT weight: recent pts, positive +/-, good morale, low fatigue
+    const hotWeight = p => {
         const ps = playerStats[p.name];
-        ps.micro_streak = null;
-        ps._prevMicro = null;
-    });
-    if (hotPick)  { playerStats[hotPick.name].micro_streak  = 'HOT';  playerStats[hotPick.name]._prevMicro  = 'HOT';  }
-    if (coldPick) { playerStats[coldPick.name].micro_streak = 'COLD'; playerStats[coldPick.name]._prevMicro = 'COLD'; }
+        const lastGame = ps.recentGames?.slice(-1)[0] || {};
+        const lastPts = lastGame.pts || 0;
+        const lastPm  = lastGame.pm  || 0;
+        const morale  = ps.status?.morale  || 100;
+        const fatigue = ps.status?.fatigue || 0;
+        return Math.max(0.1, (1 + lastPts * 2.5 + Math.max(0, lastPm) * 0.5) * (morale / 100) * (1 - fatigue / 250));
+    };
+
+    // COLD weight: recent pointless games, negative +/-, low-OVR players more vulnerable
+    const coldWeight = p => {
+        const ps = playerStats[p.name];
+        const lastGame  = ps.recentGames?.slice(-1)[0] || {};
+        const lastPts   = lastGame.pts || 0;
+        const lastPm    = lastGame.pm  || 0;
+        const pointless = ps.consPointless || 0;
+        const ovr       = getPlayerWeightedStats(p.name).ovr || 70;
+        const ovrVuln   = Math.max(0.5, 1.5 - (ovr / 100)); // lower OVR = more cold-vulnerable
+        return Math.max(0.1, (1 + pointless * 0.25 + Math.max(0, -lastPm) * 0.5) * ovrVuln * (lastPts === 0 ? 1.5 : 0.3));
+    };
+
+    const pickN = (pool, weightFn, n) => {
+        const picked = [];
+        let remaining = [...pool];
+        for (let i = 0; i < n && remaining.length > 0; i++) {
+            const w = remaining.map(weightFn);
+            const total = w.reduce((a, b) => a + b, 0);
+            let r = Math.random() * total;
+            let chosen = remaining[0];
+            for (let j = 0; j < remaining.length; j++) { r -= w[j]; if (r <= 0) { chosen = remaining[j]; break; } }
+            picked.push(chosen);
+            remaining = remaining.filter(p => p !== chosen);
+        }
+        return picked;
+    };
+
+    // Pick 2-3 HOT and 2-3 COLD per team (scales with roster size)
+    const nPicks = eligible.length >= 12 ? 3 : 2;
+    const hotPicks  = pickN(eligible, hotWeight, nPicks);
+    const hotSet    = new Set(hotPicks.map(p => p.name));
+    const coldPicks = pickN(eligible.filter(p => !hotSet.has(p.name)), coldWeight, nPicks);
+
+    eligible.forEach(p => { const ps = playerStats[p.name]; ps.micro_streak = null; ps._prevMicro = null; });
+    hotPicks.forEach(p  => { playerStats[p.name].micro_streak = 'HOT';  playerStats[p.name]._prevMicro = 'HOT';  });
+    coldPicks.forEach(p => { playerStats[p.name].micro_streak = 'COLD'; playerStats[p.name]._prevMicro = 'COLD'; });
 }
 
 // 3. The 5-Game Rolling "Macro" Streaks (Run Post-Game)
@@ -1797,15 +1827,16 @@ function processPostGameStreaks(skaters, goalies) {
                 meetsCold = pm3 <= -5;
             }
 
-            // HOT counter — builds up over sustained good play, bleeds off otherwise
+            // HOT counter — builds on sustained good play, bleeds off when below threshold
             if (meetsHot) {
                 ps.hotCounter  = Math.min(3, ps.hotCounter  + 1);
                 ps.coldCounter = Math.max(0, ps.coldCounter - 1);
-            } else if (pts3 === 0) {
+            } else {
+                // Any window that fails the HOT threshold chips away at the counter
                 ps.hotCounter = Math.max(0, ps.hotCounter - 1);
             }
 
-            // COLD counter — builds up over sustained slump, bleeds off when scoring
+            // COLD counter — builds on sustained slump, bleeds off when scoring
             if (meetsCold) {
                 ps.coldCounter = Math.min(3, ps.coldCounter + 1);
                 ps.hotCounter  = Math.max(0, ps.hotCounter  - 1);
@@ -1842,17 +1873,38 @@ function processPostGameStreaks(skaters, goalies) {
             let svPct = totalSa > 0 ? (totalSv / totalSa) : 0;
             let ovr = getPlayerWeightedStats(g.name).ovr;
 
-            ps.macro_streak = null;
+            if (!ps.hotCounter)  ps.hotCounter  = 0;
+            if (!ps.coldCounter) ps.coldCounter = 0;
 
+            let meetsHot = false, meetsCold = false;
             if (ovr >= 85) {
-                // ELITE GOALIES
-                if (svPct >= 0.940) ps.macro_streak = 'HOT';
-                else if (svPct <= 0.885) ps.macro_streak = 'COLD';
+                meetsHot  = svPct >= 0.940;
+                meetsCold = svPct <= 0.885;
+            } else if (ovr >= 70) {
+                meetsHot  = svPct >= 0.925;
+                meetsCold = svPct <= 0.875;
             } else {
-                // AVERAGE/BACKUP GOALIES
-                if (svPct >= 0.920) ps.macro_streak = 'HOT';
-                else if (svPct <= 0.860) ps.macro_streak = 'COLD';
+                meetsHot  = svPct >= 0.910;
+                meetsCold = svPct <= 0.860;
             }
+
+            if (meetsHot) {
+                ps.hotCounter  = Math.min(3, ps.hotCounter  + 1);
+                ps.coldCounter = Math.max(0, ps.coldCounter - 1);
+            } else {
+                ps.hotCounter = Math.max(0, ps.hotCounter - 1);
+            }
+
+            if (meetsCold) {
+                ps.coldCounter = Math.min(3, ps.coldCounter + 1);
+                ps.hotCounter  = Math.max(0, ps.hotCounter  - 1);
+            } else {
+                ps.coldCounter = Math.max(0, ps.coldCounter - 1);
+            }
+
+            ps.macro_streak = null;
+            if (ps.hotCounter  >= 3) ps.macro_streak = 'HOT';
+            else if (ps.coldCounter >= 3) ps.macro_streak = 'COLD';
         }
     });
 }
