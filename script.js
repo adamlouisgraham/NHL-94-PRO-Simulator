@@ -7471,6 +7471,8 @@ function openStatLeaders() {
     h += tbl('PIM',   top(skaters, (a,b)=>b[k].pim-a[k].pim).map(p=>row(p,p[k].pim,'#FF8800')).join(''));
     h += tbl('GWG',   top(skaters, (a,b)=>(b[k].gwg||0)-(a[k].gwg||0)).map(p=>row(p,p[k].gwg||0,'#FFD700')).join(''));
     h += tbl('SV%',   top(goalies,  (a,b)=>goalieSvp(b)-goalieSvp(a)).filter(p=>p[k].sa>=10).map(p=>row(p,goalieSvp(p).toFixed(3),'var(--neon-cyan)')).join(''));
+    const soGoalies = [...goalies].filter(p=>(p[k].so||0)>0).sort((a,b)=>(b[k].so||0)-(a[k].so||0)).slice(0,25);
+    if (soGoalies.length > 0) h += tbl('Shutouts', soGoalies.map(p=>row(p,p[k].so,'#FFD700')).join(''));
     h += `</div></div>`;
 
     h += renderMonthlyProgress();
