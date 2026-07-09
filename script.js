@@ -1786,10 +1786,10 @@ function processPostGameStreaks(skaters, goalies) {
             if (ovr >= 85) {
                 meetsHot  = pts3 >= 5 && pm3 >= 0;
                 meetsCold = pts3 === 0 && pm3 <= -2;
-            } else if (ovr >= 75) {
+            } else if (ovr >= 70) {
                 meetsHot  = pts3 >= 3 && pm3 >= 0;
                 meetsCold = pts3 === 0 && pm3 <= -2;
-            } else if (ovr >= 65) {
+            } else if (ovr >= 60) {
                 meetsHot  = pts3 >= 3 && pm3 >= 1;
                 meetsCold = ps.consPointless >= 5 && pm3 <= -3;
             } else {
