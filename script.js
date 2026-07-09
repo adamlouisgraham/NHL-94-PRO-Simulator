@@ -2419,7 +2419,8 @@ const getRosterStructure = (tk) => {
     // -- Honor custom lines if the coach saved them ------------------------
     if (customLines[tk]) {
         const cl = customLines[tk];
-        const byName = n => r.find(p => p.name === n);
+        const isHealthy = n => { const ps = playerStats[n]; return ps && !ps.onIR && (!ps.injury || ps.injury.daysRemaining === 0) && (!ps.suspended || ps.suspended.days === 0); };
+        const byName = n => { const p = r.find(pl => pl.name === n); return (p && isHealthy(n)) ? p : null; };
         // Dedupe across the whole group — a player may only occupy ONE slot
         const resolveGroup = (nameArrays, fallback) => {
             const seen = new Set();
@@ -3726,7 +3727,7 @@ function simGame(idx) {
 
     // EMPTY NETTER — trailing team pulls goalie in final 2 min (steps 116-119)
     // ~50% chance they actually pull; leading team has ~65% chance to score EN goal
-    if (hG !== aG && !isASG) {
+    if (step >= 116 && hG !== aG && !isASG) {
         const trailerIsHome = hG < aG;
         const goalDiff = Math.abs(hG - aG);
         if (goalDiff === 1) {
@@ -4041,8 +4042,8 @@ function simGame(idx) {
     let activeGoalies = [hG_obj, aG_obj].filter(g => g !== null);
     if (typeof processPostGameStreaks === 'function') processPostGameStreaks(winningTeamRoster.concat(losingTeamRoster), activeGoalies);
     if (typeof applyPostGameFatigue === 'function' && aG_name && hG_name) applyPostGameFatigue(g.a.nrm, g.h.nrm, aG_name, hG_name);
-    if (typeof reviewGameForSuspensions === 'function') reviewGameForSuspensions(matchStats, g.h.nrm, g.a.nrm);
-    if (typeof triggerGameInjuries === 'function') triggerGameInjuries(matchStats, g.h.nrm, g.a.nrm);
+    if (typeof reviewGameForSuspensions === 'function') { reviewGameForSuspensions(matchStats, g.h.nrm, g.a.nrm); clearWpCache(); }
+    if (typeof triggerGameInjuries === 'function') { triggerGameInjuries(matchStats, g.h.nrm, g.a.nrm); clearWpCache(); }
 
     // Chemistry score decay/rebuild for custom duos
     if (!isASG && customDuos.length > 0) {
@@ -6677,7 +6678,7 @@ function runEndOfSeasonAwards() {
     // 3. CALDER — eligible: career GP < 32 (all positions)
     const ROOKIE_GP_LIMIT = 31;
     const calderScore = p => p.pos === 'G' ? (p.season.w * 1.5) + (p.season.so * 3) : (p.season.g + p.season.a);
-    const calderEligible = allPlayers.filter(p => { const cGP = p.career.gp || 0; return p.pos === 'G' ? (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minGoalieGP) : (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minSkaterGP); });
+    const calderEligible = allPlayers.filter(p => { const cGP = Math.max(0, (p.career.gp || 0) - (p.season.gp || 0)); return p.pos === 'G' ? (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minGoalieGP) : (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minSkaterGP); });
     const calderSorted = [...calderEligible].sort((a, b) => calderScore(b) - calderScore(a));
     if (calderSorted.length > 0) {
         awardTrophy(calderSorted[0].name, currentSeason, "Calder");
@@ -8233,8 +8234,8 @@ function applyPostGameFatigue(awayTeamCode, homeTeamCode, awayGoalieName, homeGo
         rosters[tk].forEach(p => {
             if (!p.status) p.status = { fatigue: 0, morale: 0, injuryDays: 0, suspension: 0, consecutiveStarts: 0 };
 
-            // Skaters gain 8 fatigue per game
-            if (p.pos !== 'G' && p.status.injuryDays === 0) {
+            // Skaters gain 8 fatigue per game (not if on IR)
+            if (p.pos !== 'G' && p.status.injuryDays === 0 && !playerStats[p.name]?.onIR) {
                 p.status.fatigue = Math.min(100, p.status.fatigue + 8);
             }
             // Goalies
@@ -8350,6 +8351,10 @@ function processDailyUpdates() {
             }
 
             playerA.team = teamB; playerB.team = teamA;
+            const _teamAObj = league.find(t => t.nrm === teamA);
+            const _teamBObj = league.find(t => t.nrm === teamB);
+            if (playerStats[playerA.name] && _teamBObj) { playerStats[playerA.name].team = _teamBObj.name; playerStats[playerA.name].teamCode = _teamBObj.code; }
+            if (playerStats[playerB.name] && _teamAObj) { playerStats[playerB.name].team = _teamAObj.name; playerStats[playerB.name].teamCode = _teamAObj.code; }
 
             rosters[teamA] = rosters[teamA].filter(p => p.name !== playerA.name);
             rosters[teamA].push(playerB);
