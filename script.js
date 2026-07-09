@@ -2379,7 +2379,9 @@ const getRosterStructure = (tk) => {
 
     let healthySkaters = r.filter(p => {
         let ps = playerStats[p.name];
-        return getPos(p) !== 'G' && ps && !ps.onIR && (!ps.injury || ps.injury.daysRemaining === 0);
+        return getPos(p) !== 'G' && ps && !ps.onIR
+            && (!ps.injury || ps.injury.daysRemaining === 0)
+            && (!ps.suspended || ps.suspended.days === 0);
     });
 
     let fPool = healthySkaters.filter(p => getPos(p) !== 'D')
@@ -8163,8 +8165,12 @@ function processDailyUpdates() {
         rosters[tk].forEach(p => {
             if (!p.status) return;
             if (p.status.injuryDays > 0) p.status.injuryDays--;
-            if (playedToday && p.status.suspension > 0) p.status.suspension--;
-            if (!playedToday) p.status.fatigue = Math.max(0, p.status.fatigue - 25); 
+            if (!playedToday) p.status.fatigue = Math.max(0, p.status.fatigue - 25);
+            // Decrement suspension counter each game the team plays
+            const ps = playerStats[p.name];
+            if (ps && ps.suspended && ps.suspended.days > 0 && playedToday) {
+                ps.suspended.days--;
+            }
         });
     }
 
@@ -8321,8 +8327,10 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
                 else if (lengthRoll < 0.25) gamesOut = 3; // 20% chance: 3 Games
                 else if (lengthRoll < 0.60) gamesOut = 2; // 35% chance: 2 Games
                 
-                // Apply the suspension to their status backpack
-                player.status.suspension += gamesOut;
+                // Apply the suspension — tracked on playerStats so lineup/UI both see it
+                if (!player.suspended) player.suspended = { days: 0, reason: '' };
+                player.suspended.days = Math.max(player.suspended.days, gamesOut);
+                player.suspended.reason = 'DOPS';
                 
                 // Figure out which team they play for so we can write the headline
                 let teamCode = rosters[homeCode].find(p => p.name === pName) ? homeCode : awayCode;
