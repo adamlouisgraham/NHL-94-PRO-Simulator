@@ -3621,6 +3621,35 @@ function simGame(idx) {
         }
     }
 
+    // FIGHTING — coincidental 5-min majors, weighted toward high aggr/rough players
+    // ~1.5% chance per tick → ~0.9 fights/game; only skaters on ice are eligible
+    if (!isASG && Math.random() < 0.015) {
+        const fightWeight = (name) => {
+            const ps = playerStats[name];
+            if (!ps) return 0;
+            const aggr = gradeToNum(ps.attr?.aggr) || 50;
+            const rough = gradeToNum(ps.attr?.rough) || 50;
+            return Math.pow((aggr + rough) / 2, 2); // quadratic so high-aggr players dominate
+        };
+        const pickFighter = (pool) => {
+            const w = pool.map(p => fightWeight(p.name));
+            const total = w.reduce((a, b) => a + b, 0);
+            if (total === 0) return pool[Math.floor(Math.random() * pool.length)];
+            let r = Math.random() * total;
+            for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) return pool[i]; }
+            return pool[0];
+        };
+        const hFighter = pickFighter(hOnIce.filter(p => p.pos !== 'G'));
+        const aFighter = pickFighter(aOnIce.filter(p => p.pos !== 'G'));
+        if (hFighter && aFighter) {
+            trk(hFighter.name, 'pim', 5);
+            trk(aFighter.name, 'pim', 5);
+            penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr,
+                tm: g.h.code, cl: '#FF4444',
+                txt: `FIGHT: ${hFighter.name} vs ${aFighter.name} — coincidental majors (5 min each)`, isPenalty: false, isFight: true });
+        }
+    }
+
     // EMPTY NETTER — trailing team pulls goalie in final 2 min (steps 116-119)
     // ~50% chance they actually pull; leading team has ~65% chance to score EN goal
     if (hG !== aG && !isASG) {
