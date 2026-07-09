@@ -1769,43 +1769,53 @@ function processPostGameStreaks(skaters, goalies) {
             ps.consPointless = 0;
         }
 
-        // Rolling window: Keep only the last 4 games (tighter, faster response)
-        if (ps.recentGames.length > 4) ps.recentGames.shift();
+        // Rolling window: 3-game sample
+        if (ps.recentGames.length > 3) ps.recentGames.shift();
 
-        // Evaluate ONLY if they have a full 4-game sample size
-        if (ps.recentGames.length === 4) {
-            let pts4 = ps.recentGames.reduce((sum, g) => sum + g.pts, 0);
-            let pm4 = ps.recentGames.reduce((sum, g) => sum + g.pm, 0);
-            let ovr = getPlayerWeightedStats(p.name).ovr;
+        // Evaluate ONLY if they have a full 3-game sample size
+        if (ps.recentGames.length === 3) {
+            let pts3 = ps.recentGames.reduce((sum, g) => sum + g.pts, 0);
+            let pm3  = ps.recentGames.reduce((sum, g) => sum + g.pm,  0);
+            let ovr  = getPlayerWeightedStats(p.name).ovr;
 
             if (!ps.coldCounter) ps.coldCounter = 0;
+            if (!ps.hotCounter)  ps.hotCounter  = 0;
 
-            // Determine whether this 4-game window meets HOT or COLD criteria
+            // Determine whether this 3-game window meets HOT or COLD criteria
             let meetsHot = false, meetsCold = false;
             if (ovr >= 85) {
-                meetsHot = pts4 >= 6;
-                meetsCold = pts4 === 0 && pm4 <= -2;
+                meetsHot  = pts3 >= 5;
+                meetsCold = pts3 === 0 && pm3 <= -2;
             } else if (ovr >= 75) {
-                meetsHot = pts4 >= 4;
-                meetsCold = pts4 === 0 && pm4 <= -2;
+                meetsHot  = pts3 >= 3;
+                meetsCold = pts3 === 0 && pm3 <= -2;
             } else if (ovr >= 65) {
-                meetsHot = pts4 >= 3;
-                meetsCold = ps.consPointless >= 6 && pm4 <= -4;
+                meetsHot  = pts3 >= 3;
+                meetsCold = ps.consPointless >= 5 && pm3 <= -3;
             } else {
-                meetsHot = pts4 >= 3;
-                meetsCold = pm4 <= -6;
+                meetsHot  = pts3 >= 2;
+                meetsCold = pm3 <= -5;
             }
 
-            // Degradation: counter climbs toward COLD, good play reduces it
+            // HOT counter — builds up over sustained good play, bleeds off otherwise
+            if (meetsHot) {
+                ps.hotCounter  = Math.min(3, ps.hotCounter  + 1);
+                ps.coldCounter = Math.max(0, ps.coldCounter - 1);
+            } else if (pts3 === 0) {
+                ps.hotCounter = Math.max(0, ps.hotCounter - 1);
+            }
+
+            // COLD counter — builds up over sustained slump, bleeds off when scoring
             if (meetsCold) {
                 ps.coldCounter = Math.min(3, ps.coldCounter + 1);
-            } else if (pts4 >= 1) {
+                ps.hotCounter  = Math.max(0, ps.hotCounter  - 1);
+            } else if (pts3 >= 1) {
                 ps.coldCounter = Math.max(0, ps.coldCounter - 1);
             }
 
-            // COLD only applies once counter reaches 3 (sustained slump)
+            // Tags require counter = 3 (sustained run in either direction)
             ps.macro_streak = null;
-            if (meetsHot) ps.macro_streak = 'HOT';
+            if (ps.hotCounter  >= 3) ps.macro_streak = 'HOT';
             else if (ps.coldCounter >= 3) ps.macro_streak = 'COLD';
         }
     });
