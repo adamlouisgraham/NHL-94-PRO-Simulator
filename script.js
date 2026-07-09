@@ -3547,8 +3547,8 @@ function simGame(idx) {
                 const pimAmt = isMajor ? 5 : 2;
                 trk(offender, 'pim', pimAmt);
                 penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: penTeam.code, cl: teamColors[penTeam.nrm] ? teamColors[penTeam.nrm][0] : '#fff', txt: `PENALTY: ${offender} (${isMajor ? '5 min major' : '2 min minor'})`, isPenalty: true });
-                // Major penalty → 6% chance of 1-3 game suspension
-                if (isMajor && Math.random() < 0.06 && playerStats[offender]) {
+                // Major penalty → 1% chance of 1-3 game suspension
+                if (isMajor && Math.random() < 0.01 && playerStats[offender]) {
                     const days = Math.ceil(Math.random() * 3);
                     playerStats[offender].suspended = { days, reason: 'Match penalty' };
                     penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: penTeam.code,
@@ -8303,19 +8303,19 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
     for (let pName in matchStats) {
         let stats = matchStats[pName];
         
-        // Only review players who accumulated serious PIMs (10+ = brawl / multiple majors)
-        if (stats.pim >= 10) {
+        // Only review players who accumulated serious PIMs (15+ = brawl / multiple majors)
+        if (stats.pim >= 15) {
             let player = playerStats[pName];
 
             // Failsafe to ensure they have the status backpack
             if (!player || !player.status) continue;
 
-            // Flat 8% chance per game at this threshold — rare but meaningful
-            let baseChance = 0.08;
+            // Flat 2% chance per game at this threshold — very rare
+            let baseChance = 0.02;
 
             // "Repeat Offender" Tax: Enforcers get scrutinized more harshly by the league
             let isEnforcer = getPlayerWeightedStats(pName).tag.includes('ENFORCER');
-            if (isEnforcer) baseChance += 0.04;
+            if (isEnforcer) baseChance += 0.01;
             
             // Roll the dice! Does the league suspend them?
             if (Math.random() < baseChance) {
