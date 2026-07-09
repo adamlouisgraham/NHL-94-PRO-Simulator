@@ -1628,7 +1628,7 @@ function getPlayerWeightedStats(pName) {
         let penaltyPct = (fatigue / 100) * maxPenaltyPercent * endResistance;
         
         finalOvr = Math.round(baseOvr * (1 - penaltyPct));
-        finalOvr += morale;
+        finalOvr += (morale - 100); // morale is 50–150; 100 = neutral, so deviation from 100 is the actual swing
     }
 
     // HOT/COLD streaks modify the player's own OVR — macro > micro; both can stack with dailySwing
@@ -3642,7 +3642,9 @@ function simGame(idx) {
                 const ppStratMod = advTeam.nrm === selectedTeam ? (coachAdj.pp === -1 ? 1.10 : coachAdj.pp === 1 ? 0.90 : 1.0) : 1.0;
                 const ppConvRate = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm) * ppStratMod;
                 const ppRoll = Math.random();
-                const ppUnit = advTeam.nrm === g.h.nrm ? hOnIce : aOnIce;
+                const advTeamObj2 = advTeam.nrm === g.h.nrm ? hTeamObj : aTeamObj;
+                const pp1Roster = (advTeamObj2?.specialTeams?.pp1 || []).filter(p => p && !(playerStats[p.name]?.injury?.daysRemaining > 0) && !(playerStats[p.name]?.suspended?.days > 0));
+                const ppUnit = pp1Roster.length >= 3 ? pp1Roster : (advTeam.nrm === g.h.nrm ? hOnIce : aOnIce);
                 const pkUnit = advTeam.nrm === g.h.nrm ? aOnIce : hOnIce;
 
                 if (ppRoll < ppConvRate && ppUnit.length > 0) {
@@ -4827,6 +4829,10 @@ async function beginNewYear() {
             p.playoff = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0};
         }
         p.streakType = 'stable'; p.hasScored = false; p.seasonTicks = 0;
+        p.hotCounter = 0; p.coldCounter = 0;
+        p.recentGames = []; p.recentStarts = [];
+        p.macro_streak = null; p.micro_streak = null;
+        p.playingHurt = false; p.consPointless = 0;
     });
     
     takeMonthSnapshot(); 
