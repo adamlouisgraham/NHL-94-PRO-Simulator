@@ -1765,11 +1765,10 @@ function assignMicroStreaks(rosterArray) {
         return picked;
     };
 
-    // Pick 2-3 HOT and 2-3 COLD per team (scales with roster size)
-    const nPicks = eligible.length >= 12 ? 3 : 2;
-    const hotPicks  = pickN(eligible, hotWeight, nPicks);
+    // 1 HOT and 1 COLD per team
+    const hotPicks  = pickN(eligible, hotWeight, 1);
     const hotSet    = new Set(hotPicks.map(p => p.name));
-    const coldPicks = pickN(eligible.filter(p => !hotSet.has(p.name)), coldWeight, nPicks);
+    const coldPicks = pickN(eligible.filter(p => !hotSet.has(p.name)), coldWeight, 1);
 
     eligible.forEach(p => { const ps = playerStats[p.name]; ps.micro_streak = null; ps._prevMicro = null; });
     hotPicks.forEach(p  => { playerStats[p.name].micro_streak = 'HOT';  playerStats[p.name]._prevMicro = 'HOT';  });
