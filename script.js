@@ -1723,7 +1723,7 @@ function assignMicroStreaks(rosterArray) {
 
     const eligible = rosterArray.filter(p => {
         const ps = playerStats[p.name];
-        return ps && (ps.injury?.daysRemaining ?? 0) === 0 && !ps.macro_streak && p.line !== 'BENCH';
+        return ps && (ps.injury?.daysRemaining ?? 0) === 0 && !ps.macro_streak && p.line !== 'BENCH' && p.pos !== 'G';
     });
     if (eligible.length < 2) return;
 
@@ -1897,7 +1897,8 @@ function processPostGameStreaks(skaters, goalies) {
             if (meetsCold) {
                 ps.coldCounter = Math.min(3, ps.coldCounter + 1);
                 ps.hotCounter  = Math.max(0, ps.hotCounter  - 1);
-            } else {
+            } else if (svPct >= (ovr >= 85 ? 0.900 : ovr >= 70 ? 0.890 : 0.875)) {
+                // Only bleed cold counter when play is meaningfully above the cold threshold
                 ps.coldCounter = Math.max(0, ps.coldCounter - 1);
             }
 
@@ -3014,7 +3015,7 @@ function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
 }
 
 // Helper function to build the Special Teams HTML dynamically
-function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.12, Math.min(0.27, 0.165 + diff * 0.0028 * pace)); }
+function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.08, Math.min(0.27, 0.165 + diff * 0.0028 * pace)); }
 
 // --- GAME MATH & STATS ---
 function checkMilestones(pName) {
@@ -3300,8 +3301,10 @@ function simGame(idx) {
     // B2B goalie fatigue: starting goalie on back-to-back takes a wall modifier hit
     const hB2BPen = (!isPlayoffs && hG_obj && playedYesterday(g.h.nrm)) ? 0.06 : 0;
     const aB2BPen = (!isPlayoffs && aG_obj && playedYesterday(g.a.nrm)) ? 0.06 : 0;
-    let hWallMod = Math.max(0.72, Math.min(1.28, 1.0 + (75 - hGOvr) * 0.013 + hB2BPen));
-    let aWallMod = Math.max(0.72, Math.min(1.28, 1.0 + (75 - aGOvr) * 0.013 + aB2BPen));
+    const hHurtPen = (hG_name && playerStats[hG_name]?.playingHurt) ? 0.15 : 0;
+    const aHurtPen = (aG_name && playerStats[aG_name]?.playingHurt) ? 0.15 : 0;
+    let hWallMod = Math.max(0.72, Math.min(1.28, 1.0 + (75 - hGOvr) * 0.013 + hB2BPen - hHurtPen));
+    let aWallMod = Math.max(0.72, Math.min(1.28, 1.0 + (75 - aGOvr) * 0.013 + aB2BPen - aHurtPen));
     // Coaching adjustments: forecheck 1=aggressive(open game), -1=defensive(tight); pp 1=shoot, -1=cycle
     if (!isPlayoffs && !isASG) {
         const fMod = coachAdj.forecheck * 0.025; // aggressive opens scoring both ways
@@ -4567,9 +4570,11 @@ function initPlayoffs() {
     const cen = divTop4('Central');
     const pac = divTop4('Pacific');
 
+    // Stamp division seed so home ice in later rounds uses seed, not raw pts
+    [atl, ne, cen, pac].forEach(div => div.forEach((t, i) => { t._playoffSeed = i + 1; }));
     const mkS = (t1, t2, conf, div, slot) => {
-        const home = t1.season.pts >= t2.season.pts ? t1 : t2;
-        const away = t1.season.pts >= t2.season.pts ? t2 : t1;
+        const home = (t1._playoffSeed || 99) <= (t2._playoffSeed || 99) ? t1 : t2;
+        const away = (t1._playoffSeed || 99) <= (t2._playoffSeed || 99) ? t2 : t1;
         return { h: home, a: away, hW: 0, aW: 0, conf, div, slot, games: [] };
     };
 
@@ -4707,8 +4712,8 @@ function _doRoundAdvance() {
 
     const getWinner = s => s.hW === 4 ? s.h : s.a;
     const mkNext = (t1, t2, conf, div) => {
-        const home = t1.season.pts >= t2.season.pts ? t1 : t2;
-        const away = t1.season.pts >= t2.season.pts ? t2 : t1;
+        const home = (t1._playoffSeed || 99) <= (t2._playoffSeed || 99) ? t1 : t2;
+        const away = (t1._playoffSeed || 99) <= (t2._playoffSeed || 99) ? t2 : t1;
         return { h: home, a: away, hW: 0, aW: 0, conf, div, games: [] };
     };
 
@@ -6626,9 +6631,12 @@ function runEndOfSeasonAwards() {
         teamTopScorers[tm].sort((a, b) => b - a); 
     }
 
+    const _eastTeams = league.filter(t=>t.conf==='Eastern').sort((a,b)=>b.season.pts-a.season.pts).slice(0,8);
+    const _westTeams = league.filter(t=>t.conf==='Western').sort((a,b)=>b.season.pts-a.season.pts).slice(0,8);
+    if (_eastTeams.length === 0) console.warn('runEndOfSeasonAwards: no Eastern conf teams found — check CSV conf column');
     const playoffQualifiers = new Set([
-        ...league.filter(t=>t.conf==='Eastern').sort((a,b)=>b.season.pts-a.season.pts).slice(0,8).map(t=>t.name),
-        ...league.filter(t=>t.conf==='Western').sort((a,b)=>b.season.pts-a.season.pts).slice(0,8).map(t=>t.name)
+        ...(_eastTeams.length > 0 ? _eastTeams : [...league].sort((a,b)=>b.season.pts-a.season.pts).slice(0,13)).map(t=>t.name),
+        ..._westTeams.map(t=>t.name)
     ]);
 
     let mvpCandidates = [];
@@ -6709,7 +6717,7 @@ function runEndOfSeasonAwards() {
 
     // 6. FRANK J. SELKE
     const selkeSorted = skaters
-        .filter(p => p.season.gp >= 40 && [ 'PRO DEFENSIVE FWD', 'DEFENSIVE FWD', 'TWO-WAY FWD', 'GRINDER', 'POWER FORWARD'].includes(getPlayerWeightedStats(p.name).tag))
+        .filter(p => p.season.gp >= 40 && ['PRO DEFENSIVE FWD', 'DEFENSIVE FWD', 'TWO-WAY FWD', 'TWO-WAY STAR F', 'GRINDER', 'POWER FORWARD'].includes(getPlayerWeightedStats(p.name).tag))
         .sort((a, b) => {
             let scoreA = (getDef(a.name) * 0.6) + ((a.season.pm || 0) * 0.4);
             let scoreB = (getDef(b.name) * 0.6) + ((b.season.pm || 0) * 0.4);
@@ -8266,10 +8274,11 @@ function processDailyUpdates() {
             if (!p.status) return;
             if (p.status.injuryDays > 0) p.status.injuryDays--;
             if (!playedToday) p.status.fatigue = Math.max(0, p.status.fatigue - 25);
-            // Decrement suspension counter each game the team plays
+            // Decrement suspension based on the player's own current team schedule (safe after trades)
             const ps = playerStats[p.name];
-            if (ps && ps.suspended && ps.suspended.days > 0 && playedToday) {
-                ps.suspended.days--;
+            if (ps && ps.suspended && ps.suspended.days > 0) {
+                const playerTk = ps.teamCode || tk;
+                if (teamsPlayedToday.has(playerTk)) ps.suspended.days--;
             }
         });
     }
@@ -8429,7 +8438,7 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
                 
                 // Apply the suspension — tracked on playerStats so lineup/UI both see it
                 if (!player.suspended) player.suspended = { days: 0, reason: '' };
-                player.suspended.days = Math.max(player.suspended.days, gamesOut);
+                player.suspended.days += gamesOut; // accumulate — serving suspension doesn't protect from new bans
                 player.suspended.reason = 'DOPS';
                 
                 // Figure out which team they play for so we can write the headline
@@ -8470,7 +8479,7 @@ function rollInGameInjuries(homeCode, awayCode) {
         skaters.forEach(p => {
             const ps = playerStats[p.name];
             if (!ps) return;
-            const fatigueBonus = (ps.fatigue || 0) > 65 ? 0.003 : 0;
+            const fatigueBonus = getPlayerFatigueAmount(p.name) > 5 ? 0.003 : 0;
             const aggrBonus = getAggr(p.name) > 70 ? 0.002 : 0;
             if (Math.random() < SKATER_CHANCE + fatigueBonus + aggrBonus) {
                 const roll = Math.random();
@@ -8494,7 +8503,8 @@ function rollInGameInjuries(homeCode, awayCode) {
                 const backupG = rosters[tk].find(b => b.pos === 'G' && b.name !== p.name && (playerStats[b.name]?.injury?.daysRemaining ?? 0) === 0);
                 const days = backupG ? Math.floor(Math.random() * 4) + 1 : 1;
                 ps.injury = { severity: days, daysRemaining: days };
-                const backupNote = backupG ? ` ${backupG.name} enters in relief.` : ' No healthy backup — capped at 1 game.';
+                if (!backupG) ps.playingHurt = true; // stays in net but at reduced effectiveness
+                const backupNote = backupG ? ` ${backupG.name} enters in relief.` : ' No healthy backup — playing through.';
                 tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `🚨 GOALIE PULLED (INJURY): ${p.name} (${tk.toUpperCase()}) — out ${days} game${days > 1 ? 's' : ''}.${backupNote}` });
             }
         });
@@ -8511,7 +8521,7 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
         const stats = matchStats[pName];
         if (!stats.toi || stats.toi <= 0) continue;
 
-        const fatigueBonus = (ps.fatigue || 0) > 70 ? 0.003 : 0;
+        const fatigueBonus = getPlayerFatigueAmount(pName) > 5 ? 0.003 : 0;
         const physicalBonus = stats.pim >= 2 ? 0.002 : 0;
         const chance = BASE_CHANCE + fatigueBonus + physicalBonus;
 
