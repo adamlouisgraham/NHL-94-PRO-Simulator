@@ -1784,16 +1784,16 @@ function processPostGameStreaks(skaters, goalies) {
             // Determine whether this 3-game window meets HOT or COLD criteria
             let meetsHot = false, meetsCold = false;
             if (ovr >= 85) {
-                meetsHot  = pts3 >= 5;
+                meetsHot  = pts3 >= 5 && pm3 >= 0;
                 meetsCold = pts3 === 0 && pm3 <= -2;
             } else if (ovr >= 75) {
-                meetsHot  = pts3 >= 3;
+                meetsHot  = pts3 >= 3 && pm3 >= 0;
                 meetsCold = pts3 === 0 && pm3 <= -2;
             } else if (ovr >= 65) {
-                meetsHot  = pts3 >= 3;
+                meetsHot  = pts3 >= 3 && pm3 >= 1;
                 meetsCold = ps.consPointless >= 5 && pm3 <= -3;
             } else {
-                meetsHot  = pts3 >= 2;
+                meetsHot  = pts3 >= 2 && pm3 >= 2;
                 meetsCold = pm3 <= -5;
             }
 
