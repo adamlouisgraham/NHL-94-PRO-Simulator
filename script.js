@@ -1778,25 +1778,35 @@ function processPostGameStreaks(skaters, goalies) {
             let pm4 = ps.recentGames.reduce((sum, g) => sum + g.pm, 0);
             let ovr = getPlayerWeightedStats(p.name).ovr;
 
-            ps.macro_streak = null; // Reset to stable by default
+            if (!ps.coldCounter) ps.coldCounter = 0;
 
+            // Determine whether this 4-game window meets HOT or COLD criteria
+            let meetsHot = false, meetsCold = false;
             if (ovr >= 85) {
-                // STARS (85+ OVR) — need genuine drought to be COLD
-                if (pts4 >= 6) ps.macro_streak = 'HOT';
-                else if (pts4 === 0) ps.macro_streak = 'COLD';
+                meetsHot = pts4 >= 6;
+                meetsCold = pts4 === 0 && pm4 <= -2;
             } else if (ovr >= 75) {
-                // TOP 6 / TOP 4 (75-84 OVR)
-                if (pts4 >= 4) ps.macro_streak = 'HOT';
-                else if (pts4 === 0) ps.macro_streak = 'COLD';
+                meetsHot = pts4 >= 4;
+                meetsCold = pts4 === 0 && pm4 <= -2;
             } else if (ovr >= 65) {
-                // MID-TIER (65-74 OVR) — depth scorers; need 6 pointless to go COLD
-                if (pts4 >= 3) ps.macro_streak = 'HOT';
-                else if (ps.consPointless >= 6 && pm4 <= -3) ps.macro_streak = 'COLD';
+                meetsHot = pts4 >= 3;
+                meetsCold = ps.consPointless >= 6 && pm4 <= -4;
             } else {
-                // DEPTH / CHECKERS (<65 OVR) — rarely score; only +/- matters for COLD
-                if (pts4 >= 3) ps.macro_streak = 'HOT';
-                else if (pm4 <= -5) ps.macro_streak = 'COLD';
+                meetsHot = pts4 >= 3;
+                meetsCold = pm4 <= -6;
             }
+
+            // Degradation: counter climbs toward COLD, good play reduces it
+            if (meetsCold) {
+                ps.coldCounter = Math.min(3, ps.coldCounter + 1);
+            } else if (pts4 >= 1) {
+                ps.coldCounter = Math.max(0, ps.coldCounter - 1);
+            }
+
+            // COLD only applies once counter reaches 3 (sustained slump)
+            ps.macro_streak = null;
+            if (meetsHot) ps.macro_streak = 'HOT';
+            else if (ps.coldCounter >= 3) ps.macro_streak = 'COLD';
         }
     });
 
