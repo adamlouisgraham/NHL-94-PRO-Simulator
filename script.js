@@ -1634,10 +1634,10 @@ function getPlayerWeightedStats(pName) {
     // HOT/COLD streaks modify the player's own OVR — macro > micro; both can stack with dailySwing
     const ps = playerStats[pName];
     if (ps) {
-        if (ps.macro_streak === 'HOT')       finalOvr = Math.round(finalOvr * 1.12);
-        else if (ps.micro_streak === 'HOT')  finalOvr = Math.round(finalOvr * 1.06);
-        if (ps.macro_streak === 'COLD')      finalOvr = Math.round(finalOvr * 0.88);
-        else if (ps.micro_streak === 'COLD') finalOvr = Math.round(finalOvr * 0.94);
+        if (ps.macro_streak === 'HOT')       finalOvr = Math.round(finalOvr * 1.05);
+        else if (ps.micro_streak === 'HOT')  finalOvr = Math.round(finalOvr * 1.03);
+        if (ps.macro_streak === 'COLD')      finalOvr = Math.round(finalOvr * 0.95);
+        else if (ps.micro_streak === 'COLD') finalOvr = Math.round(finalOvr * 0.97);
         // dailySwing: pre-game per-player variance (±8% of ovr, set by applyDailyRandomSwing)
         if (ps.dailySwing) finalOvr = Math.max(40, Math.min(99, Math.round(finalOvr * (1 + ps.dailySwing))));
     }
