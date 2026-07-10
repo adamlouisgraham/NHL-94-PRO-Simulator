@@ -3519,8 +3519,8 @@ function simGame(idx) {
             const psHome = Math.random() < 0.5;
             const psTeam = psHome ? g.h : g.a;
             const psGoalie = psHome ? aG_obj : hG_obj;
-            const psRoster = rosters[psTeam.nrm] ? rosters[psTeam.nrm].filter(p => p.pos !== 'G') : [];
-            const psShooter = psRoster.length ? psRoster[Math.floor(Math.random() * psRoster.length)] : null;
+            const psOnIce = (psHome ? hOnIce : aOnIce).filter(p => p.pos !== 'G');
+            const psShooter = psOnIce.length ? selectShooter(psOnIce) : null;
             if (psShooter && psGoalie) {
                 const shooterOvr = getPlayerWeightedStats(psShooter.name).ovr || 75;
                 const goalieOvr  = getPlayerWeightedStats(psGoalie.name).ovr  || 75;
@@ -3673,8 +3673,8 @@ function simGame(idx) {
                         // PP goal = PK goal against for the penalised team
                         if (penTeamObj) penTeamObj.season.pkg = (penTeamObj.season.pkg || 0) + 1;
                     }
-                } else if (ppRoll < 0.185 && pkUnit.length > 0) {
-                    // SHORTHANDED GOAL (~4% of PP opp result in SHG)
+                } else if (ppRoll >= ppConvRate && Math.random() < 0.02 && pkUnit.length > 0) {
+                    // SHORTHANDED GOAL — independent ~2% roll so strong PP teams can still give up SHGs
                     const shShooter = selectShooter(pkUnit);
                     const shEv = processSingleGoal(penTeam.nrm, penTeam.code, shShooter, pkUnit, timeStr, period, (minute % 20 || 20), sec);
                     if (shEv) {
@@ -3696,34 +3696,34 @@ function simGame(idx) {
                 }
             }
         }
-    }
 
-    // FIGHTING — coincidental 5-min majors, weighted toward high aggr/rough players
-    // ~1.5% chance per tick → ~0.9 fights/game; only skaters on ice are eligible
-    if (!isASG && Math.random() < 0.015) {
-        const fightWeight = (name) => {
-            const ps = playerStats[name];
-            if (!ps) return 0;
-            const aggr = gradeToNum(ps.attr?.aggr) || 50;
-            const rough = gradeToNum(ps.attr?.rough) || 50;
-            return Math.pow((aggr + rough) / 2, 2); // quadratic so high-aggr players dominate
-        };
-        const pickFighter = (pool) => {
-            const w = pool.map(p => fightWeight(p.name));
-            const total = w.reduce((a, b) => a + b, 0);
-            if (total === 0) return pool[Math.floor(Math.random() * pool.length)];
-            let r = Math.random() * total;
-            for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) return pool[i]; }
-            return pool[0];
-        };
-        const hFighter = pickFighter(hOnIce.filter(p => p.pos !== 'G'));
-        const aFighter = pickFighter(aOnIce.filter(p => p.pos !== 'G'));
-        if (hFighter && aFighter) {
-            trk(hFighter.name, 'pim', 5);
-            trk(aFighter.name, 'pim', 5);
-            penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr,
-                tm: g.h.code, cl: '#FF4444',
-                txt: `FIGHT: ${hFighter.name} vs ${aFighter.name} — coincidental majors (5 min each)`, isPenalty: false, isFight: true });
+        // FIGHTING — coincidental 5-min majors, weighted toward high aggr/rough players
+        // ~1.5% chance per tick → ~0.9 fights/game; only skaters on ice are eligible
+        if (!isASG && Math.random() < 0.015) {
+            const fightWeight = (name) => {
+                const ps = playerStats[name];
+                if (!ps) return 0;
+                const aggr = gradeToNum(ps.attr?.aggr) || 50;
+                const rough = gradeToNum(ps.attr?.rough) || 50;
+                return Math.pow((aggr + rough) / 2, 2); // quadratic so high-aggr players dominate
+            };
+            const pickFighter = (pool) => {
+                const w = pool.map(p => fightWeight(p.name));
+                const total = w.reduce((a, b) => a + b, 0);
+                if (total === 0) return pool[Math.floor(Math.random() * pool.length)];
+                let r = Math.random() * total;
+                for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) return pool[i]; }
+                return pool[0];
+            };
+            const hFighter = pickFighter(hOnIce.filter(p => p.pos !== 'G'));
+            const aFighter = pickFighter(aOnIce.filter(p => p.pos !== 'G'));
+            if (hFighter && aFighter) {
+                trk(hFighter.name, 'pim', 5);
+                trk(aFighter.name, 'pim', 5);
+                penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr,
+                    tm: g.h.code, cl: '#FF4444',
+                    txt: `FIGHT: ${hFighter.name} vs ${aFighter.name} — coincidental majors (5 min each)`, isPenalty: false, isFight: true });
+            }
         }
     }
 
