@@ -1776,7 +1776,7 @@ function assignMicroStreaks(rosterArray) {
 }
 
 // 3. The 5-Game Rolling "Macro" Streaks (Run Post-Game)
-function processPostGameStreaks(skaters, goalies) {
+function processPostGameStreaks(skaters, goalies, matchStats) {
     // --- SKATERS ---
     skaters.forEach(p => {
         let ps = playerStats[p.name];
@@ -1785,13 +1785,14 @@ function processPostGameStreaks(skaters, goalies) {
         if (!ps.recentGames) ps.recentGames = [];
         
         // Push this game's stats (Points and Plus/Minus)
+        const ms = (matchStats && matchStats[p.name]) || {};
         ps.recentGames.push({
-            pts: (p.goals || 0) + (p.assists || 0),
-            pm: p.pm || 0
+            pts: (ms.g || 0) + (ms.a || 0),
+            pm: ms.pm || 0
         });
-        
+
         // Track consecutive pointless games
-        const thisGamePts = (p.goals || 0) + (p.assists || 0);
+        const thisGamePts = (ms.g || 0) + (ms.a || 0);
         if (thisGamePts === 0) {
             ps.consPointless = (ps.consPointless || 0) + 1;
         } else {
@@ -1858,9 +1859,10 @@ function processPostGameStreaks(skaters, goalies) {
         if (!ps.recentStarts) ps.recentStarts = [];
         
         // Push this game's shots and saves
+        const gms = (matchStats && matchStats[g.name]) || {};
         ps.recentStarts.push({
-            sv: g.saves || 0,
-            sa: g.shotsAgainst || 0
+            sv: gms.sv || 0,
+            sa: gms.sa || 0
         });
         
         // Rolling window: Keep only the last 3 starts
@@ -4022,27 +4024,28 @@ function simGame(idx) {
         }
     }
 
-    // ðŸ§¹ 10. MORALE & POST-GAME CLEANUP
+    // 10. MORALE & POST-GAME CLEANUP
     let isHomeWin = (hG > aG);
+    const isTie = (hG === aG);
     const winningTeamRoster = isHomeWin ? [...hStruct.f.flat(), ...hStruct.d.flat()] : [...aStruct.f.flat(), ...aStruct.d.flat()];
     const losingTeamRoster = isHomeWin ? [...aStruct.f.flat(), ...aStruct.d.flat()] : [...hStruct.f.flat(), ...hStruct.d.flat()];
 
-    if (winningTeamRoster) {
-        let winBoost = isHomeWin ? 12 : 8; 
+    if (!isTie && winningTeamRoster) {
+        let winBoost = isHomeWin ? 12 : 8;
         winningTeamRoster.forEach(p => {
             if (playerStats[p.name]) playerStats[p.name].morale = Math.min(150, playerStats[p.name].morale + winBoost);
         });
     }
 
-    if (losingTeamRoster && !isPlayoffs) { 
-        let lossPenalty = (!isHomeWin) ? 12 : 6; 
+    if (!isTie && losingTeamRoster && !isPlayoffs) {
+        let lossPenalty = (!isHomeWin) ? 12 : 6;
         losingTeamRoster.forEach(p => {
             if (playerStats[p.name]) playerStats[p.name].morale = Math.max(50, playerStats[p.name].morale - lossPenalty);
         });
     }
 
     let activeGoalies = [hG_obj, aG_obj].filter(g => g !== null);
-    if (typeof processPostGameStreaks === 'function') processPostGameStreaks(winningTeamRoster.concat(losingTeamRoster), activeGoalies);
+    if (typeof processPostGameStreaks === 'function') processPostGameStreaks(winningTeamRoster.concat(losingTeamRoster), activeGoalies, matchStats);
     if (typeof applyPostGameFatigue === 'function' && aG_name && hG_name) applyPostGameFatigue(g.a.nrm, g.h.nrm, aG_name, hG_name);
     if (typeof reviewGameForSuspensions === 'function') { reviewGameForSuspensions(matchStats, g.h.nrm, g.a.nrm); clearWpCache(); }
     if (typeof triggerGameInjuries === 'function') { triggerGameInjuries(matchStats, g.h.nrm, g.a.nrm); clearWpCache(); }
@@ -4130,8 +4133,8 @@ function selectShooter(unit) {
         weight *= isD ? 0.80 : (pos === 'LW' || pos === 'RW') ? 1.08 : (pos === 'C') ? 0.95 : 1.0;
 
         // Hot/cold modifier
-        if (ps.isHot)  weight *= 1.20;
-        if (ps.isCold) weight *= 0.80;
+        if (ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT')  weight *= 1.20;
+        if (ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD') weight *= 0.80;
 
         return Math.max(1, weight);
     });
@@ -8280,7 +8283,18 @@ function processDailyUpdates() {
         rosters[tk].forEach(p => {
             if (!p.status) return;
             if (p.status.injuryDays > 0) p.status.injuryDays--;
-            if (!playedToday) p.status.fatigue = Math.max(0, p.status.fatigue - 25);
+            // Heal playerStats injury on rest days (game days are covered by heal() inside simulateGame)
+            const ps4 = playerStats[p.name];
+            if (!playedToday && ps4 && ps4.injury && ps4.injury.daysRemaining > 0) {
+                ps4.injury.daysRemaining--;
+                if (ps4.injury.daysRemaining === 0) { ps4.onIR = false; }
+            }
+            if (!playedToday) {
+                p.status.fatigue = Math.max(0, p.status.fatigue - 25);
+                // Also recover real sim fatigue tracked via seasonTicks
+                const ps6 = playerStats[p.name];
+                if (ps6 && ps6.seasonTicks > 0) ps6.seasonTicks = Math.max(0, ps6.seasonTicks - 20);
+            }
             // Decrement suspension based on the player's own current team schedule (safe after trades)
             const ps = playerStats[p.name];
             if (ps && ps.suspended && ps.suspended.days > 0) {
