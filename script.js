@@ -1617,19 +1617,14 @@ function getPlayerWeightedStats(pName) {
     // =========================================================
     let finalOvr = baseOvr;
     
-    if (p.status) {
-        let fatigue = p.status.fatigue || 0;
-        let morale = p.status.morale || 0;
-        
-        let endurance = parseInt(p.attr.endurance || p.attr.END || p.attr.end) || 70;
-        
-        let maxPenaltyPercent = 0.05; // Max 5% OVR penalty at full fatigue
-        let endResistance = 1.2 - (endurance / 100);
-        let penaltyPct = (fatigue / 100) * maxPenaltyPercent * endResistance;
-        
-        finalOvr = Math.round(baseOvr * (1 - penaltyPct));
-        finalOvr += (morale - 100); // morale is 50–150; 100 = neutral, so deviation from 100 is the actual swing
-    }
+    // fatigue lives on playerStats as seasonTicks; morale is a top-level field — neither is on p.status
+    const fatiguePenalty = typeof getPlayerFatigueAmount === 'function' ? getPlayerFatigueAmount(pName) : 0;
+    const morale = p.morale !== undefined ? p.morale : 100;
+    const endurance = parseInt(p.attr?.endurance || p.attr?.END || p.attr?.end) || 70;
+    const endResistance = 1.2 - (endurance / 100);
+    const penaltyPct = Math.min(fatiguePenalty / 100, 1) * 0.05 * endResistance;
+    finalOvr = Math.round(baseOvr * (1 - penaltyPct));
+    finalOvr += (morale - 100); // morale 50–150; 100 = neutral
 
     // HOT/COLD streaks modify the player's own OVR — macro > micro; both can stack with dailySwing
     const ps = playerStats[pName];
