@@ -3699,7 +3699,7 @@ function simGame(idx) {
 
         // FIGHTING — coincidental 5-min majors, weighted toward high aggr/rough players
         // ~1.5% chance per tick → ~0.9 fights/game; only skaters on ice are eligible
-        if (!isASG && Math.random() < 0.015) {
+        if (!isASG && Math.random() < 0.00167) {
             const fightWeight = (name) => {
                 const ps = playerStats[name];
                 if (!ps) return 0;
