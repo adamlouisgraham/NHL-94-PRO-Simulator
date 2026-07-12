@@ -3779,6 +3779,11 @@ function simGame(idx) {
                 const tag = getPlayerWeightedStats(best.name)?.tag;
                 return { ovr: (getPlayerWeightedStats(best.name).ovr||70) + (tag === 'SNIPER' ? 3 : tag === 'SUPERSTAR' ? 5 : 0), name: best.name };
             };
+            const otAssist = (struct, starName) => {
+                const line = otLine(struct).filter(p => p.name !== starName);
+                if (!line.length || Math.random() < 0.15) return null; // ~15% unassisted
+                return line[Math.floor(Math.random()*line.length)].name;
+            };
             const hStar = otBest(hStruct), aStar = otBest(aStruct);
             const hWinProb = Math.max(0.25, Math.min(0.75, 0.52 + (hStar.ovr - aStar.ovr) * 0.005));
             const otSec = Math.floor(Math.random()*300);
@@ -3787,16 +3792,20 @@ function simGame(idx) {
                 hG++; hShots++;
                 trk(aG_name,'sa',1); trk(aG_name,'ga',1);
                 if (hStar.name) { trk(hStar.name,'g',1); trk(hStar.name,'s',1); }
+                const hAssist = hStar.name ? otAssist(hStruct, hStar.name) : null;
+                if (hAssist) trk(hAssist,'a',1);
                 allGoals.push({ p:4, m:otM, s:otS, str:`OT ${otM}:${otS<10?'0'+otS:otS}`, tm:g.h.code,
                     cl:teamColors[g.h.nrm]?.[0]||'#fff',
-                    txt:buildGoalText(hStar.name, null, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:hStar.name, code:g.h.code });
+                    txt:buildGoalText(hStar.name, hAssist, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:hStar.name, pAssist:hAssist, code:g.h.code });
             } else {
                 aG++; aShots++;
                 trk(hG_name,'sa',1); trk(hG_name,'ga',1);
                 if (aStar.name) { trk(aStar.name,'g',1); trk(aStar.name,'s',1); }
+                const aAssist = aStar.name ? otAssist(aStruct, aStar.name) : null;
+                if (aAssist) trk(aAssist,'a',1);
                 allGoals.push({ p:4, m:otM, s:otS, str:`OT ${otM}:${otS<10?'0'+otS:otS}`, tm:g.a.code,
                     cl:teamColors[g.a.nrm]?.[0]||'#fff',
-                    txt:buildGoalText(aStar.name, null, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:aStar.name, code:g.a.code });
+                    txt:buildGoalText(aStar.name, aAssist, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:aStar.name, pAssist:aAssist, code:g.a.code });
             }
         }
         // else: OT not resolved — game remains a tie
@@ -3811,6 +3820,11 @@ function simGame(idx) {
             const sniperBonus = tag === 'SNIPER' ? 3 : tag === 'SUPERSTAR' ? 5 : 0;
             return { ovr: (getPlayerWeightedStats(best.name).ovr||70) + sniperBonus, name: best.name };
         };
+        const otShooterAssist = (struct, starName) => {
+            const line = [...(struct.f[0]||[]), ...(struct.d[0]||[])].filter(p => p.name !== starName);
+            if (!line.length || Math.random() < 0.15) return null; // ~15% unassisted
+            return line[Math.floor(Math.random()*line.length)].name;
+        };
         while (hG === aG && otPeriods < 7) {
             otPeriods++;
             const hStar = otShooterOvr(hStruct);
@@ -3822,18 +3836,22 @@ function simGame(idx) {
                 hG++; hShots++;
                 trk(aG_name,'sa',1); trk(aG_name,'ga',1);
                 if (hStar.name) { trk(hStar.name,'g',1); trk(hStar.name,'s',1); }
+                const hAssist = hStar.name ? otShooterAssist(hStruct, hStar.name) : null;
+                if (hAssist) trk(hAssist,'a',1);
                 const otM = Math.floor(otSec/60)+1, otS = otSec%60;
                 allGoals.push({ p:3+otPeriods, m:otM, s:otS, str:`OT${otPeriods} ${otM}:${otS<10?'0'+otS:otS}`,
                     tm:g.h.code, cl:teamColors[g.h.nrm]?.[0]||'#fff',
-                    txt:buildGoalText(hStar.name, null, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:hStar.name, code:g.h.code });
+                    txt:buildGoalText(hStar.name, hAssist, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:hStar.name, pAssist:hAssist, code:g.h.code });
             } else {
                 aG++; aShots++;
                 trk(hG_name,'sa',1); trk(hG_name,'ga',1);
                 if (aStar.name) { trk(aStar.name,'g',1); trk(aStar.name,'s',1); }
+                const aAssist = aStar.name ? otShooterAssist(aStruct, aStar.name) : null;
+                if (aAssist) trk(aAssist,'a',1);
                 const otM = Math.floor(otSec/60)+1, otS = otSec%60;
                 allGoals.push({ p:3+otPeriods, m:otM, s:otS, str:`OT${otPeriods} ${otM}:${otS<10?'0'+otS:otS}`,
                     tm:g.a.code, cl:teamColors[g.a.nrm]?.[0]||'#fff',
-                    txt:buildGoalText(aStar.name, null, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:aStar.name, code:g.a.code });
+                    txt:buildGoalText(aStar.name, aAssist, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:aStar.name, pAssist:aAssist, code:g.a.code });
             }
         }
     }
@@ -4660,8 +4678,9 @@ function _doRoundAdvance() {
     });
     if(playoffBracket.round === 4) {
         if(w[0]) currentCupChamp = w[0].name;
+        _awardsPending = true;
         openAwardsVoting();
-        
+
         // !! Spawn the button to jump straight into the next year!
         if (!document.getElementById('btnStartNextSeason')) {
             const btnStartNextSeason = document.createElement('button'); 
@@ -4740,7 +4759,9 @@ function processOffseasonGrowth() {
     if (logs.length > 0 && awardConfig.headlines) { logs.sort(() => 0.5 - Math.random()).slice(0, 5).forEach(msg => { tradeLog.unshift({ day: 'OFFSEASON', details: msg }); }); }
 }
 
+let _awardsPending = false;
 async function beginNewYear() {
+    if (_awardsPending) { alert('Reveal the award winners before starting the next season — history would snapshot as zeroed standings otherwise.'); return; }
     clearWpCache();
     currentSeason++; isPlayoffs = false;
     league.forEach(t => {
@@ -7437,6 +7458,7 @@ function openAwardsVoting() {
     window._revealAwardWinners = () => {
         document.getElementById('awardsVotingOverlay').style.display = 'none';
         runEndOfSeasonAwards();
+        _awardsPending = false;
     };
 
     document.getElementById('votingSeasonLabel').textContent = currentSeason || '';
@@ -8400,6 +8422,10 @@ function processDailyUpdates() {
                         if (playerStats[pB.name] && _cmA) { playerStats[pB.name].team = _cmA.name; playerStats[pB.name].teamCode = _cmA.code; }
                         rosters[teamA] = rosters[teamA].filter(p => p.name !== pA.name); rosters[teamA].push(pB);
                         rosters[teamB] = rosters[teamB].filter(p => p.name !== pB.name); rosters[teamB].push(pA);
+                        if (_cmA) _cmA.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
+                        if (_cmB) _cmB.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
+                        assignTeamCaptains();
+                        clearWpCache();
                         tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `COUNTERMOVE: ${teamA.toUpperCase()} responds — acquires ${pB.name} from ${teamB.toUpperCase()} for ${pA.name}.` });
                     }
                 }
@@ -8495,6 +8521,7 @@ function rollInGameInjuries(homeCode, awayCode) {
                 else                  days = Math.floor(Math.random() * 5) + 6;
                 days = Math.min(days, 12);
                 if (days > 0) ps.injury = { severity: days, daysRemaining: days };
+                else ps.shakenUpToday = true; // exempt from a second independent injury roll later this game
                 const label = days === 0 ? 'shaken up — playing through' : `out ${days} game${days > 1 ? 's' : ''}`;
                 tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `[INJ] IN-GAME: ${p.name} (${tk.toUpperCase()}) — ${label}.` });
             }
@@ -8526,6 +8553,7 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
         const ps = playerStats[pName];
         if (!ps || !ps.injury) continue;
         if (ps.injury.daysRemaining > 0) continue;
+        if (ps.shakenUpToday) { ps.shakenUpToday = false; continue; } // already dinged by rollInGameInjuries this game
         const stats = matchStats[pName];
         if (!stats.toi || stats.toi <= 0) continue;
 
