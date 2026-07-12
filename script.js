@@ -3635,7 +3635,7 @@ function simGame(idx) {
 
                 // Resolve the powerplay using team PP/PK ratings (not a flat 20%)
                 // PP strategy: CYCLE (-1) = patient setup, higher conversion; SHOOT (1) = quick shots, lower conversion
-                const ppStratMod = advTeam.nrm === selectedTeam ? (coachAdj.pp === -1 ? 1.10 : coachAdj.pp === 1 ? 0.90 : 1.0) : 1.0;
+                const ppStratMod = (!isPlayoffs && !isASG && advTeam.nrm === selectedTeam) ? (coachAdj.pp === -1 ? 1.10 : coachAdj.pp === 1 ? 0.90 : 1.0) : 1.0;
                 const ppConvRate = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm) * ppStratMod;
                 const ppRoll = Math.random();
                 const advTeamObj2 = advTeam.nrm === g.h.nrm ? hTeamObj : aTeamObj;
@@ -5740,7 +5740,8 @@ function submitAdvGame() {
     let aG = aScore, hG = hScore;
     let hStatus = hG > aG ? 'win' : (hG < aG ? 'loss' : 'tie');
     let aStatus = aG > hG ? 'win' : (aG < hG ? 'loss' : 'tie');
-    
+    gameMilestones = [];
+
     const applyGoalie = (tk, side, oppGoals, oppEN, status) => {
         let gEntry = advBoxScoreTemp[side].entries.find(e => e.isGoalie);
         let gName = gEntry ? gEntry.name : null;
@@ -5771,7 +5772,15 @@ function submitAdvGame() {
         });
     };
     applySkaters('away'); applySkaters('home');
-    
+
+    // Surface milestone banners for this manually-entered game before they can be overwritten by a later simGame() call
+    if (gameMilestones.length > 0 && awardConfig.milestones && awardConfig.headlines) {
+        gameMilestones.forEach(msg => {
+            tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `MILESTONE: ${msg}` });
+        });
+        gameMilestones = [];
+    }
+
     if (!isASG) {
         advBoxScoreTemp.away.dressed.forEach(pN => { if(playerStats[pN]) playerStats[pN][k].gp++; });
         advBoxScoreTemp.home.dressed.forEach(pN => { if(playerStats[pN]) playerStats[pN][k].gp++; });
