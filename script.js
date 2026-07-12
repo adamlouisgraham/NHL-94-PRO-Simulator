@@ -3247,6 +3247,9 @@ function simGame(idx) {
     const hG_obj = selG(g.h.nrm), aG_obj = selG(g.a.nrm);
     let hG_name = hG_obj ? hG_obj.name : null;
     let aG_name = aG_obj ? aG_obj.name : null;
+    // Record original starters before any blowout-pull reassignment
+    const origHG_name = hG_name;
+    const origAG_name = aG_name;
 
     // ðŸ§± 3. MACRO AURAS & MODIFIER MATH
     let hAuraMod = (getTeamSystemAura(g.h.nrm) === 'OFFENSIVE TEAM' ? 1.15 : (getTeamSystemAura(g.h.nrm) === 'DEFENSIVE TEAM' ? 0.85 : 1.0));
@@ -4003,7 +4006,7 @@ function simGame(idx) {
     if (aG_name && playerStats[aG_name]) playerStats[aG_name].lastPlayedDay = currentDay;
     let activeGoalies = [hG_obj, aG_obj].filter(g => g !== null);
     if (typeof processPostGameStreaks === 'function') processPostGameStreaks(winningTeamRoster.concat(losingTeamRoster), activeGoalies, matchStats);
-    if (typeof applyPostGameFatigue === 'function' && aG_name && hG_name) applyPostGameFatigue(g.a.nrm, g.h.nrm, aG_name, hG_name);
+    if (typeof applyPostGameFatigue === 'function' && origHG_name && origAG_name) applyPostGameFatigue(g.a.nrm, g.h.nrm, origAG_name, origHG_name);
     if (typeof reviewGameForSuspensions === 'function') { reviewGameForSuspensions(matchStats, g.h.nrm, g.a.nrm); clearWpCache(); }
     if (typeof triggerGameInjuries === 'function') { triggerGameInjuries(matchStats, g.h.nrm, g.a.nrm); clearWpCache(); }
 
@@ -7030,6 +7033,8 @@ function approveProposal(id) {
         
         let t1o = league.find(l=>l.nrm===t.t1); if(t1o) t1o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
         let t2o = league.find(l=>l.nrm===t.t2); if(t2o) t2o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
+        assignTeamCaptains();
+        clearWpCache();
         tradeLog.unshift({ day: currentDay, details: ` BLOCKBUSTER: ${t.p1} traded to ${t.t2Name} for ${t.p2}!` });
     }
     pendingTrades = pendingTrades.filter(x => x.id !== id); openProposalsModal(); updateUI(); refreshTradeBadge(); saveGame();
