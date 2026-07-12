@@ -6828,7 +6828,7 @@ function getConnSmytheScore(p) {
         return (wins * 5) + (shutouts * 10);
     }
     
-    // Skater logic: Goals valued 2x, Assists 1x
+    // Skater logic: Goals valued 1.2x, Assists 1x
     const goals = s.g || 0;
     const assists = s.a || 0;
     return (goals * 1.2) + (assists * 1);
@@ -7025,7 +7025,11 @@ function executeTrade() {
 
     const resetGoalieTracking = (name) => {
         const ps = playerStats[name];
-        if (ps && ps.pos === 'G') { ps.consStarts = 0; ps.lastStart = -1; ps.goalieDays = 0; }
+        if (ps && ps.pos === 'G') {
+            ps.lastStart = -1; ps.goalieDays = 0;
+            if (ps.season) ps.season.consStarts = 0;
+            if (ps.playoff) ps.playoff.consStarts = 0;
+        }
     };
     s1.forEach(n => { const i = rosters[t1c].findIndex(p => p.name === n); if(i !== -1) { rosters[t2c].push(rosters[t1c].splice(i, 1)[0]); if(playerStats[n] && t2o) { playerStats[n].team = t2o.name; playerStats[n].teamCode = t2o.code; resetGoalieTracking(n); } } });
     s2.forEach(n => { const i = rosters[t2c].findIndex(p => p.name === n); if(i !== -1) { rosters[t1c].push(rosters[t2c].splice(i, 1)[0]); if(playerStats[n] && t1o) { playerStats[n].team = t1o.name; playerStats[n].teamCode = t1o.code; resetGoalieTracking(n); } } });
@@ -7080,8 +7084,8 @@ function approveProposal(id) {
     if (i1 !== -1 && i2 !== -1) {
         rosters[t.t2].push(rosters[t.t1].splice(i1, 1)[0]); rosters[t.t1].push(rosters[t.t2].splice(i2, 1)[0]);
         const t2lg = league.find(l=>l.nrm===t.t2); const t1lg = league.find(l=>l.nrm===t.t1);
-        if (playerStats[t.p1]) { playerStats[t.p1].team = t.t2Name; if (t2lg) playerStats[t.p1].teamCode = t2lg.code; if (playerStats[t.p1].pos === 'G') { playerStats[t.p1].consStarts = 0; playerStats[t.p1].lastStart = -1; playerStats[t.p1].goalieDays = 0; } }
-        if (playerStats[t.p2]) { playerStats[t.p2].team = t.t1Name; if (t1lg) playerStats[t.p2].teamCode = t1lg.code; if (playerStats[t.p2].pos === 'G') { playerStats[t.p2].consStarts = 0; playerStats[t.p2].lastStart = -1; playerStats[t.p2].goalieDays = 0; } }
+        if (playerStats[t.p1]) { playerStats[t.p1].team = t.t2Name; if (t2lg) playerStats[t.p1].teamCode = t2lg.code; if (playerStats[t.p1].pos === 'G') { playerStats[t.p1].lastStart = -1; playerStats[t.p1].goalieDays = 0; if (playerStats[t.p1].season) playerStats[t.p1].season.consStarts = 0; if (playerStats[t.p1].playoff) playerStats[t.p1].playoff.consStarts = 0; } }
+        if (playerStats[t.p2]) { playerStats[t.p2].team = t.t1Name; if (t1lg) playerStats[t.p2].teamCode = t1lg.code; if (playerStats[t.p2].pos === 'G') { playerStats[t.p2].lastStart = -1; playerStats[t.p2].goalieDays = 0; if (playerStats[t.p2].season) playerStats[t.p2].season.consStarts = 0; if (playerStats[t.p2].playoff) playerStats[t.p2].playoff.consStarts = 0; } }
         
         let t1o = league.find(l=>l.nrm===t.t1); if(t1o) t1o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
         let t2o = league.find(l=>l.nrm===t.t2); if(t2o) t2o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
@@ -8659,9 +8663,12 @@ function getTradeProbabilityMultiplier() {
 }
 
 // Top-8 in conference by points = "contender" (buyer); everyone else = "seller" as the deadline nears
+// Below a minimum games-played floor, points-based ranking is too noisy to trust — default to non-contender
 function isContenderTeam(nrm) {
     const t = league.find(l => l.nrm === nrm);
     if (!t) return true;
+    const MIN_GP_FOR_RANKING = 15;
+    if ((t.season.gp || 0) < MIN_GP_FOR_RANKING) return false;
     const confTeams = league.filter(l => l.conf === t.conf).sort((a, b) => b.season.pts - a.season.pts).slice(0, 8);
     return confTeams.some(l => l.nrm === nrm);
 }
