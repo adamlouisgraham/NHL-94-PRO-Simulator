@@ -1978,24 +1978,10 @@ function getLiveIceOvr(pName) {
     const p = playerStats[pName]; 
     if (!p) return 0;
 
-    // 1. Grab the PURE weighted calculation (ignores the CSV overall entirely)
-    let live = getPlayerWeightedStats(pName).baseOvr;
-    
-    // 2. Apply Macro/Micro Streaks
-    if (p.macro_streak === 'HOT') live += 10;
-    else if (p.micro_streak === 'HOT') live += 5;
-    if (p.macro_streak === 'COLD') live -= 10;
-    else if (p.micro_streak === 'COLD') live -= 5;
-    // Return-from-injury penalty: eases off over several games
+    // Start from the fully-computed OVR (morale, fatigue, streaks, dailySwing already baked in)
+    let live = getPlayerWeightedStats(pName).ovr;
+    // Return-from-injury penalty: eases off over several games (not in getPlayerWeightedStats)
     if (p.returnFromInjury && p.returnFromInjury > 0) live = Math.round(live * 0.93);
-    
-    // 3. Apply Fatigue Penalty
-    live -= getPlayerFatigueAmount(pName);
-    
-    // 4. Apply Morale Boost/Penalty
-    if (p.status && p.status.morale) {
-        live += ((p.status.morale - 100) * 0.05); // Adjust multiplier scaling to your liking
-    }
     
     // 4b. Captain Effect - a healthy/hot captain lifts team-wide morale; an injured/cold captain hurts it harder than a regular player would
     const tObj = league.find(t => t.code === p.teamCode);
@@ -4245,7 +4231,7 @@ function applyDailyRandomSwing(tk) {
     if (starters.length < 2) return;
 
     // Weighted selection — mirrors assignMicroStreaks logic so swing and micro reinforce each other
-    const hotW  = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; const morale = ps.status?.morale || 100; return Math.max(0.1, (1 + lastPts * 2) * (morale / 100)); };
+    const hotW  = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; const morale = ps.morale ?? 100; return Math.max(0.1, (1 + lastPts * 2) * (morale / 100)); };
     const coldW = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; const pointless = ps.consPointless || 0; return Math.max(0.1, (1 + pointless * 0.5) * (lastPts === 0 ? 2 : 0.5)); };
     const pick  = (pool, wFn) => { const w = pool.map(wFn); const t = w.reduce((a,b)=>a+b,0); let r = Math.random()*t; for(let i=0;i<pool.length;i++){r-=w[i];if(r<=0)return pool[i];} return pool[0]; };
 
