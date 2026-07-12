@@ -3194,27 +3194,30 @@ function simGame(idx) {
     };
     
     // [INJ] 1. HEALING & PRE-GAME SETUP
-    const heal = tk => { 
-        if(rosters[tk]) rosters[tk].forEach(p => { 
-            if(playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining > 0) {
-                playerStats[p.name].injury.daysRemaining--;
-                if(playerStats[p.name].injury.daysRemaining === 0) {
-                    const sev = playerStats[p.name].injury.severity || 0;
-                    if (!playerStats[p.name].injuryHistory) playerStats[p.name].injuryHistory = [];
-                    playerStats[p.name].injuryHistory.push({
+    const heal = tk => {
+        if(rosters[tk]) rosters[tk].forEach(p => {
+            const ps = playerStats[p.name];
+            if (!ps) return;
+            if (ps.injury && ps.injury.daysRemaining > 0) {
+                ps.injury.daysRemaining--;
+                if (ps.injury.daysRemaining === 0) {
+                    const sev = ps.injury.severity || 0;
+                    if (!ps.injuryHistory) ps.injuryHistory = [];
+                    ps.injuryHistory.push({
                         date: currentDay,
                         daysMissed: sev,
                         gamesOut: sev,
                         season: currentSeason,
                         grade: sev >= 8 ? 'serious' : sev >= 3 ? 'moderate' : 'minor'
                     });
-                    if (sev >= 3) playerStats[p.name].returnFromInjury = Math.ceil(sev / 2);
-                    playerStats[p.name].injury = { severity: 0, daysRemaining: 0 };
-                } else if (playerStats[p.name].returnFromInjury > 0) {
-                    playerStats[p.name].returnFromInjury--;
+                    if (sev >= 3) ps.returnFromInjury = Math.ceil(sev / 2);
+                    ps.injury = { severity: 0, daysRemaining: 0 };
                 }
+            } else if (ps.returnFromInjury > 0) {
+                // Decays once the player is actually back on the ice, independent of the injury guard above
+                ps.returnFromInjury--;
             }
-        }); 
+        });
     };
 
     heal(g.h.nrm);
