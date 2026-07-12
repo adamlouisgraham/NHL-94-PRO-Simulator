@@ -5335,7 +5335,7 @@ function renderTeamStats() {
     // --- GOALTENDER STATS ---
     h += `<div><div class="unit-header">GOALTENDER STATS</div><table style="width:100%; text-align:center;"><tr><th style="text-align:left;">PLAYER</th><th>GP</th><th>W</th><th>L</th><th>T</th><th>SA</th><th>GA</th><th>SV%</th><th>GAA</th><th>SO</th></tr>`;
     if (rosters[tk]) {
-        let goalies = rosters[tk].filter(p => p.pos === 'G').sort((a, b) => playerStats[b.name][k].w - playerStats[a.name][k].w);
+        let goalies = rosters[tk].filter(p => p.pos === 'G' && playerStats[p.name]?.[k]).sort((a, b) => (playerStats[b.name][k].w || 0) - (playerStats[a.name][k].w || 0));
         h += goalies.map(g => {
             const st = playerStats[g.name];
             const sa = st[k].sa || 0; const sv = st[k].sv || 0; const ga = Math.max(0, sa - sv);
@@ -5356,7 +5356,7 @@ function renderTeamStats() {
           </tr>`;
 
     if (rosters[tk]) {
-        let sk = rosters[tk].filter(p => p.pos !== 'G').sort((a, b) => (playerStats[b.name][k].g + playerStats[b.name][k].a) - (playerStats[a.name][k].g + playerStats[a.name][k].a));
+        let sk = rosters[tk].filter(p => p.pos !== 'G' && playerStats[p.name]?.[k]).sort((a, b) => ((playerStats[b.name][k].g || 0) + (playerStats[b.name][k].a || 0)) - ((playerStats[a.name][k].g || 0) + (playerStats[a.name][k].a || 0)));
         
         h += sk.map(p => { 
             const st = playerStats[p.name]; 
@@ -6889,8 +6889,9 @@ function getConnSmytheScore(p) {
                 hallOfFame.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: hofCarGP, g: hofCarG, a: hofCarA, pts: hofCarG+hofCarA, w: hofCarW, so: hofCarSO, mvp: p.asgMvp });
                 retiredPlayers.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: hofCarGP, g: hofCarG, a: hofCarA, pts: (p.career.pts||0)+(p.season.g+p.season.a), w: hofCarW, pim: (p.career.pim||0)+(p.season.pim||0), ppg: (p.career.ppg||0)+(p.season.ppg||0)+(p.careerPlayoff&&p.careerPlayoff.ppg||0)+(p.playoff&&p.playoff.ppg||0) });
                 const tkObj = league.find(t=>t.name===p.team); const tk = tkObj ? tkObj.nrm : null; 
-                if(tk && rosters[tk]) rosters[tk] = rosters[tk].filter(r => r.name !== p.name); 
-                tradeLog.unshift({ day: 'POST', details: `RETIRED: Legend ${p.name} inducted.` }); 
+                if(tk && rosters[tk]) rosters[tk] = rosters[tk].filter(r => r.name !== p.name);
+                delete playerStats[p.name];
+                tradeLog.unshift({ day: 'POST', details: `RETIRED: Legend ${p.name} inducted.` });
             } 
         }); 
         res += "<h3 style='margin-top:15px; color:var(--silver-light);'>HALL OF FAME:</h3><p style='font-size:7px; color:#888;'>" + (ind.join(', ') || 'None') + "</p>"; 
@@ -7051,7 +7052,7 @@ function renderLeagueHistory() {
 function renderHallOfFame() { 
     let el = document.getElementById('hofTable'); if (!el) return;
     let h = `<tr><th>YR</th><th>PLAYER</th><th>POS</th><th>TEAM</th><th>GP</th><th>G/W</th><th>A/SO</th><th>PTS</th><th>[AWD]</th></tr>`; 
-    hallOfFame.forEach(p => { h += `<tr><td>${p.year}</td><td class="hof-hl">${p.name}</td><td>${p.pos}</td><td>${p.team}</td><td>${p.gp}</td><td>${p.g || p.w}</td><td>${p.a || p.so}</td><td>${p.pts || p.w}</td><td>${p.mvp?'[MVP]':''}</td></tr>`; }); 
+    hallOfFame.forEach(p => { h += `<tr><td>${p.year}</td><td class="hof-hl">${p.name}</td><td>${p.pos}</td><td>${p.team}</td><td>${p.gp}</td><td>${p.pos==='G' ? p.w : p.g}</td><td>${p.pos==='G' ? p.so : p.a}</td><td>${p.pos==='G' ? '-' : p.pts}</td><td>${p.mvp?'[MVP]':''}</td></tr>`; }); 
     el.innerHTML = h; 
 }
 
