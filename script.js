@@ -6982,7 +6982,8 @@ function executeTrade() {
     if(t1o) t1o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null}; if(t2o) t2o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
     
     tradeLog.unshift({ day: currentDay, details: `TRADE: ${t1o.code} <-> ${t2o.code}` });
-    document.getElementById('tradeOverlay').style.display = 'none'; 
+    assignTeamCaptains(); // refresh captains — traded captain must not keep modifying old team
+    document.getElementById('tradeOverlay').style.display = 'none';
     updateUI(); renderTradeLog(); saveGame();
 }
 
