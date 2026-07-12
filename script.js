@@ -1730,7 +1730,7 @@ function assignMicroStreaks(rosterArray) {
         const lastPm  = lastGame.pm  || 0;
         const morale  = ps.morale ?? 100;
         const fatigue = getPlayerFatigueAmount(p.name) || 0;
-        return Math.max(0.1, (1 + lastPts * 2.5 + Math.max(0, lastPm) * 0.5) * (morale / 100) * (1 - fatigue / 250));
+        return Math.max(0.1, (1 + lastPts * 2.5 + Math.max(0, lastPm) * 0.5) * (1 - fatigue / 250));
     };
 
     // COLD weight: recent pointless games, negative +/-, low-OVR players more vulnerable
@@ -4231,7 +4231,7 @@ function applyDailyRandomSwing(tk) {
     if (starters.length < 2) return;
 
     // Weighted selection — mirrors assignMicroStreaks logic so swing and micro reinforce each other
-    const hotW  = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; const morale = ps.morale ?? 100; return Math.max(0.1, (1 + lastPts * 2) * (morale / 100)); };
+    const hotW  = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; return Math.max(0.1, 1 + lastPts * 2); };
     const coldW = p => { const ps = playerStats[p.name]; const lastPts = ps.recentGames?.slice(-1)[0]?.pts || 0; const pointless = ps.consPointless || 0; return Math.max(0.1, (1 + pointless * 0.5) * (lastPts === 0 ? 2 : 0.5)); };
     const pick  = (pool, wFn) => { const w = pool.map(wFn); const t = w.reduce((a,b)=>a+b,0); let r = Math.random()*t; for(let i=0;i<pool.length;i++){r-=w[i];if(r<=0)return pool[i];} return pool[0]; };
 
