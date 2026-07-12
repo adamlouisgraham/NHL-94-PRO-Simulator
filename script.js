@@ -1728,8 +1728,8 @@ function assignMicroStreaks(rosterArray) {
         const lastGame = ps.recentGames?.slice(-1)[0] || {};
         const lastPts = lastGame.pts || 0;
         const lastPm  = lastGame.pm  || 0;
-        const morale  = ps.status?.morale  || 100;
-        const fatigue = ps.status?.fatigue || 0;
+        const morale  = ps.morale ?? 100;
+        const fatigue = getPlayerFatigueAmount(p.name) || 0;
         return Math.max(0.1, (1 + lastPts * 2.5 + Math.max(0, lastPm) * 0.5) * (morale / 100) * (1 - fatigue / 250));
     };
 
@@ -3297,8 +3297,9 @@ function simGame(idx) {
     const hGOvr = hG_obj ? (getPlayerWeightedStats(hG_obj.name).ovr || 75) : 75;
     const aGOvr = aG_obj ? (getPlayerWeightedStats(aG_obj.name).ovr || 75) : 75;
     // B2B goalie fatigue: starting goalie on back-to-back takes a wall modifier hit
-    const hB2BPen = (!isPlayoffs && hG_obj && playedYesterday(g.h.nrm)) ? 0.06 : 0;
-    const aB2BPen = (!isPlayoffs && aG_obj && playedYesterday(g.a.nrm)) ? 0.06 : 0;
+    // B2B penalty only applies to the goalie who actually played yesterday, not the fresh backup
+    const hB2BPen = (!isPlayoffs && hG_obj && playerStats[hG_obj.name]?.lastPlayedDay === currentDay - 1) ? 0.06 : 0;
+    const aB2BPen = (!isPlayoffs && aG_obj && playerStats[aG_obj.name]?.lastPlayedDay === currentDay - 1) ? 0.06 : 0;
     const hHurtPen = (hG_name && playerStats[hG_name]?.playingHurt) ? 0.15 : 0;
     const aHurtPen = (aG_name && playerStats[aG_name]?.playingHurt) ? 0.15 : 0;
     let hWallMod = Math.max(0.72, Math.min(1.28, 1.0 + (75 - hGOvr) * 0.013 + hB2BPen - hHurtPen));
@@ -4039,6 +4040,9 @@ function simGame(idx) {
         });
     }
 
+    // Stamp which day each goalie last played so B2B penalty can target only the tired starter
+    if (hG_name && playerStats[hG_name]) playerStats[hG_name].lastPlayedDay = currentDay;
+    if (aG_name && playerStats[aG_name]) playerStats[aG_name].lastPlayedDay = currentDay;
     let activeGoalies = [hG_obj, aG_obj].filter(g => g !== null);
     if (typeof processPostGameStreaks === 'function') processPostGameStreaks(winningTeamRoster.concat(losingTeamRoster), activeGoalies, matchStats);
     if (typeof applyPostGameFatigue === 'function' && aG_name && hG_name) applyPostGameFatigue(g.a.nrm, g.h.nrm, aG_name, hG_name);
@@ -8241,6 +8245,9 @@ function applyPostGameFatigue(awayTeamCode, homeTeamCode, awayGoalieName, homeGo
             // Skaters gain 8 fatigue per game (not if on IR)
             if (p.pos !== 'G' && p.status.injuryDays === 0 && !playerStats[p.name]?.onIR) {
                 p.status.fatigue = Math.min(100, p.status.fatigue + 8);
+                // Also accumulate real sim fatigue so getPlayerFatigueAmount / getPlayerWeightedStats sees it
+                const ps1 = playerStats[p.name];
+                if (ps1) ps1.seasonTicks = (ps1.seasonTicks || 0) + 20;
             }
             // Goalies
             else if (p.pos === 'G') {
@@ -8283,6 +8290,10 @@ function processDailyUpdates() {
             if (!playedToday && ps4 && ps4.injury && ps4.injury.daysRemaining > 0) {
                 ps4.injury.daysRemaining--;
                 if (ps4.injury.daysRemaining === 0) { ps4.onIR = false; }
+            }
+            // Morale decays 3% per day toward neutral (100) so extreme values don't persist all season
+            if (ps4 && ps4.morale !== undefined && ps4.morale !== 100) {
+                ps4.morale = Math.round(ps4.morale * 0.97 + 100 * 0.03);
             }
             if (!playedToday) {
                 p.status.fatigue = Math.max(0, p.status.fatigue - 25);
@@ -8515,11 +8526,14 @@ function rollInGameInjuries(homeCode, awayCode) {
             }
         });
 
-        // Goalie injury — triggers backup pull event
+        // Goalie injury — triggers backup pull event; stop after first injury per team
+        let goalieInjuredThisTeam = false;
         goalies.forEach(p => {
+            if (goalieInjuredThisTeam) return;
             const ps = playerStats[p.name];
             if (!ps) return;
             if (Math.random() < GOALIE_CHANCE) {
+                goalieInjuredThisTeam = true;
                 const backupG = rosters[tk].find(b => b.pos === 'G' && b.name !== p.name && (playerStats[b.name]?.injury?.daysRemaining ?? 0) === 0);
                 const days = backupG ? Math.floor(Math.random() * 4) + 1 : 1;
                 ps.injury = { severity: days, daysRemaining: days };
