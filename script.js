@@ -31,7 +31,7 @@
     "BOOMER":         { shotRate: 1.20, penaltyRate: 1.00,  assistRate: 1.11 }, // Higher shotRate, slightly lower assistRate to reflect their focus on powerful shots
     "BIG HITTER":     { shotRate: 1.00, penaltyRate: 1.40,  assistRate: 1.00 }, // Lower shotRate, higher penaltyRate to reflect their physical style
     "SHUTDOWN":       { shotRate: 0.80, penaltyRate: 1.00,  assistRate: 1.00 }, // Lower shotRate, balanced assistRate to reflect their defensive focus
-    "TWO-WAY STAR":   { shotRate: 1.09, penaltyRate: 0.90,  assistRate: 1.25 },
+    "TWO-WAY STAR D": { shotRate: 1.09, penaltyRate: 0.90,  assistRate: 1.25 },
     "TWO-WAY D":      { shotRate: 0.97, penaltyRate: 1.00,  assistRate: 1.05 },
     "PRO OFFENSIVE D":{ shotRate: 1.05, penaltyRate: 0.70,  assistRate: 1.15 },
     "PRO DEFENSIVE D":{ shotRate: 0.80, penaltyRate: 0.70,  assistRate: 0.95 },
@@ -1905,7 +1905,7 @@ function getArchetypeBadge(pName) {
     const abbrevMap = {
         'PLAYMAKER': 'PL',
         'SUPERSTAR': 'SS',
-        'TwO-WAY STAR F': 'TSF',
+        'TWO-WAY STAR F': 'TSF',
         'SNIPER': 'SN',
         'DANGLER': 'DA',
         'SPEEDSTER': 'SP',
@@ -2600,8 +2600,21 @@ const getRosterStructure = (tk) => {
     //  BOTTOM 6 WINGER DRAFT
     // ==========================================
     // Line 3 prioritizes Defense/Two-Way. Line 4 takes the best remaining.
-    safeDraft(2, sortDef); 
+    safeDraft(2, sortDef);
     safeDraft(3, sortOvrDesc);
+
+    // Failsafe: anti-stacking may have rejected every remaining candidate for L3/L4
+    // (e.g. leftover forwards all sharing a tag already seated on that line) — force-fill
+    // any still-short line from the remaining pool so no forward is left off the roster.
+    [2, 3].forEach(lineIdx => {
+        while (fLines[lineIdx].length < 3 && usedNames.size < maxForwards) {
+            let available = fPool.filter(p => !usedNames.has(p.name)).sort(sortOvrDesc);
+            if (!available.length) break;
+            const p = available[0];
+            fLines[lineIdx].push(p);
+            usedNames.add(p.name);
+        }
+    });
 
     // ==========================================
     //  5b. POST-DRAFT SYNERGY REBALANCER
@@ -4800,10 +4813,11 @@ async function beginNewYear() {
     processOffseasonGrowth();
     assignTeamCaptains();
 
-    // Capture preseason OVR baseline for GM Report Card grading
+    // Capture preseason OVR baseline for GM Report Card grading.
+    // Uses baseOvr (not .ovr) so leftover fatigue/morale from the prior season doesn't contaminate the baseline.
     preseasonOvrSnapshot = {};
     league.forEach(t => {
-        const rpl = (rosters[t.nrm] || []).map(p => getPlayerWeightedStats(p.name).ovr).filter(v => v > 0);
+        const rpl = (rosters[t.nrm] || []).map(p => getPlayerWeightedStats(p.name).baseOvr).filter(v => v > 0);
         preseasonOvrSnapshot[t.nrm] = rpl.length ? Math.round(rpl.reduce((a, b) => a + b, 0) / rpl.length) : 75;
     });
 
