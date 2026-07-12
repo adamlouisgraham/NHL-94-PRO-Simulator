@@ -2224,8 +2224,7 @@ function getAllDuos() { return [...dynamicDuos, ...customDuos]; }
 
 // Example helper to ensure every player has a tag
 function getTag(name) {
-    if (playerStats[name] && playerStats[name].tag) return playerStats[name].tag;
-    return 'UNKNOWN'; // Or a default fallback
+    return (typeof getPlayerWeightedStats === 'function' ? getPlayerWeightedStats(name)?.tag : null) || 'UNKNOWN';
 }
 
 // =========================================================
@@ -6266,6 +6265,17 @@ function leSwapSlot(tk, slotId, newPlayerName) {
     lines[lineIdx][spotIdx] = newPlayerName;
     if (oldLine !== -1) lines[oldLine][oldSpot] = displaced;
 
+    // New personnel in a slot means old accumulated chemistry no longer applies
+    const tObj = league.find(t => t.nrm === tk);
+    if (tObj && tObj.chem) {
+        if (type === 'f' && tObj.chem.f) tObj.chem.f[lineIdx] = 0;
+        if (type === 'd' && tObj.chem.d) tObj.chem.d[lineIdx] = 0;
+        if (oldLine !== -1) {
+            if (type === 'f' && tObj.chem.f) tObj.chem.f[oldLine] = 0;
+            if (type === 'd' && tObj.chem.d) tObj.chem.d[oldLine] = 0;
+        }
+    }
+
     document.getElementById('le-swap-overlay')?.remove();
     renderLineEditor(tk);
 }
@@ -6951,7 +6961,8 @@ function getConnSmytheScore(p) {
     if(awardConfig.draft) { 
         let sorting = [...league].sort((a,b) => a.season.pts - b.season.pts);
         sorting.forEach(t => { 
-            const rN = "ROOKIE-" + Math.floor(Math.random()*9000+1000); 
+            let rN;
+            do { rN = "ROOKIE-" + Math.floor(Math.random()*90000+10000); } while (playerStats[rN]);
             if (!rosters[t.nrm]) rosters[t.nrm] = []; 
             playerStats[rN] = { 
                 name: rN, team: t.name, teamCode: t.code, pos: 'F', age: 18, streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false, injury: { severity: 0, daysRemaining: 0 }, attr: { off: 65 + Math.floor(Math.random()*15), def: 60 + Math.floor(Math.random()*15), gDef: 60 }, 
