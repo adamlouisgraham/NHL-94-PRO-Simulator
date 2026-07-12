@@ -244,7 +244,7 @@ function gradeToNum(val) {
 const getOff  = (pName) => parseInt(playerStats[pName]?.attr.off   || playerStats[pName]?.attr.OFF  || 0);
 const getDef  = (pName) => parseInt(playerStats[pName]?.attr.def   || playerStats[pName]?.attr.DEF  || 0);
 const getChk  = (pName) => { const p = playerStats[pName]; return p ? (gradeToNum(p.attr.check) || 50) : 50; };
-const getAggr = (pName) => { const p = playerStats[pName]; return p ? (gradeToNum(p.attr.aggr)  || 50) : 50; };
+const getAggr = (pName) => { const p = playerStats[pName]; return (p && p.attr) ? (gradeToNum(p.attr.aggr) || 50) : 50; };
 const getWgt  = (pName) => { const p = playerStats[pName]; return p ? (p.weight || getWeightLbs(p.attr.weight || 'C')) : 180; };
 const getArch = (pName) => getPlayerWeightedStats(pName).tag || 'Unknown';
 
@@ -332,6 +332,14 @@ function getCaptainChemModifier(teamNrm) {
 }
 let league = []; let rosters = {}; let playerStats = {}; let tradeLog = []; let hallOfFame = []; let leagueHistory = []; let retiredPlayers = []; let calendar = []; let realDatesMap = []; let gameMilestones = []; let monthSnapshot = {}; let pendingTrades = []; let playoffBracket = { round: 1, series: [] }; let teams = {}; let selectedTeam = null;
 let customDuos = []; // user-defined chemistry pairs, supplements the hardcoded dynamicDuos
+// Checks that swapping outA(from teamA)<->outB(from teamB) leaves both post-trade rosters with a goalie and a center
+function tradeKeepsRostersViable(teamAKey, outA, teamBKey, outB) {
+    const postA = rosters[teamAKey].map(p=>p.name).filter(n=>n!==outA.name).concat([outB.name]);
+    const postB = rosters[teamBKey].map(p=>p.name).filter(n=>n!==outB.name).concat([outA.name]);
+    const hasGoalie = names => names.some(n => playerStats[n]?.pos === 'G');
+    const hasCenter = names => names.some(n => playerStats[n]?.pos === 'C');
+    return hasGoalie(postA) && hasGoalie(postB) && hasCenter(postA) && hasCenter(postB);
+}
 // Drop any duo where a member retired or the pair is no longer on the same team roster
 function pruneCustomDuos() {
     customDuos = customDuos.filter(duo => {
@@ -6544,8 +6552,10 @@ function initAllStarGame() {
     const w = selectAS('west', 'CAMPBELL CONFERENCE', 'CAM', 'campbell', 'campbell.jpg'); 
     
     rosters[e.nrm] = e.roster; rosters[w.nrm] = w.roster;
-    calendar.splice(currentDay, 0, [{ h: e, a: w, result: null, isASG_game: true }]); 
-    
+    calendar.splice(currentDay, 0, [{ h: e, a: w, result: null, isASG_game: true }]);
+    if (Array.isArray(realDatesMap) && realDatesMap.length) realDatesMap.splice(currentDay, 0, 'ALL-STAR BREAK');
+
+
     const btnArena = document.getElementById('btnGameSelect'); 
     if (btnArena) btnArena.innerText = "ASG BREAK";
     
@@ -7061,7 +7071,12 @@ function openProposalsModal() {
 function approveProposal(id) {
     let t = pendingTrades.find(x => x.id === id); if (!t) return;
     const i1 = rosters[t.t1].findIndex(p => p.name === t.p1); const i2 = rosters[t.t2].findIndex(p => p.name === t.p2);
-    
+
+    if (i1 !== -1 && i2 !== -1 && !tradeKeepsRostersViable(t.t1, rosters[t.t1][i1], t.t2, rosters[t.t2][i2])) {
+        alert('This trade would leave a team without a goalie or center and cannot be approved. Reject it instead.');
+        return;
+    }
+
     if (i1 !== -1 && i2 !== -1) {
         rosters[t.t2].push(rosters[t.t1].splice(i1, 1)[0]); rosters[t.t1].push(rosters[t.t2].splice(i2, 1)[0]);
         const t2lg = league.find(l=>l.nrm===t.t2); const t1lg = league.find(l=>l.nrm===t.t1);
@@ -8382,6 +8397,10 @@ function processDailyUpdates() {
                 dealTag = `BLOCKBUSTER: ${teamA.toUpperCase()} trades ${playerA.name} to ${teamB.toUpperCase()} for ${playerB.name}`;
             }
 
+            if (!tradeKeepsRostersViable(teamA, playerA, teamB, playerB)) {
+                // Would leave a team without a goalie or center — skip this tick's trade
+            } else {
+
             const _teamAObj = league.find(t => t.nrm === teamA);
             const _teamBObj = league.find(t => t.nrm === teamB);
 
@@ -8415,6 +8434,7 @@ function processDailyUpdates() {
                     }
                 });
             }
+            }
         }
     }
 
@@ -8431,7 +8451,7 @@ function processDailyUpdates() {
                 if (skA.length && skB.length) {
                     const pA = skA[Math.floor(Math.random() * skA.length)];
                     const pB = skB[Math.floor(Math.random() * skB.length)];
-                    if (pA.name !== pB.name) {
+                    if (pA.name !== pB.name && tradeKeepsRostersViable(teamA, pA, teamB, pB)) {
                         pA.team = teamB; pB.team = teamA;
                         const _cmA = league.find(t => t.nrm === teamA);
                         const _cmB = league.find(t => t.nrm === teamB);
