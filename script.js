@@ -2613,6 +2613,7 @@ const getRosterStructure = (tk) => {
             const p = available[0];
             fLines[lineIdx].push(p);
             usedNames.add(p.name);
+            triggerSynergies(p, lineIdx);
         }
     });
 
@@ -2838,7 +2839,7 @@ const getRosterStructure = (tk) => {
         let bothDef = getDef(pair[0]) > getOff(pair[0]) && getDef(pair[1]) > getOff(pair[1]);
         if (!bothOff && !bothDef) continue; // already balanced
         // Find a swap candidate from other pairs that has the opposite profile
-        for (let j = i + 1; j < 3; j++) {
+        for (let j = i + 1; j < 3 && (bothOff || bothDef); j++) {
             let otherPair = dPairs[j];
             for (let k = 0; k < otherPair.length; k++) {
                 let cand = otherPair[k];
@@ -2858,7 +2859,9 @@ const getRosterStructure = (tk) => {
                     break;
                 }
             }
-            if (!bothOff && !bothDef) break;
+            // Recompute after any swap — stale flags would otherwise let a second swap re-corrupt an already-fixed pair
+            bothOff = getDef(pair[0]) < getOff(pair[0]) && getDef(pair[1]) < getOff(pair[1]);
+            bothDef = getDef(pair[0]) > getOff(pair[0]) && getDef(pair[1]) > getOff(pair[1]);
         }
     }
 
