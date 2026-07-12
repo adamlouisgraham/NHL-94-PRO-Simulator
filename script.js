@@ -1713,61 +1713,33 @@ class CreaseManager {
 }
 
 // 2. The Daily "Any Given Night" Micro Streaks (Run Pre-Game)
-function assignMicroStreaks(rosterArray) {
+// Picks 1 HOT and 1 COLD at random from all dressed healthy players including the starting goalie.
+function assignMicroStreaks(rosterArray, startingGoalie) {
     rosterArray.forEach(p => { if (playerStats[p.name]) playerStats[p.name].micro_streak = null; });
 
     const eligible = rosterArray.filter(p => {
         const ps = playerStats[p.name];
-        return ps && (ps.injury?.daysRemaining ?? 0) === 0 && !ps.macro_streak && p.line !== 'BENCH' && p.pos !== 'G';
+        return ps && (ps.injury?.daysRemaining ?? 0) === 0 && (!ps.suspended || ps.suspended.days === 0) && !ps.macro_streak && p.line !== 'BENCH';
     });
+    // Include starting goalie if provided and healthy
+    if (startingGoalie) {
+        const gps = playerStats[startingGoalie.name];
+        if (gps && (gps.injury?.daysRemaining ?? 0) === 0 && !gps.macro_streak && !eligible.find(p => p.name === startingGoalie.name)) {
+            eligible.push(startingGoalie);
+        }
+    }
     if (eligible.length < 2) return;
 
-    // HOT weight: recent pts, positive +/-, good morale, low fatigue
-    const hotWeight = p => {
-        const ps = playerStats[p.name];
-        const lastGame = ps.recentGames?.slice(-1)[0] || {};
-        const lastPts = lastGame.pts || 0;
-        const lastPm  = lastGame.pm  || 0;
-        const morale  = ps.morale ?? 100;
-        const fatigue = getPlayerFatigueAmount(p.name) || 0;
-        return Math.max(0.1, (1 + lastPts * 2.5 + Math.max(0, lastPm) * 0.5) * (1 - fatigue / 250));
-    };
+    // Pure random pick — any dressed player equally likely
+    const pickRandom = (pool) => pool[Math.floor(Math.random() * pool.length)];
 
-    // COLD weight: recent pointless games, negative +/-, low-OVR players more vulnerable
-    const coldWeight = p => {
-        const ps = playerStats[p.name];
-        const lastGame  = ps.recentGames?.slice(-1)[0] || {};
-        const lastPts   = lastGame.pts || 0;
-        const lastPm    = lastGame.pm  || 0;
-        const pointless = ps.consPointless || 0;
-        const ovr       = getPlayerWeightedStats(p.name).ovr || 70;
-        const ovrVuln   = Math.max(0.5, 1.5 - (ovr / 100)); // lower OVR = more cold-vulnerable
-        return Math.max(0.1, (1 + pointless * 0.25 + Math.max(0, -lastPm) * 0.5) * ovrVuln * (lastPts === 0 ? 1.5 : 0.3));
-    };
+    const hot = pickRandom(eligible);
+    const remaining = eligible.filter(p => p.name !== hot.name);
+    const cold = pickRandom(remaining);
 
-    const pickN = (pool, weightFn, n) => {
-        const picked = [];
-        let remaining = [...pool];
-        for (let i = 0; i < n && remaining.length > 0; i++) {
-            const w = remaining.map(weightFn);
-            const total = w.reduce((a, b) => a + b, 0);
-            let r = Math.random() * total;
-            let chosen = remaining[0];
-            for (let j = 0; j < remaining.length; j++) { r -= w[j]; if (r <= 0) { chosen = remaining[j]; break; } }
-            picked.push(chosen);
-            remaining = remaining.filter(p => p !== chosen);
-        }
-        return picked;
-    };
-
-    // 1 HOT and 1 COLD per team
-    const hotPicks  = pickN(eligible, hotWeight, 1);
-    const hotSet    = new Set(hotPicks.map(p => p.name));
-    const coldPicks = pickN(eligible.filter(p => !hotSet.has(p.name)), coldWeight, 1);
-
-    eligible.forEach(p => { const ps = playerStats[p.name]; ps.micro_streak = null; ps._prevMicro = null; });
-    hotPicks.forEach(p  => { playerStats[p.name].micro_streak = 'HOT';  playerStats[p.name]._prevMicro = 'HOT';  });
-    coldPicks.forEach(p => { playerStats[p.name].micro_streak = 'COLD'; playerStats[p.name]._prevMicro = 'COLD'; });
+    eligible.forEach(p => { const ps = playerStats[p.name]; if (ps) { ps.micro_streak = null; ps._prevMicro = null; } });
+    if (playerStats[hot.name])  { playerStats[hot.name].micro_streak  = 'HOT';  playerStats[hot.name]._prevMicro  = 'HOT';  }
+    if (playerStats[cold.name]) { playerStats[cold.name].micro_streak = 'COLD'; playerStats[cold.name]._prevMicro = 'COLD'; }
 }
 
 // 3. The 5-Game Rolling "Macro" Streaks (Run Post-Game)
@@ -3241,8 +3213,8 @@ function simGame(idx) {
         }
     });
 
-    if (rosters[g.h.nrm]) assignMicroStreaks(rosters[g.h.nrm]);
-    if (rosters[g.a.nrm]) assignMicroStreaks(rosters[g.a.nrm]);
+    if (rosters[g.h.nrm]) assignMicroStreaks(rosters[g.h.nrm], hG_obj);
+    if (rosters[g.a.nrm]) assignMicroStreaks(rosters[g.a.nrm], aG_obj);
     // Per-game dailySwing — must run after micro streaks so cache is built correctly
     applyDailyRandomSwing(g.h.nrm);
     applyDailyRandomSwing(g.a.nrm);
