@@ -259,6 +259,7 @@ let customLines = JSON.parse(localStorage.getItem('nhl94_customLines')) || {};
 let awardConfig = { streaks: true, chemistry: true, rivalries: true, aging: false, draft: false, retirements: false, headlines: true, milestones: true, injuries: true, legacy_schedule: true, trades: true, tradeBlock: false };
 let coachAdj = { forecheck: 0, pp: 0, lineMatch: false };
 let coachTrust = 50; // 0-100; updated after each user-team game
+let _awardsPending = false; // true between playoff-round-4 end and awards being revealed; blocks beginNewYear
 let deadlineCountermove = {}; // { teamNrm: expiryDay } — contenders flagged after a rival deadline deal
 let chemScores = {}; // { "P1|P2": 0-100 } — per-custom-duo chemistry score, decays without shared goals
 let preseasonOvrSnapshot = {}; // { teamNrm: avgOvr } captured at season start
@@ -331,6 +332,14 @@ function getCaptainChemModifier(teamNrm) {
 }
 let league = []; let rosters = {}; let playerStats = {}; let tradeLog = []; let hallOfFame = []; let leagueHistory = []; let retiredPlayers = []; let calendar = []; let realDatesMap = []; let gameMilestones = []; let monthSnapshot = {}; let pendingTrades = []; let playoffBracket = { round: 1, series: [] }; let teams = {}; let selectedTeam = null;
 let customDuos = []; // user-defined chemistry pairs, supplements the hardcoded dynamicDuos
+// Drop any duo where a member retired or the pair is no longer on the same team roster
+function pruneCustomDuos() {
+    customDuos = customDuos.filter(duo => {
+        if (!duo.every(n => playerStats[n])) return false;
+        const teamCodes = new Set(duo.map(n => playerStats[n].teamCode));
+        return teamCodes.size === 1;
+    });
+}
 let currentDay = 0; let currentSeason = 1; let isPlayoffs = false; let isASG = false; let activeIdx = null; let statMode = 'season'; let isSimulating = false; let isSimSeason = false; let isTurboMode = false; let currentCupChamp = ""; let activeSubInfo = null; let customRosterData = null; let customRosterSource = 'google'; let customTeamData = null; let customPlayerData = null; let customScheduleData = null; let customEventLogData = null; let eventLogData = null;
 let watchBroadcastDay = null; let watchBroadcastIdx = null;
 
@@ -457,7 +466,7 @@ function buildSavePayload() {
             league, rosters, playerStats, tradeLog, hallOfFame, leagueHistory, 
             retiredPlayers, calendar: lightweightCalendar, currentDay, currentSeason, 
             isPlayoffs, isASG, currentCupChamp, playoffBracket: lightweightBracket, awardConfig, 
-            monthSnapshot, pendingTrades, realDatesMap, customDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains
+            monthSnapshot, pendingTrades, realDatesMap, customDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, _awardsPending
         }
     };
 }
@@ -511,6 +520,7 @@ function applyLoadedSave(data) {
     teamCaptains = (typeof data.teamCaptains === 'object' && data.teamCaptains) ? data.teamCaptains : {};
     if (!Object.keys(teamCaptains).length) assignTeamCaptains();
     realDatesMap = Array.isArray(data.realDatesMap) ? data.realDatesMap : [];
+    _awardsPending = Boolean(data._awardsPending);
 
     if (currentDay < 0) currentDay = 0;
     if (currentDay >= calendar.length) currentDay = calendar.length - 1;
@@ -3602,7 +3612,11 @@ function simGame(idx) {
                 const ppConvRate = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm) * ppStratMod;
                 const ppRoll = Math.random();
                 const advTeamObj2 = advTeam.nrm === g.h.nrm ? hTeamObj : aTeamObj;
-                const pp1Roster = (advTeamObj2?.specialTeams?.pp1 || []).filter(p => p && !(playerStats[p.name]?.injury?.daysRemaining > 0) && !(playerStats[p.name]?.suspended?.days > 0));
+                const pp1Names = advTeamObj2?.specialTeams?.pp1 || [];
+                const advTeamRoster = rosters[advTeam.nrm] || [];
+                const pp1Roster = pp1Names
+                    .map(n => (n && typeof n === 'object') ? n : advTeamRoster.find(p => p.name === n))
+                    .filter(p => p && !(playerStats[p.name]?.injury?.daysRemaining > 0) && !(playerStats[p.name]?.suspended?.days > 0));
                 const ppUnit = pp1Roster.length >= 3 ? pp1Roster : (advTeam.nrm === g.h.nrm ? hOnIce : aOnIce);
                 const pkUnit = advTeam.nrm === g.h.nrm ? aOnIce : hOnIce;
 
@@ -4759,7 +4773,6 @@ function processOffseasonGrowth() {
     if (logs.length > 0 && awardConfig.headlines) { logs.sort(() => 0.5 - Math.random()).slice(0, 5).forEach(msg => { tradeLog.unshift({ day: 'OFFSEASON', details: msg }); }); }
 }
 
-let _awardsPending = false;
 async function beginNewYear() {
     if (_awardsPending) { alert('Reveal the award winners before starting the next season — history would snapshot as zeroed standings otherwise.'); return; }
     clearWpCache();
@@ -4768,7 +4781,7 @@ async function beginNewYear() {
         t.season = {gp:0, w:0, l:0, t:0, pts:0, gf:0, ga:0, ppo:0, ppg:0, ts:0, ppga:0}; t.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
         // Preserve user-set PP/PK lines but drop any players no longer on this roster
         const rosterNames = new Set((rosters[t.nrm] || []).map(p => p.name));
-        const filterUnit = (unit) => (unit || []).filter(p => p && rosterNames.has(p.name));
+        const filterUnit = (unit) => (unit || []).filter(p => p && rosterNames.has((p && typeof p === 'object') ? p.name : p));
         const st = t.specialTeams || {};
         t.specialTeams = { pp1: filterUnit(st.pp1), pp2: filterUnit(st.pp2), pk1: filterUnit(st.pk1), pk2: filterUnit(st.pk2), exa: filterUnit(st.exa) };
         t.winStreak = 0; t.loseStreak = 0; t.teamMeeting = false; t.coachFired = false; t.undefeated=0; t.winless=0;
@@ -6627,10 +6640,11 @@ function runEndOfSeasonAwards() {
     const _eastTeams = league.filter(t=>t.conf==='Eastern').sort((a,b)=>b.season.pts-a.season.pts).slice(0,8);
     const _westTeams = league.filter(t=>t.conf==='Western').sort((a,b)=>b.season.pts-a.season.pts).slice(0,8);
     if (_eastTeams.length === 0) console.warn('runEndOfSeasonAwards: no Eastern conf teams found — check CSV conf column');
-    const playoffQualifiers = new Set([
-        ...(_eastTeams.length > 0 ? _eastTeams : [...league].sort((a,b)=>b.season.pts-a.season.pts).slice(0,13)).map(t=>t.name),
-        ..._westTeams.map(t=>t.name)
-    ]);
+    if (_westTeams.length === 0) console.warn('runEndOfSeasonAwards: no Western conf teams found — check CSV conf column');
+    // If either conference's tagging is broken, fall back to a single league-wide top-16 so no team's players are wrongly excluded
+    const playoffQualifiers = (_eastTeams.length === 0 || _westTeams.length === 0)
+        ? new Set([...league].sort((a,b)=>b.season.pts-a.season.pts).slice(0,16).map(t=>t.name))
+        : new Set([..._eastTeams.map(t=>t.name), ..._westTeams.map(t=>t.name)]);
 
     let mvpCandidates = [];
     skaters.forEach(p => {
@@ -6920,7 +6934,8 @@ function getConnSmytheScore(p) {
                 tradeLog.unshift({ day: 'POST', details: `RETIRED: Legend ${p.name} inducted.` });
             } 
         }); 
-        res += "<h3 style='margin-top:15px; color:var(--silver-light);'>HALL OF FAME:</h3><p style='font-size:7px; color:#888;'>" + (ind.join(', ') || 'None') + "</p>"; 
+        res += "<h3 style='margin-top:15px; color:var(--silver-light);'>HALL OF FAME:</h3><p style='font-size:7px; color:#888;'>" + (ind.join(', ') || 'None') + "</p>";
+        pruneCustomDuos();
     }
     
     if(awardConfig.draft) { 
@@ -7009,6 +7024,7 @@ function executeTrade() {
     
     tradeLog.unshift({ day: currentDay, details: `TRADE: ${t1o.code} <-> ${t2o.code}` });
     assignTeamCaptains(); // refresh captains — traded captain must not keep modifying old team
+    pruneCustomDuos();
     document.getElementById('tradeOverlay').style.display = 'none';
     updateUI(); renderTradeLog(); saveGame();
 }
@@ -7056,6 +7072,7 @@ function approveProposal(id) {
         let t2o = league.find(l=>l.nrm===t.t2); if(t2o) t2o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
         assignTeamCaptains();
         clearWpCache();
+        pruneCustomDuos();
         tradeLog.unshift({ day: currentDay, details: ` BLOCKBUSTER: ${t.p1} traded to ${t.t2Name} for ${t.p2}!` });
     }
     pendingTrades = pendingTrades.filter(x => x.id !== id); openProposalsModal(); updateUI(); refreshTradeBadge(); saveGame();
@@ -8426,6 +8443,7 @@ function processDailyUpdates() {
                         if (_cmB) _cmB.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
                         assignTeamCaptains();
                         clearWpCache();
+                        pruneCustomDuos();
                         tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `COUNTERMOVE: ${teamA.toUpperCase()} responds — acquires ${pB.name} from ${teamB.toUpperCase()} for ${pA.name}.` });
                     }
                 }
