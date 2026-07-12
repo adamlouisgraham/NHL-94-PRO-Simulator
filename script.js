@@ -4769,7 +4769,7 @@ async function beginNewYear() {
 
         if (p.pos === 'G') {
             // Archive Regular Season to Career Regular Season
-            p.career.gp += p.season.gp; p.career.w += p.season.w; p.career.l += (p.season.l || 0); p.career.t += (p.season.t || 0); p.career.so += p.season.so; p.career.sv += p.season.sv; p.career.sa += p.season.sa;
+            p.career.gp += p.season.gp; p.career.w += p.season.w; p.career.l += (p.season.l || 0); p.career.t += (p.season.t || 0); p.career.so += p.season.so; p.career.sv += p.season.sv; p.career.sa += p.season.sa; p.career.toi = (p.career.toi || 0) + (p.season.toi || 0);
             
             // Archive Playoff to Career Playoff
             p.careerPlayoff.gp += p.playoff.gp; p.careerPlayoff.w += p.playoff.w; p.careerPlayoff.l += (p.playoff.l || 0); p.careerPlayoff.so += p.playoff.so; p.careerPlayoff.sv += p.playoff.sv; p.careerPlayoff.sa += p.playoff.sa;
@@ -4779,7 +4779,7 @@ async function beginNewYear() {
             p.playoff = {gp:0, w:0, l:0, so:0, sv:0, sa:0, consStarts:0};
         } else {
             // Archive Regular Season to Career Regular Season
-            p.career.gp += p.season.gp; p.career.g += p.season.g; p.career.a += p.season.a; p.career.pts += (p.season.g + p.season.a); p.career.pm += (p.season.pm || 0); p.career.pim += (p.season.pim || 0); p.career.ppg += (p.season.ppg || 0); p.career.shg += (p.season.shg || 0); p.career.gwg += (p.season.gwg || 0); p.career.s += (p.season.s || 0); 
+            p.career.gp += p.season.gp; p.career.g += p.season.g; p.career.a += p.season.a; p.career.pts += (p.season.g + p.season.a); p.career.pm += (p.season.pm || 0); p.career.pim += (p.season.pim || 0); p.career.ppg += (p.season.ppg || 0); p.career.shg += (p.season.shg || 0); p.career.gwg += (p.season.gwg || 0); p.career.s += (p.season.s || 0); p.career.toi = (p.career.toi || 0) + (p.season.toi || 0);
             
             // Archive Playoff to Career Playoff
             p.careerPlayoff.gp += p.playoff.gp; p.careerPlayoff.g += p.playoff.g; p.careerPlayoff.a += p.playoff.a; p.careerPlayoff.pts += (p.playoff.g + p.playoff.a); p.careerPlayoff.pm += (p.playoff.pm || 0); p.careerPlayoff.pim += (p.playoff.pim || 0); p.careerPlayoff.ppg += (p.playoff.ppg || 0); p.careerPlayoff.shg += (p.playoff.shg || 0); p.careerPlayoff.gwg += (p.playoff.gwg || 0); p.careerPlayoff.s += (p.playoff.s || 0);
