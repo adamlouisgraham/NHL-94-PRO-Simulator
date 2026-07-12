@@ -2860,7 +2860,7 @@ const getRosterStructure = (tk) => {
     // ==========================================
     let gPool = r.filter(p => {
         let ps = playerStats[p.name];
-        return getPos(p) === 'G' && ps && (!ps.injury || ps.injury.daysRemaining === 0);
+        return getPos(p) === 'G' && ps && (!ps.injury || ps.injury.daysRemaining === 0) && (!ps.suspended || ps.suspended.days === 0);
     }).sort((a,b) => getOvr(b) - getOvr(a));
     
     // FINAL DEDUPE PASS — a skater may only appear on ONE forward line and
@@ -3240,7 +3240,7 @@ function simGame(idx) {
 
     //  2. GOALIE SELECTION
     const selG = (tk) => { 
-        const gs = rosters[tk] ? rosters[tk].filter(p => p.pos === 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0).sort((a, b) => getPlayerWeightedStats(b.name).ovr - getPlayerWeightedStats(a.name).ovr) : [];
+        const gs = rosters[tk] ? rosters[tk].filter(p => p.pos === 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0 && (!playerStats[p.name].suspended || playerStats[p.name].suspended.days === 0)).sort((a, b) => getPlayerWeightedStats(b.name).ovr - getPlayerWeightedStats(a.name).ovr) : [];
         if (!gs.length) { const allG = (rosters[tk] || []).filter(p => p.pos === 'G'); return allG.length ? allG[0] : null; }
         if (gs.length === 1 || isPlayoffs || isASG) return gs[0];
         
@@ -8223,33 +8223,6 @@ function initializeFranchiseVariables() {
     // Trigger the leaders refresh now that the data exists
     // Add this line exactly here to force the UI to populate now that data exists
 if (typeof updateLeadersUI === 'function') updateLeadersUI();
-}
-
-// 2. The brain that decides which goalie is starting tonight
-function getStartingGoalie(teamCode) {
-    let goalies = rosters[teamCode].filter(p => p.pos === 'G');
-    goalies.sort((a, b) => getPlayerWeightedStats(b.name).ovr - getPlayerWeightedStats(a.name).ovr);
-
-    let starter = goalies[0];
-    let backup = goalies.length > 1 ? goalies[1] : goalies[0];
-
-    if (!starter.status) starter.status = { consecutiveStarts: 0, fatigue: 0, injuryDays: 0 };
-    if (!backup.status) backup.status = { consecutiveStarts: 0, fatigue: 0, injuryDays: 0 };
-
-    let selectedGoalie = starter;
-
-    // Start the backup if the starter is injured, exhausted, or has played 4+ games in a row
-    if (starter.status.injuryDays > 0 || starter.status.fatigue > 75 || starter.status.consecutiveStarts >= 4) {
-        selectedGoalie = backup;
-    }
-
-    if (selectedGoalie.name === starter.name) {
-        starter.status.consecutiveStarts++; backup.status.consecutiveStarts = 0;
-    } else {
-        backup.status.consecutiveStarts++; starter.status.consecutiveStarts = 0;
-    }
-
-    return selectedGoalie;
 }
 
 // =========================================================
