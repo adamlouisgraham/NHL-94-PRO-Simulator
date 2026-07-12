@@ -3302,15 +3302,13 @@ function simGame(idx) {
     let hWallMod = Math.max(0.72, Math.min(1.28, 1.0 + (75 - hGOvr) * 0.013 + hB2BPen - hHurtPen));
     let aWallMod = Math.max(0.72, Math.min(1.28, 1.0 + (75 - aGOvr) * 0.013 + aB2BPen - aHurtPen));
     // Coaching adjustments: forecheck 1=aggressive(open game), -1=defensive(tight); pp 1=shoot, -1=cycle
-    if (!isPlayoffs && !isASG) {
-        const fMod = coachAdj.forecheck * 0.025; // aggressive opens scoring both ways
+    if (!isPlayoffs && !isASG && selectedTeam && (g.h.nrm === selectedTeam || g.a.nrm === selectedTeam)) {
+        const fMod = coachAdj.forecheck * 0.025; // aggressive opens scoring both ways — only affects the user's own games
         hWallMod += fMod; aWallMod += fMod;
         // Coach trust: high trust slightly boosts user team's goalie, low trust slightly hurts
-        if (selectedTeam) {
-            const trustMod = (coachTrust - 50) * 0.003; // ±0.15 at extremes
-            if (g.h.nrm === selectedTeam) hWallMod -= trustMod;
-            if (g.a.nrm === selectedTeam) aWallMod -= trustMod;
-        }
+        const trustMod = (coachTrust - 50) * 0.003; // ±0.15 at extremes
+        if (g.h.nrm === selectedTeam) hWallMod -= trustMod;
+        if (g.a.nrm === selectedTeam) aWallMod -= trustMod;
     }
     // Goalie streak wall modifier — HOT goalie = harder to score on, COLD goalie = easier
     // macro carries more weight than micro; these stack (macro HOT goalie on a micro HOT night = -0.085)
@@ -3483,9 +3481,12 @@ function simGame(idx) {
         aMomentum = Math.max(0, aMomentum - 1);
 
         // Live Dynamic Matchup Overalls (momentum adds up to +3 OVR for ~4 min after a goal)
-        const lineMatchBonus = (!isPlayoffs && !isASG && coachAdj.lineMatch) ? 1.0 : 0;
-        let hLiveOvr = (getLiveLineOvr(hOnIce) + lineMatchBonus + homeLastChangeMod + parityBoost - hFatiguePen + hPressureMod + hStreakMod + rivalBonus + hMomentum * 0.375) * hAuraMod * homeCrowdEnergy;
-        let aLiveOvr = (getLiveLineOvr(aOnIce) - aFatiguePen + aPressureMod + aStreakMod + rivalBonus + aMomentum * 0.375) * aAuraMod;
+        // Line Match bonus only applies to the user's own team, on whichever side they're playing
+        const lineMatchActive = !isPlayoffs && !isASG && coachAdj.lineMatch && selectedTeam;
+        const hLineMatchBonus = (lineMatchActive && g.h.nrm === selectedTeam) ? 1.0 : 0;
+        const aLineMatchBonus = (lineMatchActive && g.a.nrm === selectedTeam) ? 1.0 : 0;
+        let hLiveOvr = (getLiveLineOvr(hOnIce) + hLineMatchBonus + homeLastChangeMod + parityBoost - hFatiguePen + hPressureMod + hStreakMod + rivalBonus + hMomentum * 0.375) * hAuraMod * homeCrowdEnergy;
+        let aLiveOvr = (getLiveLineOvr(aOnIce) + aLineMatchBonus - aFatiguePen + aPressureMod + aStreakMod + rivalBonus + aMomentum * 0.375) * aAuraMod;
 
         let diff = hLiveOvr - aLiveOvr + chaosOffset;
 
@@ -4005,6 +4006,8 @@ function simGame(idx) {
                 if (m.sa > 0) pStat.sa = (pStat.sa || 0) + m.sa;
                 if (m.sv > 0) pStat.sv = (pStat.sv || 0) + m.sv;
                 if (m.ga > 0) pStat.ga = (pStat.ga || 0) + m.ga;
+
+                if (typeof checkMilestones === 'function') checkMilestones(pName);
             }
         }
 
@@ -4299,64 +4302,6 @@ function applyDailyRandomSwing(tk) {
  * @param {boolean} isRegularSeason - Whether regular season (affects loss penalty)
  */
 
-//  2. THE BACKGROUND PENALTY ROLLER (Renamed and Upgraded)
-// Call this randomly during standard play: let penResult = rollGeneralPenalty(attacker);
-function rollGeneralPenalty(attacker) {
-    // 1. Safely extract attributes via unified grade-aware accessors
-    const aName = attacker.name;
-    let rgh = aName ? (gradeToNum(playerStats[aName]?.attr?.rough) || 50) : 50;
-    let agr = aName ? getAggr(aName) : 50;
-    let chk = aName ? getChk(aName)  : 50;
-
-    // 2. Base Probability (Overall chance to commit ANY penalty)
-    // Aggression and Roughness drive the likelihood of breaking the rules
-    let basePenaltyChance = 0.05; 
-    let temperamentModifier = (rgh + agr) / 100; // 50+50 = 1.0x. 99+99 = ~2.0x
-    
-    // Calculate final probability including Ref Strictness (if you have it defined)
-    let refMod = typeof REF_STRICTNESS !== 'undefined' ? REF_STRICTNESS : 1.0;
-    let finalPenaltyChance = basePenaltyChance * temperamentModifier * refMod;
-
-    // 3. Roll the dice for a penalty!
-    if (Math.random() < finalPenaltyChance) {
-        
-        // 4. Determine Penalty Type based on Checking (CHK) rating
-        // Low Checking = Stick Infractions (Clumsy defense)
-        // High Checking = Physical Infractions (Overly aggressive hits)
-        
-        const stickWeight = Math.max(10, 100 - chk);
-        const physicalWeight = Math.max(10, chk);
-        const totalWeight = stickWeight + physicalWeight;
-        const roll = Math.random() * totalWeight;
-        
-        // Use PENALTY_REGISTRY to pick infraction type
-        const infractions = roll < stickWeight ? PENALTY_REGISTRY.stick : PENALTY_REGISTRY.physical;
-        const infractionName = infractions[Math.floor(Math.random() * infractions.length)];
-        
-        // Base major chance, with escalation for physical infractions
-        let isMajor = Math.random() < GAME_CONFIG.penalties.major_chance;
-        if (roll >= stickWeight && Math.random() < GAME_CONFIG.penalties.major_escalation) {
-            isMajor = true;  // Physical infractions escalate more easily
-        }
-
-        const pim = isMajor ? 5 : 2;
-
-        return {
-            penaltyCalled: true,
-            minutes: pim,
-            type: isMajor ? "Major" : "Minor",
-            infraction: infractionName
-        };
-    } else {
-        // No penalty occurred
-        return { 
-            penaltyCalled: false, 
-            minutes: 0, 
-            type: "None", 
-            infraction: "" 
-        };
-    }
-}
 // --- SEASON CALENDAR LOGIC ---
 async function loadScheduleFromCSV(customRows = null) {
     try {
