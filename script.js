@@ -6944,7 +6944,7 @@ function getConnSmytheScore(p) {
             const rN = "ROOKIE-" + Math.floor(Math.random()*9000+1000); 
             if (!rosters[t.nrm]) rosters[t.nrm] = []; 
             playerStats[rN] = { 
-                name: rN, team: t.name, teamCode: t.code, pos: 'F', age: 18, streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false, injury: 0, attr: { off: 65 + Math.floor(Math.random()*15), def: 60 + Math.floor(Math.random()*15), gDef: 60 }, 
+                name: rN, team: t.name, teamCode: t.code, pos: 'F', age: 18, streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false, injury: { severity: 0, daysRemaining: 0 }, attr: { off: 65 + Math.floor(Math.random()*15), def: 60 + Math.floor(Math.random()*15), gDef: 60 }, 
                 career: {gp:0, g:0, a:0, pts:0, w:0, so:0, sv:0, sa:0, pim:0, ppg:0}, season: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, t:0, pim:0, ppg:0}, playoff: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, pim:0, ppg:0} 
             }; 
             rosters[t.nrm].push({name: rN, pos: 'F'}); 
@@ -8376,23 +8376,26 @@ function processDailyUpdates() {
                 dealTag = `BLOCKBUSTER: ${teamA.toUpperCase()} trades ${playerA.name} to ${teamB.toUpperCase()} for ${playerB.name}`;
             }
 
-            playerA.team = teamB; playerB.team = teamA;
             const _teamAObj = league.find(t => t.nrm === teamA);
             const _teamBObj = league.find(t => t.nrm === teamB);
-            if (playerStats[playerA.name] && _teamBObj) { playerStats[playerA.name].team = _teamBObj.name; playerStats[playerA.name].teamCode = _teamBObj.code; }
-            if (playerStats[playerB.name] && _teamAObj) { playerStats[playerB.name].team = _teamAObj.name; playerStats[playerB.name].teamCode = _teamAObj.code; }
-
-            rosters[teamA] = rosters[teamA].filter(p => p.name !== playerA.name);
-            rosters[teamA].push(playerB);
-
-            rosters[teamB] = rosters[teamB].filter(p => p.name !== playerB.name);
-            rosters[teamB].push(playerA);
 
             if (awardConfig.tradeBlock) {
-                pendingTrades.push({ id: Date.now() + Math.random(), t1: teamA, t2: teamB, t1Name: teamA, t2Name: teamB, p1: playerA.name, p2: playerB.name, day: currentDay });
+                // Queue for user approval — do NOT touch rosters or playerStats yet;
+                // approveProposal() will execute the swap if accepted, rejectProposal() discards it cleanly
+                pendingTrades.push({ id: Date.now() + Math.random(), t1: teamA, t2: teamB, t1Name: _teamAObj?.name || teamA, t2Name: _teamBObj?.name || teamB, p1: playerA.name, p2: playerB.name, day: currentDay });
                 tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `TRADE OFFER: ${teamA.toUpperCase()} ↔ ${teamB.toUpperCase()} — pending approval.` });
                 refreshTradeBadge();
             } else {
+                playerA.team = teamB; playerB.team = teamA;
+                if (playerStats[playerA.name] && _teamBObj) { playerStats[playerA.name].team = _teamBObj.name; playerStats[playerA.name].teamCode = _teamBObj.code; }
+                if (playerStats[playerB.name] && _teamAObj) { playerStats[playerB.name].team = _teamAObj.name; playerStats[playerB.name].teamCode = _teamAObj.code; }
+
+                rosters[teamA] = rosters[teamA].filter(p => p.name !== playerA.name);
+                rosters[teamA].push(playerB);
+
+                rosters[teamB] = rosters[teamB].filter(p => p.name !== playerB.name);
+                rosters[teamB].push(playerA);
+
                 tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `${dealTag}.` });
             }
 
@@ -8424,6 +8427,10 @@ function processDailyUpdates() {
                     const pB = skB[Math.floor(Math.random() * skB.length)];
                     if (pA.name !== pB.name) {
                         pA.team = teamB; pB.team = teamA;
+                        const _cmA = league.find(t => t.nrm === teamA);
+                        const _cmB = league.find(t => t.nrm === teamB);
+                        if (playerStats[pA.name] && _cmB) { playerStats[pA.name].team = _cmB.name; playerStats[pA.name].teamCode = _cmB.code; }
+                        if (playerStats[pB.name] && _cmA) { playerStats[pB.name].team = _cmA.name; playerStats[pB.name].teamCode = _cmA.code; }
                         rosters[teamA] = rosters[teamA].filter(p => p.name !== pA.name); rosters[teamA].push(pB);
                         rosters[teamB] = rosters[teamB].filter(p => p.name !== pB.name); rosters[teamB].push(pA);
                         tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `COUNTERMOVE: ${teamA.toUpperCase()} responds — acquires ${pB.name} from ${teamB.toUpperCase()} for ${pA.name}.` });
