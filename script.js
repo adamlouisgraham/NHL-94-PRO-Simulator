@@ -6469,14 +6469,16 @@ function initAllStarGame() {
         };
 
         const confTeams = league.filter(t => isConfMatch(t.conf));
-        const pL = Object.values(playerStats).filter(p => { 
-            const t = league.find(t => t.code === p.teamCode || t.name === p.team); 
-            return t && isConfMatch(t.conf); 
-        }); 
+        const pL = Object.values(playerStats).filter(p => {
+            const t = league.find(t => t.code === p.teamCode || t.name === p.team);
+            return t && isConfMatch(t.conf)
+                && (!p.injury || p.injury.daysRemaining === 0)
+                && (!p.suspended || p.suspended.days === 0);
+        });
 
         let selectedPlayers = []; let repNames = new Set();
         // Season production + legacy weight: past All-Star appearances nudge repeat selections
-        const getScore = (p) => (p.pos === 'G' ? (p.season.w * 2) + p.season.so : p.season.g + p.season.a) + ((p.career?.asg || 0) * 1.5);
+        const getScore = (p) => (p.pos === 'G' ? (p.season.w * 2) + p.season.so : p.season.g + p.season.a) + (((p.career?.asg || 0) + (p.asgAppearances || 0)) * 1.5);
 
         confTeams.forEach(team => {
             const teamPlayers = pL.filter(p => p.teamCode === team.code).sort((a, b) => getScore(b) - getScore(a));
