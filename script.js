@@ -3012,16 +3012,18 @@ function checkMilestones(pName) {
     const p = playerStats[pName];
     if (!p) return;
 
-    // Calculate current total stats (historical career + live season)
+    // Calculate current total stats (historical career + live season + playoffs)
     const c = p.career || { gp:0, g:0, a:0, pts:0, w:0, so:0 };
     const s = p.season || { gp:0, g:0, a:0, so:0, w:0 };
+    const po = p.playoff || {};
+    const cpo = p.careerPlayoff || {};
 
-    const totalGP = c.gp + s.gp;
-    const totalG = c.g + (s.g || 0);
-    const totalA = c.a + (s.a || 0);
-    const totalPts = c.pts + (s.g || 0) + (s.a || 0);
-    const totalW = c.w + (s.w || 0);
-    const totalSO = c.so + (s.so || 0);
+    const totalGP = c.gp + s.gp + (po.gp || 0) + (cpo.gp || 0);
+    const totalG = c.g + (s.g || 0) + (po.g || 0) + (cpo.g || 0);
+    const totalA = c.a + (s.a || 0) + (po.a || 0) + (cpo.a || 0);
+    const totalPts = c.pts + (s.g || 0) + (s.a || 0) + (po.g || 0) + (po.a || 0) + (cpo.g || 0) + (cpo.a || 0);
+    const totalW = c.w + (s.w || 0) + (po.w || 0) + (cpo.w || 0);
+    const totalSO = c.so + (s.so || 0) + (po.so || 0) + (cpo.so || 0);
 
     // Define milestone thresholds
     const gpMilestones = [100, 500, 1000, 1500];
@@ -4051,14 +4053,14 @@ function simGame(idx) {
     if (!isTie && winningTeamRoster) {
         let winBoost = isHomeWin ? 12 : 8;
         winningTeamRoster.forEach(p => {
-            if (playerStats[p.name]) playerStats[p.name].morale = Math.min(150, playerStats[p.name].morale + winBoost);
+            if (playerStats[p.name]) playerStats[p.name].morale = Math.min(150, (playerStats[p.name].morale ?? 100) + winBoost);
         });
     }
 
     if (!isTie && losingTeamRoster && !isPlayoffs) {
         let lossPenalty = (!isHomeWin) ? 12 : 6;
         losingTeamRoster.forEach(p => {
-            if (playerStats[p.name]) playerStats[p.name].morale = Math.max(50, playerStats[p.name].morale - lossPenalty);
+            if (playerStats[p.name]) playerStats[p.name].morale = Math.max(50, (playerStats[p.name].morale ?? 100) - lossPenalty);
         });
     }
 
@@ -5734,9 +5736,10 @@ function submitAdvGame() {
     if (aSum + aEN !== aScore) return alert(`ERROR: Away score (${aScore}) does not match entered Player Goals (${aSum}) + Empty Nets (${aEN}).`);
     if (hSum + hEN !== hScore) return alert(`ERROR: Home score (${hScore}) does not match entered Player Goals (${hSum}) + Empty Nets (${hEN}).`);
     
+    // Write to the same combined 'playoff' bucket simGame uses — career archival,
+    // HOF records, and the player-card playoff tab all read p.playoff, never playoff_N
     let k = 'season';
-    if (isPlayoffs) k = `playoff_${playoffBracket.round}`;
-    if (isASG) k = 'playoff';
+    if (isPlayoffs || isASG) k = 'playoff';
     let aG = aScore, hG = hScore;
     let hStatus = hG > aG ? 'win' : (hG < aG ? 'loss' : 'tie');
     let aStatus = aG > hG ? 'win' : (aG < hG ? 'loss' : 'tie');
@@ -6937,12 +6940,16 @@ function getConnSmytheScore(p) {
         sorting.forEach(t => { 
             let rN;
             do { rN = "ROOKIE-" + Math.floor(Math.random()*90000+10000); } while (playerStats[rN]);
-            if (!rosters[t.nrm]) rosters[t.nrm] = []; 
-            playerStats[rN] = { 
-                name: rN, team: t.name, teamCode: t.code, pos: 'F', age: 18, streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false, injury: { severity: 0, daysRemaining: 0 }, attr: { off: 65 + Math.floor(Math.random()*15), def: 60 + Math.floor(Math.random()*15), gDef: 60 }, 
-                career: {gp:0, g:0, a:0, pts:0, w:0, so:0, sv:0, sa:0, pim:0, ppg:0}, season: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, t:0, pim:0, ppg:0}, playoff: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, pim:0, ppg:0} 
-            }; 
-            rosters[t.nrm].push({name: rN, pos: 'F'}); 
+            if (!rosters[t.nrm]) rosters[t.nrm] = [];
+            // Real position so center/goalie roster-viability checks see this player correctly
+            const rPos = ['C', 'LW', 'RW'][Math.floor(Math.random() * 3)];
+            playerStats[rN] = {
+                name: rN, team: t.name, teamCode: t.code, pos: rPos, age: 18, streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false,
+                morale: 100, suspended: { days: 0, reason: "" }, weight: 190 + Math.floor(Math.random()*30),
+                injury: { severity: 0, daysRemaining: 0 }, attr: { off: 65 + Math.floor(Math.random()*15), def: 60 + Math.floor(Math.random()*15), gDef: 60 },
+                career: {gp:0, g:0, a:0, pts:0, w:0, so:0, sv:0, sa:0, pim:0, ppg:0}, season: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, t:0, pim:0, ppg:0}, playoff: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, pim:0, ppg:0}
+            };
+            rosters[t.nrm].push({name: rN, pos: rPos});
         }); 
         res += "<p style='font-size:7px; color:var(--neon-cyan);'>Draft Completed: 1 Rookie added per team.</p>"; 
     }
