@@ -5628,7 +5628,7 @@ function openAdvEditor() {
     const preDressed = (tk) => {
         let r = rosters[tk]; if (!r || r.length === 0) return [];
         try {
-            let healthy = r.filter(p => playerStats[p.name] && playerStats[p.name].injury.daysRemaining === 0);
+            let healthy = r.filter(p => playerStats[p.name] && playerStats[p.name].injury.daysRemaining === 0 && !(playerStats[p.name].suspended?.days > 0));
             let gList = healthy.filter(p => p.pos === 'G').sort((a,b) => (playerStats[b.name].attr.gDef || 0) - (playerStats[a.name].attr.gDef || 0));
             let fList = healthy.filter(p => p.pos !== 'D' && p.pos !== 'G').sort((a,b) => (playerStats[b.name].attr.off || 0) - (playerStats[a.name].attr.off || 0)).slice(0, 12);
             let dList = healthy.filter(p => p.pos === 'D').sort((a,b) => (playerStats[b.name].attr.off || 0) - (playerStats[a.name].attr.off || 0)).slice(0, 6);
@@ -6372,7 +6372,7 @@ function openSpecialTeamsMenu(tk, mode, unitNum) {
         h += `</div>`;
         h += `<select id="st_select_${i}" style="background:#222; color:var(--neon-cyan); border:1px solid #555; padding:8px; width:100%; border-radius:3px; font-size:10px;">`;
         h += `<option value="">-- SELECT PLAYER --</option>`;
-        let healthySkaters = roster.filter(p => p.pos !== 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0);
+        let healthySkaters = roster.filter(p => p.pos !== 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0 && !(playerStats[p.name].suspended?.days > 0));
         healthySkaters.forEach(p => { 
             let selected = p.name === currentPlayer ? 'selected' : ''; 
             let pPos = getPlayerPosition(p);
@@ -8592,7 +8592,7 @@ function rollInGameInjuries(homeCode, awayCode) {
             if (!ps) return;
             if (Math.random() < GOALIE_CHANCE) {
                 goalieInjuredThisTeam = true;
-                const backupG = rosters[tk].find(b => b.pos === 'G' && b.name !== p.name && (playerStats[b.name]?.injury?.daysRemaining ?? 0) === 0);
+                const backupG = rosters[tk].find(b => b.pos === 'G' && b.name !== p.name && (playerStats[b.name]?.injury?.daysRemaining ?? 0) === 0 && !(playerStats[b.name]?.suspended?.days > 0));
                 const days = backupG ? Math.floor(Math.random() * 4) + 1 : 1;
                 ps.injury = { severity: days, daysRemaining: days };
                 if (!backupG) ps.playingHurt = true; // stays in net but at reduced effectiveness
