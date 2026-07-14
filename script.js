@@ -1941,7 +1941,7 @@ function getTeamSystemAura(tk) {
     if (!rosters[tk]) return 'NONE'; 
     
     // Pull only the 18 active dressed skaters (no goalies, no injured players)
-    let skaters = rosters[tk].filter(p => p.pos !== 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0).slice(0, 18);
+    let skaters = rosters[tk].filter(p => p.pos !== 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0 && !(playerStats[p.name].suspended?.days > 0)).slice(0, 18);
     if (skaters.length < 18) return 'NONE'; 
     
     let avgOff = skaters.reduce((s, p) => s + (playerStats[p.name].attr.off || 70), 0) / skaters.length;
@@ -2908,7 +2908,7 @@ function getSpecialTeamsUnit(tk, type, unitNum, isEN = false) {
     
     // Defensive fallback if roster structure fails
     if (!struct || !struct.f || !struct.d) {
-        let sks = rosters[tk] ? rosters[tk].filter(p => p.pos !== 'G' && playerStats[p.name] && playerStats[p.name].injury.daysRemaining === 0) : [];
+        let sks = rosters[tk] ? rosters[tk].filter(p => p.pos !== 'G' && playerStats[p.name] && playerStats[p.name].injury.daysRemaining === 0 && !(playerStats[p.name].suspended?.days > 0)) : [];
         return sks.slice(0, 5);
     }
 
