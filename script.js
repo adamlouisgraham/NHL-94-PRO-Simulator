@@ -1642,7 +1642,7 @@ function getPlayerWeightedStats(pName) {
     const endResistance = 1.2 - (endurance / 100);
     const penaltyPct = Math.min(fatiguePenalty / 100, 1) * 0.05 * endResistance;
     finalOvr = Math.round(baseOvr * (1 - penaltyPct));
-    finalOvr += (morale - 100); // morale 50–150; 100 = neutral
+    finalOvr += Math.round((morale - 100) * 0.3); // morale 50–150; 100 = neutral; scaled down from a 1:1 swing to a believable +-15 max
 
     // HOT/COLD streaks modify the player's own OVR — macro > micro; both can stack with dailySwing
     const ps = playerStats[pName];
@@ -1652,8 +1652,11 @@ function getPlayerWeightedStats(pName) {
         if (ps.macro_streak === 'COLD')      finalOvr = Math.round(finalOvr * 0.95);
         else if (ps.micro_streak === 'COLD') finalOvr -= 10;
         // dailySwing: pre-game per-player variance (±8% of ovr, set by applyDailyRandomSwing)
-        if (ps.dailySwing) finalOvr = Math.max(40, Math.min(99, Math.round(finalOvr * (1 + ps.dailySwing))));
+        if (ps.dailySwing) finalOvr = Math.round(finalOvr * (1 + ps.dailySwing));
     }
+    // Always clamp to a believable range — previously this only happened inside the dailySwing
+    // branch, so on any day without a swing roll, morale+streak stacking could push OVR to 150+ or below 0.
+    finalOvr = Math.max(40, Math.min(99, finalOvr));
 
     const result = { ovr: finalOvr, tag: tag, baseOvr: baseOvr };
     _wpCache[pName] = result;
@@ -1996,8 +1999,8 @@ function getLiveIceOvr(pName) {
         else if (chemVal >= 10) live += 3;
         else if (chemVal >= 5) live += 1;
     }
-    
-    return Math.round(live);
+
+    return Math.max(40, Math.min(99, Math.round(live)));
 }
 
 function getDynamicTeamOvr(tk) {
