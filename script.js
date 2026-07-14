@@ -3251,25 +3251,18 @@ function simGame(idx) {
         }
     });
 
-    if (rosters[g.h.nrm]) assignMicroStreaks(rosters[g.h.nrm], hG_obj);
-    if (rosters[g.a.nrm]) assignMicroStreaks(rosters[g.a.nrm], aG_obj);
-    // Per-game dailySwing — must run after micro streaks so cache is built correctly
-    applyDailyRandomSwing(g.h.nrm);
-    applyDailyRandomSwing(g.a.nrm);
-    clearWpCache(); // flush after swing assignment so OVR picks up dailySwing values
-
     //  2. GOALIE SELECTION
-    const selG = (tk) => { 
+    const selG = (tk) => {
         const gs = rosters[tk] ? rosters[tk].filter(p => p.pos === 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0 && (!playerStats[p.name].suspended || playerStats[p.name].suspended.days === 0)).sort((a, b) => getPlayerWeightedStats(b.name).ovr - getPlayerWeightedStats(a.name).ovr) : [];
         if (!gs.length) { const allG = (rosters[tk] || []).filter(p => p.pos === 'G'); return allG.length ? allG[0] : null; }
         if (gs.length === 1 || isPlayoffs || isASG) return gs[0];
-        
+
         const starter = gs[0]; const backup = gs[1]; const sStats = playerStats[starter.name][k];
         let diff = getPlayerWeightedStats(starter.name).ovr - getPlayerWeightedStats(backup.name).ovr;
-        let restChance = 0.12; 
-        if (diff <= 10) restChance = 0.45; else if (diff <= 15) restChance = 0.30; 
+        let restChance = 0.12;
+        if (diff <= 10) restChance = 0.45; else if (diff <= 15) restChance = 0.30;
         if (playedYesterday(tk)) restChance += 0.60;
-        
+
         const bStats = playerStats[backup.name]?.[k];
         if (sStats.consStarts >= 7 || Math.random() < restChance) {
             sStats.consStarts = 0;
@@ -3287,6 +3280,13 @@ function simGame(idx) {
     let aG_name = aG_obj ? aG_obj.name : null;
     // Record original starters before any blowout-pull reassignment
     const origHG_name = hG_name;
+
+    if (rosters[g.h.nrm]) assignMicroStreaks(rosters[g.h.nrm], hG_obj);
+    if (rosters[g.a.nrm]) assignMicroStreaks(rosters[g.a.nrm], aG_obj);
+    // Per-game dailySwing — must run after micro streaks so cache is built correctly
+    applyDailyRandomSwing(g.h.nrm);
+    applyDailyRandomSwing(g.a.nrm);
+    clearWpCache(); // flush after swing assignment so OVR picks up dailySwing values
     const origAG_name = aG_name;
 
     // ðŸ§± 3. MACRO AURAS & MODIFIER MATH
@@ -5628,7 +5628,7 @@ function openAdvEditor() {
     const preDressed = (tk) => {
         let r = rosters[tk]; if (!r || r.length === 0) return [];
         try {
-            let healthy = r.filter(p => playerStats[p.name] && playerStats[p.name].injury.daysRemaining === 0);
+            let healthy = r.filter(p => playerStats[p.name] && playerStats[p.name].injury.daysRemaining === 0 && !(playerStats[p.name].suspended?.days > 0));
             let gList = healthy.filter(p => p.pos === 'G').sort((a,b) => (playerStats[b.name].attr.gDef || 0) - (playerStats[a.name].attr.gDef || 0));
             let fList = healthy.filter(p => p.pos !== 'D' && p.pos !== 'G').sort((a,b) => (playerStats[b.name].attr.off || 0) - (playerStats[a.name].attr.off || 0)).slice(0, 12);
             let dList = healthy.filter(p => p.pos === 'D').sort((a,b) => (playerStats[b.name].attr.off || 0) - (playerStats[a.name].attr.off || 0)).slice(0, 6);
@@ -6372,7 +6372,7 @@ function openSpecialTeamsMenu(tk, mode, unitNum) {
         h += `</div>`;
         h += `<select id="st_select_${i}" style="background:#222; color:var(--neon-cyan); border:1px solid #555; padding:8px; width:100%; border-radius:3px; font-size:10px;">`;
         h += `<option value="">-- SELECT PLAYER --</option>`;
-        let healthySkaters = roster.filter(p => p.pos !== 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0);
+        let healthySkaters = roster.filter(p => p.pos !== 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0 && !(playerStats[p.name].suspended?.days > 0));
         healthySkaters.forEach(p => { 
             let selected = p.name === currentPlayer ? 'selected' : ''; 
             let pPos = getPlayerPosition(p);
@@ -8592,7 +8592,7 @@ function rollInGameInjuries(homeCode, awayCode) {
             if (!ps) return;
             if (Math.random() < GOALIE_CHANCE) {
                 goalieInjuredThisTeam = true;
-                const backupG = rosters[tk].find(b => b.pos === 'G' && b.name !== p.name && (playerStats[b.name]?.injury?.daysRemaining ?? 0) === 0);
+                const backupG = rosters[tk].find(b => b.pos === 'G' && b.name !== p.name && (playerStats[b.name]?.injury?.daysRemaining ?? 0) === 0 && !(playerStats[b.name]?.suspended?.days > 0));
                 const days = backupG ? Math.floor(Math.random() * 4) + 1 : 1;
                 ps.injury = { severity: days, daysRemaining: days };
                 if (!backupG) ps.playingHurt = true; // stays in net but at reduced effectiveness
