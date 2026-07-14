@@ -3251,25 +3251,18 @@ function simGame(idx) {
         }
     });
 
-    if (rosters[g.h.nrm]) assignMicroStreaks(rosters[g.h.nrm], hG_obj);
-    if (rosters[g.a.nrm]) assignMicroStreaks(rosters[g.a.nrm], aG_obj);
-    // Per-game dailySwing — must run after micro streaks so cache is built correctly
-    applyDailyRandomSwing(g.h.nrm);
-    applyDailyRandomSwing(g.a.nrm);
-    clearWpCache(); // flush after swing assignment so OVR picks up dailySwing values
-
     //  2. GOALIE SELECTION
-    const selG = (tk) => { 
+    const selG = (tk) => {
         const gs = rosters[tk] ? rosters[tk].filter(p => p.pos === 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0 && (!playerStats[p.name].suspended || playerStats[p.name].suspended.days === 0)).sort((a, b) => getPlayerWeightedStats(b.name).ovr - getPlayerWeightedStats(a.name).ovr) : [];
         if (!gs.length) { const allG = (rosters[tk] || []).filter(p => p.pos === 'G'); return allG.length ? allG[0] : null; }
         if (gs.length === 1 || isPlayoffs || isASG) return gs[0];
-        
+
         const starter = gs[0]; const backup = gs[1]; const sStats = playerStats[starter.name][k];
         let diff = getPlayerWeightedStats(starter.name).ovr - getPlayerWeightedStats(backup.name).ovr;
-        let restChance = 0.12; 
-        if (diff <= 10) restChance = 0.45; else if (diff <= 15) restChance = 0.30; 
+        let restChance = 0.12;
+        if (diff <= 10) restChance = 0.45; else if (diff <= 15) restChance = 0.30;
         if (playedYesterday(tk)) restChance += 0.60;
-        
+
         const bStats = playerStats[backup.name]?.[k];
         if (sStats.consStarts >= 7 || Math.random() < restChance) {
             sStats.consStarts = 0;
@@ -3287,6 +3280,13 @@ function simGame(idx) {
     let aG_name = aG_obj ? aG_obj.name : null;
     // Record original starters before any blowout-pull reassignment
     const origHG_name = hG_name;
+
+    if (rosters[g.h.nrm]) assignMicroStreaks(rosters[g.h.nrm], hG_obj);
+    if (rosters[g.a.nrm]) assignMicroStreaks(rosters[g.a.nrm], aG_obj);
+    // Per-game dailySwing — must run after micro streaks so cache is built correctly
+    applyDailyRandomSwing(g.h.nrm);
+    applyDailyRandomSwing(g.a.nrm);
+    clearWpCache(); // flush after swing assignment so OVR picks up dailySwing values
     const origAG_name = aG_name;
 
     // ðŸ§± 3. MACRO AURAS & MODIFIER MATH
