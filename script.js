@@ -4758,8 +4758,8 @@ function processOffseasonGrowth() {
         }
         if (p.pos === 'G') {
             p.attr.gDef = Math.max(20, Math.min(99, (parseInt(p.attr.gDef) || 70) + dChg));
-            if (p.attr.pass !== undefined) p.attr.pass = Math.max(20, Math.min(99, (parseInt(p.attr.pass) || 60) + pChg));
-            if (p.attr.stkHnd !== undefined) p.attr.stkHnd = Math.max(20, Math.min(99, (parseInt(p.attr.stkHnd) || 60) + pChg));
+            p.attr.pass = Math.max(20, Math.min(99, (parseInt(p.attr.pass) || 60) + pChg));
+            p.attr.stkHnd = Math.max(20, Math.min(99, (parseInt(p.attr.stkHnd) || 60) + pChg));
         }
         else { p.attr.off = Math.max(20, Math.min(99, p.attr.off + oChg)); p.attr.def = Math.max(20, Math.min(99, p.attr.def + dChg)); p.attr.ovr = getPlayerWeightedStats(p.name).ovr; }
         if (awardConfig.headlines) {
@@ -5678,7 +5678,7 @@ function toggleAdvInputs(side) {
         sInp.style.display = 'none'; gInp.style.display = 'block';
     } else {
         sInp.style.display = 'grid'; gInp.style.display = 'none';
-        ['G', 'A', 'PM', 'PIM'].forEach(id => document.getElementById(`adv${side === 'away'?'Away':'Home'}${id}`).value = 0);
+        ['G', 'A', 'PM', 'PIM', 'S'].forEach(id => document.getElementById(`adv${side === 'away'?'Away':'Home'}${id}`).value = 0);
         ['PPG', 'SHG'].forEach(id => document.getElementById(`adv${side === 'away'?'Away':'Home'}${id}`).checked = false);
     }
 }
@@ -5700,9 +5700,10 @@ function addAdvStatLine(side) {
         entry.a = parseInt(document.getElementById(`${pref}A`).value) || 0;
         entry.pm = parseInt(document.getElementById(`${pref}PM`).value) || 0;
         entry.pim = parseInt(document.getElementById(`${pref}PIM`).value) || 0;
+        entry.s = parseInt(document.getElementById(`${pref}S`).value) || 0;
         entry.ppg = document.getElementById(`${pref}PPG`).checked ? 1 : 0;
         entry.shg = document.getElementById(`${pref}SHG`).checked ? 1 : 0;
-        
+
         if (entry.g === 0 && entry.a === 0 && entry.pm === 0 && entry.pim === 0) return alert("Enter at least one stat.");
         if (entry.ppg > entry.g || entry.shg > entry.g) return alert("Special teams goals cannot exceed total goals.");
     }
@@ -5717,8 +5718,8 @@ function renderAdvStatList(side) {
     let h = '';
     advBoxScoreTemp[side].entries.forEach(e => {
         h += `<div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="color:var(--ea-yellow);">${e.name}</span>`;
-        if (e.isGoalie) { h += `<span style="color:#aaa;">SA: ${e.sa}</span>`; } 
-        else { let sStr = `G:${e.g} A:${e.a} +/-:${e.pm > 0 ? '+'+e.pm : e.pm} PIM:${e.pim}`; if(e.ppg) sStr += ` PPG`; if(e.shg) sStr += ` SHG`; h += `<span style="color:#aaa;">${sStr}</span>`; }
+        if (e.isGoalie) { h += `<span style="color:#aaa;">SA: ${e.sa}</span>`; }
+        else { let sStr = `G:${e.g} A:${e.a} +/-:${e.pm > 0 ? '+'+e.pm : e.pm} PIM:${e.pim} S:${e.s}`; if(e.ppg) sStr += ` PPG`; if(e.shg) sStr += ` SHG`; h += `<span style="color:#aaa;">${sStr}</span>`; }
         h += `<button onclick="removeAdvStatLine('${side}', '${e.name}')" style="color:var(--line-red); border:none; background:transparent; cursor:pointer;">[X]</button></div>`;
     });
     document.getElementById(side === 'away' ? 'advAwayList' : 'advHomeList').innerHTML = h;
