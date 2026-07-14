@@ -269,14 +269,15 @@ function isTeamCaptain(pName) {
     return Object.values(teamCaptains).includes(pName);
 }
 
-// Trade Value Index: OVR weighted by prime-age factor (peaks ~age 28, drops off steeply after 33)
+// Trade Value Index: OVR weighted by prime-age factor and position scarcity
 function getTradeValue(pName) {
     const ps = playerStats[pName];
     if (!ps) return 50;
     const ovr = getPlayerWeightedStats(pName).ovr;
     const age = ps.age || 25;
-    const primeMod = Math.max(0, 14 - Math.abs(age - 28)); // 0 at extremes, 14 at prime
-    return Math.round(ovr * 0.65 + primeMod * 2.5);
+    const primeMod = Math.max(0, 14 - Math.abs(age - 28));
+    const posMult = ps.pos === 'G' ? 1.15 : ps.pos === 'C' ? 1.10 : ps.pos === 'D' ? 1.05 : 1.0;
+    return Math.round((ovr * 0.65 + primeMod * 2.5) * posMult);
 }
 
 // Picks the highest-leadership skater on each roster as team captain for the season
@@ -543,11 +544,10 @@ function applyLoadedSave(data) {
     
     // Re-link the playoff bracket just in case!
     if (playoffBracket && playoffBracket.series) {
-        playoffBracket.series.forEach(s => {
-            if (s.h && s.h.nrm) s.h = league.find(t => t.nrm === s.h.nrm) || s.h;
-            if (s.a && s.a.nrm) s.a = league.find(t => t.nrm === s.a.nrm) || s.a;
-            if (!s.games) s.games = [];
-        });
+        const relinkSeries = arr => { if (!arr) return; arr.forEach(s => { if (s.h && s.h.nrm) s.h = league.find(t => t.nrm === s.h.nrm) || s.h; if (s.a && s.a.nrm) s.a = league.find(t => t.nrm === s.a.nrm) || s.a; if (!s.games) s.games = []; }); };
+        relinkSeries(playoffBracket.series);
+        relinkSeries(playoffBracket.east);
+        relinkSeries(playoffBracket.west);
         // Rebuild game.series and series.games from calendar (stripped on save to break circular ref)
         calendar.forEach(day => {
             day.forEach(g => {
@@ -3524,17 +3524,20 @@ function simGame(idx) {
                 const goalieOvr  = getPlayerWeightedStats(psGoalie.name).ovr  || 75;
                 const psScoreProb = 0.30 + (shooterOvr - goalieOvr) * 0.005;
                 const psScored = Math.random() < Math.max(0.15, Math.min(0.65, psScoreProb));
+                trk(psShooter.name, 's', 1);
                 if (psScored) {
-                    if (psHome) { hG++; trk(psShooter.name, 'g', 1); trk(aG_name, 'ga', 1); }
-                    else        { aG++; trk(psShooter.name, 'g', 1); trk(hG_name, 'ga', 1); }
+                    if (psHome) { hG++; trk(psShooter.name, 'g', 1); trk(aG_name, 'ga', 1); trk(aG_name, 'sa', 1); }
+                    else        { aG++; trk(psShooter.name, 'g', 1); trk(hG_name, 'ga', 1); trk(hG_name, 'sa', 1); }
                 } else {
-                    if (psHome) trk(aG_name, 'sv', 1); else trk(hG_name, 'sv', 1);
+                    if (psHome) { trk(aG_name, 'sv', 1); trk(aG_name, 'sa', 1); }
+                    else        { trk(hG_name, 'sv', 1); trk(hG_name, 'sa', 1); }
                 }
                 const psResult = psScored ? 'GOAL' : 'STOPPED';
                 const psTxt = `${psShooter.name} on a PENALTY SHOT — ${psResult}! (${psTeam.code} vs ${psGoalie.name})`;
                 allGoals.push({ p: period, m: minute % 20 || 20, s: sec, tm: psTeam.code,
                     cl: psScored ? (teamColors[psTeam.nrm]?.[0] || '#fff') : '#888',
-                    txt: psTxt, isPenaltyShot: true, isGoal: psScored });
+                    txt: psTxt, isPenaltyShot: true, isGoal: psScored,
+                    scorer: psScored ? psShooter.name : null, code: psTeam.code });
                 if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `PENALTY SHOT: ${psTxt}` });
             }
         }
@@ -3630,10 +3633,11 @@ function simGame(idx) {
                 
                 // Track power play opportunity on the team with the advantage
                 const advTeamObj = league.find(t => t.nrm === advTeam.nrm);
-                if (advTeamObj) advTeamObj.season.ppo = (advTeamObj.season.ppo || 0) + 1;
-                // Track penalty kill attempt on the penalised team
                 const penTeamObj = league.find(t => t.nrm === penTeam.nrm);
-                if (penTeamObj) penTeamObj.season.pka = (penTeamObj.season.pka || 0) + 1;
+                if (!isASG && !isPlayoffs) {
+                    if (advTeamObj) advTeamObj.season.ppo = (advTeamObj.season.ppo || 0) + 1;
+                    if (penTeamObj) penTeamObj.season.pka = (penTeamObj.season.pka || 0) + 1;
+                }
 
                 // Resolve the powerplay using team PP/PK ratings (not a flat 20%)
                 // PP strategy: CYCLE (-1) = patient setup, higher conversion; SHOOT (1) = quick shots, lower conversion
@@ -3660,20 +3664,21 @@ function simGame(idx) {
                         ppEv.cl = teamColors[advTeam.nrm] ? teamColors[advTeam.nrm][0] : '#FFD700';
                         ppEv.txt = buildGoalText(ppEv.scorer, ppEv.pAssist, ppEv.sAssist, null, true, false, false, 0, 0, 0);
                         allGoals.push(ppEv);
-                        if (advTeam.nrm === g.h.nrm) hG++; else aG++;
+                        if (advTeam.nrm === g.h.nrm) { hG++; hShots++; } else { aG++; aShots++; }
                         // Charge the penalised team's goalie with the shot + goal
                         const pkGoalie = penTeam.nrm === g.h.nrm ? hG_name : aG_name;
                         trk(pkGoalie, 'sa', 1); trk(pkGoalie, 'ga', 1);
-                        trk(ppEv.scorer, 'g', 1);
+                        trk(ppEv.scorer, 'g', 1); trk(ppEv.scorer, 's', 1);
                         if (ppEv.pAssist) trk(ppEv.pAssist, 'a', 1);
                         if (ppEv.sAssist) trk(ppEv.sAssist, 'a', 1);
-                        const kk = (isPlayoffs||isASG)?'playoff':'season';
-                        if (playerStats[ppEv.scorer]) { playerStats[ppEv.scorer][kk].ppg = (playerStats[ppEv.scorer][kk].ppg||0)+1; }
-                        if (ppEv.pAssist && playerStats[ppEv.pAssist]) { playerStats[ppEv.pAssist][kk].ppa = (playerStats[ppEv.pAssist][kk].ppa||0)+1; }
-                        if (ppEv.sAssist && playerStats[ppEv.sAssist]) { playerStats[ppEv.sAssist][kk].ppa = (playerStats[ppEv.sAssist][kk].ppa||0)+1; }
-                        if (advTeamObj) advTeamObj.season.ppg = (advTeamObj.season.ppg || 0) + 1;
-                        // PP goal = PK goal against for the penalised team
-                        if (penTeamObj) penTeamObj.season.pkg = (penTeamObj.season.pkg || 0) + 1;
+                        if (!isASG) {
+                            const kk = isPlayoffs?'playoff':'season';
+                            if (playerStats[ppEv.scorer]) { playerStats[ppEv.scorer][kk].ppg = (playerStats[ppEv.scorer][kk].ppg||0)+1; }
+                            if (ppEv.pAssist && playerStats[ppEv.pAssist]) { playerStats[ppEv.pAssist][kk].ppa = (playerStats[ppEv.pAssist][kk].ppa||0)+1; }
+                            if (ppEv.sAssist && playerStats[ppEv.sAssist]) { playerStats[ppEv.sAssist][kk].ppa = (playerStats[ppEv.sAssist][kk].ppa||0)+1; }
+                            if (advTeamObj) advTeamObj.season.ppg = (advTeamObj.season.ppg || 0) + 1;
+                            if (penTeamObj) penTeamObj.season.pkg = (penTeamObj.season.pkg || 0) + 1;
+                        }
                     }
                 } else if (ppRoll >= ppConvRate && Math.random() < 0.02 && pkUnit.length > 0) {
                     // SHORTHANDED GOAL — independent ~2% roll so strong PP teams can still give up SHGs
@@ -3685,15 +3690,14 @@ function simGame(idx) {
                         shEv.cl = teamColors[penTeam.nrm] ? teamColors[penTeam.nrm][0] : '#00FFFF';
                         shEv.txt = buildGoalText(shEv.scorer, shEv.pAssist, shEv.sAssist, null, false, true, false, 0, 0, 0);
                         allGoals.push(shEv);
-                        if (penTeam.nrm === g.h.nrm) hG++; else aG++;
+                        if (penTeam.nrm === g.h.nrm) { hG++; hShots++; } else { aG++; aShots++; }
                         // SH goal is charged to the advantaged team's goalie
                         const ppGoalie = advTeam.nrm === g.h.nrm ? hG_name : aG_name;
                         trk(ppGoalie, 'sa', 1); trk(ppGoalie, 'ga', 1);
-                        trk(shEv.scorer, 'g', 1);
+                        trk(shEv.scorer, 'g', 1); trk(shEv.scorer, 's', 1);
                         if (shEv.pAssist) trk(shEv.pAssist, 'a', 1);
                         if (shEv.sAssist) trk(shEv.sAssist, 'a', 1);
-                        const kk2 = (isPlayoffs||isASG)?'playoff':'season';
-                        if (playerStats[shEv.scorer]) { playerStats[shEv.scorer][kk2].shg = (playerStats[shEv.scorer][kk2].shg||0)+1; }
+                        if (!isASG && playerStats[shEv.scorer]) { const kk2 = isPlayoffs?'playoff':'season'; playerStats[shEv.scorer][kk2].shg = (playerStats[shEv.scorer][kk2].shg||0)+1; }
                     }
                 }
             }
@@ -3751,10 +3755,10 @@ function simGame(idx) {
                         enEv.isEN = true;
                         enEv.tm = enScorerTeam.code;
                         enEv.cl = teamColors[enScorerTeam.nrm]?.[0] || '#fff';
-                        enEv.txt = buildGoalText(enEv.scorer, enEv.pAssist, null, null, false, false, true, 0, 0, 3);
+                        enEv.txt = buildGoalText(enEv.scorer, enEv.pAssist, enEv.sAssist, null, false, false, true, 0, 0, 3);
                         allGoals.push(enEv);
-                        if (trailerIsHome) aG++; else hG++;
-                        trk(enEv.scorer, 'g', 1);
+                        if (trailerIsHome) { aG++; aShots++; } else { hG++; hShots++; }
+                        trk(enEv.scorer, 'g', 1); trk(enEv.scorer, 's', 1);
                         if (enEv.pAssist) trk(enEv.pAssist, 'a', 1);
                         if (enEv.sAssist) trk(enEv.sAssist, 'a', 1);
                         // NHL rules: empty-net goals do NOT count against the pulled goalie
@@ -3770,11 +3774,14 @@ function simGame(idx) {
                         if (tieEv) {
                             tieEv.tm = tieScorerTeam.code;
                             tieEv.cl = teamColors[tieScorerTeam.nrm]?.[0] || '#fff';
-                            tieEv.txt = buildGoalText(tieEv.scorer, null, null, null, false, false, false, 0, 0, 3);
+                            tieEv.txt = buildGoalText(tieEv.scorer, tieEv.pAssist, tieEv.sAssist, null, false, false, false, 0, 0, 3);
                             allGoals.push(tieEv);
-                            if (trailerIsHome) hG++; else aG++;
-                            trk(tieEv.scorer, 'g', 1);
+                            if (trailerIsHome) { hG++; hShots++; } else { aG++; aShots++; }
+                            trk(tieEv.scorer, 'g', 1); trk(tieEv.scorer, 's', 1);
                             if (tieEv.pAssist) trk(tieEv.pAssist, 'a', 1);
+                            if (tieEv.sAssist) trk(tieEv.sAssist, 'a', 1);
+                            const oppGoalie = trailerIsHome ? aG_name : hG_name;
+                            if (oppGoalie) { trk(oppGoalie, 'sa', 1); trk(oppGoalie, 'ga', 1); }
                         }
                     }
                 }
@@ -3874,7 +3881,7 @@ function simGame(idx) {
             const aStar = otShooterOvr(aStruct);
             // Home ice + star OVR comparison determines winner probability
             const hWinProb = 0.52 + (hStar.ovr - aStar.ovr) * 0.005;
-            const otSec = Math.floor(Math.random()*300); // random time in OT period
+            const otSec = Math.floor(Math.random()*1200); // random time in 20-min OT period
             if (Math.random() < Math.max(0.25, Math.min(0.75, hWinProb))) {
                 hG++; hShots++;
                 trk(aG_name,'sa',1); trk(aG_name,'ga',1);
@@ -3929,19 +3936,29 @@ function simGame(idx) {
     //  8. GOALIE POSITION RECORDING
     let hStatus = hG > aG ? 'win' : (hG < aG ? 'loss' : 'tie'); 
     let aStatus = aG > hG ? 'win' : (aG < hG ? 'loss' : 'tie');
-    let totalGameMinutes = 60 + (otPeriods * 5);
+    let totalGameMinutes = 60 + (isPlayoffs ? otPeriods * 20 : otPeriods * 5);
     
+    const hPulled = hG_name !== origHG_name;
+    const aPulled = aG_name !== origAG_name;
     if (hG_obj) {
-        playerStats[hG_name][k].gp++;
-        if (aG === 0) playerStats[hG_name][k].so++;
-        if (hStatus === 'win') playerStats[hG_name][k].w++; else if (hStatus === 'loss') playerStats[hG_name][k].l++; else playerStats[hG_name][k].t++;
-        trk(hG_name, 'toi', totalGameMinutes);
+        const decisionGoalie = hPulled ? origHG_name : hG_name;
+        if (playerStats[decisionGoalie]?.[k]) {
+            playerStats[decisionGoalie][k].gp++;
+            if (hStatus === 'win') playerStats[decisionGoalie][k].w++; else if (hStatus === 'loss') playerStats[decisionGoalie][k].l++; else playerStats[decisionGoalie][k].t++;
+        }
+        if (hPulled && playerStats[hG_name]?.[k]) playerStats[hG_name][k].gp++;
+        if (!hPulled && aG === 0) playerStats[hG_name][k].so++;
+        trk(origHG_name, 'toi', totalGameMinutes);
     }
     if (aG_obj) {
-        playerStats[aG_name][k].gp++;
-        if (hG === 0) playerStats[aG_name][k].so++;
-        if (aStatus === 'win') playerStats[aG_name][k].w++; else if (aStatus === 'loss') playerStats[aG_name][k].l++; else playerStats[aG_name][k].t++;
-        trk(aG_name, 'toi', totalGameMinutes);
+        const decisionGoalie = aPulled ? origAG_name : aG_name;
+        if (playerStats[decisionGoalie]?.[k]) {
+            playerStats[decisionGoalie][k].gp++;
+            if (aStatus === 'win') playerStats[decisionGoalie][k].w++; else if (aStatus === 'loss') playerStats[decisionGoalie][k].l++; else playerStats[decisionGoalie][k].t++;
+        }
+        if (aPulled && playerStats[aG_name]?.[k]) playerStats[aG_name][k].gp++;
+        if (!aPulled && hG === 0) playerStats[aG_name][k].so++;
+        trk(origAG_name, 'toi', totalGameMinutes);
     }
 
     // Compute 3 Stars (skaters by pts+pm, goalies eligible by sv%)
@@ -3954,7 +3971,7 @@ function simGame(idx) {
         return { name: p.name, score: (ms.g||0)*3 + (ms.a||0)*2 + (ms.pm||0)*0.5 };
     });
     const goalieStars = [];
-    [[hG_name, aShots, hG], [aG_name, hShots, aG]].forEach(([gName, sa, ga]) => {
+    [[hG_name, aShots, aG], [aG_name, hShots, hG]].forEach(([gName, sa, ga]) => {
         if (gName && sa > 0) {
             const svPct = (sa - ga) / sa;
             if (svPct >= 0.900) goalieStars.push({ name: gName, score: svPct * 6 + (svPct >= 0.940 ? 3 : svPct >= 0.920 ? 1.5 : 0) });
@@ -3969,8 +3986,8 @@ function simGame(idx) {
     }
 
     // Goalie duel detection
-    const hSvPct = hShots > 0 ? (hShots - aG) / hShots : 0;
-    const aSvPct = aShots > 0 ? (aShots - hG) / aShots : 0;
+    const hSvPct = aShots > 0 ? (aShots - aG) / aShots : 0;
+    const aSvPct = hShots > 0 ? (hShots - hG) / hShots : 0;
     const isGoalieDuel = hSvPct >= 0.930 && aSvPct >= 0.930;
     if (isGoalieDuel && !isASG && awardConfig.headlines) {
         tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `GOALIE DUEL: ${hG_name||'?'} (${Math.round(hSvPct*1000)/10}%) vs ${aG_name||'?'} (${Math.round(aSvPct*1000)/10}%) — what a battle between the pipes!` });
@@ -4019,8 +4036,8 @@ function simGame(idx) {
         });
 
         if(!isPlayoffs) {
-            if(hG > aG) { g.h.season.w++; g.h.season.pts += 2; g.a.season.l++; g.h.winStreak++; g.h.undefeated++; g.h.loseStreak = 0; g.h.winless = 0; g.a.loseStreak++; g.a.winless++; g.a.winStreak = 0; g.a.undefeated = 0; } 
-            else if(aG > hG) { g.a.season.w++; g.a.season.pts += 2; g.h.season.l++; g.a.winStreak++; g.a.undefeated++; g.a.loseStreak = 0; g.a.winless = 0; g.h.loseStreak++; g.h.winless++; g.h.winStreak = 0; g.h.undefeated = 0; } 
+            if(hG > aG) { g.h.season.w++; g.h.season.pts += 2; g.a.season.l++; g.h.winStreak++; g.h.undefeated++; g.h.loseStreak = 0; g.h.winless = 0; g.a.loseStreak++; g.a.winless++; g.a.winStreak = 0; g.a.undefeated = 0; }
+            else if(aG > hG) { g.a.season.w++; g.a.season.pts += 2; g.h.season.l++; g.a.winStreak++; g.a.undefeated++; g.a.loseStreak = 0; g.a.winless = 0; g.h.loseStreak++; g.h.winless++; g.h.winStreak = 0; g.h.undefeated = 0; }
             else { g.h.season.t++; g.a.season.t++; g.h.season.pts++; g.a.season.pts++; g.h.winStreak = 0; g.h.undefeated++; g.h.loseStreak = 0; g.h.winless++; g.a.winStreak = 0; g.a.undefeated++; g.a.loseStreak = 0; g.a.winless++; }
             g.h.season.gp++; g.a.season.gp++;
             g.h.season.gf += hG; g.h.season.ga += aG; g.h.season.sf = (g.h.season.sf||0) + hShots; g.h.season.sa = (g.h.season.sa||0) + aShots;
@@ -4069,9 +4086,9 @@ function simGame(idx) {
     if (aG_name && playerStats[aG_name]) playerStats[aG_name].lastPlayedDay = currentDay;
     let activeGoalies = [hG_obj, aG_obj].filter(g => g !== null);
     if (typeof processPostGameStreaks === 'function') processPostGameStreaks(winningTeamRoster.concat(losingTeamRoster), activeGoalies, matchStats);
-    if (typeof applyPostGameFatigue === 'function' && origHG_name && origAG_name) applyPostGameFatigue(g.a.nrm, g.h.nrm, origAG_name, origHG_name);
-    if (typeof reviewGameForSuspensions === 'function') { reviewGameForSuspensions(matchStats, g.h.nrm, g.a.nrm); clearWpCache(); }
-    if (typeof triggerGameInjuries === 'function') { triggerGameInjuries(matchStats, g.h.nrm, g.a.nrm); clearWpCache(); }
+    if (!isASG && typeof applyPostGameFatigue === 'function' && origHG_name && origAG_name) applyPostGameFatigue(g.a.nrm, g.h.nrm, origAG_name, origHG_name);
+    if (!isASG && typeof reviewGameForSuspensions === 'function') { reviewGameForSuspensions(matchStats, g.h.nrm, g.a.nrm); clearWpCache(); }
+    if (!isASG && typeof triggerGameInjuries === 'function') { triggerGameInjuries(matchStats, g.h.nrm, g.a.nrm); clearWpCache(); }
 
     // Chemistry score decay/rebuild for custom duos
     if (!isASG && customDuos.length > 0) {
@@ -4088,18 +4105,23 @@ function simGame(idx) {
         }
     }
 
-    // Per-line chemistry build/decay — increment when a line scores together, decay when quiet
+    // Per-line chemistry build/decay — credit only when 2+ members of the SAME line/pair contributed to a goal for THEIR team
     if (!isASG) {
-        const scorerSet = new Set(allGoals.filter(ev=>ev.scorer&&!ev.isPenalty).flatMap(ev=>[ev.scorer,ev.pAssist,ev.sAssist].filter(Boolean)));
+        const teamGoals = {};
+        teamGoals[g.h.nrm] = allGoals.filter(ev => ev.scorer && !ev.isPenalty && ev.tm === g.h.code);
+        teamGoals[g.a.nrm] = allGoals.filter(ev => ev.scorer && !ev.isPenalty && ev.tm === g.a.code);
         [g.h.nrm, g.a.nrm].forEach(tk => {
             const tObj = league.find(t=>t.nrm===tk);
             if (!tObj || !tObj.chem || !tObj.chem.lastUnit) return;
+            const tkGoalParticipants = (teamGoals[tk] || []).map(ev => new Set([ev.scorer, ev.pAssist, ev.sAssist].filter(Boolean)));
             tObj.chem.lastUnit.f.forEach((line, i) => {
-                const lineScored = line.some(p => p && scorerSet.has(p.name));
+                const lineNames = line.filter(p=>p).map(p=>p.name);
+                const lineScored = tkGoalParticipants.some(goalSet => lineNames.filter(n => goalSet.has(n)).length >= 2);
                 tObj.chem.f[i] = Math.max(0, Math.min(15, (tObj.chem.f[i]||0) + (lineScored ? 1 : -0.75)));
             });
             tObj.chem.lastUnit.d.forEach((pair, i) => {
-                const pairScored = pair.some(p => p && scorerSet.has(p.name));
+                const pairNames = pair.filter(p=>p).map(p=>p.name);
+                const pairScored = tkGoalParticipants.some(goalSet => pairNames.filter(n => goalSet.has(n)).length >= 2);
                 tObj.chem.d[i] = Math.max(0, Math.min(15, (tObj.chem.d[i]||0) + (pairScored ? 0.5 : -0.35)));
             });
         });
@@ -4736,6 +4758,8 @@ function processOffseasonGrowth() {
         }
         if (p.pos === 'G') {
             p.attr.gDef = Math.max(20, Math.min(99, (parseInt(p.attr.gDef) || 70) + dChg));
+            if (p.attr.pass !== undefined) p.attr.pass = Math.max(20, Math.min(99, (parseInt(p.attr.pass) || 60) + pChg));
+            if (p.attr.stkHnd !== undefined) p.attr.stkHnd = Math.max(20, Math.min(99, (parseInt(p.attr.stkHnd) || 60) + pChg));
         }
         else { p.attr.off = Math.max(20, Math.min(99, p.attr.off + oChg)); p.attr.def = Math.max(20, Math.min(99, p.attr.def + dChg)); p.attr.ovr = getPlayerWeightedStats(p.name).ovr; }
         if (awardConfig.headlines) {
@@ -4783,21 +4807,21 @@ async function beginNewYear() {
             p.career.gp += p.season.gp; p.career.w += p.season.w; p.career.l += (p.season.l || 0); p.career.t += (p.season.t || 0); p.career.so += p.season.so; p.career.sv += p.season.sv; p.career.sa += p.season.sa; p.career.toi = (p.career.toi || 0) + (p.season.toi || 0);
             
             // Archive Playoff to Career Playoff
-            p.careerPlayoff.gp += p.playoff.gp; p.careerPlayoff.w += p.playoff.w; p.careerPlayoff.l += (p.playoff.l || 0); p.careerPlayoff.so += p.playoff.so; p.careerPlayoff.sv += p.playoff.sv; p.careerPlayoff.sa += p.playoff.sa;
+            p.careerPlayoff.gp += p.playoff.gp; p.careerPlayoff.w += p.playoff.w; p.careerPlayoff.l += (p.playoff.l || 0); p.careerPlayoff.so += p.playoff.so; p.careerPlayoff.sv += p.playoff.sv; p.careerPlayoff.sa += p.playoff.sa; p.careerPlayoff.toi = (p.careerPlayoff.toi || 0) + (p.playoff.toi || 0);
 
             // Wipe clean for the new year
-            p.season = {gp:0, w:0, l:0, t:0, so:0, sv:0, sa:0, consStarts:0}; 
-            p.playoff = {gp:0, w:0, l:0, so:0, sv:0, sa:0, consStarts:0};
+            p.season = {gp:0, w:0, l:0, t:0, so:0, sv:0, sa:0, toi:0, consStarts:0};
+            p.playoff = {gp:0, w:0, l:0, so:0, sv:0, sa:0, toi:0, consStarts:0};
         } else {
             // Archive Regular Season to Career Regular Season
             p.career.gp += p.season.gp; p.career.g += p.season.g; p.career.a += p.season.a; p.career.pts += (p.season.g + p.season.a); p.career.pm += (p.season.pm || 0); p.career.pim += (p.season.pim || 0); p.career.ppg += (p.season.ppg || 0); p.career.shg += (p.season.shg || 0); p.career.gwg += (p.season.gwg || 0); p.career.s += (p.season.s || 0); p.career.toi = (p.career.toi || 0) + (p.season.toi || 0);
             
             // Archive Playoff to Career Playoff
-            p.careerPlayoff.gp += p.playoff.gp; p.careerPlayoff.g += p.playoff.g; p.careerPlayoff.a += p.playoff.a; p.careerPlayoff.pts += (p.playoff.g + p.playoff.a); p.careerPlayoff.pm += (p.playoff.pm || 0); p.careerPlayoff.pim += (p.playoff.pim || 0); p.careerPlayoff.ppg += (p.playoff.ppg || 0); p.careerPlayoff.shg += (p.playoff.shg || 0); p.careerPlayoff.gwg += (p.playoff.gwg || 0); p.careerPlayoff.s += (p.playoff.s || 0);
+            p.careerPlayoff.gp += p.playoff.gp; p.careerPlayoff.g += p.playoff.g; p.careerPlayoff.a += p.playoff.a; p.careerPlayoff.pts += (p.playoff.g + p.playoff.a); p.careerPlayoff.pm += (p.playoff.pm || 0); p.careerPlayoff.pim += (p.playoff.pim || 0); p.careerPlayoff.ppg += (p.playoff.ppg || 0); p.careerPlayoff.shg += (p.playoff.shg || 0); p.careerPlayoff.gwg += (p.playoff.gwg || 0); p.careerPlayoff.s += (p.playoff.s || 0); p.careerPlayoff.toi = (p.careerPlayoff.toi || 0) + (p.playoff.toi || 0);
             
             // Wipe clean for the new year
-            p.season = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0}; 
-            p.playoff = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0};
+            p.season = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, consStarts:0};
+            p.playoff = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, consStarts:0};
         }
         p.streakType = 'stable'; p.hasScored = false; p.seasonTicks = 0;
         p.hotCounter = 0; p.coldCounter = 0;
@@ -4887,7 +4911,7 @@ function simNextGame() {
 function advanceCalendar() {
     if (currentDay >= calendar.length) return false;
     currentDay++;
-    
+
     if (currentDay === Math.floor(calendar.length / 2) && !isPlayoffs && !isASG && awardConfig.streaks) { initAllStarGame(); return false; }
     if (isASG && calendar[currentDay] && !calendar[currentDay].some(g => g.isASG_game)) {
         isASG = false;
@@ -5764,12 +5788,20 @@ function submitAdvGame() {
     
     applyGoalie(g.a.nrm, 'away', hG, hEN, aStatus);
     applyGoalie(g.h.nrm, 'home', aG, aEN, hStatus);
+    ['away','home'].forEach(side => {
+        const gEntry = advBoxScoreTemp[side].entries.find(e => e.isGoalie);
+        if (gEntry && playerStats[gEntry.name]) {
+            const ps = playerStats[gEntry.name];
+            ps.lastPlayedDay = currentDay;
+            if (ps[k]) ps[k].consStarts = (ps[k].consStarts || 0) + 1;
+        }
+    });
     
     const applySkaters = (side) => {
         advBoxScoreTemp[side].entries.filter(e => !e.isGoalie).forEach(e => {
             if(playerStats[e.name] && !isASG) {
                 let s = playerStats[e.name][k];
-                s.g += e.g; s.a += e.a; s.pm += e.pm; s.pim += e.pim; s.ppg += e.ppg; s.shg += e.shg;
+                s.g += e.g; s.a += e.a; s.pm += e.pm; s.pim += e.pim; s.ppg += e.ppg; s.shg += e.shg; s.s = (s.s||0) + (e.s||0);
                 checkMilestones(e.name);
             }
         });
@@ -6657,7 +6689,7 @@ function runEndOfSeasonAwards() {
         if (!playoffQualifiers.has(g.team)) return;
         let w = g.season.w || 0;
         let so = g.season.so || 0;
-        let svPct = g.season.gp > 0 ? (g.season.sv / g.season.sa) : 0;
+        let svPct = g.season.gp > 0 && g.season.sa > 0 ? (g.season.sv / g.season.sa) : 0;
         let svBonus = svPct > 0.900 ? (svPct - 0.900) * 1000 : 0;
         mvpCandidates.push({ name: g.name, score: (w * 2.2) + (so * 3) + svBonus });
     });
@@ -6681,7 +6713,7 @@ function runEndOfSeasonAwards() {
     // 3. CALDER — eligible: career GP < 32 (all positions)
     const ROOKIE_GP_LIMIT = 31;
     const calderScore = p => p.pos === 'G' ? (p.season.w * 1.5) + (p.season.so * 3) : (p.season.g + p.season.a);
-    const calderEligible = allPlayers.filter(p => { const cGP = Math.max(0, (p.career.gp || 0) - (p.season.gp || 0)); return p.pos === 'G' ? (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minGoalieGP) : (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minSkaterGP); });
+    const calderEligible = allPlayers.filter(p => { const cGP = p.career.gp || 0; return p.pos === 'G' ? (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minGoalieGP) : (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minSkaterGP); });
     const calderSorted = [...calderEligible].sort((a, b) => calderScore(b) - calderScore(a));
     if (calderSorted.length > 0) {
         awardTrophy(calderSorted[0].name, currentSeason, "Calder");
@@ -6920,11 +6952,25 @@ function getConnSmytheScore(p) {
             const carW = (p.career.w || 0) + (p.season.w || 0);
             const isGoalie = p.pos === 'G';
             const meetsCareerBar = isGoalie ? (carGP >= 250 || carW >= 100) : (carPts >= 150 || carGP >= 350);
-            if(meetsCareerBar && ((p.age > 36 && roll < 0.25) || ((p.attr.off+p.attr.def)/2 >= 90 && roll < 0.05))) {
+            const eliteOvr = isGoalie ? (parseInt(p.attr.gDef) || 70) : ((p.attr.off+p.attr.def)/2);
+            if(meetsCareerBar && ((p.age > 36 && roll < 0.25) || (p.age >= 33 && eliteOvr >= 90 && roll < 0.05))) {
                 ind.push(p.name);
-                const hofCarGP = (p.career.gp||0)+(p.season.gp||0), hofCarG = (p.career.g||0)+(p.season.g||0), hofCarA = (p.career.a||0)+(p.season.a||0), hofCarW = (p.career.w||0)+(p.season.w||0), hofCarSO = (p.career.so||0)+(p.season.so||0);
-                hallOfFame.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: hofCarGP, g: hofCarG, a: hofCarA, pts: hofCarG+hofCarA, w: hofCarW, so: hofCarSO, mvp: p.asgMvp });
-                retiredPlayers.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: hofCarGP, g: hofCarG, a: hofCarA, pts: (p.career.pts||0)+(p.season.g+p.season.a), w: hofCarW, pim: (p.career.pim||0)+(p.season.pim||0), ppg: (p.career.ppg||0)+(p.season.ppg||0)+(p.careerPlayoff&&p.careerPlayoff.ppg||0)+(p.playoff&&p.playoff.ppg||0) });
+                const cp = p.careerPlayoff || {};
+                const pl = p.playoff || {};
+                const hofCarGP = (p.career.gp||0)+(p.season.gp||0), hofCarW = (p.career.w||0)+(p.season.w||0), hofCarSO = (p.career.so||0)+(p.season.so||0);
+                if (isGoalie) {
+                    const hofCarL = (p.career.l||0)+(p.season.l||0), hofCarT = (p.career.t||0)+(p.season.t||0);
+                    const hofCarSV = (p.career.sv||0)+(p.season.sv||0), hofCarSA = (p.career.sa||0)+(p.season.sa||0);
+                    const hofPlGP = (cp.gp||0)+(pl.gp||0), hofPlW = (cp.w||0)+(pl.w||0), hofPlL = (cp.l||0)+(pl.l||0), hofPlSO = (cp.so||0)+(pl.so||0), hofPlSV = (cp.sv||0)+(pl.sv||0), hofPlSA = (cp.sa||0)+(pl.sa||0);
+                    hallOfFame.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: hofCarGP, w: hofCarW, so: hofCarSO, mvp: p.asgMvp });
+                    retiredPlayers.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, age: p.age, asgApp: p.asgAppearances || 0, gp: hofCarGP, w: hofCarW, l: hofCarL, t: hofCarT, so: hofCarSO, sv: hofCarSV, sa: hofCarSA, plGP: hofPlGP, plW: hofPlW, plL: hofPlL, plSO: hofPlSO, plSV: hofPlSV, plSA: hofPlSA });
+                } else {
+                    const hofCarG = (p.career.g||0)+(p.season.g||0), hofCarA = (p.career.a||0)+(p.season.a||0);
+                    const hofPPG = (p.career.ppg||0)+(p.season.ppg||0), hofPM = (p.career.pm||0)+(p.season.pm||0), hofGWG = (p.career.gwg||0)+(p.season.gwg||0);
+                    const hofPlGP = (cp.gp||0)+(pl.gp||0), hofPlG = (cp.g||0)+(pl.g||0), hofPlA = (cp.a||0)+(pl.a||0);
+                    hallOfFame.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: hofCarGP, g: hofCarG, a: hofCarA, pts: hofCarG+hofCarA, w: hofCarW, so: hofCarSO, mvp: p.asgMvp });
+                    retiredPlayers.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, age: p.age, asgApp: p.asgAppearances || 0, gp: hofCarGP, g: hofCarG, a: hofCarA, pts: hofCarG+hofCarA, ppg: hofPPG, pm: hofPM, gwg: hofGWG, plGP: hofPlGP, plG: hofPlG, plA: hofPlA, plPTS: hofPlG+hofPlA });
+                }
                 const tkObj = league.find(t=>t.name===p.team); const tk = tkObj ? tkObj.nrm : null; 
                 if(tk && rosters[tk]) rosters[tk] = rosters[tk].filter(r => r.name !== p.name);
                 delete playerStats[p.name];
@@ -6947,7 +6993,10 @@ function getConnSmytheScore(p) {
                 name: rN, team: t.name, teamCode: t.code, pos: rPos, age: 18, streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false,
                 morale: 100, suspended: { days: 0, reason: "" }, weight: 190 + Math.floor(Math.random()*30),
                 injury: { severity: 0, daysRemaining: 0 }, attr: { off: 65 + Math.floor(Math.random()*15), def: 60 + Math.floor(Math.random()*15), gDef: 60 },
-                career: {gp:0, g:0, a:0, pts:0, w:0, so:0, sv:0, sa:0, pim:0, ppg:0}, season: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, t:0, pim:0, ppg:0}, playoff: {gp:0, g:0, a:0, so:0, sv:0, sa:0, w:0, l:0, pim:0, ppg:0}
+                career: {gp:0, g:0, a:0, pts:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, t:0, so:0, sv:0, sa:0},
+                careerPlayoff: {gp:0, g:0, a:0, pts:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, so:0, sv:0, sa:0},
+                season: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, t:0, so:0, sv:0, sa:0, consStarts:0},
+                playoff: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, so:0, sv:0, sa:0, consStarts:0}
             };
             rosters[t.nrm].push({name: rN, pos: rPos});
         }); 
