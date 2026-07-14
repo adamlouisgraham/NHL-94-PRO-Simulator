@@ -10,9 +10,9 @@
     // =========================================================
     const archMods = {
     // --- FORWARDS (Balanced for higher goal/assist totals) ---
-    "SUPERSTAR":      { shotRate: 1.40, penaltyRate: 0.70,  assistRate: 1.40 }, // Increased assistRate to reflect their well-rounded dominance
-    "SNIPER":         { shotRate: 1.50, penaltyRate: 0.85,  assistRate: 0.90 }, // Higher shotRate, lower assistRate to specialize them
-    "PLAYMAKER":      { shotRate: 0.89, penaltyRate: 0.80,  assistRate: 1.65 }, // Lower shotRate, significantly higher assistRate
+    "SUPERSTAR":      { shotRate: 1.25, penaltyRate: 0.70,  assistRate: 1.22 }, // Well-rounded dominance, trimmed to curb inflated point totals
+    "SNIPER":         { shotRate: 1.30, penaltyRate: 0.85,  assistRate: 0.90 }, // Higher shotRate, lower assistRate to specialize them
+    "PLAYMAKER":      { shotRate: 0.89, penaltyRate: 0.80,  assistRate: 1.40 }, // Lower shotRate, significantly higher assistRate
     "SPEEDSTER":      { shotRate: 1.19, penaltyRate: 0.80,  assistRate: 1.15 },
     "DANGLER":        { shotRate: 1.14, penaltyRate: 0.80,  assistRate: 1.30 },
     "POWER FORWARD":  { shotRate: 1.20, penaltyRate: 1.20,  assistRate: 0.97 },
@@ -26,8 +26,8 @@
     "DEFENSIVE FWD":  { shotRate: 0.75, penaltyRate: 1.00,  assistRate: 0.95 },
 
     // --- DEFENSEMEN ---
-    "FRANCHISE D":    { shotRate: 1.15, penaltyRate: 0.80,  assistRate: 1.45 }, // High assistRate to reflect their role in starting plays and quarterbacking from the blueline
-    "QUARTERBACK":    { shotRate: 0.99, penaltyRate: 0.85,  assistRate: 1.60 }, // Maximize playmaking from the blueline
+    "FRANCHISE D":    { shotRate: 1.15, penaltyRate: 0.80,  assistRate: 1.25 }, // High assistRate to reflect their role in starting plays and quarterbacking from the blueline
+    "QUARTERBACK":    { shotRate: 0.99, penaltyRate: 0.85,  assistRate: 1.35 }, // Maximize playmaking from the blueline
     "BOOMER":         { shotRate: 1.20, penaltyRate: 1.00,  assistRate: 1.11 }, // Higher shotRate, slightly lower assistRate to reflect their focus on powerful shots
     "BIG HITTER":     { shotRate: 1.00, penaltyRate: 1.40,  assistRate: 1.00 }, // Lower shotRate, higher penaltyRate to reflect their physical style
     "SHUTDOWN":       { shotRate: 0.80, penaltyRate: 1.00,  assistRate: 1.00 }, // Lower shotRate, balanced assistRate to reflect their defensive focus
@@ -3290,8 +3290,8 @@ function simGame(idx) {
     const origAG_name = aG_name;
 
     // ðŸ§± 3. MACRO AURAS & MODIFIER MATH
-    let hAuraMod = (getTeamSystemAura(g.h.nrm) === 'OFFENSIVE TEAM' ? 1.15 : (getTeamSystemAura(g.h.nrm) === 'DEFENSIVE TEAM' ? 0.85 : 1.0));
-    let aAuraMod = (getTeamSystemAura(g.a.nrm) === 'OFFENSIVE TEAM' ? 1.15 : (getTeamSystemAura(g.a.nrm) === 'DEFENSIVE TEAM' ? 0.85 : 1.0));
+    let hAuraMod = (getTeamSystemAura(g.h.nrm) === 'OFFENSIVE TEAM' ? 1.08 : (getTeamSystemAura(g.h.nrm) === 'DEFENSIVE TEAM' ? 0.92 : 1.0));
+    let aAuraMod = (getTeamSystemAura(g.a.nrm) === 'OFFENSIVE TEAM' ? 1.08 : (getTeamSystemAura(g.a.nrm) === 'DEFENSIVE TEAM' ? 0.92 : 1.0));
     // Sliding goalie save modifier  -  centered at OVR 75: bad goalie=1.12, avg=1.0, elite=0.88
     const hGOvr = hG_obj ? (getPlayerWeightedStats(hG_obj.name).ovr || 75) : 75;
     const aGOvr = aG_obj ? (getPlayerWeightedStats(aG_obj.name).ovr || 75) : 75;
@@ -3552,9 +3552,9 @@ function simGame(idx) {
             // Conversion Roll  -  base 8.0%, sniper gets +24% multiplier, softer diff scaling
             // (tuned so ES + PP + EN goals land near ~8.5 total/game)
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
-            const hSniperMod = hShooterTag === 'SNIPER' ? 1.24 : hShooterTag === 'SUPERSTAR' ? 1.18 : 1.0;
+            const hSniperMod = hShooterTag === 'SNIPER' ? 1.14 : hShooterTag === 'SUPERSTAR' ? 1.10 : 1.0;
             const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.092 + (diff * 0.0023)) * aWallMod * hSniperMod * hChaosMod;
+            let scoringProb = (0.084 + (diff * 0.0015)) * aWallMod * hSniperMod * hChaosMod;
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
@@ -3585,9 +3585,9 @@ function simGame(idx) {
             trk(hG_name, 'sa', 1);     // Record Goalie Shot Against
 
             const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
-            const aSniperMod = aShooterTag === 'SNIPER' ? 1.24 : aShooterTag === 'SUPERSTAR' ? 1.18 : 1.0;
+            const aSniperMod = aShooterTag === 'SNIPER' ? 1.14 : aShooterTag === 'SUPERSTAR' ? 1.10 : 1.0;
             const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.092 - (diff * 0.0023)) * hWallMod * aSniperMod * aChaosMod;
+            let scoringProb = (0.084 - (diff * 0.0015)) * hWallMod * aSniperMod * aChaosMod;
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
