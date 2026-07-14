@@ -3735,7 +3735,7 @@ function simGame(idx) {
 
     // EMPTY NETTER — trailing team pulls goalie in final 2 min (steps 116-119)
     // ~50% chance they actually pull; leading team has ~65% chance to score EN goal
-    if (step >= 116 && hG !== aG && !isASG) {
+    if (hG !== aG && !isASG) {
         const trailerIsHome = hG < aG;
         const goalDiff = Math.abs(hG - aG);
         if (goalDiff === 1) {
