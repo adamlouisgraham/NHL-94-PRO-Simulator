@@ -1642,15 +1642,15 @@ function getPlayerWeightedStats(pName) {
     const endResistance = 1.2 - (endurance / 100);
     const penaltyPct = Math.min(fatiguePenalty / 100, 1) * 0.05 * endResistance;
     finalOvr = Math.round(baseOvr * (1 - penaltyPct));
-    finalOvr += Math.round((morale - 100) * 0.3); // morale 50–150; 100 = neutral; scaled down from a 1:1 swing to a believable +-15 max
+    finalOvr += Math.round((morale - 100) * 0.18); // morale 50–150; 100 = neutral; softened further to a believable +-9 max
 
     // HOT/COLD streaks modify the player's own OVR — macro > micro; both can stack with dailySwing
     const ps = playerStats[pName];
     if (ps) {
-        if (ps.macro_streak === 'HOT')       finalOvr = Math.round(finalOvr * 1.05);
-        else if (ps.micro_streak === 'HOT')  finalOvr += 10;
-        if (ps.macro_streak === 'COLD')      finalOvr = Math.round(finalOvr * 0.95);
-        else if (ps.micro_streak === 'COLD') finalOvr -= 10;
+        if (ps.macro_streak === 'HOT')       finalOvr = Math.round(finalOvr * 1.025);
+        else if (ps.micro_streak === 'HOT')  finalOvr += 5;
+        if (ps.macro_streak === 'COLD')      finalOvr = Math.round(finalOvr * 0.975);
+        else if (ps.micro_streak === 'COLD') finalOvr -= 5;
         // dailySwing: pre-game per-player variance (±8% of ovr, set by applyDailyRandomSwing)
         if (ps.dailySwing) finalOvr = Math.round(finalOvr * (1 + ps.dailySwing));
     }
@@ -1995,8 +1995,8 @@ function getLiveIceOvr(pName) {
                 if (tObj.chem.dYears && tObj.chem.dYears[pairIdx] >= 2) isTelepathic = true; 
             } 
         }
-        if (chemVal >= 10 && isTelepathic) live += 5;
-        else if (chemVal >= 10) live += 3;
+        if (chemVal >= 10 && isTelepathic) live += 3;
+        else if (chemVal >= 10) live += 2;
         else if (chemVal >= 5) live += 1;
     }
 
