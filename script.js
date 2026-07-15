@@ -3304,8 +3304,8 @@ function simGame(idx) {
     const aB2BPen = (!isPlayoffs && aG_obj && playerStats[aG_obj.name]?.lastPlayedDay === currentDay - 1) ? 0.06 : 0;
     const hHurtPen = (hG_name && playerStats[hG_name]?.playingHurt) ? 0.15 : 0;
     const aHurtPen = (aG_name && playerStats[aG_name]?.playingHurt) ? 0.15 : 0;
-    let hWallMod = Math.max(0.72, Math.min(1.28, 1.0 + (75 - hGOvr) * 0.013 + hB2BPen - hHurtPen));
-    let aWallMod = Math.max(0.72, Math.min(1.28, 1.0 + (75 - aGOvr) * 0.013 + aB2BPen - aHurtPen));
+    let hWallMod = Math.max(0.80, Math.min(1.20, 1.0 + (75 - hGOvr) * 0.010 + hB2BPen - hHurtPen));
+    let aWallMod = Math.max(0.80, Math.min(1.20, 1.0 + (75 - aGOvr) * 0.010 + aB2BPen - aHurtPen));
     // Coaching adjustments: forecheck 1=aggressive(open game), -1=defensive(tight); pp 1=shoot, -1=cycle
     if (!isPlayoffs && !isASG && selectedTeam && (g.h.nrm === selectedTeam || g.a.nrm === selectedTeam)) {
         const fMod = coachAdj.forecheck * 0.025; // aggressive opens scoring both ways — only affects the user's own games
@@ -3346,7 +3346,7 @@ function simGame(idx) {
     const hAvgOvr = getDynamicTeamOvr(g.h.nrm) || 75;
     const aAvgOvr = getDynamicTeamOvr(g.a.nrm) || 75;
     const ovrGap  = aAvgOvr - hAvgOvr; // positive = home team is underdog
-    const parityBoost = isASG ? 0 : Math.min(4, Math.max(0, ovrGap * 0.35));
+    const parityBoost = isASG ? 0 : Math.min(6, Math.max(0, ovrGap * 0.45));
 
     let homeCrowdEnergy = 1.03;
 
@@ -3557,7 +3557,7 @@ function simGame(idx) {
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const hSniperMod = hShooterTag === 'SNIPER' ? 1.14 : hShooterTag === 'SUPERSTAR' ? 1.10 : 1.0;
             const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.084 + (diff * 0.0015)) * aWallMod * hSniperMod * hChaosMod;
+            let scoringProb = (0.084 + (diff * 0.0011)) * aWallMod * hSniperMod * hChaosMod;
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
@@ -3590,7 +3590,7 @@ function simGame(idx) {
             const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const aSniperMod = aShooterTag === 'SNIPER' ? 1.14 : aShooterTag === 'SUPERSTAR' ? 1.10 : 1.0;
             const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.084 - (diff * 0.0015)) * hWallMod * aSniperMod * aChaosMod;
+            let scoringProb = (0.084 - (diff * 0.0011)) * hWallMod * aSniperMod * aChaosMod;
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
@@ -6714,10 +6714,14 @@ function runEndOfSeasonAwards() {
         winnerStats["Art Ross"] = `${artSorted[0].season.g}G  ${artSorted[0].season.a}A  ${artSorted[0].season.g+artSorted[0].season.a}PTS`;
     }
 
-    // 3. CALDER — eligible: career GP < 32 (all positions)
+    // 3. CALDER — eligible: career GP < 32 AND age <= 25 (all positions)
+    // Age gate matters because a fresh franchise's career.gp starts at 0 for every
+    // imported player, real veterans included — without it, established stars sweep
+    // the rookie award in year 1 simply because the engine has no history for them yet.
     const ROOKIE_GP_LIMIT = 31;
+    const ROOKIE_AGE_LIMIT = 25;
     const calderScore = p => p.pos === 'G' ? (p.season.w * 1.5) + (p.season.so * 3) : (p.season.g + p.season.a);
-    const calderEligible = allPlayers.filter(p => { const cGP = p.career.gp || 0; return p.pos === 'G' ? (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minGoalieGP) : (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minSkaterGP); });
+    const calderEligible = allPlayers.filter(p => { const cGP = p.career.gp || 0; const ageOk = (p.age || 99) <= ROOKIE_AGE_LIMIT; return p.pos === 'G' ? (cGP <= ROOKIE_GP_LIMIT && ageOk && p.season.gp >= minGoalieGP) : (cGP <= ROOKIE_GP_LIMIT && ageOk && p.season.gp >= minSkaterGP); });
     const calderSorted = [...calderEligible].sort((a, b) => calderScore(b) - calderScore(a));
     if (calderSorted.length > 0) {
         awardTrophy(calderSorted[0].name, currentSeason, "Calder");
