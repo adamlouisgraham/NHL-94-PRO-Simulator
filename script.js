@@ -1356,8 +1356,8 @@ async function startNewGame(useCustomRoster = false) {
     }
                         },
                         potential: Math.random() < 0.05 ? 'Franchise' : (Math.random() < 0.25 ? 'Top 6' : (Math.random() < 0.60 ? 'Depth' : 'Bust')),
-                        career: { 
-                            gp: parseInt(getCol(r, ["CAREER GP", "C_GP", "CAR GP"], -1)) || 0, 
+                        career: {
+                            gp: parseInt(getCol(r, ["CAREER GP", "C_GP", "CAR GP", "CGP"], -1)) || 0,
                             g: parseInt(getCol(r, ["CAREER G", "C_G", "CAR G"], -1)) || 0, 
                             a: parseInt(getCol(r, ["CAREER A", "C_A", "CAR A"], -1)) || 0, 
                             pts: parseInt(getCol(r, ["CAREER PTS", "C_PTS", "CAR PTS"], -1)) || 0, 
@@ -1440,7 +1440,7 @@ async function startNewGame(useCustomRoster = false) {
                 
                 potential: 'Depth',
                 career: {
-                    gp: parseInt(getCol(r, ["CAREER GP", "C_GP", "CAR GP"], -1)) || 0,
+                    gp: parseInt(getCol(r, ["GOALIE CAREER GP", "GOALIE CAREER GAMES PLAYED", "G CAREER GP", "CAREER GP", "C_GP", "CAR GP", "CGP"], -1)) || 0,
                     g: 0, a: 0, pts: 0, pm: 0, pim: 0, ppg: 0,
                     w: parseInt(getCol(r, ["CAREER W", "C_W", "CAR W"], -1)) || 0,
                     l: parseInt(getCol(r, ["CAREER L", "C_L", "CAR L"], -1)) || 0,
@@ -6718,14 +6718,15 @@ function runEndOfSeasonAwards() {
         winnerStats["Art Ross"] = `${artSorted[0].season.g}G  ${artSorted[0].season.a}A  ${artSorted[0].season.g+artSorted[0].season.a}PTS`;
     }
 
-    // 3. CALDER — eligible: career GP < 32 AND age <= 25 (all positions)
-    // Age gate matters because a fresh franchise's career.gp starts at 0 for every
-    // imported player, real veterans included — without it, established stars sweep
-    // the rookie award in year 1 simply because the engine has no history for them yet.
+    // 3. CALDER — eligible: career GP < 32 entering the season (all positions)
+    // A player under the career-GP threshold IS a rookie by definition, full stop —
+    // no age gate on top of it. (A fresh franchise's career.gp starts at 0 for every
+    // imported player in year 1, so real veterans can look like rookies that one season;
+    // that's accepted as a one-time bootstrap quirk rather than excluding genuine
+    // late-arriving rookies with an artificial age cutoff in every later season.)
     const ROOKIE_GP_LIMIT = 31;
-    const ROOKIE_AGE_LIMIT = 25;
     const calderScore = p => p.pos === 'G' ? (p.season.w * 1.5) + (p.season.so * 3) : (p.season.g + p.season.a);
-    const calderEligible = allPlayers.filter(p => { const cGP = p.career.gp || 0; const ageOk = (p.age || 99) <= ROOKIE_AGE_LIMIT; return p.pos === 'G' ? (cGP <= ROOKIE_GP_LIMIT && ageOk && p.season.gp >= minGoalieGP) : (cGP <= ROOKIE_GP_LIMIT && ageOk && p.season.gp >= minSkaterGP); });
+    const calderEligible = allPlayers.filter(p => { const cGP = p.career.gp || 0; return p.pos === 'G' ? (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minGoalieGP) : (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minSkaterGP); });
     const calderSorted = [...calderEligible].sort((a, b) => calderScore(b) - calderScore(a));
     if (calderSorted.length > 0) {
         awardTrophy(calderSorted[0].name, currentSeason, "Calder");
