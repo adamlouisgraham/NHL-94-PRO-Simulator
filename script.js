@@ -349,7 +349,7 @@ function pruneCustomDuos() {
         return teamCodes.size === 1;
     });
 }
-let currentDay = 0; let currentSeason = 1; let isPlayoffs = false; let isASG = false; let activeIdx = null; let statMode = 'season'; let isSimulating = false; let isSimSeason = false; let isTurboMode = false; let currentCupChamp = ""; let activeSubInfo = null; let customRosterData = null; let customRosterSource = 'google'; let customTeamData = null; let customPlayerData = null; let customScheduleData = null; let customEventLogData = null; let eventLogData = null;
+let currentDay = 0; let currentSeason = 1; let isPlayoffs = false; let isASG = false; let asgDoneThisSeason = false; let activeIdx = null; let statMode = 'season'; let isSimulating = false; let isSimSeason = false; let isTurboMode = false; let currentCupChamp = ""; let activeSubInfo = null; let customRosterData = null; let customRosterSource = 'google'; let customTeamData = null; let customPlayerData = null; let customScheduleData = null; let customEventLogData = null; let eventLogData = null;
 let watchBroadcastDay = null; let watchBroadcastIdx = null;
 
 const SAVE_STORAGE_KEY = 'nhl94dynasty'; const HISTORY_STORAGE_KEY = 'nhl94history'; const HOF_STORAGE_KEY = 'nhl94hof'; const RETIRED_STORAGE_KEY = 'nhl94retired';
@@ -475,7 +475,7 @@ function buildSavePayload() {
             league, rosters, playerStats, tradeLog, hallOfFame, leagueHistory, 
             retiredPlayers, calendar: lightweightCalendar, currentDay, currentSeason, 
             isPlayoffs, isASG, currentCupChamp, playoffBracket: lightweightBracket, awardConfig, 
-            monthSnapshot, pendingTrades, realDatesMap, customDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, _awardsPending
+            monthSnapshot, pendingTrades, realDatesMap, customDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, _awardsPending, asgDoneThisSeason
         }
     };
 }
@@ -530,6 +530,7 @@ function applyLoadedSave(data) {
     if (!Object.keys(teamCaptains).length) assignTeamCaptains();
     realDatesMap = Array.isArray(data.realDatesMap) ? data.realDatesMap : [];
     _awardsPending = Boolean(data._awardsPending);
+    asgDoneThisSeason = Boolean(data.asgDoneThisSeason);
 
     if (currentDay < 0) currentDay = 0;
     if (currentDay >= calendar.length) currentDay = calendar.length - 1;
@@ -3493,7 +3494,10 @@ function simGame(idx) {
         let hLiveOvr = (getLiveLineOvr(hOnIce) + hLineMatchBonus + homeLastChangeMod + parityBoost - hFatiguePen + hPressureMod + hStreakMod + rivalBonus + hMomentum * 0.375) * hAuraMod * homeCrowdEnergy;
         let aLiveOvr = (getLiveLineOvr(aOnIce) + aLineMatchBonus - aFatiguePen + aPressureMod + aStreakMod + rivalBonus + aMomentum * 0.375) * aAuraMod;
 
-        let diff = hLiveOvr - aLiveOvr + chaosOffset;
+        // Cap the effective OVR gap so blowout-sized roster mismatches (20+ pts) stop scaling
+        // linearly — beyond this point extra roster strength gives diminishing returns instead
+        // of compounding indefinitely across 84 games.
+        let diff = Math.max(-18, Math.min(18, hLiveOvr - aLiveOvr + chaosOffset));
 
         // SCORE EFFECT — trailing team presses harder (more shots, more risk)
         // Leading team plays conservative (fewer shots, tighter D)
@@ -4776,7 +4780,7 @@ function processOffseasonGrowth() {
 async function beginNewYear() {
     if (_awardsPending) { alert('Reveal the award winners before starting the next season — history would snapshot as zeroed standings otherwise.'); return; }
     clearWpCache();
-    currentSeason++; isPlayoffs = false;
+    currentSeason++; isPlayoffs = false; asgDoneThisSeason = false;
     league.forEach(t => {
         t.season = {gp:0, w:0, l:0, t:0, pts:0, gf:0, ga:0, ppo:0, ppg:0, ts:0, ppga:0}; t.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
         // Preserve user-set PP/PK lines but drop any players no longer on this roster
@@ -4915,7 +4919,7 @@ function advanceCalendar() {
     if (currentDay >= calendar.length) return false;
     currentDay++;
 
-    if (currentDay === Math.floor(calendar.length / 2) && !isPlayoffs && !isASG && awardConfig.streaks) { initAllStarGame(); return false; }
+    if (currentDay === Math.floor(calendar.length / 2) && !isPlayoffs && !isASG && !asgDoneThisSeason && awardConfig.streaks) { asgDoneThisSeason = true; initAllStarGame(); return false; }
     if (isASG && calendar[currentDay] && !calendar[currentDay].some(g => g.isASG_game)) {
         isASG = false;
         // Remove the temporary All-Star rosters so trade/injury/roster logic
