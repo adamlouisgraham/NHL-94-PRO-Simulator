@@ -945,7 +945,7 @@ const rivals = {
 };
 
 const DEFAULT_TEAM_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7TQG09fJijxS0CFdwQF3ht_Q1ggw99rfmHzRC2RF4Ht5ZlmyJP2qTMOtOvxuiijczcO_UXm_zwIig/pub?gid=732700653&single=true&output=csv";
-const DEFAULT_PLAYER_URL = "NHL94_Stats_Exports/team%20rosters%20-%20Rosters.csv";
+const DEFAULT_PLAYER_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7TQG09fJijxS0CFdwQF3ht_Q1ggw99rfmHzRC2RF4Ht5ZlmyJP2qTMOtOvxuiijczcO_UXm_zwIig/pub?gid=1253001256&single=true&output=csv";
 const DEFAULT_SCHEDULE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7TQG09fJijxS0CFdwQF3ht_Q1ggw99rfmHzRC2RF4Ht5ZlmyJP2qTMOtOvxuiijczcO_UXm_zwIig/pub?gid=184342160&single=true&output=csv";
 const DEFAULT_EVENT_LOG_URL = "";
 const SHEET_URL_STORAGE_KEY = "nhl94CustomSheetUrls";
@@ -3265,7 +3265,11 @@ function simGame(idx) {
         let diff = getPlayerWeightedStats(starter.name).ovr - getPlayerWeightedStats(backup.name).ovr;
         let restChance = 0.12;
         if (diff <= 10) restChance = 0.45; else if (diff <= 15) restChance = 0.30;
-        if (playedYesterday(tk)) restChance += 0.60;
+        // B2B rest only applies if THIS goalie (the current OVR-ranked starter) is the one who
+        // actually played yesterday — playedYesterday(tk) is team-wide and would otherwise bench
+        // the true starter (who didn't play) just because the backup had a game the day before,
+        // snowballing into the backup getting most of the season's starts.
+        if (playerStats[starter.name]?.lastPlayedDay === currentDay - 1) restChance += 0.60;
 
         const bStats = playerStats[backup.name]?.[k];
         if (sStats.consStarts >= 7 || Math.random() < restChance) {
@@ -3559,9 +3563,9 @@ function simGame(idx) {
             // Conversion Roll  -  base 8.0%, sniper gets +24% multiplier, softer diff scaling
             // (tuned so ES + PP + EN goals land near ~8.5 total/game)
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
-            const hSniperMod = hShooterTag === 'SNIPER' ? 1.14 : hShooterTag === 'SUPERSTAR' ? 1.10 : 1.0;
+            const hSniperMod = hShooterTag === 'SNIPER' ? 1.20 : hShooterTag === 'SUPERSTAR' ? 1.16 : 1.0;
             const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.084 + (diff * 0.0011)) * aWallMod * hSniperMod * hChaosMod;
+            let scoringProb = (0.090 + (diff * 0.0011)) * aWallMod * hSniperMod * hChaosMod;
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
@@ -3592,9 +3596,9 @@ function simGame(idx) {
             trk(hG_name, 'sa', 1);     // Record Goalie Shot Against
 
             const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
-            const aSniperMod = aShooterTag === 'SNIPER' ? 1.14 : aShooterTag === 'SUPERSTAR' ? 1.10 : 1.0;
+            const aSniperMod = aShooterTag === 'SNIPER' ? 1.20 : aShooterTag === 'SUPERSTAR' ? 1.16 : 1.0;
             const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.084 - (diff * 0.0011)) * hWallMod * aSniperMod * aChaosMod;
+            let scoringProb = (0.090 - (diff * 0.0011)) * hWallMod * aSniperMod * aChaosMod;
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
@@ -4152,7 +4156,12 @@ function simGame(idx) {
             });
             tObj.chem.lastUnit.d.forEach((pair, i) => {
                 const pairNames = pair.filter(p=>p).map(p=>p.name);
-                const pairScored = tkGoalParticipants.some(goalSet => pairNames.filter(n => goalSet.has(n)).length >= 2);
+                // Only 2 members per pair (vs. 3 on a forward line), and D already take a 30%
+                // assist-weight penalty in processSingleGoal — requiring BOTH partners on the
+                // SAME goal is almost never satisfied, leaving pair chemistry permanently near 0
+                // league-wide. The increment is already scaled down (0.5/-0.35 vs 1/-0.75) to
+                // compensate for an easier trigger, so 1+ member on the goal is enough here.
+                const pairScored = tkGoalParticipants.some(goalSet => pairNames.some(n => goalSet.has(n)));
                 tObj.chem.d[i] = Math.max(0, Math.min(15, (tObj.chem.d[i]||0) + (pairScored ? 0.5 : -0.35)));
             });
         });
