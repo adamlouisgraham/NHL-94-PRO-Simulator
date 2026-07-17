@@ -3003,7 +3003,7 @@ function getOffAttr(player) {
 
 function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
     const isPP = mode === 'PP'; const players = getSpecialTeamsUnit(tk, mode, unitNum, isEN);
-    let score = players.reduce((sum, p) => { const stats = playerStats[p.name]; if (!stats) return sum; const ovr = getLiveIceOvr(p.name); if (isPP) { return sum + ovr + getGradeMod(stats.attr.pass || 'C') * 2.5 + getGradeMod(stats.attr.shotPwr || 'C') + getGradeMod(stats.attr.offAwr || 'C') * 2.0; } else { return sum + ovr * 0.9 + getGradeMod(stats.attr.gDefAware || 'C') * 2 + getGradeMod(stats.attr.check || 'C') * 1.5; } }, 0);
+    let score = players.reduce((sum, p) => { const stats = playerStats[p.name]; if (!stats) return sum; const ovr = getLiveIceOvr(p.name); const grades = stats.attr.grades || {}; if (isPP) { return sum + ovr + getGradeMod(grades.pass || 'C') * 2.5 + getGradeMod(grades.shotPwr || 'C') * 2.0 + getGradeMod(grades.shotAcc || 'C') * 1.5; } else { return sum + ovr * 0.9 + getGradeMod(grades.check || 'C') * 2.0 + getGradeMod(grades.stkHnd || 'C') * 1.0 + getGradeMod(grades.agil || 'C') * 1.0; } }, 0);
     return Math.max(0, score / Math.max(players.length, 1));
 }
 
@@ -8646,8 +8646,9 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
                 ? `[INJ] INJURY NOTE: ${pName} (${teamCode.toUpperCase()}) was shaken up  -  out for a period.`
                 : `[INJ] INJURY: ${pName} (${teamCode.toUpperCase()})  -  ${label}, out ${days} game${days > 1 ? 's' : ''}.`;
 
-            // Only confirm long injuries (12-15 games)
-            if (days >= 12) {
+            // Only confirm long injuries (12-15 games), and only when a human is watching a manual sim —
+            // Turbo/auto-sim must never block on a synchronous dialog mid-loop.
+            if (days >= 12 && !isTurboMode) {
                 const accept = confirm(`INJURY  -  ${pName} (${teamCode.toUpperCase()})\n${label.toUpperCase()}\n\nApply this injury? (OK = yes, Cancel = skip)`);
                 if (!accept) {
                     tradeLog.unshift({ day: currentDay, details: ` INJURY AVOIDED: ${pName} (${teamCode.toUpperCase()}) played through a ${label}.` });
