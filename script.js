@@ -4832,6 +4832,12 @@ async function beginNewYear() {
     });
 
     Object.values(playerStats).forEach(p => {
+        // Absolute-day-stamped state must not carry across the currentDay reset, or it produces
+        // garbage (negative "Day X on IR" displays, spurious B2B fatigue penalties matching a
+        // stale day number from last season) — same bug class as currentCupChamp/pendingTrades.
+        p.lastPlayedDay = undefined;
+        if (p.onIR) p.irDay = 0;
+
         // Safety net: Give existing players the careerPlayoff tracker if they don't have it yet
         if (!p.careerPlayoff) {
             if (p.pos === 'G') p.careerPlayoff = {gp:0, w:0, l:0, t:0, so:0, sv:0, sa:0};
