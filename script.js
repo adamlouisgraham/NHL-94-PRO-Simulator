@@ -790,7 +790,7 @@ function renderScheduleDashboard() {
             return `<span style="color:#666;font-size:5px;"> ${gp.name}${tag}${b2b}</span>`;
         };
         const hMeet = g.h?.season?.meetings?.[g.a?.nrm] || 0;
-        const isHistRival = awardConfig.rivalries && !!(rivals[g.h?.nrm]?.includes(g.a?.nrm));
+        const isHistRival = awardConfig.rivalries && !!(rivals[g.h?.nrm]?.includes(g.a?.nrm) || rivals[g.a?.nrm]?.includes(g.h?.nrm));
         const rivalTag = awardConfig.rivalries && (hMeet >= 3 || isHistRival) ? ' <span style="color:var(--line-red);font-size:5px;">[RIVALRY]</span>' : '';
         const recFmt = t => `${t.season.w||0}-${t.season.l||0}-${t.season.t||0}`;
         const hRec = g.h ? recFmt(g.h) : '';
@@ -3353,7 +3353,7 @@ function simGame(idx) {
 
     // RIVALRY — historical rivals play with extra intensity from game 1; organic (3+ meetings) adds more
     const hMeetings = !isPlayoffs ? ((g.h.season.meetings || {})[g.a.nrm] || 0) : 0;
-    const isHistoricRival = awardConfig.rivalries && !!(rivals[g.h.nrm]?.includes(g.a.nrm));
+    const isHistoricRival = awardConfig.rivalries && !!(rivals[g.h.nrm]?.includes(g.a.nrm) || rivals[g.a.nrm]?.includes(g.h.nrm));
     const rivalBonus = !awardConfig.rivalries ? 0 : isHistoricRival ? (hMeetings >= 3 ? 3 : 1) : (hMeetings >= 3 ? 2 : 0);
 
     // CHAOS — globalChaos drives all random variance; scaled by context
