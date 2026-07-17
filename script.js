@@ -8467,14 +8467,26 @@ function processDailyUpdates() {
                 refreshTradeBadge();
             } else {
                 playerA.team = teamB; playerB.team = teamA;
-                if (playerStats[playerA.name] && _teamBObj) { playerStats[playerA.name].team = _teamBObj.name; playerStats[playerA.name].teamCode = _teamBObj.code; }
-                if (playerStats[playerB.name] && _teamAObj) { playerStats[playerB.name].team = _teamAObj.name; playerStats[playerB.name].teamCode = _teamAObj.code; }
+                if (playerStats[playerA.name] && _teamBObj) {
+                    playerStats[playerA.name].team = _teamBObj.name; playerStats[playerA.name].teamCode = _teamBObj.code;
+                    if (playerStats[playerA.name].pos === 'G') { playerStats[playerA.name].lastStart = -1; playerStats[playerA.name].goalieDays = 0; if (playerStats[playerA.name].season) playerStats[playerA.name].season.consStarts = 0; if (playerStats[playerA.name].playoff) playerStats[playerA.name].playoff.consStarts = 0; }
+                }
+                if (playerStats[playerB.name] && _teamAObj) {
+                    playerStats[playerB.name].team = _teamAObj.name; playerStats[playerB.name].teamCode = _teamAObj.code;
+                    if (playerStats[playerB.name].pos === 'G') { playerStats[playerB.name].lastStart = -1; playerStats[playerB.name].goalieDays = 0; if (playerStats[playerB.name].season) playerStats[playerB.name].season.consStarts = 0; if (playerStats[playerB.name].playoff) playerStats[playerB.name].playoff.consStarts = 0; }
+                }
 
                 rosters[teamA] = rosters[teamA].filter(p => p.name !== playerA.name);
                 rosters[teamA].push(playerB);
 
                 rosters[teamB] = rosters[teamB].filter(p => p.name !== playerB.name);
                 rosters[teamB].push(playerA);
+
+                if (_teamAObj) _teamAObj.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
+                if (_teamBObj) _teamBObj.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
+                assignTeamCaptains();
+                clearWpCache();
+                pruneCustomDuos();
 
                 tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `${dealTag}.` });
             }
@@ -8496,7 +8508,7 @@ function processDailyUpdates() {
     // Countermove — flagged contenders get a boosted trade roll for 1 day
     const activeCountermove = Object.entries(deadlineCountermove).filter(([, expiry]) => currentDay <= expiry);
     activeCountermove.forEach(([nrm]) => {
-        if (awardConfig.trades && Math.random() < 0.18) {
+        if (awardConfig.trades && !awardConfig.tradeBlock && Math.random() < 0.18) {
             const teamA = nrm;
             const others = Object.keys(rosters).filter(k => k !== teamA && league.some(t => t.nrm === k));
             const teamB = others[Math.floor(Math.random() * others.length)];
