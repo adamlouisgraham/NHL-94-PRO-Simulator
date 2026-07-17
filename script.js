@@ -4804,7 +4804,7 @@ function processOffseasonGrowth() {
 async function beginNewYear() {
     if (_awardsPending) { alert('Reveal the award winners before starting the next season — history would snapshot as zeroed standings otherwise.'); return; }
     clearWpCache();
-    currentSeason++; isPlayoffs = false; asgDoneThisSeason = false;
+    currentSeason++; isPlayoffs = false; asgDoneThisSeason = false; currentCupChamp = "";
     league.forEach(t => {
         t.season = {gp:0, w:0, l:0, t:0, pts:0, gf:0, ga:0, ppo:0, ppg:0, ts:0, ppga:0}; t.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
         // Preserve user-set PP/PK lines but drop any players no longer on this roster
