@@ -3624,16 +3624,40 @@ function simGame(idx) {
             let advTeam = penTeam.nrm === g.h.nrm ? g.a : g.h;
             let activeSkaters = penTeam.nrm === g.h.nrm ? hOnIce : aOnIce;
             if (activeSkaters.length > 0) {
-                let offender = activeSkaters[Math.floor(Math.random() * activeSkaters.length)].name;
+                // Weight the offender toward high aggression/roughness — mirrors the FIGHTING
+                // selection below, so the player "involved in the play" is realistically the
+                // one whose attributes make them prone to taking penalties, not a coin flip.
+                const penWeight = (name) => {
+                    const ps = playerStats[name];
+                    if (!ps) return 1;
+                    const aggr = gradeToNum(ps.attr?.aggr) || 50;
+                    const rough = gradeToNum(ps.attr?.rough) || 50;
+                    return Math.pow((aggr + rough) / 2, 1.5);
+                };
+                const penWeights = activeSkaters.map(p => penWeight(p.name));
+                const penTotal = penWeights.reduce((a, b) => a + b, 0);
+                let offender;
+                if (penTotal === 0) {
+                    offender = activeSkaters[Math.floor(Math.random() * activeSkaters.length)].name;
+                } else {
+                    let r = Math.random() * penTotal;
+                    offender = activeSkaters[0].name;
+                    for (let i = 0; i < activeSkaters.length; i++) { r -= penWeights[i]; if (r <= 0) { offender = activeSkaters[i].name; break; } }
+                }
                 // ~6% of penalties are majors (fighting/boarding) → possible suspension
                 const isMajor = Math.random() < 0.06;
                 const pimAmt = isMajor ? 5 : 2;
                 trk(offender, 'pim', pimAmt);
                 penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: penTeam.code, cl: teamColors[penTeam.nrm] ? teamColors[penTeam.nrm][0] : '#fff', txt: `PENALTY: ${offender} (${isMajor ? '5 min major' : '2 min minor'})`, isPenalty: true });
                 // Major penalty → 1% chance of 1-3 game suspension
-                if (isMajor && Math.random() < 0.01 && playerStats[offender]) {
+                // Guard: a player already serving a suspension shouldn't be on the ice at all
+                // (getRosterStructure filters them out), so this should never fire twice on
+                // the same player — but skip rather than stack if that guarantee is ever broken.
+                if (isMajor && Math.random() < 0.01 && playerStats[offender] && !(playerStats[offender].suspended?.days > 0)) {
                     const days = Math.ceil(Math.random() * 3);
-                    playerStats[offender].suspended = { days, reason: 'Match penalty' };
+                    if (!playerStats[offender].suspended) playerStats[offender].suspended = { days: 0, reason: '' };
+                    playerStats[offender].suspended.days += days;
+                    playerStats[offender].suspended.reason = 'Match penalty';
                     penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: penTeam.code,
                         cl: '#FF8800', txt: `SUSPENSION: ${offender} — ${days} game(s) (match penalty)`, isNote: true });
                 }
