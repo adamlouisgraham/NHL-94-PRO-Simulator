@@ -3600,7 +3600,7 @@ function simGame(idx) {
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const hSniperMod = getEliteShooterMod(hShooterTag);
             const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.093 + (diff * 0.0011)) * aWallMod * hSniperMod * hChaosMod;
+            let scoringProb = (0.093 + (diff * 0.0011)) * aWallMod * hSniperMod * hChaosMod * (isASG ? 1.6 : 1.0);
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
@@ -3633,7 +3633,7 @@ function simGame(idx) {
             const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const aSniperMod = getEliteShooterMod(aShooterTag);
             const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.093 - (diff * 0.0011)) * hWallMod * aSniperMod * aChaosMod;
+            let scoringProb = (0.093 - (diff * 0.0011)) * hWallMod * aSniperMod * aChaosMod * (isASG ? 1.6 : 1.0);
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
@@ -4358,14 +4358,16 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
     let secondaryAssist = null;
     let remaining = [...eligiblePool];
 
-    // Primary Assist (~90% chance)
-    if (remaining.length > 0 && Math.random() < 0.90) {
+    // Primary Assist (~93.1% chance) — combined with the secondary rate below, this targets
+    // ~71.5% of all goals getting two assists, ~21.6% one assist, ~6.9% unassisted (the increase
+    // to two-assist goals is taken entirely from the unassisted bucket, one-assist unchanged).
+    if (remaining.length > 0 && Math.random() < 0.931) {
         primaryAssist = weightedPick(remaining);
         remaining = remaining.filter(n => n !== primaryAssist);
     }
 
-    // Secondary Assist (~76% chance if primary exists and players remain)
-    if (primaryAssist && remaining.length > 0 && Math.random() < 0.76) {
+    // Secondary Assist (~76.8% chance if primary exists and players remain)
+    if (primaryAssist && remaining.length > 0 && Math.random() < 0.768) {
         secondaryAssist = weightedPick(remaining);
     }
 
