@@ -10,9 +10,9 @@
     // =========================================================
     const archMods = {
     // --- FORWARDS (Balanced for higher goal/assist totals) ---
-    "SUPERSTAR":      { shotRate: 1.25, penaltyRate: 0.70,  assistRate: 1.22 }, // Well-rounded dominance, trimmed to curb inflated point totals
-    "SNIPER":         { shotRate: 1.30, penaltyRate: 0.85,  assistRate: 0.90 }, // Higher shotRate, lower assistRate to specialize them
-    "PLAYMAKER":      { shotRate: 0.89, penaltyRate: 0.80,  assistRate: 1.40 }, // Lower shotRate, significantly higher assistRate
+    "SUPERSTAR":      { shotRate: 1.38, penaltyRate: 0.70,  assistRate: 1.38 }, // Elite well-rounded dominance — should push top players toward 100+ point seasons
+    "SNIPER":         { shotRate: 1.40, penaltyRate: 0.85,  assistRate: 0.95 }, // Higher shotRate, lower assistRate to specialize them
+    "PLAYMAKER":      { shotRate: 0.89, penaltyRate: 0.80,  assistRate: 1.55 }, // Lower shotRate, significantly higher assistRate
     "SPEEDSTER":      { shotRate: 1.19, penaltyRate: 0.80,  assistRate: 1.15 },
     "DANGLER":        { shotRate: 1.14, penaltyRate: 0.80,  assistRate: 1.30 },
     "POWER FORWARD":  { shotRate: 1.20, penaltyRate: 1.20,  assistRate: 0.97 },
@@ -22,6 +22,7 @@
     "ENFORCER F":     { shotRate: 0.50, penaltyRate: 1.60,  assistRate: 0.50 },
     "PRO OFFENSIVE FWD": { shotRate: 1.14, penaltyRate: 0.75,  assistRate: 1.14 },
     "PRO DEFENSIVE FWD": { shotRate: 0.89, penaltyRate: 0.75,  assistRate: 1.05 },
+    "DEFENSIVE SPECIALIST": { shotRate: 0.82, penaltyRate: 0.80,  assistRate: 0.98 },
     "OFFENSIVE FWD":  { shotRate: 0.90, penaltyRate: 1.00,  assistRate: 1.00 },
     "DEFENSIVE FWD":  { shotRate: 0.75, penaltyRate: 1.00,  assistRate: 0.95 },
 
@@ -39,6 +40,24 @@
     "DEFENSIVE D":    { shotRate: 0.75, penaltyRate: 1.10,  assistRate: 0.95 },
     "ENFORCER D":     { shotRate: 0.70, penaltyRate: 1.60,  assistRate: 0.60 }
 };
+
+// Goal-conversion bonus by archetype, applied on top of archMods shot/assist attempt-rate
+// weighting. archMods governs how OFTEN a player gets the puck/shoots/sets up a goal; this
+// governs how often that specific shot actually goes in — the two stack multiplicatively.
+// Broadened beyond SUPERSTAR/SNIPER so playmakers and other offensive archetypes also see a
+// real point-total lift, not just pure snipers.
+function getEliteShooterMod(tag) {
+    switch (tag) {
+        case 'SNIPER': return 1.30;
+        case 'SUPERSTAR': return 1.26;
+        case 'PLAYMAKER': return 1.14;
+        case 'DANGLER': return 1.12;
+        case 'POWER FORWARD': return 1.10;
+        case 'SPEEDSTER': return 1.08;
+        case 'TWO-WAY STAR F': return 1.08;
+        default: return 1.0;
+    }
+}
 
     function getLeadershipScore(pName) {
     const p = playerStats[pName];
@@ -1589,8 +1608,12 @@ function getPlayerWeightedStats(pName) {
             else if (off >= 75 && def >= 75 && check >= 75 || aggr >= 75 && pass >= 75 && pwr >= 75 || shotAcc >= 75 ) tag = "TWO-WAY STAR F";
             else if (off >= 75 && agl >= 75 && spd >= 80) tag = "SPEEDSTER"; 
             else if (off >= 75 && agl >= 80 && stkHnd >= 80) tag = "DANGLER";
-            else if (off >= 70 && check >= 65 && pwr >= 70 && aggr >= 65 && rough >= 65 && weight >= 215) tag = "POWER FORWARD"; 
+            else if (off >= 70 && check >= 65 && pwr >= 70 && aggr >= 65 && rough >= 65 && weight >= 215) tag = "POWER FORWARD";
             else if (def >= 65 && off >= 65 && check >= 60 && aggr >= 65 && rough >= 65 && weight <= 215) tag = "GRINDER";
+            // Shutdown-style forward: strong defensive awareness without meeting any other archetype's
+            // criteria above. Distinct from PRO DEFENSIVE FWD (which only requires def>=70 with no
+            // offense floor) so a true 75+ defensive specialist reads as a distinct, named archetype.
+            else if (def >= 75) tag = "DEFENSIVE SPECIALIST";
             else if (off >= 70) tag = "PRO OFFENSIVE FWD";
             else if (def >= 70) tag = "PRO DEFENSIVE FWD";
             
@@ -1932,6 +1955,7 @@ function getArchetypeBadge(pName) {
         'DEFENSIVE FWD': 'DF',
         'PRO OFFENSIVE FWD': 'POF',
         'PRO DEFENSIVE FWD': 'PDF',
+        'DEFENSIVE SPECIALIST': 'DS',
         'ENFORCER D': 'ED',
         'WALL': 'WL'
     };
@@ -3563,7 +3587,7 @@ function simGame(idx) {
             // Conversion Roll  -  base 8.0%, sniper gets +24% multiplier, softer diff scaling
             // (tuned so ES + PP + EN goals land near ~8.5 total/game)
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
-            const hSniperMod = hShooterTag === 'SNIPER' ? 1.20 : hShooterTag === 'SUPERSTAR' ? 1.16 : 1.0;
+            const hSniperMod = getEliteShooterMod(hShooterTag);
             const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
             let scoringProb = (0.090 + (diff * 0.0011)) * aWallMod * hSniperMod * hChaosMod;
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
@@ -3596,7 +3620,7 @@ function simGame(idx) {
             trk(hG_name, 'sa', 1);     // Record Goalie Shot Against
 
             const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
-            const aSniperMod = aShooterTag === 'SNIPER' ? 1.20 : aShooterTag === 'SUPERSTAR' ? 1.16 : 1.0;
+            const aSniperMod = getEliteShooterMod(aShooterTag);
             const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
             let scoringProb = (0.090 - (diff * 0.0011)) * hWallMod * aSniperMod * aChaosMod;
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
@@ -4102,15 +4126,25 @@ function simGame(idx) {
     const winningTeamRoster = isHomeWin ? [...hStruct.f.flat(), ...hStruct.d.flat()] : [...aStruct.f.flat(), ...aStruct.d.flat()];
     const losingTeamRoster = isHomeWin ? [...aStruct.f.flat(), ...aStruct.d.flat()] : [...hStruct.f.flat(), ...hStruct.d.flat()];
 
+    // Underdog morale scaling: a win means more to a rated-below-60 club (upset energy), and a
+    // loss stings less since it's the expected outcome. Scales linearly below 60 OVR, capped so
+    // it can't invert the effect for very weak teams.
+    const winningTk = isHomeWin ? g.h.nrm : g.a.nrm;
+    const losingTk = isHomeWin ? g.a.nrm : g.h.nrm;
+    const winTeamOvr = getDynamicTeamOvr(winningTk) || 70;
+    const loseTeamOvr = getDynamicTeamOvr(losingTk) || 70;
+    const underdogWinMod = winTeamOvr < 60 ? Math.min(1.6, 1 + (60 - winTeamOvr) * 0.03) : 1.0;
+    const underdogLossMod = loseTeamOvr < 60 ? Math.max(0.4, 1 - (60 - loseTeamOvr) * 0.03) : 1.0;
+
     if (!isTie && winningTeamRoster) {
-        let winBoost = isHomeWin ? 12 : 8;
+        let winBoost = (isHomeWin ? 12 : 8) * underdogWinMod;
         winningTeamRoster.forEach(p => {
             if (playerStats[p.name]) playerStats[p.name].morale = Math.min(150, (playerStats[p.name].morale ?? 100) + winBoost);
         });
     }
 
     if (!isTie && losingTeamRoster && !isPlayoffs) {
-        let lossPenalty = (!isHomeWin) ? 12 : 6;
+        let lossPenalty = ((!isHomeWin) ? 12 : 6) * underdogLossMod;
         losingTeamRoster.forEach(p => {
             if (playerStats[p.name]) playerStats[p.name].morale = Math.max(50, (playerStats[p.name].morale ?? 100) - lossPenalty);
         });
@@ -6515,7 +6549,96 @@ function clearArchives() {
     } 
 }
 
-function exportCSV() { 
+// Reverse of gradeToNum's randomized bucket ranges — used only for re-exporting a numeric
+// attribute back into a letter grade for the roster CSV. Not an exact inverse (gradeToNum
+// itself is a random roll within a bucket), but round-trips within the same tier.
+function numToGrade(n) {
+    const v = parseInt(n);
+    if (isNaN(v)) return 'C';
+    if (v >= 95) return 'A+';
+    if (v >= 90) return 'A';
+    if (v >= 85) return 'A-';
+    if (v >= 80) return 'B+';
+    if (v >= 75) return 'B';
+    if (v >= 70) return 'B-';
+    if (v >= 63) return 'C+';
+    if (v >= 56) return 'C';
+    if (v >= 50) return 'C-';
+    if (v >= 40) return 'D';
+    return 'F';
+}
+
+// Exports the CURRENT state of the league (post-trades, post-retirements, updated career
+// totals, current age/team) as a re-importable roster CSV in the same one-row-per-player
+// shape the app's own CSV parser expects (header-name matched, not position-dependent — see
+// getCol() calls in the CSV load path). Meant to be re-uploaded to the Google Sheet (or used
+// as a custom Player Sheet URL/file) so a brand-new franchise starts from the updated pool
+// instead of the original static roster data.
+function exportUpdatedRosterCSV() {
+    const headers = [
+        "Team Code","Team Name","Last Name","First Name","Position","Offense Awareness","Defense Awareness",
+        "Shot Power","Passing","Aggression","Roughness","Endurance","Checking","Shot Accuracy","Stick Handling",
+        "Agility","Speed","Weight","Age","All Star App.",
+        "Career GP","Career G","Career A","Career Pts","Career PPG","Career +/-","Career GWG",
+        "Career Playoff GP","Career Playoff G","Career Playoff A","Career Playoff Pts",
+        "Goalie Last Name","Goalie First Name","Handed","G Def",
+        "Goalie CAREER GP","CAREER W","CAREER L","CAREER T","CAREER SO","CAREER SV","CAREER SA",
+        "Goalie CAREER PLAYOFF GP","CAREER PLAYOFF W","CAREER PLAYOFF L","CAREER PLAYOFF SO","CAREER PLAYOFF SV","CAREER PLAYOFF SA",
+        "Goalie Career Allstar Games"
+    ];
+    const esc = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const rows = [headers.join(',')];
+
+    Object.values(playerStats).forEach(p => {
+        const parts = (p.name || '').split(' ');
+        const lastName = parts.length > 1 ? parts.slice(1).join(' ') : parts[0];
+        const firstName = parts.length > 1 ? parts[0] : '';
+        const c = p.career || {};
+        const cp = p.careerPlayoff || {};
+        const teamObj = league.find(t => t.code === p.teamCode) || {};
+
+        if (p.pos === 'G') {
+            const row = new Array(headers.length).fill('');
+            row[0] = p.teamCode || ''; row[1] = teamObj.name || p.team || '';
+            row[18] = p.age || ''; row[19] = p.asgAppearances || 0;
+            row[31] = lastName; row[32] = firstName;
+            row[33] = p.attr?.handed || 'L';
+            row[34] = numToGrade(p.attr?.gDef);
+            row[35] = c.gp || 0; row[36] = c.w || 0; row[37] = c.l || 0; row[38] = c.t || 0;
+            row[39] = c.so || 0; row[40] = c.sv || 0; row[41] = c.sa || 0;
+            row[42] = cp.gp || 0; row[43] = cp.w || 0; row[44] = cp.l || 0;
+            row[45] = cp.so || 0; row[46] = cp.sv || 0; row[47] = cp.sa || 0;
+            row[48] = p.asgAppearances || 0;
+            rows.push(row.map(esc).join(','));
+        } else {
+            const g = p.attr?.grades || {};
+            const row = new Array(headers.length).fill('');
+            row[0] = p.teamCode || ''; row[1] = teamObj.name || p.team || '';
+            row[2] = lastName; row[3] = firstName; row[4] = p.pos || '';
+            row[5] = numToGrade(p.attr?.off); row[6] = numToGrade(p.attr?.def);
+            row[7] = g.shotPwr || 'C'; row[8] = g.pass || 'C'; row[9] = g.aggr || 'C';
+            row[10] = g.rough || 'C'; row[11] = g.endur || 'C'; row[12] = g.check || 'C';
+            row[13] = g.shotAcc || 'C'; row[14] = g.stkHnd || 'C'; row[15] = g.agil || 'C'; row[16] = g.speed || 'C';
+            row[17] = p.weight || '';
+            row[18] = p.age || ''; row[19] = p.asgAppearances || 0;
+            row[20] = c.gp || 0; row[21] = c.g || 0; row[22] = c.a || 0; row[23] = (c.g||0)+(c.a||0);
+            row[24] = c.ppg || 0; row[25] = c.pm || 0; row[26] = c.gwg || 0;
+            row[27] = cp.gp || 0; row[28] = cp.g || 0; row[29] = cp.a || 0; row[30] = (cp.g||0)+(cp.a||0);
+            rows.push(row.map(esc).join(','));
+        }
+    });
+
+    const csv = rows.join('\n');
+    const b = new Blob([csv], {type: "text/csv"});
+    const u = URL.createObjectURL(b);
+    const a = document.createElement("a");
+    a.href = u;
+    a.download = `nhl94_roster_updated_season${currentSeason}.csv`;
+    a.click();
+    URL.revokeObjectURL(u);
+}
+
+function exportCSV() {
     let csv = "Player,Team,Pos,Age,GP,G,A,PTS,W,SO,SV%,GAA,OVR,ASG_APP\n"; 
     Object.values(playerStats).forEach(p => { 
         const s = p.season; const svp = s.sa > 0 ? (s.sv/s.sa).toFixed(3) : "0.000"; const gaa = s.gp > 0 ? ((s.sa-s.sv)/s.gp).toFixed(2) : "0.00"; 
@@ -6808,12 +6931,27 @@ function runEndOfSeasonAwards() {
         winnerStats["Bill Masterton"] = `${mastSorted[0].season.g+mastSorted[0].season.a}PTS  ${mastSorted[0].season.gp}GP`;
     }
 
-    // 6. FRANK J. SELKE
+    // 6. FRANK J. SELKE — all forwards are eligible, but the scoring formula and tie-break
+    // both favor genuine defensive-minded archetypes so a pure sniper with good +/- can't
+    // out-vote an actual shutdown/two-way forward.
+    const selkeDefTagBonus = (tag) => {
+        if (tag === 'DEFENSIVE SPECIALIST') return 8;
+        if (tag === 'PRO DEFENSIVE FWD' || tag === 'DEFENSIVE FWD') return 6;
+        if (tag === 'TWO-WAY STAR F' || tag === 'GRINDER') return 4;
+        if (tag === 'TWO-WAY FWD') return 2;
+        return 0;
+    };
     const selkeSorted = skaters
-        .filter(p => p.season.gp >= 40 && ['PRO DEFENSIVE FWD', 'DEFENSIVE FWD', 'TWO-WAY FWD', 'TWO-WAY STAR F', 'GRINDER', 'POWER FORWARD'].includes(getPlayerWeightedStats(p.name).tag))
+        .filter(p => p.pos !== 'D' && p.season.gp >= 40)
         .sort((a, b) => {
-            let scoreA = (getDef(a.name) * 0.6) + ((a.season.pm || 0) * 0.4);
-            let scoreB = (getDef(b.name) * 0.6) + ((b.season.pm || 0) * 0.4);
+            const tagA = getPlayerWeightedStats(a.name).tag, tagB = getPlayerWeightedStats(b.name).tag;
+            let scoreA = (getDef(a.name) * 0.6) + ((a.season.pm || 0) * 0.4) + selkeDefTagBonus(tagA);
+            let scoreB = (getDef(b.name) * 0.6) + ((b.season.pm || 0) * 0.4) + selkeDefTagBonus(tagB);
+            if (scoreA === scoreB) {
+                const aTwoWay = tagA.startsWith('TWO-WAY') ? 1 : 0;
+                const bTwoWay = tagB.startsWith('TWO-WAY') ? 1 : 0;
+                return bTwoWay - aTwoWay;
+            }
             return scoreB - scoreA;
         });
         
