@@ -247,10 +247,13 @@ function gradeToNum(val) {
         'F-':  () => roll(30, 39)
     };
     
-    const cleanVal = String(val).toUpperCase().trim();
-    
+    // Strip stray characters (seen in the source sheet as e.g. "B=", "C=" - likely a leftover
+    // formula/copy-paste artifact) so a real intended letter grade doesn't silently fall back to
+    // a flat default of 70 just because of one extra symbol.
+    const cleanVal = String(val).toUpperCase().trim().replace(/[^A-Z+-]/g, '');
+
     // If the letter exists, roll the dice. Otherwise, fallback safely to 70.
-    return map[cleanVal] ? map[cleanVal]() : 70; 
+    return map[cleanVal] ? map[cleanVal]() : 70;
 }
 
 
