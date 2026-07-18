@@ -5148,25 +5148,30 @@ async function simRound() {
 async function simPlayoffs() {
     if(confirm("Simulate playoffs at Balanced speed?")) {
         if (isSimulating) return;
-        isSimulating = true; 
-        
-        while (isSimulating && isPlayoffs && !currentCupChamp) { 
-            if (currentDay < calendar.length) {
-                await simDay(false, true); 
-                updateUI(); 
-                await sleep(300); 
-                advanceCalendar(); 
-            } else {
-                showBracket(); // The round finished. Show the final bracket...
-                await sleep(2000); // Pause for 2 seconds so you can see who won!
-                handleRoundEnd(); // Automatically advance to the next round!
-                await sleep(1000); // Pause to show the new empty bracket before games start
+        isSimulating = true;
+
+        // try/finally so isSimulating is always released — without it, any thrown exception
+        // mid-loop (or a stale flag from an interrupted prior run) leaves the flag stuck true
+        // forever, and every future click of this button silently no-ops at the guard above.
+        try {
+            while (isSimulating && isPlayoffs && !currentCupChamp) {
+                if (currentDay < calendar.length) {
+                    await simDay(false, true);
+                    updateUI();
+                    await sleep(300);
+                    advanceCalendar();
+                } else {
+                    showBracket(); // The round finished. Show the final bracket...
+                    await sleep(2000); // Pause for 2 seconds so you can see who won!
+                    handleRoundEnd(); // Automatically advance to the next round!
+                    await sleep(1000); // Pause to show the new empty bracket before games start
+                }
             }
+        } finally {
+            isSimulating = false;
+            updateUI();
+            saveGame();
         }
-        
-        isSimulating = false; 
-        updateUI(); 
-        saveGame();
     }
 }
 
