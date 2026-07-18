@@ -3799,6 +3799,21 @@ function simGame(idx) {
                 penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr,
                     tm: g.h.code, cl: '#FF4444',
                     txt: `FIGHT: ${hFighter.name} vs ${aFighter.name} — coincidental majors (5 min each)`, isPenalty: false, isFight: true });
+
+                // Same major-penalty suspension risk applies here — a fight hands out an identical
+                // 5-min major to the regular penalty path above, which already rolls this. A lower
+                // rate than a boarding/charging major, since a "clean" fight draws supplemental
+                // discipline far less often in practice.
+                [hFighter, aFighter].forEach(fighter => {
+                    if (Math.random() < 0.004 && playerStats[fighter.name] && !(playerStats[fighter.name].suspended?.days > 0)) {
+                        const days = Math.ceil(Math.random() * 3);
+                        if (!playerStats[fighter.name].suspended) playerStats[fighter.name].suspended = { days: 0, reason: '' };
+                        playerStats[fighter.name].suspended.days += days;
+                        playerStats[fighter.name].suspended.reason = 'Match penalty';
+                        penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: g.h.code,
+                            cl: '#FF8800', txt: `SUSPENSION: ${fighter.name} — ${days} game(s) (match penalty)`, isNote: true });
+                    }
+                });
             }
         }
     }
@@ -8863,7 +8878,10 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
         if (!stats.toi || stats.toi <= 0) continue;
 
         const fatigueBonus = getPlayerFatigueAmount(pName) > 5 ? 0.003 : 0;
-        const physicalBonus = stats.pim >= 2 ? 0.002 : 0;
+        // Scale by penalty severity, not just a flat "took any penalty" flag — a fight or major
+        // (5 PIM) is a genuinely more injury-prone event than an ordinary 2-min minor and should
+        // carry noticeably more risk, not the same fixed bump.
+        const physicalBonus = stats.pim >= 5 ? 0.006 : stats.pim >= 2 ? 0.002 : 0;
         const chance = BASE_CHANCE + fatigueBonus + physicalBonus;
 
         if (Math.random() < chance) {
