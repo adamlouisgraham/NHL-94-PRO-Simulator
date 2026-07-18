@@ -2705,15 +2705,26 @@ const getRosterStructure = (tk) => {
                         available = fPool.filter(x => !usedNames.has(x.name)).sort(sortOff);
                     }
 
+                    let redrafted = false;
                     for (let cand of available) {
                         if (canAddPlayer(cand, line, false)) {
                             // Put centers back at the front of the line so your UI looks correct
-                            if (isCenter) line.unshift(cand); 
+                            if (isCenter) line.unshift(cand);
                             else line.push(cand);
-                            
+
                             usedNames.add(cand.name);
+                            redrafted = true;
                             break;
                         }
+                    }
+                    // Anti-stacking rejected every candidate (e.g. the bounced player is a
+                    // SUPERSTAR and this line already has one) — force-add the best remaining
+                    // one anyway. A minor archetype stack beats silently vanishing a healthy
+                    // player off every line for the rest of the game.
+                    if (!redrafted && available.length > 0) {
+                        const cand = available[0];
+                        if (isCenter) line.unshift(cand); else line.push(cand);
+                        usedNames.add(cand.name);
                     }
                 }
             }
@@ -3589,7 +3600,7 @@ function simGame(idx) {
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const hSniperMod = getEliteShooterMod(hShooterTag);
             const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.090 + (diff * 0.0011)) * aWallMod * hSniperMod * hChaosMod;
+            let scoringProb = (0.093 + (diff * 0.0011)) * aWallMod * hSniperMod * hChaosMod;
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
@@ -3622,7 +3633,7 @@ function simGame(idx) {
             const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const aSniperMod = getEliteShooterMod(aShooterTag);
             const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.090 - (diff * 0.0011)) * hWallMod * aSniperMod * aChaosMod;
+            let scoringProb = (0.093 - (diff * 0.0011)) * hWallMod * aSniperMod * aChaosMod;
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
@@ -8764,6 +8775,27 @@ function getBenchDepth(tk) {
     return rosters[tk].filter(p => p.pos === 'G' && p.line === 'BENCH' && (playerStats[p.name]?.injury?.daysRemaining ?? 0) === 0 && !playerStats[p.name]?.onIR).length;
 }
 
+// A team with exactly (or fewer than) 12 forwards on its whole roster has zero bench depth beyond
+// what's dressed each game — a multi-game injury there forces the roster builder to run every
+// remaining line short for the injury's full duration with no possible replacement (no call-up
+// system exists). Cap forward injuries to 1 game for these threadbare rosters instead.
+function hasSpareForward(tk) {
+    const roster = rosters[tk] || [];
+    const forwardCount = roster.filter(p => p.pos !== 'D' && p.pos !== 'G').length;
+    return forwardCount > 12;
+}
+
+// Same reasoning as hasSpareForward: 6 D fills exactly 3 pairs, 2 G fills starter+backup —
+// either at exactly that minimum means zero reserve, so a multi-game injury there is capped.
+function hasSpareDefenseman(tk) {
+    const roster = rosters[tk] || [];
+    return roster.filter(p => p.pos === 'D').length > 6;
+}
+function hasSpareGoalie(tk) {
+    const roster = rosters[tk] || [];
+    return roster.filter(p => p.pos === 'G').length > 2;
+}
+
 function rollInGameInjuries(homeCode, awayCode) {
     if (!awardConfig.injuries) return;
     const SKATER_CHANCE = 0.009;
@@ -8788,6 +8820,10 @@ function rollInGameInjuries(homeCode, awayCode) {
                 else if (roll < 0.92) days = Math.floor(Math.random() * 4) + 2;
                 else                  days = Math.floor(Math.random() * 5) + 6;
                 days = Math.min(days, 12);
+                if (days > 1) {
+                    if (p.pos !== 'D' && !hasSpareForward(tk)) days = 1;
+                    else if (p.pos === 'D' && !hasSpareDefenseman(tk)) days = 1;
+                }
                 if (days > 0) ps.injury = { severity: days, daysRemaining: days };
                 else ps.shakenUpToday = true; // exempt from a second independent injury roll later this game
                 const label = days === 0 ? 'shaken up — playing through' : `out ${days} game${days > 1 ? 's' : ''}`;
@@ -8804,7 +8840,8 @@ function rollInGameInjuries(homeCode, awayCode) {
             if (Math.random() < GOALIE_CHANCE) {
                 goalieInjuredThisTeam = true;
                 const backupG = rosters[tk].find(b => b.pos === 'G' && b.name !== p.name && (playerStats[b.name]?.injury?.daysRemaining ?? 0) === 0 && !(playerStats[b.name]?.suspended?.days > 0));
-                const days = backupG ? Math.floor(Math.random() * 4) + 1 : 1;
+                let days = backupG ? Math.floor(Math.random() * 4) + 1 : 1;
+                if (days > 1 && !hasSpareGoalie(tk)) days = 1;
                 ps.injury = { severity: days, daysRemaining: days };
                 if (!backupG) ps.playingHurt = true; // stays in net but at reduced effectiveness
                 const backupNote = backupG ? ` ${backupG.name} enters in relief.` : ' No healthy backup — playing through.';
@@ -8841,6 +8878,11 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
             days = Math.min(days, 15);
 
             const teamCode = (rosters[homeCode] || []).find(p => p.name === pName) ? homeCode : awayCode;
+            if (days > 1) {
+                if (ps.pos !== 'D' && ps.pos !== 'G' && !hasSpareForward(teamCode)) { days = 1; label = '1-game injury'; }
+                else if (ps.pos === 'D' && !hasSpareDefenseman(teamCode)) { days = 1; label = '1-game injury'; }
+                else if (ps.pos === 'G' && !hasSpareGoalie(teamCode)) { days = 1; label = '1-game injury'; }
+            }
             const note = days === 0
                 ? `[INJ] INJURY NOTE: ${pName} (${teamCode.toUpperCase()}) was shaken up  -  out for a period.`
                 : `[INJ] INJURY: ${pName} (${teamCode.toUpperCase()})  -  ${label}, out ${days} game${days > 1 ? 's' : ''}.`;
