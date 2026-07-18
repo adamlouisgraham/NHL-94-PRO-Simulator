@@ -4031,7 +4031,11 @@ function simGame(idx) {
             playerStats[decisionGoalie][k].gp++;
             if (hStatus === 'win') playerStats[decisionGoalie][k].w++; else if (hStatus === 'loss') playerStats[decisionGoalie][k].l++; else playerStats[decisionGoalie][k].t++;
         }
-        if (hPulled && playerStats[hG_name]?.[k]) playerStats[hG_name][k].gp++;
+        // No GP credit for a pulled-in backup here — the blowout-pull check runs after the
+        // entire tick loop finishes, so it's a retroactive relabeling, not a real mid-game
+        // swap. Every shot/save in this game was actually simulated under the original
+        // starter's ratings the whole way through; the backup has zero real TOI/SA/SV to
+        // back up an appearance, so crediting them a bare GP was a phantom stat line.
         if (!hPulled && aG === 0) playerStats[hG_name][k].so++;
         trk(origHG_name, 'toi', totalGameMinutes);
     }
@@ -4041,7 +4045,6 @@ function simGame(idx) {
             playerStats[decisionGoalie][k].gp++;
             if (aStatus === 'win') playerStats[decisionGoalie][k].w++; else if (aStatus === 'loss') playerStats[decisionGoalie][k].l++; else playerStats[decisionGoalie][k].t++;
         }
-        if (aPulled && playerStats[aG_name]?.[k]) playerStats[aG_name][k].gp++;
         if (!aPulled && hG === 0) playerStats[aG_name][k].so++;
         trk(origAG_name, 'toi', totalGameMinutes);
     }
