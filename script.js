@@ -2789,49 +2789,39 @@ const getRosterStructure = (tk) => {
         let temp = fLines[0]; fLines[0] = fLines[1]; fLines[1] = temp;
     }
 
-    // FINAL DUO REUNION SWEEP
-    // Safety net: if any hardcoded duo members still ended up on different lines, unite them now.
-    // Runs in a loop until no more moves are needed (handles chain reactions).
-    let reunionChanged = true;
-    while (reunionChanged) {
-        reunionChanged = false;
-        for (const group of getAllDuos()) {
-            const placed = group
-                .map(name => ({ name, lineIdx: [0,1,2,3].findIndex(i => fLines[i].some(p => p.name === name)) }))
-                .filter(x => x.lineIdx !== -1);
-            if (placed.length < 2) continue;
-            const uniqueLines = [...new Set(placed.map(x => x.lineIdx))];
-            if (uniqueLines.length === 1) continue; // already together
-
-            // Anchor = line of the highest-OVR duo member
-            const anchorEntry = placed.reduce((best, cur) => {
-                const pCur = fLines[cur.lineIdx].find(x => x.name === cur.name);
-                const pBest = fLines[best.lineIdx].find(x => x.name === best.name);
-                return getOvr(pCur) >= getOvr(pBest) ? cur : best;
-            });
-            const anchorIdx = anchorEntry.lineIdx;
-            const targetLine = fLines[anchorIdx];
-            const groupSet = new Set(group);
-
-            for (const { name, lineIdx } of placed) {
-                if (lineIdx === anchorIdx) continue;
-                const sourceLine = fLines[lineIdx];
-                const mover = sourceLine.find(x => x.name === name);
-                if (!mover) continue;
-                if (targetLine.length >= 3) {
-                    // Bump lowest-OVR non-center non-duo player from target line
-                    const bumpable = targetLine
-                        .filter(x => getPos(x) !== 'C' && !groupSet.has(x.name))
-                        .sort((a, b) => getOvr(a) - getOvr(b));
-                    if (!bumpable.length) continue;
-                    const victim = bumpable[0];
-                    targetLine.splice(targetLine.indexOf(victim), 1);
-                    sourceLine.push(victim);
-                }
-                sourceLine.splice(sourceLine.indexOf(mover), 1);
-                targetLine.push(mover);
-                reunionChanged = true;
+    // FINAL DUO REUNION SWEEP (single pass, pre-filtered to this team's duos only)
+    const fNameSet = new Set(fLines.flat().map(p => p.name));
+    const teamFDuos = getAllDuos().filter(g => g.filter(n => fNameSet.has(n)).length >= 2);
+    for (const group of teamFDuos) {
+        const placed = group
+            .map(name => ({ name, lineIdx: [0,1,2,3].findIndex(i => fLines[i].some(p => p.name === name)) }))
+            .filter(x => x.lineIdx !== -1);
+        if (placed.length < 2) continue;
+        if (new Set(placed.map(x => x.lineIdx)).size === 1) continue;
+        const anchorEntry = placed.reduce((best, cur) => {
+            const pCur = fLines[cur.lineIdx].find(x => x.name === cur.name);
+            const pBest = fLines[best.lineIdx].find(x => x.name === best.name);
+            return getOvr(pCur) >= getOvr(pBest) ? cur : best;
+        });
+        const anchorIdx = anchorEntry.lineIdx;
+        const targetLine = fLines[anchorIdx];
+        const groupSet = new Set(group);
+        for (const { name, lineIdx } of placed) {
+            if (lineIdx === anchorIdx) continue;
+            const sourceLine = fLines[lineIdx];
+            const mover = sourceLine.find(x => x.name === name);
+            if (!mover) continue;
+            if (targetLine.length >= 3) {
+                const bumpable = targetLine
+                    .filter(x => getPos(x) !== 'C' && !groupSet.has(x.name))
+                    .sort((a, b) => getOvr(a) - getOvr(b));
+                if (!bumpable.length) continue;
+                const victim = bumpable[0];
+                targetLine.splice(targetLine.indexOf(victim), 1);
+                sourceLine.push(victim);
             }
+            sourceLine.splice(sourceLine.indexOf(mover), 1);
+            targetLine.push(mover);
         }
     }
     // Re-enforce rank one final time after reunion
@@ -3008,47 +2998,39 @@ const getRosterStructure = (tk) => {
         }
     }
 
-    // FINAL D-PAIR REUNION SWEEP
-    // If any hardcoded pair mates ended up in different pairs, unite them now.
-    let dReunionChanged = true;
-    while (dReunionChanged) {
-        dReunionChanged = false;
-        for (const group of getAllDuos()) {
-            const placed = group
-                .map(name => ({ name, pairIdx: [0,1,2].findIndex(i => dPairs[i].some(p => p.name === name)) }))
-                .filter(x => x.pairIdx !== -1);
-            if (placed.length < 2) continue;
-            const uniquePairs = [...new Set(placed.map(x => x.pairIdx))];
-            if (uniquePairs.length === 1) continue; // already together
-
-            // Anchor = pair of the highest-OVR duo member
-            const anchorEntry = placed.reduce((best, cur) => {
-                const pCur = dPairs[cur.pairIdx].find(x => x.name === cur.name);
-                const pBest = dPairs[best.pairIdx].find(x => x.name === best.name);
-                return getOvr(pCur) >= getOvr(pBest) ? cur : best;
-            });
-            const anchorPairIdx = anchorEntry.pairIdx;
-            const targetPair = dPairs[anchorPairIdx];
-            const groupSet = new Set(group);
-
-            for (const { name, pairIdx } of placed) {
-                if (pairIdx === anchorPairIdx) continue;
-                const sourcePair = dPairs[pairIdx];
-                const mover = sourcePair.find(x => x.name === name);
-                if (!mover) continue;
-                if (targetPair.length >= 2) {
-                    const bumpable = targetPair
-                        .filter(x => !groupSet.has(x.name))
-                        .sort((a, b) => getOvr(a) - getOvr(b));
-                    if (!bumpable.length) continue;
-                    const victim = bumpable[0];
-                    targetPair.splice(targetPair.indexOf(victim), 1);
-                    sourcePair.push(victim);
-                }
-                sourcePair.splice(sourcePair.indexOf(mover), 1);
-                targetPair.push(mover);
-                dReunionChanged = true;
+    // FINAL D-PAIR REUNION SWEEP (single pass, pre-filtered to this team's duos only)
+    const dNameSet = new Set(dPairs.flat().map(p => p.name));
+    const teamDDuos = getAllDuos().filter(g => g.filter(n => dNameSet.has(n)).length >= 2);
+    for (const group of teamDDuos) {
+        const placed = group
+            .map(name => ({ name, pairIdx: [0,1,2].findIndex(i => dPairs[i].some(p => p.name === name)) }))
+            .filter(x => x.pairIdx !== -1);
+        if (placed.length < 2) continue;
+        if (new Set(placed.map(x => x.pairIdx)).size === 1) continue;
+        const anchorEntry = placed.reduce((best, cur) => {
+            const pCur = dPairs[cur.pairIdx].find(x => x.name === cur.name);
+            const pBest = dPairs[best.pairIdx].find(x => x.name === best.name);
+            return getOvr(pCur) >= getOvr(pBest) ? cur : best;
+        });
+        const anchorPairIdx = anchorEntry.pairIdx;
+        const targetPair = dPairs[anchorPairIdx];
+        const groupSet = new Set(group);
+        for (const { name, pairIdx } of placed) {
+            if (pairIdx === anchorPairIdx) continue;
+            const sourcePair = dPairs[pairIdx];
+            const mover = sourcePair.find(x => x.name === name);
+            if (!mover) continue;
+            if (targetPair.length >= 2) {
+                const bumpable = targetPair
+                    .filter(x => !groupSet.has(x.name))
+                    .sort((a, b) => getOvr(a) - getOvr(b));
+                if (!bumpable.length) continue;
+                const victim = bumpable[0];
+                targetPair.splice(targetPair.indexOf(victim), 1);
+                sourcePair.push(victim);
             }
+            sourcePair.splice(sourcePair.indexOf(mover), 1);
+            targetPair.push(mover);
         }
     }
 
@@ -3861,23 +3843,25 @@ function simGame(idx) {
             }
         }
 
-        // Quick Penalty Roll — 0.046 per 15-sec step ≈ 11 penalties/game (roughly double the
-        // old 6.6, so every team develops real PIM accumulators). ~40% of the minors are
+        // Quick Penalty Roll — 0.044 per 15-sec step ≈ 10-11 penalties/game. ~40% of the minors are
         // COINCIDENTAL (roughing scrums after the whistle — one offender per side, no power
-        // play), which keeps actual PP opportunities near the old ~6.6/game so league scoring
-        // doesn't inflate with the extra whistles.
-        if (Math.random() < 0.046) {
-            // Weight the offender toward high aggression/roughness — mirrors the FIGHTING
-            // selection below, so the player "involved in the play" is realistically the
-            // one whose attributes make them prone to taking penalties, not a coin flip.
-            // ENFORCER-tagged players draw an extra 3x — they're the ones goading scrums.
+        // play), which keeps actual PP opportunities in check so league scoring stays realistic.
+        if (Math.random() < 0.044) {
+            // Weight the offender toward high aggression/roughness but with a flatter curve
+            // (exponent 1.1 instead of 1.5, enforcer mult 1.8 instead of 3) so PIM spreads
+            // more broadly across the roster rather than piling onto a single enforcer.
             const penWeight = (name) => {
                 const ps = playerStats[name];
                 if (!ps) return 1;
                 const aggr = gradeToNum(ps.attr?.aggr) || 50;
                 const rough = gradeToNum(ps.attr?.rough) || 50;
-                const tagMult = (getPlayerWeightedStats(name)?.tag || '').includes('ENFORCER') ? 3 : 1;
-                return Math.pow((aggr + rough) / 2, 1.5) * tagMult;
+                const tagMult = (getPlayerWeightedStats(name)?.tag || '').includes('ENFORCER') ? 2.0 : 1;
+                const base = Math.pow((aggr + rough) / 2, 1.3) * tagMult;
+                // Soft PIM cap: starts reducing weight at 150 PIM, drops by 15% per 10 PIM over the cap
+                const seasonPim = ps.season?.pim || 0;
+                const overCap = Math.max(0, seasonPim - 200);
+                const capPenalty = Math.pow(0.85, overCap / 10);
+                return base * capPenalty;
             };
             const pickOffender = (skaters) => {
                 const w = skaters.map(p => penWeight(p.name));
@@ -3893,8 +3877,9 @@ function simGame(idx) {
                 const hOff = pickOffender(hOnIce.filter(p => p.pos !== 'G'));
                 const aOff = pickOffender(aOnIce.filter(p => p.pos !== 'G'));
                 if (hOff && aOff) {
-                    trk(hOff, 'pim', 2);
-                    trk(aOff, 'pim', 2);
+                    const capSkip = (name) => { const ov = Math.max(0, (playerStats[name]?.season?.pim||0) - 200); return ov > 0 && Math.random() < 1 - Math.pow(0.85, ov/10); };
+                    if (!capSkip(hOff)) trk(hOff, 'pim', 2);
+                    if (!capSkip(aOff)) trk(aOff, 'pim', 2);
                     penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: g.h.code,
                         cl: '#FFAA66', txt: `COINCIDENTAL MINORS: ${hOff} & ${aOff} — roughing (2 min each)`, isPenalty: true });
                 }
@@ -3907,6 +3892,12 @@ function simGame(idx) {
                 // ~6% of penalties are majors (fighting/boarding) → possible suspension
                 const isMajor = Math.random() < 0.06;
                 const pimAmt = isMajor ? 5 : 2;
+                // Soft PIM cap: once a player is over 150 season PIM, roll to skip the call
+                // (referee "lets it go") — 25% chance to skip per 10 PIM over the threshold
+                const offPim = playerStats[offender]?.season?.pim || 0;
+                const overCap2 = Math.max(0, offPim - 200);
+                const skipChance = 1 - Math.pow(0.85, overCap2 / 10);
+                if (skipChance > 0 && Math.random() < skipChance) { /* penalty waved off */ } else {
                 trk(offender, 'pim', pimAmt);
                 penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: penTeam.code, cl: teamColors[penTeam.nrm] ? teamColors[penTeam.nrm][0] : '#fff', txt: `PENALTY: ${offender} (${isMajor ? '5 min major' : '2 min minor'})`, isPenalty: true });
                 // Major penalty → 1% chance of 1-3 game suspension
@@ -3992,7 +3983,43 @@ function simGame(idx) {
                     }
                 }
             }
+                } // end soft-cap else
             } // end non-coincidental branch
+        }
+
+        // GOON ROLL — extra PIM for high-rough/enforcer players regardless of ice time.
+        // Only targets players with rough grade ≥ C (56+) to avoid spreading PIM to skill players.
+        // Uses hRoster/aRoster from the game object — no full playerStats scan.
+        if (!isASG && Math.random() < 0.012) {
+            const goonTeam = Math.random() < 0.5 ? g.h : g.a;
+            const tStruct = goonTeam.nrm === g.h.nrm ? hStruct : aStruct;
+            const teamRoster = [...tStruct.f.flat(), ...tStruct.d.flat()];
+            if (teamRoster && teamRoster.length > 0) {
+                const gPool = teamRoster.filter(p => {
+                    const ps = playerStats[p.name];
+                    if (!ps || ps.pos === 'G' || ps.injury?.daysRemaining > 0 || ps.suspended?.days > 0) return false;
+                    const rough = gradeToNum(ps.attr?.rough) || 0;
+                    return rough >= 56; // C grade minimum — filters out skill players
+                });
+                if (gPool.length > 0) {
+                    const gWt = gPool.map(p => {
+                        const ps = playerStats[p.name];
+                        const aggr = gradeToNum(ps.attr?.aggr) || 50;
+                        const rough = gradeToNum(ps.attr?.rough) || 50;
+                        const tagMult = (getPlayerWeightedStats(p.name)?.tag||'').includes('ENFORCER') ? 3 : 1;
+                        const base = Math.pow((aggr + rough) / 2, 1.8) * tagMult;
+                        const overCap = Math.max(0, (ps.season?.pim||0) - 200);
+                        return base * Math.pow(0.85, overCap / 10);
+                    });
+                    const gTotal = gWt.reduce((a,b)=>a+b,0);
+                    if (gTotal > 0) {
+                        let gr = Math.random() * gTotal;
+                        let gPicked = gPool[gPool.length-1];
+                        for (let i=0;i<gPool.length;i++){gr-=gWt[i];if(gr<=0){gPicked=gPool[i];break;}}
+                        trk(gPicked.name, 'pim', 2);
+                    }
+                }
+            }
         }
 
         // FIGHTING — coincidental 5-min majors, weighted toward high aggr/rough players
