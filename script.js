@@ -3746,8 +3746,8 @@ function simGame(idx) {
         const activeChaos = chaosScale * periodMult * closeMult;
         const chaosSpike = (Math.random() - 0.5) * activeChaos * 0.12;
         // Halved from the 30-sec-tick values (0.22 base) so shots/game stay the same at 240 ticks
-        let hShotChance = (0.22 + (diff * 0.0011) * asgBoost + scoreEffectH + chaosSpike) * 0.5;
-        let aShotChance = (0.22 - (diff * 0.0011) * asgBoost + scoreEffectA - chaosSpike) * 0.5;
+        let hShotChance = (0.22 + (diff * 0.0007) * asgBoost + scoreEffectH + chaosSpike) * 0.5;
+        let aShotChance = (0.22 - (diff * 0.0007) * asgBoost + scoreEffectA - chaosSpike) * 0.5;
 
         period = minute <= 20 ? 1 : (minute <= 40 ? 2 : 3);
         let sec = (step % 4) * 15; // exact quarter-minute stamps: :00 / :15 / :30 / :45
@@ -3795,7 +3795,7 @@ function simGame(idx) {
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const hSniperMod = getEliteShooterMod(hShooterTag);
             const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.093 + (diff * 0.0011)) * aWallMod * hSniperMod * hChaosMod * (isASG ? 1.6 : 1.0);
+            let scoringProb = (0.093 + (diff * 0.0007)) * aWallMod * hSniperMod * hChaosMod * (isASG ? 1.6 : 1.0);
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
@@ -3828,7 +3828,7 @@ function simGame(idx) {
             const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const aSniperMod = getEliteShooterMod(aShooterTag);
             const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.093 - (diff * 0.0011)) * hWallMod * aSniperMod * aChaosMod * (isASG ? 1.6 : 1.0);
+            let scoringProb = (0.093 - (diff * 0.0007)) * hWallMod * aSniperMod * aChaosMod * (isASG ? 1.6 : 1.0);
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
