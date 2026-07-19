@@ -2163,8 +2163,8 @@ const dynamicDuos = [
     ['Lyle Odelein', 'Kevin Haller'],
     // NJD
     ['Stephane Richer', 'Bernie Nicholls', 'Claude Lemieux'],
-    ['John MacLean', 'Bill Guerin'],
-    ['Bobby Holik', 'Randy McKay'],
+    ['Alexnder Semak', 'John MacLean', 'Valeri Zelepukin'],
+    ['Bobby Holik', 'Randy McKay', 'Bill Guerin'],
     ['Scott Stevens', 'Bruce Driver'],
     ['Scott Niedermayer', 'Vachslav Fetisov'],
     // NYI
@@ -2191,8 +2191,8 @@ const dynamicDuos = [
     ['Dimitri Yushkevich', 'Yves Racine'],
     ['Garry Galley', 'Rob Ramage'],
     // PIT
-    ['Mario Lemieux', 'Jaromir Jagr', 'Rick Tocchet'],
-    ['Ron Francis', 'Kevin Stevens', 'Tomas Sandstrom'],
+    ['Ron Francis', 'Jaromir Jagr', 'Rick Tocchet'],
+    ['Mario Lemieux', 'Kevin Stevens', 'Tomas Sandstrom'],
     ['Martin Straka', 'Markus Naslund'],
     ['Larry Murphy', 'Kjell Samuelsson'],
     ['Greg Hawgood', 'Ulf Samuelsson'],
@@ -3947,6 +3947,13 @@ function simGame(idx) {
             }
         }
         // else: OT not resolved — game remains a tie
+        // Either way, the 5-min period was actually played — credit the on-ice OT unit (top
+        // line + top pair, the same personnel used for the scoring roll above) with the TOI.
+        // Goalie TOI already includes this via totalGameMinutes; skaters previously got none.
+        const hOtUnit = [...(hStruct.f[0]||[]), ...(hStruct.d[0]||[])];
+        const aOtUnit = [...(aStruct.f[0]||[]), ...(aStruct.d[0]||[])];
+        hOtUnit.forEach(p => trk(p.name, 'toi', 5));
+        aOtUnit.forEach(p => trk(p.name, 'toi', 5));
     }
     if(isPlayoffs && hG === aG) {
         // OT uses top lines + star player modifier — not a coin flip
@@ -3991,6 +3998,14 @@ function simGame(idx) {
                     tm:g.a.code, cl:teamColors[g.a.nrm]?.[0]||'#fff',
                     txt:buildGoalText(aStar.name, aAssist, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:aStar.name, pAssist:aAssist, code:g.a.code });
             }
+        }
+        // Same fixed OT unit (top line + top pair) played every period this game — credit all
+        // of them with the full otPeriods*20 minutes, matching goalie TOI which already includes it.
+        if (otPeriods > 0) {
+            const hOtUnit = [...(hStruct.f[0]||[]), ...(hStruct.d[0]||[])];
+            const aOtUnit = [...(aStruct.f[0]||[]), ...(aStruct.d[0]||[])];
+            hOtUnit.forEach(p => trk(p.name, 'toi', otPeriods * 20));
+            aOtUnit.forEach(p => trk(p.name, 'toi', otPeriods * 20));
         }
     }
 
@@ -4222,7 +4237,7 @@ function simGame(idx) {
             });
             tObj.chem.lastUnit.d.forEach((pair, i) => {
                 const pairNames = pair.filter(p=>p).map(p=>p.name);
-                // Only 2 members per pair (vs. 3 on a forward line), and D already take a 30%
+                // Only 2 members per pair (vs. 3 on a forward line), and D already take a 20%
                 // assist-weight penalty in processSingleGoal — requiring BOTH partners on the
                 // SAME goal is almost never satisfied, leaving pair chemistry permanently near 0
                 // league-wide. The increment is already scaled down (0.5/-0.35 vs 1/-0.75) to
@@ -4332,10 +4347,10 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         // Archetype modifier
         weight *= (arch.assistRate || 1.0);
 
-        // Position modifier  -  centers are primary distributors, D penalized ~30%
+        // Position modifier  -  centers are primary distributors, D penalized ~20%
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
-        weight *= isD ? 0.70 : (pos === 'C') ? 1.15 : 1.0;
+        weight *= isD ? 0.80 : (pos === 'C') ? 1.15 : 1.0;
 
         // Hot/cold streak modifier
         if (ps.isHot)  weight *= 1.15;
@@ -5106,7 +5121,7 @@ async function simSeason(useTurbo = false) {
         await simDay(false, true); updateUI();
         let percent = Math.floor((currentDay / calendar.length) * 100);
         document.getElementById('tickerScroll').innerText = `${useTurbo ? ' TURBO SIMULATING' : ' CALCULATING SEASON ALGORITHMS'}: DAY ${currentDay} OF ${calendar.length} (${percent}% COMPLETE)...`;
-        if (!useTurbo) { await sleep(20); } else if (currentDay % 15 === 0) { await sleep(0); }
+        if (!useTurbo) { await sleep(50); } else if (currentDay % 15 === 0) { await sleep(0); }
         let keepGoing = advanceCalendar();
         if (!keepGoing) break;
     }
@@ -5124,24 +5139,32 @@ async function simRestOfSeason() {
     if (isPlayoffs) return;
     const remaining = calendar.slice(currentDay).filter(day => day && day.some(g => g && !g.result)).length;
     if (remaining === 0) { alert('No remaining regular season games.'); return; }
-    if (!confirm(`Simulate all ${remaining} remaining day(s) at turbo speed?`)) return;
+    // No confirm prompt and turbo mode forced on — this button is meant to blast through in a
+    // flash with zero dialogs, including the long-injury confirm() that would otherwise fire
+    // mid-loop (that check is gated on !isTurboMode).
     isSimulating = true;
+    const wasTurboMode = isTurboMode;
+    isTurboMode = true;
     const btn = document.getElementById('btnSimRest');
     if (btn) { btn.disabled = true; btn.textContent = 'SIMULATING...'; }
-    while (isSimulating && currentDay < calendar.length) {
-        await simDay(false, true);
-        const pct = Math.floor((currentDay / calendar.length) * 100);
-        const dayScores = (calendar[currentDay - 1] || []).filter(g => g && g.result).map(g => `${g.a.code} ${g.result.aG}-${g.result.hG} ${g.h.code}`).join('  ');
-        const ticker = document.getElementById('tickerScroll');
-        if (ticker) ticker.innerText = `⚡ SIMULATING... DAY ${currentDay}/${calendar.length} (${pct}%) | ${dayScores || '---'}`;
-        refreshScheduleDashboardUI(); // keep progress bar + upcoming games live
-        await sleep(0); // yield every day so scores flash in ticker
-        const keepGoing = advanceCalendar();
-        if (!keepGoing) break;
+    try {
+        while (isSimulating && currentDay < calendar.length) {
+            await simDay(false, true);
+            const pct = Math.floor((currentDay / calendar.length) * 100);
+            const dayScores = (calendar[currentDay - 1] || []).filter(g => g && g.result).map(g => `${g.a.code} ${g.result.aG}-${g.result.hG} ${g.h.code}`).join('  ');
+            const ticker = document.getElementById('tickerScroll');
+            if (ticker) ticker.innerText = `⚡ SIMULATING... DAY ${currentDay}/${calendar.length} (${pct}%) | ${dayScores || '---'}`;
+            refreshScheduleDashboardUI(); // keep progress bar + upcoming games live
+            await sleep(0); // yield every day so scores flash in ticker
+            const keepGoing = advanceCalendar();
+            if (!keepGoing) break;
+        }
+    } finally {
+        isSimulating = false;
+        isTurboMode = wasTurboMode;
+        if (btn) { btn.disabled = false; btn.textContent = 'SIM REST OF SEASON ⚡'; }
+        updateUI(); saveGame();
     }
-    isSimulating = false;
-    if (btn) { btn.disabled = false; btn.textContent = 'SIM REST OF SEASON ⚡'; }
-    updateUI(); saveGame();
     if (currentDay >= calendar.length) initPlayoffs();
 }
 
