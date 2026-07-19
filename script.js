@@ -3381,8 +3381,8 @@ function calculateDynamicIceTime(struct) {
     // P2/P3 adjust downward to compensate within the 120-min budget.
     // OVR-driven spread: elite top pairs (OVR gap ≥ 8 vs P3) can reach 32 min;
     // weak depth pairs bottom out at 12 min for teams with large quality gaps.
-    const d1Ovr2 = dPairs[0].length ? dPairs[0].reduce((s,p)=>s+getOvr(p),0)/dPairs[0].length : 70;
-    const d3Ovr2 = dPairs[2].length ? dPairs[2].reduce((s,p)=>s+getOvr(p),0)/dPairs[2].length : 60;
+    const d1Ovr2 = struct.d[0]?.length ? struct.d[0].reduce((s,p)=>s+(getPlayerWeightedStats(p.name)?.ovr||70),0)/struct.d[0].length : 70;
+    const d3Ovr2 = struct.d[2]?.length ? struct.d[2].reduce((s,p)=>s+(getPlayerWeightedStats(p.name)?.ovr||60),0)/struct.d[2].length : 60;
     const ovrGap = Math.max(0, d1Ovr2 - d3Ovr2);
     const spreadBonus = Math.min(ovrGap / 8, 1); // 0→1 as gap goes 0→8
     finalDefensePairMins[0] = Math.max(22, Math.min(30 + spreadBonus * 2, finalDefensePairMins[0]));
