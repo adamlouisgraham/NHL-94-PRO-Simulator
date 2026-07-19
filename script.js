@@ -2110,7 +2110,7 @@ const dynamicDuos = [
     ['Glen Wesley', 'Don Sweeney'],
     // BUF
     ['Pat LaFontaine', 'Yuri Khmylev', 'Donald Audette'],
-    ['Alexnder Mogilny', 'Dale Hawerchuk', 'Derek Plante'],
+    ['Alexander Mogilny', 'Dale Hawerchuk', 'Derek Plante'],
     ['Brad May', 'Rob Ray', 'Dave Hannan'],
     ['Doug Bodger', 'Richard Smehlik'],
     ['Petr Svoboda', 'Philippe Boucher'],
@@ -2137,8 +2137,8 @@ const dynamicDuos = [
     ['Igor Kravchuk', 'Boris Mironov'],
     ['Bob Beers', 'Fredrik Olausson'],
     // FLA
-    ['Jesse Belanger', 'Bob Kudelski'],
-    ['Stu Barnes', 'Rob Niedermayer'],
+    ['Andrei Lomakin', 'Jesse Belanger', 'Scott Mellanby'],
+    ['Stu Barnes', 'Bob Kudelski', 'Rob Niedermayer'],
     ['Tom Fitzgerald', 'Dave Lowry'],
     ['Gord Murphy', 'Peter Andersson'],
     ['Geoff Smith', 'Brian Benning'],
