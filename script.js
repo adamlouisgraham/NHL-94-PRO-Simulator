@@ -1607,7 +1607,10 @@ function getPlayerWeightedStats(pName) {
             if (baseOvr >= 85) tag = "SUPERSTAR";
             else if (shotAcc >= 80 && pwr >= 75 && off >= 80) tag = "SNIPER"; 
             else if (pass >= 80 && off >= 80) tag = "PLAYMAKER";
-            else if (rough >= 80 && aggr >= 80) tag = "ENFORCER F";
+            // ENFORCER = both aggression AND roughness at B or above. Sits high in the
+            // waterfall (above TWO-WAY STAR F / TWO-WAY FWD / OFFENSIVE FWD / DEFENSIVE FWD)
+            // so a true goon profile is never re-labeled as a generic two-way/off/def forward.
+            else if (rough >= 75 && aggr >= 75) tag = "ENFORCER F";
             else if (off >= 75 && def >= 75 && check >= 75 || aggr >= 75 && pass >= 75 && pwr >= 75 || shotAcc >= 75 ) tag = "TWO-WAY STAR F";
             else if (off >= 75 && agl >= 75 && spd >= 80) tag = "SPEEDSTER"; 
             else if (off >= 75 && agl >= 80 && stkHnd >= 80) tag = "DANGLER";
@@ -2107,7 +2110,7 @@ const dynamicDuos = [
     ['Glen Wesley', 'Don Sweeney'],
     // BUF
     ['Pat LaFontaine', 'Yuri Khmylev', 'Donald Audette'],
-    ['Alexander Mogilny', 'Dale Hawerchuk', 'Jason Dawe'],
+    ['Alexnder Mogilny', 'Dale Hawerchuk', 'Derek Plante'],
     ['Brad May', 'Rob Ray', 'Dave Hannan'],
     ['Doug Bodger', 'Richard Smehlik'],
     ['Petr Svoboda', 'Philippe Boucher'],
@@ -2177,6 +2180,7 @@ const dynamicDuos = [
     // NYR
     ['Mark Messier', 'Glenn Anderson', 'Adam Graves'],
     ['Steve Larmer', 'Alexei Kovalev', 'Sergei Nemchinov'],
+    ['Craig MacTavish', 'Esa Tikkanen', 'Ed Olczyk'],
     ['Brian Leetch', 'Alex Karpotsev'],
     ['Sergei Zubov', 'Jeff Beukeboom'],
     // OTW
@@ -2193,7 +2197,7 @@ const dynamicDuos = [
     // PIT
     ['Ron Francis', 'Jaromir Jagr', 'Rick Tocchet'],
     ['Mario Lemieux', 'Kevin Stevens', 'Tomas Sandstrom'],
-    ['Martin Straka', 'Markus Naslund'],
+    ['Joe Mullen', 'Martin Straka', 'Markus Naslund'],
     ['Larry Murphy', 'Kjell Samuelsson'],
     ['Greg Hawgood', 'Ulf Samuelsson'],
     // QUE
@@ -2939,6 +2943,32 @@ const getRosterStructure = (tk) => {
     cleanF.forEach(line => { while (line.length < 3 && spareF.length) { const p = spareF.shift(); line.push(p); seenSkaters.add(p.name); } });
     const spareD = dPool.filter(p => !seenSkaters.has(p.name)).sort((a,b) => getOvr(b) - getOvr(a));
     cleanD.forEach(pair => { while (pair.length < 2 && spareD.length) { const p = spareD.shift(); pair.push(p); seenSkaters.add(p.name); } });
+
+    // FINAL ORDERING PASS — duo/pair chemistry is honored first during the draft above; once
+    // everything is seated, re-rank the intact trios so the strongest line holds the L1 slot
+    // (and its TOI share). Fixes e.g. Hartford, whose highest-rated trio was landing on L3 and
+    // getting checking-line minutes. D-pairs are already re-ranked by best individual D above.
+    cleanF.sort((a, b) => localLineOvr(b) - localLineOvr(a));
+
+    // GUARANTEED ENFORCER — if the roster has a healthy ENFORCER-tagged forward, dress one on
+    // the 4th line (in place of its weakest non-center) so every lineup ices its goon.
+    if (!cleanF.flat().some(p => getTag(p) === 'ENFORCER F')) {
+        const enforcer = fPool.filter(p => !seenSkaters.has(p.name) && getTag(p) === 'ENFORCER F')
+            .sort((a, b) => getOvr(b) - getOvr(a))[0];
+        if (enforcer) {
+            const l4 = cleanF[3];
+            const victims = l4.filter(p => getPos(p) !== 'C').sort((a, b) => getOvr(a) - getOvr(b));
+            if (victims.length) {
+                const v = victims[0];
+                l4[l4.indexOf(v)] = enforcer;
+                seenSkaters.delete(v.name);
+                seenSkaters.add(enforcer.name);
+            } else if (l4.length < 3) {
+                l4.push(enforcer);
+                seenSkaters.add(enforcer.name);
+            }
+        }
+    }
     const struct = { f: cleanF, d: cleanD, g: gPool };
     _structCache[tk] = struct;
     return struct;
@@ -3134,7 +3164,7 @@ function calculateDynamicIceTime(struct) {
     // ==========================================
     
     // Base Baseline Targets (Per Player Average)
-    let fShares = [20, 17, 14, 9]; // Baseline points corresponding to midpoints of your request
+    let fShares = [20, 17, 14, 6]; // Baseline points corresponding to midpoints of your request
 
     // RULE A: Line 1 heavily outweighs all other lines -> Play near max (22 mins per player)
     const line1DominantThreshold = 8; // If Line 1 is 8+ points better than average of lines 2, 3, 4
@@ -3165,6 +3195,16 @@ function calculateDynamicIceTime(struct) {
         fShares[2] = avg; fShares[3] = avg;
     }
 
+    // RULE D: BALANCED BOTTOM-NINE — if lines 2, 3, and 4 are ALL within 5 OVR points of each
+    // other (e.g. Florida's flat depth chart), they split the non-L1 minutes evenly instead of
+    // following the usual L2 > L3 > L4 ladder. L1 keeps its top share.
+    const bottomSpread = Math.max(f2Ovr, f3Ovr, f4Ovr) - Math.min(f2Ovr, f3Ovr, f4Ovr);
+    const bottomThreeSplit = bottomSpread <= 5;
+    if (bottomThreeSplit) {
+        const avg234 = (fShares[1] + fShares[2] + fShares[3]) / 3;
+        fShares[1] = avg234; fShares[2] = avg234; fShares[3] = avg234;
+    }
+
     // Scale Forward Shares to exactly fit 180 total skater minutes
     // (Each line has 3 players, so total share sum = (fShares[0]*3) + (fShares[1]*3) + ...)
     let sumFShares = (fShares[0] * 3) + (fShares[1] * 3) + (fShares[2] * 3) + (fShares[3] * 3);
@@ -3174,9 +3214,15 @@ function calculateDynamicIceTime(struct) {
 
     // Apply strict clamping boundaries to safeguard requested ranges
     finalForwardLineMins[0] = Math.max(18, Math.min(22, finalForwardLineMins[0]));
-    finalForwardLineMins[1] = Math.max(16, Math.min(18, finalForwardLineMins[1]));
-    finalForwardLineMins[2] = Math.max(13, Math.min(15, finalForwardLineMins[2]));
-    finalForwardLineMins[3] = Math.max(8, Math.min(12, finalForwardLineMins[3]));
+    if (bottomThreeSplit) {
+        // Per-line ladder clamps would immediately un-equalize the even split (L2 forced back
+        // to 16+, L4 capped at 9) — use one shared range for all three bottom lines instead.
+        for (let i = 1; i <= 3; i++) finalForwardLineMins[i] = Math.max(10, Math.min(16, finalForwardLineMins[i]));
+    } else {
+        finalForwardLineMins[1] = Math.max(16, Math.min(18, finalForwardLineMins[1]));
+        finalForwardLineMins[2] = Math.max(13, Math.min(15, finalForwardLineMins[2]));
+        finalForwardLineMins[3] = Math.max(4, Math.min(9, finalForwardLineMins[3]));
+    }
 
     // Normalize again if clamping caused a slight mathematical offset from 180
     let clampedSumF = (finalForwardLineMins[0]*3) + (finalForwardLineMins[1]*3) + (finalForwardLineMins[2]*3) + (finalForwardLineMins[3]*3);
@@ -3208,9 +3254,11 @@ function calculateDynamicIceTime(struct) {
     let finalDefensePairMins = dShares.map(share => share * scaleD);
 
     // Apply strict clamping boundaries to safeguard requested ranges
-    finalDefensePairMins[0] = Math.max(22, Math.min(26, finalDefensePairMins[0]));
-    finalDefensePairMins[1] = Math.max(18, Math.min(21, finalDefensePairMins[1]));
-    finalDefensePairMins[2] = Math.max(14, Math.min(17, finalDefensePairMins[2]));
+    // P1 can reach 30 min for a truly elite top pair (e.g. MacInnis/Bourque level);
+    // P2/P3 adjust downward to compensate within the 120-min budget.
+    finalDefensePairMins[0] = Math.max(22, Math.min(30, finalDefensePairMins[0]));
+    finalDefensePairMins[1] = Math.max(17, Math.min(24, finalDefensePairMins[1]));
+    finalDefensePairMins[2] = Math.max(13, Math.min(17, finalDefensePairMins[2]));
 
     // Normalize again if clamping caused a offset from 120
     let clampedSumD = (finalDefensePairMins[0]*2) + (finalDefensePairMins[1]*2) + (finalDefensePairMins[2]*2);
@@ -3223,11 +3271,21 @@ function calculateDynamicIceTime(struct) {
     // ==========================================
     // Breakdown of how each Pairing's total ice time is divided alongside Forward Lines
     // Matrix distribution setup: [Pair 1, Pair 2, Pair 3] mapping to [Line 1, Line 2, Line 3, Line 4]
-    const dDistributionMatrix = [
+    const baseDDistributionMatrix = [
         [0.65, 0.20, 0.10, 0.05], // Pair 1: 65% on L1, 20% on L2, 10% on L3, 5% on L4
         [0.20, 0.50, 0.20, 0.10], // Pair 2: Balanced deployment favoring Line 2
         [0.10, 0.15, 0.55, 0.20]  // Pair 3: Sheltered deployment favoring Line 3/4
     ];
+
+    // This base matrix alone is identical for every team regardless of actual pairing quality,
+    // so a dominant pair 1 and a weak pair 3 end up with the same hierarchy shape as a team
+    // whose three pairs are nearly equal. Scale each pair's row by how far its computed target
+    // (finalDefensePairMins, which already reflects real OVR gaps and the 22-26/18-21/14-17
+    // clamps above) sits from the unadjusted baseline midpoint, so the actual per-game selection
+    // odds widen or narrow along with the team's real pairing strength gaps.
+    const dPairBaseline = [24, 19.5, 16.5];
+    const dPairScale = finalDefensePairMins.map((m, i) => m / dPairBaseline[i]);
+    const dDistributionMatrix = baseDDistributionMatrix.map((row, i) => row.map(w => w * dPairScale[i]));
 
     return {
         forwardLineAverages: finalForwardLineMins,   // [L1_mins, L2_mins, L3_mins, L4_mins]
@@ -3464,7 +3522,7 @@ function simGame(idx) {
         const weights = minsArray.map(m => Math.max(0, m));
         const total = weights.reduce((s, w) => s + w, 0) || 1;
         const sched = [];
-        for (let i = 0; i < 120; i++) {
+        for (let i = 0; i < 240; i++) {
             let roll = Math.random() * total;
             let cum = 0;
             let chosen = 0;
@@ -3496,11 +3554,13 @@ function simGame(idx) {
     }
 
     // ==========================================
-    //  THE 60-MINUTE SIMULATION LOOP (120 steps)
+    //  THE 60-MINUTE SIMULATION LOOP (240 steps @ 15 seconds each)
+    //  All per-tick probabilities below are calibrated for 15-sec ticks — half the old
+    //  30-sec-tick values — so per-GAME rates stay identical unless deliberately retuned.
     // ==========================================
     let period = 1; // hoisted so PATRICK ROY PROTOCOL can read it after the loop
-    for (let step = 0; step < 120; step++) {
-        let minute = Math.floor(step / 2) + 1;
+    for (let step = 0; step < 240; step++) {
+        let minute = Math.floor(step / 4) + 1;
 
         let hFLine = homeFSchedule[step];
         let aFLine = awayFSchedule[step];
@@ -3511,22 +3571,22 @@ function simGame(idx) {
         let hOnIce = [...hStruct.f[hFLine], ...hStruct.d[hDPair]];
         let aOnIce = [...aStruct.f[aFLine], ...aStruct.d[aDPair]];
 
-        // Track skater ATOI values securely (0.5 mins per step)
-        hOnIce.forEach(p => trk(p.name, 'toi', 0.5));
-        aOnIce.forEach(p => trk(p.name, 'toi', 0.5));
+        // Track skater ATOI values securely (0.25 mins per 15-sec step)
+        hOnIce.forEach(p => trk(p.name, 'toi', 0.25));
+        aOnIce.forEach(p => trk(p.name, 'toi', 0.25));
 
         // Accumulate in-game shift ticks for fatigue
         hOnIce.forEach(p => { gameIceTicks[p.name] = (gameIceTicks[p.name] || 0) + 1; });
         aOnIce.forEach(p => { gameIceTicks[p.name] = (gameIceTicks[p.name] || 0) + 1; });
 
-        // In-game fatigue penalty: free for first 20 ticks (10 min), then 0.10 OVR per tick
-        const inGameFatigue = (name) => Math.max(0, ((gameIceTicks[name] || 0) - 20) * 0.10);
+        // In-game fatigue penalty: free for first 40 ticks (10 min), then 0.05 OVR per 15-sec tick
+        const inGameFatigue = (name) => Math.max(0, ((gameIceTicks[name] || 0) - 40) * 0.05);
         const hFatiguePen = hOnIce.reduce((s,p) => s + inGameFatigue(p.name), 0) / Math.max(1, hOnIce.length);
         const aFatiguePen = aOnIce.reduce((s,p) => s + inGameFatigue(p.name), 0) / Math.max(1, aOnIce.length);
 
-        // Momentum decay — dissipates by 1 each step (~30 sec)
-        hMomentum = Math.max(0, hMomentum - 1);
-        aMomentum = Math.max(0, aMomentum - 1);
+        // Momentum decay — dissipates by 0.5 each 15-sec step (same real-time duration as before)
+        hMomentum = Math.max(0, hMomentum - 0.5);
+        aMomentum = Math.max(0, aMomentum - 0.5);
 
         // Live Dynamic Matchup Overalls (momentum adds up to +3 OVR for ~4 min after a goal)
         // Line Match bonus only applies to the user's own team, on whichever side they're playing
@@ -3554,15 +3614,16 @@ function simGame(idx) {
         const closeMult  = absDiff === 0 ? 1.4 : absDiff === 1 ? 1.15 : absDiff >= 3 ? 0.6 : 1.0;
         const activeChaos = chaosScale * periodMult * closeMult;
         const chaosSpike = (Math.random() - 0.5) * activeChaos * 0.12;
-        let hShotChance = 0.22 + (diff * 0.0011) * asgBoost + scoreEffectH + chaosSpike;
-        let aShotChance = 0.22 - (diff * 0.0011) * asgBoost + scoreEffectA - chaosSpike;
-        
+        // Halved from the 30-sec-tick values (0.22 base) so shots/game stay the same at 240 ticks
+        let hShotChance = (0.22 + (diff * 0.0011) * asgBoost + scoreEffectH + chaosSpike) * 0.5;
+        let aShotChance = (0.22 - (diff * 0.0011) * asgBoost + scoreEffectA - chaosSpike) * 0.5;
+
         period = minute <= 20 ? 1 : (minute <= 40 ? 2 : 3);
-        let sec = Math.floor(Math.random() * 60);
+        let sec = (step % 4) * 15; // exact quarter-minute stamps: :00 / :15 / :30 / :45
         let timeStr = `P${period} ${minute % 20 || 20}:${sec < 10 ? '0'+sec : sec}`;
 
-        // PENALTY SHOT — ~0.4% chance per tick (~0-1 per game)
-        if (!isASG && Math.random() < 0.004) {
+        // PENALTY SHOT — ~0.2% chance per 15-sec tick (~0-1 per game)
+        if (!isASG && Math.random() < 0.002) {
             const psHome = Math.random() < 0.5;
             const psTeam = psHome ? g.h : g.a;
             const psGoalie = psHome ? aG_obj : hG_obj;
@@ -3659,33 +3720,49 @@ function simGame(idx) {
             }
         }
 
-        // Quick Penalty Roll  -  triggers a real powerplay opportunity
-        // 0.055 per 30-sec step  ~6.6 penalties/game (keeps PP goals near ~1.3/game)
-        if (Math.random() < 0.055) {
+        // Quick Penalty Roll — 0.046 per 15-sec step ≈ 11 penalties/game (roughly double the
+        // old 6.6, so every team develops real PIM accumulators). ~40% of the minors are
+        // COINCIDENTAL (roughing scrums after the whistle — one offender per side, no power
+        // play), which keeps actual PP opportunities near the old ~6.6/game so league scoring
+        // doesn't inflate with the extra whistles.
+        if (Math.random() < 0.046) {
+            // Weight the offender toward high aggression/roughness — mirrors the FIGHTING
+            // selection below, so the player "involved in the play" is realistically the
+            // one whose attributes make them prone to taking penalties, not a coin flip.
+            // ENFORCER-tagged players draw an extra 3x — they're the ones goading scrums.
+            const penWeight = (name) => {
+                const ps = playerStats[name];
+                if (!ps) return 1;
+                const aggr = gradeToNum(ps.attr?.aggr) || 50;
+                const rough = gradeToNum(ps.attr?.rough) || 50;
+                const tagMult = (getPlayerWeightedStats(name)?.tag || '').includes('ENFORCER') ? 3 : 1;
+                return Math.pow((aggr + rough) / 2, 1.5) * tagMult;
+            };
+            const pickOffender = (skaters) => {
+                const w = skaters.map(p => penWeight(p.name));
+                const total = w.reduce((a, b) => a + b, 0);
+                if (total === 0) return skaters[Math.floor(Math.random() * skaters.length)].name;
+                let r = Math.random() * total;
+                for (let i = 0; i < skaters.length; i++) { r -= w[i]; if (r <= 0) return skaters[i].name; }
+                return skaters[skaters.length - 1].name;
+            };
+
+            if (!isASG && Math.random() < 0.40 && hOnIce.length > 0 && aOnIce.length > 0) {
+                // COINCIDENTAL MINORS — 2 PIM each side, 4-on-4, no power play
+                const hOff = pickOffender(hOnIce.filter(p => p.pos !== 'G'));
+                const aOff = pickOffender(aOnIce.filter(p => p.pos !== 'G'));
+                if (hOff && aOff) {
+                    trk(hOff, 'pim', 2);
+                    trk(aOff, 'pim', 2);
+                    penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: g.h.code,
+                        cl: '#FFAA66', txt: `COINCIDENTAL MINORS: ${hOff} & ${aOff} — roughing (2 min each)`, isPenalty: true });
+                }
+            } else {
             let penTeam = Math.random() > 0.5 ? g.h : g.a;
             let advTeam = penTeam.nrm === g.h.nrm ? g.a : g.h;
             let activeSkaters = penTeam.nrm === g.h.nrm ? hOnIce : aOnIce;
             if (activeSkaters.length > 0) {
-                // Weight the offender toward high aggression/roughness — mirrors the FIGHTING
-                // selection below, so the player "involved in the play" is realistically the
-                // one whose attributes make them prone to taking penalties, not a coin flip.
-                const penWeight = (name) => {
-                    const ps = playerStats[name];
-                    if (!ps) return 1;
-                    const aggr = gradeToNum(ps.attr?.aggr) || 50;
-                    const rough = gradeToNum(ps.attr?.rough) || 50;
-                    return Math.pow((aggr + rough) / 2, 1.5);
-                };
-                const penWeights = activeSkaters.map(p => penWeight(p.name));
-                const penTotal = penWeights.reduce((a, b) => a + b, 0);
-                let offender;
-                if (penTotal === 0) {
-                    offender = activeSkaters[Math.floor(Math.random() * activeSkaters.length)].name;
-                } else {
-                    let r = Math.random() * penTotal;
-                    offender = activeSkaters[0].name;
-                    for (let i = 0; i < activeSkaters.length; i++) { r -= penWeights[i]; if (r <= 0) { offender = activeSkaters[i].name; break; } }
-                }
+                const offender = pickOffender(activeSkaters);
                 // ~6% of penalties are majors (fighting/boarding) → possible suspension
                 const isMajor = Math.random() < 0.06;
                 const pimAmt = isMajor ? 5 : 2;
@@ -3774,19 +3851,33 @@ function simGame(idx) {
                     }
                 }
             }
+            } // end non-coincidental branch
         }
 
         // FIGHTING — coincidental 5-min majors, weighted toward high aggr/rough players
-        // ~1.5% chance per tick → ~0.9 fights/game; only skaters on ice are eligible
-        if (!isASG && Math.random() < 0.00167) {
+        // ~0.085% per 15-sec tick → ~0.2 fights/game (1 in 5). Only skaters with at least a C
+        // in BOTH aggression and roughness will drop the gloves; ENFORCER-tagged players carry
+        // a 4x weight on top of the quadratic aggr/rough curve, so the goons take most fights.
+        if (!isASG && Math.random() < 0.00085) {
             const fightWeight = (name) => {
                 const ps = playerStats[name];
                 if (!ps) return 0;
                 const aggr = gradeToNum(ps.attr?.aggr) || 50;
                 const rough = gradeToNum(ps.attr?.rough) || 50;
-                return Math.pow((aggr + rough) / 2, 2); // quadratic so high-aggr players dominate
+                const tagMult = (getPlayerWeightedStats(name)?.tag || '').includes('ENFORCER') ? 4 : 1;
+                return Math.pow((aggr + rough) / 2, 2) * tagMult; // quadratic so high-aggr players dominate
+            };
+            // Minimum C (56+) in BOTH aggr and rough to be fight-eligible — skill players with
+            // F-grade aggression never end up in a bout just because they were on the ice.
+            const canFight = (p) => {
+                const ps = playerStats[p.name];
+                if (!ps) return false;
+                const aggr = gradeToNum(ps.attr?.aggr) || 50;
+                const rough = gradeToNum(ps.attr?.rough) || 50;
+                return aggr >= 56 && rough >= 56;
             };
             const pickFighter = (pool) => {
+                if (!pool.length) return null;
                 const w = pool.map(p => fightWeight(p.name));
                 const total = w.reduce((a, b) => a + b, 0);
                 if (total === 0) return pool[Math.floor(Math.random() * pool.length)];
@@ -3794,8 +3885,8 @@ function simGame(idx) {
                 for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) return pool[i]; }
                 return pool[0];
             };
-            const hFighter = pickFighter(hOnIce.filter(p => p.pos !== 'G'));
-            const aFighter = pickFighter(aOnIce.filter(p => p.pos !== 'G'));
+            const hFighter = pickFighter(hOnIce.filter(p => p.pos !== 'G' && canFight(p)));
+            const aFighter = pickFighter(aOnIce.filter(p => p.pos !== 'G' && canFight(p)));
             if (hFighter && aFighter) {
                 trk(hFighter.name, 'pim', 5);
                 trk(aFighter.name, 'pim', 5);
