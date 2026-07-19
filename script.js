@@ -2486,22 +2486,38 @@ const getRosterStructure = (tk) => {
 
     const triggerSynergies = (player, lineIdx) => {
         let line = fLines[lineIdx];
-        if (!player || line.length >= 3) return;
-        
-        // Dynamic Duos / Trios (Check this FIRST to prioritize icons over generic archetypes)
-        let mates = getLineMates(player.name); 
+        if (!player) return;
+
+        // Dynamic Duos / Trios — hardcoded linemates take ABSOLUTE PRECEDENCE.
+        // If the line is full, bump the lowest-OVR non-center non-duo player to make room.
+        let mates = getLineMates(player.name);
         if (mates) {
             let mateList = Array.isArray(mates) ? mates : [mates];
+            const duoSet = new Set([player.name, ...mateList]);
             mateList.forEach(mateName => {
                 let mate = fPool.find(x => x.name === mateName && !usedNames.has(x.name));
-                if (mate && canAddPlayer(mate, line, true)) {
+                if (!mate) return;
+                if (line.length < 3) {
                     line.push(mate);
                     usedNames.add(mate.name);
+                } else {
+                    // Line full — bump lowest-OVR non-center player not in this duo
+                    const bumpable = line
+                        .filter(x => getPos(x) !== 'C' && !duoSet.has(x.name))
+                        .sort((a, b) => getOvr(a) - getOvr(b));
+                    if (bumpable.length > 0) {
+                        const victim = bumpable[0];
+                        line.splice(line.indexOf(victim), 1);
+                        usedNames.delete(victim.name);
+                        line.push(mate);
+                        usedNames.add(mate.name);
+                    }
                 }
             });
         }
 
-        // Archetype Match (Sniper + Playmaker)
+        // Archetype Match (Sniper + Playmaker) — only if room remains
+        if (line.length >= 3) return;
         let tag = getTag(player);
         let synTarget = tag === 'SNIPER' ? 'PLAYMAKER' : (tag === 'PLAYMAKER' ? 'SNIPER' : null);
         if (synTarget && line.length < 3) {
@@ -2773,6 +2789,56 @@ const getRosterStructure = (tk) => {
         let temp = fLines[0]; fLines[0] = fLines[1]; fLines[1] = temp;
     }
 
+    // FINAL DUO REUNION SWEEP
+    // Safety net: if any hardcoded duo members still ended up on different lines, unite them now.
+    // Runs in a loop until no more moves are needed (handles chain reactions).
+    let reunionChanged = true;
+    while (reunionChanged) {
+        reunionChanged = false;
+        for (const group of getAllDuos()) {
+            const placed = group
+                .map(name => ({ name, lineIdx: [0,1,2,3].findIndex(i => fLines[i].some(p => p.name === name)) }))
+                .filter(x => x.lineIdx !== -1);
+            if (placed.length < 2) continue;
+            const uniqueLines = [...new Set(placed.map(x => x.lineIdx))];
+            if (uniqueLines.length === 1) continue; // already together
+
+            // Anchor = line of the highest-OVR duo member
+            const anchorEntry = placed.reduce((best, cur) => {
+                const pCur = fLines[cur.lineIdx].find(x => x.name === cur.name);
+                const pBest = fLines[best.lineIdx].find(x => x.name === best.name);
+                return getOvr(pCur) >= getOvr(pBest) ? cur : best;
+            });
+            const anchorIdx = anchorEntry.lineIdx;
+            const targetLine = fLines[anchorIdx];
+            const groupSet = new Set(group);
+
+            for (const { name, lineIdx } of placed) {
+                if (lineIdx === anchorIdx) continue;
+                const sourceLine = fLines[lineIdx];
+                const mover = sourceLine.find(x => x.name === name);
+                if (!mover) continue;
+                if (targetLine.length >= 3) {
+                    // Bump lowest-OVR non-center non-duo player from target line
+                    const bumpable = targetLine
+                        .filter(x => getPos(x) !== 'C' && !groupSet.has(x.name))
+                        .sort((a, b) => getOvr(a) - getOvr(b));
+                    if (!bumpable.length) continue;
+                    const victim = bumpable[0];
+                    targetLine.splice(targetLine.indexOf(victim), 1);
+                    sourceLine.push(victim);
+                }
+                sourceLine.splice(sourceLine.indexOf(mover), 1);
+                targetLine.push(mover);
+                reunionChanged = true;
+            }
+        }
+    }
+    // Re-enforce rank one final time after reunion
+    if (localLineOvr(fLines[1]) > localLineOvr(fLines[0])) {
+        let temp = fLines[0]; fLines[0] = fLines[1]; fLines[1] = temp;
+    }
+
     // ===========================================================
     //  6. DEFENSE PAIRS - DYNAMIC DRAFTING & SYNERGY SEQUENCE
     // ===========================================================
@@ -2788,8 +2854,39 @@ const getRosterStructure = (tk) => {
     // The central drafting function that powers the whole engine
     const draftD = (p, pairIdx) => {
         if (!p || dPairs[pairIdx].length >= 2 || dUsed.has(p.name)) return;
-        dPairs[pairIdx].push(p); 
+        dPairs[pairIdx].push(p);
         dUsed.add(p.name);
+        triggerDSynergies(p, pairIdx);
+    };
+
+    // Duo-aware synergy trigger for D-pairs — mirrors forward triggerSynergies.
+    // Hardcoded pair mates take precedence; bumps lowest-OVR non-duo player if pair is full.
+    const triggerDSynergies = (player, pairIdx) => {
+        if (!player) return;
+        const pair = dPairs[pairIdx];
+        const mates = getLineMates(player.name);
+        if (!mates) return;
+        const mateList = Array.isArray(mates) ? mates : [mates];
+        const duoSet = new Set([player.name, ...mateList]);
+        mateList.forEach(mateName => {
+            const mate = dPool.find(x => x.name === mateName && !dUsed.has(x.name));
+            if (!mate) return;
+            if (pair.length < 2) {
+                pair.push(mate);
+                dUsed.add(mate.name);
+            } else {
+                const bumpable = pair
+                    .filter(x => !duoSet.has(x.name))
+                    .sort((a, b) => getOvr(a) - getOvr(b));
+                if (bumpable.length > 0) {
+                    const victim = bumpable[0];
+                    pair.splice(pair.indexOf(victim), 1);
+                    dUsed.delete(victim.name);
+                    pair.push(mate);
+                    dUsed.add(mate.name);
+                }
+            }
+        });
     };
 
     // Helper to grab the highest OVR defenseman still available
@@ -2908,6 +3005,50 @@ const getRosterStructure = (tk) => {
             // Recompute after any swap — stale flags would otherwise let a second swap re-corrupt an already-fixed pair
             bothOff = getDef(pair[0]) < getOff(pair[0]) && getDef(pair[1]) < getOff(pair[1]);
             bothDef = getDef(pair[0]) > getOff(pair[0]) && getDef(pair[1]) > getOff(pair[1]);
+        }
+    }
+
+    // FINAL D-PAIR REUNION SWEEP
+    // If any hardcoded pair mates ended up in different pairs, unite them now.
+    let dReunionChanged = true;
+    while (dReunionChanged) {
+        dReunionChanged = false;
+        for (const group of getAllDuos()) {
+            const placed = group
+                .map(name => ({ name, pairIdx: [0,1,2].findIndex(i => dPairs[i].some(p => p.name === name)) }))
+                .filter(x => x.pairIdx !== -1);
+            if (placed.length < 2) continue;
+            const uniquePairs = [...new Set(placed.map(x => x.pairIdx))];
+            if (uniquePairs.length === 1) continue; // already together
+
+            // Anchor = pair of the highest-OVR duo member
+            const anchorEntry = placed.reduce((best, cur) => {
+                const pCur = dPairs[cur.pairIdx].find(x => x.name === cur.name);
+                const pBest = dPairs[best.pairIdx].find(x => x.name === best.name);
+                return getOvr(pCur) >= getOvr(pBest) ? cur : best;
+            });
+            const anchorPairIdx = anchorEntry.pairIdx;
+            const targetPair = dPairs[anchorPairIdx];
+            const groupSet = new Set(group);
+
+            for (const { name, pairIdx } of placed) {
+                if (pairIdx === anchorPairIdx) continue;
+                const sourcePair = dPairs[pairIdx];
+                const mover = sourcePair.find(x => x.name === name);
+                if (!mover) continue;
+                if (targetPair.length >= 2) {
+                    const bumpable = targetPair
+                        .filter(x => !groupSet.has(x.name))
+                        .sort((a, b) => getOvr(a) - getOvr(b));
+                    if (!bumpable.length) continue;
+                    const victim = bumpable[0];
+                    targetPair.splice(targetPair.indexOf(victim), 1);
+                    sourcePair.push(victim);
+                }
+                sourcePair.splice(sourcePair.indexOf(mover), 1);
+                targetPair.push(mover);
+                dReunionChanged = true;
+            }
         }
     }
 
