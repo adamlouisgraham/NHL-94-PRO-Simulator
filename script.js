@@ -278,7 +278,7 @@ const getArch = (pName) => getPlayerWeightedStats(pName).tag || 'Unknown';
 let customLines = JSON.parse(localStorage.getItem('nhl94_customLines')) || {};
 
 
-let awardConfig = { streaks: true, chemistry: true, rivalries: true, aging: false, draft: false, retirements: false, headlines: true, milestones: true, injuries: true, legacy_schedule: true, trades: true, tradeBlock: false };
+let awardConfig = { streaks: true, chemistry: true, rivalries: true, aging: false, draft: false, retirements: false, headlines: true, milestones: true, injuries: true, legacy_schedule: true, trades: false, tradeBlock: false };
 let coachAdj = { forecheck: 0, pp: 0, lineMatch: false };
 let coachTrust = 50; // 0-100; updated after each user-team game
 let _awardsPending = false; // true between playoff-round-4 end and awards being revealed; blocks beginNewYear
