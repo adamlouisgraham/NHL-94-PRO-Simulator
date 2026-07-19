@@ -3379,9 +3379,15 @@ function calculateDynamicIceTime(struct) {
     // Apply strict clamping boundaries to safeguard requested ranges
     // P1 can reach 30 min for a truly elite top pair (e.g. MacInnis/Bourque level);
     // P2/P3 adjust downward to compensate within the 120-min budget.
-    finalDefensePairMins[0] = Math.max(22, Math.min(30, finalDefensePairMins[0]));
-    finalDefensePairMins[1] = Math.max(17, Math.min(24, finalDefensePairMins[1]));
-    finalDefensePairMins[2] = Math.max(13, Math.min(17, finalDefensePairMins[2]));
+    // OVR-driven spread: elite top pairs (OVR gap ≥ 8 vs P3) can reach 32 min;
+    // weak depth pairs bottom out at 12 min for teams with large quality gaps.
+    const d1Ovr2 = dPairs[0].length ? dPairs[0].reduce((s,p)=>s+getOvr(p),0)/dPairs[0].length : 70;
+    const d3Ovr2 = dPairs[2].length ? dPairs[2].reduce((s,p)=>s+getOvr(p),0)/dPairs[2].length : 60;
+    const ovrGap = Math.max(0, d1Ovr2 - d3Ovr2);
+    const spreadBonus = Math.min(ovrGap / 8, 1); // 0→1 as gap goes 0→8
+    finalDefensePairMins[0] = Math.max(22, Math.min(30 + spreadBonus * 2, finalDefensePairMins[0]));
+    finalDefensePairMins[1] = Math.max(16, Math.min(23, finalDefensePairMins[1]));
+    finalDefensePairMins[2] = Math.max(12 - spreadBonus, Math.min(16, finalDefensePairMins[2]));
 
     // Normalize again if clamping caused a offset from 120
     let clampedSumD = (finalDefensePairMins[0]*2) + (finalDefensePairMins[1]*2) + (finalDefensePairMins[2]*2);
@@ -3663,6 +3669,8 @@ function simGame(idx) {
 
     const homeFSchedule = buildLineSchedule(homeIceData.forwardLineAverages);
     const awayFSchedule = buildLineSchedule(awayIceData.forwardLineAverages);
+    const homeDSchedule = buildLineSchedule(homeIceData.defensePairAverages);
+    const awayDSchedule = buildLineSchedule(awayIceData.defensePairAverages);
 
     function getPairingForLine(fLine, matrix) {
         let p1Weight = matrix[0][fLine]; 
@@ -3688,8 +3696,8 @@ function simGame(idx) {
         let hFLine = homeFSchedule[step];
         let aFLine = awayFSchedule[step];
 
-        let hDPair = getPairingForLine(hFLine, homeIceData.defensePairingMatrix || [[1,0,0],[0,1,0],[0,0,1]]);
-        let aDPair = getPairingForLine(aFLine, awayIceData.defensePairingMatrix || [[1,0,0],[0,1,0],[0,0,1]]);
+        let hDPair = homeDSchedule[step];
+        let aDPair = awayDSchedule[step];
 
         let hOnIce = [...hStruct.f[hFLine], ...hStruct.d[hDPair]];
         let aOnIce = [...aStruct.f[aFLine], ...aStruct.d[aDPair]];
@@ -5639,7 +5647,9 @@ function renderTeamStats() {
             let psObj = playerStats[p.name];
             let toi = psObj && psObj[k] && psObj[k].gp > 0 ? Math.round(psObj[k].toi / psObj[k].gp) : 0;
 
-            return `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')"><td><span style="color:var(--neon-cyan); font-weight:bold; font-size:8px;">${posLabel}</span> <button style="${yStyle}" onclick="openSubMenu('${tk}', '${p.name}', 'F'); event.stopPropagation();">EDIT</button>${getMoraleEmoji(p.name)} ${p.name} ${getArchetypeBadge(p.name)} ${getPlayerBadges(p.name)}</td><td style="text-align:right;"><span style="color:#ccc; font-size:8px; margin-right:6px; font-weight:bold;">ATOI: ${toi}</span> <span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(p.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(p.name)}</span></td></tr>`; 
+            const fPim = psObj && psObj[k] ? (psObj[k].pim || 0) : 0;
+            const fPts = psObj && psObj[k] ? ((psObj[k].g||0) + (psObj[k].a||0)) : 0;
+            return `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')"><td><span style="color:var(--neon-cyan); font-weight:bold; font-size:8px;">${posLabel}</span> <button style="${yStyle}" onclick="openSubMenu('${tk}', '${p.name}', 'F'); event.stopPropagation();">EDIT</button>${getMoraleEmoji(p.name)} ${p.name} ${getArchetypeBadge(p.name)} ${getPlayerBadges(p.name)}</td><td style="text-align:right;"><span style="color:#aaa; font-size:8px;">${fPts}PTS</span> <span style="color:#FF8800; font-size:8px; margin-left:4px;">${fPim}PIM</span> <span style="color:#ccc; font-size:8px; margin-left:4px; font-weight:bold;">ATOI: ${toi}</span> <span style="color:#aaa; font-size:8px; margin-left:4px;">OVR: ${getPlayerWeightedStats(p.name).ovr}</span></td></tr>`;
         }).join('');
 
         h += `</table>`;
@@ -5664,7 +5674,9 @@ function renderTeamStats() {
             let psObj = playerStats[d.name];
             let toi = psObj && psObj[k] && psObj[k].gp > 0 ? Math.round(psObj[k].toi / psObj[k].gp) : 0;
 
-            return `<tr style="cursor:pointer;" onclick="showPlayerCard('${d.name}')"><td><span style="color:var(--line-red); font-weight:bold; font-size:8px;">${posLabel}</span> <button style="${yStyle}" onclick="openSubMenu('${tk}', '${d.name}', 'D'); event.stopPropagation();">EDIT</button>${getStatusBadge(d.name)}${getMoraleEmoji(d.name)}${d.name} ${getArchetypeBadge(d.name)} ${getEmoji(d.name)}</td><td style="text-align:right;"><span style="color:#ccc; font-size:8px; margin-right:6px; font-weight:bold;">ATOI: ${toi}</span> <span style="color:#aaa; font-size:8px;">OVR: ${getPlayerWeightedStats(d.name).ovr}</span> <span style="color:var(--neon-cyan); font-size:8px; margin-left:4px;">LIVE: ${getLiveIceOvr(d.name)}</span></td></tr>`; 
+            const dPim = psObj && psObj[k] ? (psObj[k].pim || 0) : 0;
+            const dPts = psObj && psObj[k] ? ((psObj[k].g||0) + (psObj[k].a||0)) : 0;
+            return `<tr style="cursor:pointer;" onclick="showPlayerCard('${d.name}')"><td><span style="color:var(--line-red); font-weight:bold; font-size:8px;">${posLabel}</span> <button style="${yStyle}" onclick="openSubMenu('${tk}', '${d.name}', 'D'); event.stopPropagation();">EDIT</button>${getStatusBadge(d.name)}${getMoraleEmoji(d.name)}${d.name} ${getArchetypeBadge(d.name)} ${getEmoji(d.name)}</td><td style="text-align:right;"><span style="color:#aaa; font-size:8px;">${dPts}PTS</span> <span style="color:#FF8800; font-size:8px; margin-left:4px;">${dPim}PIM</span> <span style="color:#ccc; font-size:8px; margin-left:4px; font-weight:bold;">ATOI: ${toi}</span> <span style="color:#aaa; font-size:8px; margin-left:4px;">OVR: ${getPlayerWeightedStats(d.name).ovr}</span></td></tr>`; 
         }).join('');
         
         h += `</table>`;
