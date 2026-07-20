@@ -3199,7 +3199,7 @@ function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
 }
 
 // Helper function to build the Special Teams HTML dynamically
-function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.08, Math.min(0.27, 0.165 + diff * 0.0028 * pace)); }
+function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.08, Math.min(0.24, 0.145 + diff * 0.0028 * pace)); }
 
 // --- GAME MATH & STATS ---
 function checkMilestones(pName) {
@@ -3534,8 +3534,8 @@ function simGame(idx) {
     const aB2BPen = (!isPlayoffs && aG_obj && playerStats[aG_obj.name]?.lastPlayedDay === currentDay - 1) ? 0.06 : 0;
     const hHurtPen = (hG_name && playerStats[hG_name]?.playingHurt) ? 0.15 : 0;
     const aHurtPen = (aG_name && playerStats[aG_name]?.playingHurt) ? 0.15 : 0;
-    let hWallMod = Math.max(0.80, Math.min(1.20, 1.0 + (75 - hGOvr) * 0.010 + hB2BPen - hHurtPen));
-    let aWallMod = Math.max(0.80, Math.min(1.20, 1.0 + (75 - aGOvr) * 0.010 + aB2BPen - aHurtPen));
+    let hWallMod = Math.max(0.75, Math.min(1.25, 1.0 + (75 - hGOvr) * 0.014 + hB2BPen - hHurtPen));
+    let aWallMod = Math.max(0.75, Math.min(1.25, 1.0 + (75 - aGOvr) * 0.014 + aB2BPen - aHurtPen));
     // Coaching adjustments: forecheck 1=aggressive(open game), -1=defensive(tight); pp 1=shoot, -1=cycle
     if (!isPlayoffs && !isASG && selectedTeam && (g.h.nrm === selectedTeam || g.a.nrm === selectedTeam)) {
         const fMod = coachAdj.forecheck * 0.025; // aggressive opens scoring both ways — only affects the user's own games
@@ -3790,12 +3790,12 @@ function simGame(idx) {
             trk(shooter.name, 's', 1); // Record Skater Shot
             trk(aG_name, 'sa', 1);     // Record Goalie Shot Against
 
-            // Conversion Roll  -  base 8.0%, sniper gets +24% multiplier, softer diff scaling
-            // (tuned so ES + PP + EN goals land near ~8.5 total/game)
+            // Conversion Roll  -  base 8.2%, sniper gets +30% multiplier, softer diff scaling
+            // (tuned so ES + PP + EN goals land near ~7.0 total/game)
             const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const hSniperMod = getEliteShooterMod(hShooterTag);
             const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.093 + (diff * 0.0002)) * aWallMod * hSniperMod * hChaosMod * (isASG ? 1.6 : 1.0);
+            let scoringProb = (0.074 + (diff * 0.0002)) * aWallMod * hSniperMod * hChaosMod * (isASG ? 1.6 : 1.0);
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 hG++;
                 trk(aG_name, 'ga', 1); // Record Goalie Goal Against
@@ -3828,7 +3828,7 @@ function simGame(idx) {
             const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
             const aSniperMod = getEliteShooterMod(aShooterTag);
             const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.093 - (diff * 0.0002)) * hWallMod * aSniperMod * aChaosMod * (isASG ? 1.6 : 1.0);
+            let scoringProb = (0.074 - (diff * 0.0002)) * hWallMod * aSniperMod * aChaosMod * (isASG ? 1.6 : 1.0);
             if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
                 aG++;
                 trk(hG_name, 'ga', 1); // Record Goalie Goal Against
