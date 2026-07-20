@@ -3851,10 +3851,10 @@ function simGame(idx) {
             }
         }
 
-        // Quick Penalty Roll — 0.044 per 15-sec step ≈ 10-11 penalties/game. ~40% of the minors are
+        // Quick Penalty Roll — 0.038 per 15-sec step ≈ 9.1 penalties/game. ~40% of the minors are
         // COINCIDENTAL (roughing scrums after the whistle — one offender per side, no power
         // play), which keeps actual PP opportunities in check so league scoring stays realistic.
-        if (Math.random() < 0.044) {
+        if (Math.random() < 0.038) {
             // Weight the offender toward high aggression/roughness but with a flatter curve
             // (exponent 1.1 instead of 1.5, enforcer mult 1.8 instead of 3) so PIM spreads
             // more broadly across the roster rather than piling onto a single enforcer.
@@ -3867,7 +3867,7 @@ function simGame(idx) {
                 const base = Math.pow((aggr + rough) / 2, 1.3) * tagMult;
                 // Soft PIM cap: starts reducing weight at 150 PIM, drops by 15% per 10 PIM over the cap
                 const seasonPim = ps.season?.pim || 0;
-                const overCap = Math.max(0, seasonPim - 200);
+                const overCap = Math.max(0, seasonPim - 150);
                 const capPenalty = Math.pow(0.85, overCap / 10);
                 return base * capPenalty;
             };
@@ -3885,7 +3885,7 @@ function simGame(idx) {
                 const hOff = pickOffender(hOnIce.filter(p => p.pos !== 'G'));
                 const aOff = pickOffender(aOnIce.filter(p => p.pos !== 'G'));
                 if (hOff && aOff) {
-                    const capSkip = (name) => { const ov = Math.max(0, (playerStats[name]?.season?.pim||0) - 200); return ov > 0 && Math.random() < 1 - Math.pow(0.85, ov/10); };
+                    const capSkip = (name) => { const ov = Math.max(0, (playerStats[name]?.season?.pim||0) - 150); return ov > 0 && Math.random() < 1 - Math.pow(0.85, ov/10); };
                     if (!capSkip(hOff)) trk(hOff, 'pim', 2);
                     if (!capSkip(aOff)) trk(aOff, 'pim', 2);
                     penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: g.h.code,
@@ -3903,7 +3903,7 @@ function simGame(idx) {
                 // Soft PIM cap: once a player is over 150 season PIM, roll to skip the call
                 // (referee "lets it go") — 25% chance to skip per 10 PIM over the threshold
                 const offPim = playerStats[offender]?.season?.pim || 0;
-                const overCap2 = Math.max(0, offPim - 200);
+                const overCap2 = Math.max(0, offPim - 150);
                 const skipChance = 1 - Math.pow(0.85, overCap2 / 10);
                 if (skipChance > 0 && Math.random() < skipChance) { /* penalty waved off */ } else {
                 trk(offender, 'pim', pimAmt);
@@ -3998,7 +3998,7 @@ function simGame(idx) {
         // GOON ROLL — extra PIM for high-rough/enforcer players regardless of ice time.
         // Only targets players with rough grade ≥ C (56+) to avoid spreading PIM to skill players.
         // Uses hRoster/aRoster from the game object — no full playerStats scan.
-        if (!isASG && Math.random() < 0.012) {
+        if (!isASG && Math.random() < 0.008) {
             const goonTeam = Math.random() < 0.5 ? g.h : g.a;
             const tStruct = goonTeam.nrm === g.h.nrm ? hStruct : aStruct;
             const teamRoster = [...tStruct.f.flat(), ...tStruct.d.flat()];
@@ -4034,7 +4034,7 @@ function simGame(idx) {
         // ~0.085% per 15-sec tick → ~0.2 fights/game (1 in 5). Only skaters with at least a C
         // in BOTH aggression and roughness will drop the gloves; ENFORCER-tagged players carry
         // a 4x weight on top of the quadratic aggr/rough curve, so the goons take most fights.
-        if (!isASG && Math.random() < 0.00085) {
+        if (!isASG && Math.random() < 0.0006) {
             const fightWeight = (name) => {
                 const ps = playerStats[name];
                 if (!ps) return 0;
