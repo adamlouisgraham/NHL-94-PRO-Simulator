@@ -1609,17 +1609,28 @@ function getPlayerWeightedStats(pName) {
         // --- FORWARDS ---
         else {
             if (baseOvr >= 85) tag = "SUPERSTAR";
-            else if (shotAcc >= 80 && pwr >= 75 && off >= 80) tag = "SNIPER"; 
+            else if (shotAcc >= 80 && pwr >= 75 && off >= 80) tag = "SNIPER";
             else if (pass >= 80 && off >= 80) tag = "PLAYMAKER";
             // ENFORCER = both aggression AND roughness at B or above. Sits high in the
-            // waterfall (above TWO-WAY STAR F / TWO-WAY FWD / OFFENSIVE FWD / DEFENSIVE FWD)
-            // so a true goon profile is never re-labeled as a generic two-way/off/def forward.
+            // waterfall so a true goon profile is never re-labeled as something else.
             else if (rough >= 75 && aggr >= 75) tag = "ENFORCER F";
-            else if (off >= 75 && def >= 75 && check >= 75 || aggr >= 75 && pass >= 75 && pwr >= 75 || shotAcc >= 75 ) tag = "TWO-WAY STAR F";
-            else if (off >= 75 && agl >= 75 && spd >= 80) tag = "SPEEDSTER"; 
-            else if (off >= 75 && agl >= 80 && stkHnd >= 80) tag = "DANGLER";
-            else if (off >= 70 && check >= 65 && pwr >= 70 && aggr >= 65 && rough >= 65 && weight >= 215) tag = "POWER FORWARD";
-            else if (def >= 65 && off >= 65 && check >= 60 && aggr >= 65 && rough >= 65 && weight <= 215) tag = "GRINDER";
+            // POWER FORWARD: physical offensive player with size. Evaluated BEFORE TWO-WAY STAR F.
+            // Route 1 — offensive-first PF (lower def): size/toughness profile without strong D.
+            // Route 2 — elite physical PF: very high rough+check qualifies even with decent def,
+            //   but high rough threshold (>=70) keeps true two-way players (Corson rough=62,
+            //   BrindAmour rough=44, Modano rough=56) in TWO-WAY STAR F where they belong.
+            else if (
+              (off >= 68 && def < 70  && check >= 60 && pwr >= 68 && aggr >= 65 && rough >= 58 && weight >= 185) ||
+              (off >= 68 && rough >= 70 && check >= 68 && pwr >= 68 && aggr >= 65 && weight >= 185)
+            ) tag = "POWER FORWARD";
+            // SPEEDSTER: pure pace players. def<70 keeps two-way speedsters in TWO-WAY STAR F.
+            else if (off >= 70 && def < 70 && agl >= 75 && spd >= 82) tag = "SPEEDSTER";
+            // DANGLER: skill/hands player. def<70 keeps two-way wizards in TWO-WAY STAR F.
+            else if (off >= 70 && def < 70 && agl >= 76 && stkHnd >= 78) tag = "DANGLER";
+            // TWO-WAY STAR F: genuine two-way contributor — requires real defensive value (def>=70).
+            // Removed the shotAcc>=75 standalone trigger that was labeling 60+ players as two-way.
+            else if ((off >= 73 && def >= 70) || (off >= 75 && check >= 70 && aggr >= 68)) tag = "TWO-WAY STAR F";
+            else if (def >= 65 && off >= 65 && check >= 60 && aggr >= 62 && rough >= 60 && weight <= 215) tag = "GRINDER";
             // Shutdown-style forward: strong defensive awareness without meeting any other archetype's
             // criteria above. Distinct from PRO DEFENSIVE FWD (which only requires def>=70 with no
             // offense floor) so a true 75+ defensive specialist reads as a distinct, named archetype.
