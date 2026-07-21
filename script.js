@@ -5,6 +5,10 @@
 // 1. CORE UTILITIES (Must be defined first)
 // =========================================================
 
+// Per-player archetype overrides — used wherever tag is looked up from getPlayerWeightedStats.
+// Lets individual players punch above their computed archetype without touching roster data.
+const PLAYER_TAG_OVERRIDES = {};
+
     // =========================================================
     //  ARCHETYPE BEHAVIOR MULTIPLIERS (Complete Master List)
     // =========================================================
@@ -3831,7 +3835,7 @@ function simGame(idx) {
             trk(defGNm, 'sa', 1);
             if (isHome) hShots++; else aShots++;
 
-            const tag       = getPlayerWeightedStats(shooter.name)?.tag;
+            const tag       = PLAYER_TAG_OVERRIDES[shooter.name] || getPlayerWeightedStats(shooter.name)?.tag;
             const sniperMod = getEliteShooterMod(tag);
             const chaosMod  = 1.0 + (Math.random()-0.5)*activeChaos*0.08;
             const wallMod   = isHome ? aWallMod : hWallMod;
@@ -4502,7 +4506,7 @@ function selectShooter(unit) {
         if (!ps) return 1;
 
         const pA = ps.attr || {};
-        const tag = (typeof getPlayerWeightedStats === 'function') ? (getPlayerWeightedStats(name)?.tag || 'GENERIC') : 'GENERIC';
+        const tag = PLAYER_TAG_OVERRIDES[name] || ((typeof getPlayerWeightedStats === 'function') ? (getPlayerWeightedStats(name)?.tag || 'GENERIC') : 'GENERIC');
         const arch = (typeof archMods !== 'undefined' && archMods[tag]) ? archMods[tag] : { shotRate: 1.0 };
 
         // Attributes: Off, ShotPwr, ShotAcc
@@ -4519,7 +4523,7 @@ function selectShooter(unit) {
         // Position modifier  -  wingers shoot a bit more, centers distribute, D ~20% less
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
-        weight *= isD ? 0.80 : (pos === 'LW' || pos === 'RW') ? 1.08 : (pos === 'C') ? 0.95 : 1.0;
+        weight *= isD ? 0.80 : (pos === 'LW' || pos === 'RW') ? 1.12 : (pos === 'C') ? 0.95 : 1.0;
 
         // Hot/cold modifier
         if (ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT')  weight *= 1.20;
@@ -4556,7 +4560,7 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         if (!ps) return 1;
 
         const pA = ps.attr || {};
-        const tag = (typeof getPlayerWeightedStats === 'function') ? (getPlayerWeightedStats(name)?.tag || 'GENERIC') : 'GENERIC';
+        const tag = PLAYER_TAG_OVERRIDES[name] || ((typeof getPlayerWeightedStats === 'function') ? (getPlayerWeightedStats(name)?.tag || 'GENERIC') : 'GENERIC');
         const arch = (typeof archMods !== 'undefined' && archMods[tag]) ? archMods[tag] : { assistRate: 1.0 };
 
         // Attributes driving assist likelihood
