@@ -15,7 +15,7 @@ const PLAYER_TAG_OVERRIDES = {};
     const archMods = {
     // --- FORWARDS (Balanced for higher goal/assist totals) ---
     "SUPERSTAR":      { shotRate: 1.38, penaltyRate: 0.70,  assistRate: 2.50 }, // Elite well-rounded dominance — should push top players toward 100+ point seasons
-    "SNIPER":         { shotRate: 1.40, penaltyRate: 0.85,  assistRate: 0.95 }, // Higher shotRate, lower assistRate to specialize them
+    "SNIPER":         { shotRate: 1.40, penaltyRate: 0.85,  assistRate: 1.00 }, // Higher shotRate, neutral assistRate — goals specialist but still earns assists
     "PLAYMAKER":      { shotRate: 0.89, penaltyRate: 0.80,  assistRate: 3.20 }, // Lower shotRate, significantly higher assistRate
     "SPEEDSTER":      { shotRate: 1.19, penaltyRate: 0.80,  assistRate: 1.15 },
     "DANGLER":        { shotRate: 1.14, penaltyRate: 0.80,  assistRate: 1.30 },
@@ -3538,8 +3538,8 @@ function simGame(idx) {
     const aB2BPen = (!isPlayoffs && aG_obj && playerStats[aG_obj.name]?.lastPlayedDay === currentDay - 1) ? 0.06 : 0;
     const hHurtPen = (hG_name && playerStats[hG_name]?.playingHurt) ? 0.15 : 0;
     const aHurtPen = (aG_name && playerStats[aG_name]?.playingHurt) ? 0.15 : 0;
-    let hWallMod = Math.max(0.75, Math.min(1.25, 1.0 + (75 - hGOvr) * 0.014 + hB2BPen - hHurtPen));
-    let aWallMod = Math.max(0.75, Math.min(1.25, 1.0 + (75 - aGOvr) * 0.014 + aB2BPen - aHurtPen));
+    let hWallMod = Math.max(0.82, Math.min(1.18, 1.0 + (75 - hGOvr) * 0.008 + hB2BPen - hHurtPen));
+    let aWallMod = Math.max(0.82, Math.min(1.18, 1.0 + (75 - aGOvr) * 0.008 + aB2BPen - aHurtPen));
     // Coaching adjustments: forecheck 1=aggressive(open game), -1=defensive(tight); pp 1=shoot, -1=cycle
     if (!isPlayoffs && !isASG && selectedTeam && (g.h.nrm === selectedTeam || g.a.nrm === selectedTeam)) {
         const fMod = coachAdj.forecheck * 0.025; // aggressive opens scoring both ways — only affects the user's own games
