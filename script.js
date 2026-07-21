@@ -10,9 +10,9 @@
     // =========================================================
     const archMods = {
     // --- FORWARDS (Balanced for higher goal/assist totals) ---
-    "SUPERSTAR":      { shotRate: 1.38, penaltyRate: 0.70,  assistRate: 1.38 }, // Elite well-rounded dominance — should push top players toward 100+ point seasons
+    "SUPERSTAR":      { shotRate: 1.38, penaltyRate: 0.70,  assistRate: 2.50 }, // Elite well-rounded dominance — should push top players toward 100+ point seasons
     "SNIPER":         { shotRate: 1.40, penaltyRate: 0.85,  assistRate: 0.95 }, // Higher shotRate, lower assistRate to specialize them
-    "PLAYMAKER":      { shotRate: 0.89, penaltyRate: 0.80,  assistRate: 1.55 }, // Lower shotRate, significantly higher assistRate
+    "PLAYMAKER":      { shotRate: 0.89, penaltyRate: 0.80,  assistRate: 3.20 }, // Lower shotRate, significantly higher assistRate
     "SPEEDSTER":      { shotRate: 1.19, penaltyRate: 0.80,  assistRate: 1.15 },
     "DANGLER":        { shotRate: 1.14, penaltyRate: 0.80,  assistRate: 1.30 },
     "POWER FORWARD":  { shotRate: 1.20, penaltyRate: 1.20,  assistRate: 0.97 },
@@ -48,11 +48,11 @@
 // real point-total lift, not just pure snipers.
 function getEliteShooterMod(tag) {
     switch (tag) {
-        case 'SNIPER': return 1.30;
-        case 'SUPERSTAR': return 1.26;
-        case 'PLAYMAKER': return 1.14;
-        case 'DANGLER': return 1.12;
-        case 'POWER FORWARD': return 1.10;
+        case 'SNIPER': return 1.45;
+        case 'SUPERSTAR': return 1.42;
+        case 'PLAYMAKER': return 1.18;
+        case 'DANGLER': return 1.14;
+        case 'POWER FORWARD': return 1.12;
         case 'SPEEDSTER': return 1.08;
         case 'TWO-WAY STAR F': return 1.08;
         default: return 1.0;
@@ -3726,7 +3726,7 @@ function simGame(idx) {
 
     // Option A: 90-second rolling shift pool for expanded assist attribution
     const hShiftLog = [], aShiftLog = []; // [{tick, players:[name,...]}]
-    const SHIFT_WIN  = 6; // ticks = 90 seconds
+    const SHIFT_WIN  = 4; // ticks = 60 seconds
     const pushShift  = (log, onIce, t) => {
         log.push({tick:t, players:onIce.filter(p=>p.pos!=='G').map(p=>p.name)});
         if (log.length > 4) log.splice(0, log.length-4);
@@ -3772,6 +3772,9 @@ function simGame(idx) {
     grantTOI(hStruct, homeIceData);
     grantTOI(aStruct, awayIceData);
 
+    // Hoisted outside event loop — fallback to first non-empty line if the scheduled line is depleted
+    const pickLine = (lines, idx) => { const l = lines[idx]||[]; if (l.length) return l; return lines.find(x=>x&&x.length) || []; };
+
     let period = 1; // hoisted so PATRICK ROY PROTOCOL can read it after the loop
     let prevEvTick = 0;
 
@@ -3782,13 +3785,12 @@ function simGame(idx) {
         const sec     = (t % 4) * 15;
         const timeStr = `P${period} ${minute%20||20}:${sec<10?'0'+sec:sec}`;
 
-        // Lines on ice at this tick from pre-built schedule
         const hFLine  = homeFSchedule[t] || 0;
         const hDPair  = homeDSchedule[t] || 0;
         const aFLine  = awayFSchedule[t] || 0;
         const aDPair  = awayDSchedule[t] || 0;
-        const hOnIce  = [...(hStruct.f[hFLine]||[]), ...(hStruct.d[hDPair]||[])];
-        const aOnIce  = [...(aStruct.f[aFLine]||[]), ...(aStruct.d[aDPair]||[])];
+        const hOnIce  = [...pickLine(hStruct.f, hFLine), ...pickLine(hStruct.d, hDPair)];
+        const aOnIce  = [...pickLine(aStruct.f, aFLine), ...pickLine(aStruct.d, aDPair)];
 
         // Update rolling shift pools (Option A)
         pushShift(hShiftLog, hOnIce, t);
@@ -3834,7 +3836,7 @@ function simGame(idx) {
             const chaosMod  = 1.0 + (Math.random()-0.5)*activeChaos*0.08;
             const wallMod   = isHome ? aWallMod : hWallMod;
             const dSign     = isHome ? 1 : -1;
-            const prob      = (0.079 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0);
+            const prob      = (0.076 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0);
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
@@ -4576,6 +4578,7 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         // Hot/cold streak modifier
         if (ps.isHot)  weight *= 1.15;
         if (ps.isCold) weight *= 0.85;
+
 
         return Math.max(1, weight);
     };
