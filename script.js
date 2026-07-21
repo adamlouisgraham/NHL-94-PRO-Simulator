@@ -3685,408 +3685,362 @@ function simGame(idx) {
     }
 
     // ==========================================
-    //  THE 60-MINUTE SIMULATION LOOP (240 steps @ 15 seconds each)
-    //  All per-tick probabilities below are calibrated for 15-sec ticks — half the old
-    //  30-sec-tick values — so per-GAME rates stay identical unless deliberately retuned.
+    //  EVENT-DRIVEN SIMULATION ENGINE (Option C + A)
+    //  Replaces the 240-tick per-step loop with a pre-generated event stream.
+    //  ~60-70 events processed per game vs 240 full ticks — ~70% fewer iterations.
+    //  Option A: assist attribution uses a 90-second rolling shift pool so
+    //  playmakers (Gretzky, Larionov) accumulate assists across recent shifts,
+    //  not only from the 5 skaters on ice at the exact goal tick.
     // ==========================================
+
+    // Poisson random variate
+    const poissonRand = (lambda) => {
+        if (lambda <= 0) return 0;
+        const L = Math.exp(-Math.min(lambda, 500));
+        let k = 0, p = 1;
+        do { k++; p *= Math.random(); } while (p > L);
+        return k - 1;
+    };
+
+    // Pre-game OVR gap drives shot distribution (static proxy for per-tick diff)
+    const preGameDiff = Math.max(-12, Math.min(12, (hAvgOvr + homeLastChangeMod + parityBoost - aAvgOvr)));
+    const hShotCount  = poissonRand(28 * (1 + preGameDiff * 0.008));
+    const aShotCount  = poissonRand(28 * (1 - preGameDiff * 0.008));
+    // Penalty counts derived from per-tick rates × 240 steps
+    const penCount    = poissonRand(5.5);   // 0.038×240×0.60 ≈ 5.47 non-coincidental
+    const coinCount   = poissonRand(3.6);   // 0.038×240×0.40 ≈ 3.65 coincidentals
+    const goonCount   = poissonRand(1.9);   // 0.008×240 ≈ 1.92
+    const fightCount  = Math.random() < 0.144 ? 1 : 0; // 0.0006×240 ≈ 0.144/game
+
+    // Assign each event a random tick (0–239), then sort chronologically
+    const randTicks = (n) => Array.from({length:n}, () => Math.floor(Math.random()*240)).sort((a,b)=>a-b);
+    const evStream  = [];
+    randTicks(hShotCount).forEach(t => evStream.push({t, type:'shot', side:'h'}));
+    randTicks(aShotCount).forEach(t => evStream.push({t, type:'shot', side:'a'}));
+    randTicks(penCount).forEach(t   => evStream.push({t, type:'pen'}));
+    randTicks(coinCount).forEach(t  => evStream.push({t, type:'coin'}));
+    randTicks(goonCount).forEach(t  => evStream.push({t, type:'goon'}));
+    if (fightCount)      evStream.push({t: Math.floor(Math.random()*240), type:'fight'});
+    if (!isASG && Math.random() < 0.48) evStream.push({t: Math.floor(Math.random()*240), type:'pshot'});
+    evStream.sort((a,b) => a.t - b.t);
+
+    // Option A: 90-second rolling shift pool for expanded assist attribution
+    const hShiftLog = [], aShiftLog = []; // [{tick, players:[name,...]}]
+    const SHIFT_WIN  = 6; // ticks = 90 seconds
+    const pushShift  = (log, onIce, t) => {
+        log.push({tick:t, players:onIce.filter(p=>p.pos!=='G').map(p=>p.name)});
+        if (log.length > 4) log.splice(0, log.length-4);
+    };
+    const expandPool = (log, onIce, t) => {
+        const s = new Set(onIce.filter(p=>p.pos!=='G').map(p=>p.name));
+        log.forEach(e => { if (t - e.tick <= SHIFT_WIN) e.players.forEach(n=>s.add(n)); });
+        return [...s].map(n => ({name:n}));
+    };
+
+    // Penalty offender picker (hoisted out of per-event scope)
+    const penWeight = (name) => {
+        const ps = playerStats[name];
+        if (!ps) return 1;
+        const aggr = gradeToNum(ps.attr?.aggr) || 50;
+        const rough = gradeToNum(ps.attr?.rough) || 50;
+        const tagMult = (getPlayerWeightedStats(name)?.tag||'').includes('ENFORCER') ? 2.0 : 1;
+        const base = Math.pow((aggr+rough)/2, 1.3) * tagMult;
+        const overCap = Math.max(0, (ps.season?.pim||0) - 150);
+        return base * Math.pow(0.85, overCap/10);
+    };
+    const pickOffender = (skaters) => {
+        const w = skaters.map(p => penWeight(p.name));
+        const total = w.reduce((a,b)=>a+b, 0);
+        if (total === 0) return skaters[Math.floor(Math.random()*skaters.length)].name;
+        let r = Math.random() * total;
+        for (let i=0; i<skaters.length; i++) { r -= w[i]; if (r<=0) return skaters[i].name; }
+        return skaters[skaters.length-1].name;
+    };
+
+    // Constants computed once for the event loop (mirrors tick-loop setup)
+    const lineMatchActive  = !isPlayoffs && !isASG && coachAdj.lineMatch && selectedTeam;
+    const hLineMatchBonus  = (lineMatchActive && g.h.nrm === selectedTeam) ? 1.0 : 0;
+    const aLineMatchBonus  = (lineMatchActive && g.a.nrm === selectedTeam) ? 1.0 : 0;
+
+    // TOI: distribute proportionally from ice-time averages (replaces per-tick 0.25 min grants)
+    const grantTOI = (struct, iceData) => {
+        const fTot = iceData.forwardLineAverages.reduce((s,v)=>s+Math.max(0,v),0) || 1;
+        const dTot = iceData.defensePairAverages.reduce((s,v)=>s+Math.max(0,v),0) || 1;
+        struct.f.forEach((line,i) => { const toi=(Math.max(0,iceData.forwardLineAverages[i]||0)/fTot)*60; line.forEach(p=>trk(p.name,'toi',toi)); });
+        struct.d.forEach((pair,i) => { const toi=(Math.max(0,iceData.defensePairAverages[i]||0)/dTot)*60; pair.forEach(p=>trk(p.name,'toi',toi)); });
+    };
+    grantTOI(hStruct, homeIceData);
+    grantTOI(aStruct, awayIceData);
+
     let period = 1; // hoisted so PATRICK ROY PROTOCOL can read it after the loop
-    for (let step = 0; step < 240; step++) {
-        let minute = Math.floor(step / 4) + 1;
+    let prevEvTick = 0;
 
-        let hFLine = homeFSchedule[step];
-        let aFLine = awayFSchedule[step];
+    for (const ev of evStream) {
+        const t = ev.t;
+        period = t < 80 ? 1 : t < 160 ? 2 : 3;
+        const minute  = Math.floor(t / 4) + 1;
+        const sec     = (t % 4) * 15;
+        const timeStr = `P${period} ${minute%20||20}:${sec<10?'0'+sec:sec}`;
 
-        let hDPair = homeDSchedule[step];
-        let aDPair = awayDSchedule[step];
+        // Lines on ice at this tick from pre-built schedule
+        const hFLine  = homeFSchedule[t] || 0;
+        const hDPair  = homeDSchedule[t] || 0;
+        const aFLine  = awayFSchedule[t] || 0;
+        const aDPair  = awayDSchedule[t] || 0;
+        const hOnIce  = [...(hStruct.f[hFLine]||[]), ...(hStruct.d[hDPair]||[])];
+        const aOnIce  = [...(aStruct.f[aFLine]||[]), ...(aStruct.d[aDPair]||[])];
 
-        let hOnIce = [...hStruct.f[hFLine], ...hStruct.d[hDPair]];
-        let aOnIce = [...aStruct.f[aFLine], ...aStruct.d[aDPair]];
+        // Update rolling shift pools (Option A)
+        pushShift(hShiftLog, hOnIce, t);
+        pushShift(aShiftLog, aOnIce, t);
 
-        // Track skater ATOI values securely (0.25 mins per 15-sec step)
-        hOnIce.forEach(p => trk(p.name, 'toi', 0.25));
-        aOnIce.forEach(p => trk(p.name, 'toi', 0.25));
+        // Momentum decay proportional to elapsed ticks since last event
+        const elapsed = t - prevEvTick;
+        hMomentum = Math.max(0, hMomentum - elapsed * 0.5);
+        aMomentum = Math.max(0, aMomentum - elapsed * 0.5);
+        prevEvTick = t;
 
-        // Accumulate in-game shift ticks for fatigue
-        hOnIce.forEach(p => { gameIceTicks[p.name] = (gameIceTicks[p.name] || 0) + 1; });
-        aOnIce.forEach(p => { gameIceTicks[p.name] = (gameIceTicks[p.name] || 0) + 1; });
-
-        // In-game fatigue penalty: free for first 40 ticks (10 min), then 0.05 OVR per 15-sec tick
-        const inGameFatigue = (name) => Math.max(0, ((gameIceTicks[name] || 0) - 40) * 0.05);
-        const hFatiguePen = hOnIce.reduce((s,p) => s + inGameFatigue(p.name), 0) / Math.max(1, hOnIce.length);
-        const aFatiguePen = aOnIce.reduce((s,p) => s + inGameFatigue(p.name), 0) / Math.max(1, aOnIce.length);
-
-        // Momentum decay — dissipates by 0.5 each 15-sec step (same real-time duration as before)
-        hMomentum = Math.max(0, hMomentum - 0.5);
-        aMomentum = Math.max(0, aMomentum - 0.5);
-
-        // Live Dynamic Matchup Overalls (momentum adds up to +3 OVR for ~4 min after a goal)
-        // Line Match bonus only applies to the user's own team, on whichever side they're playing
-        const lineMatchActive = !isPlayoffs && !isASG && coachAdj.lineMatch && selectedTeam;
-        const hLineMatchBonus = (lineMatchActive && g.h.nrm === selectedTeam) ? 1.0 : 0;
-        const aLineMatchBonus = (lineMatchActive && g.a.nrm === selectedTeam) ? 1.0 : 0;
-        let hLiveOvr = (getLiveLineOvr(hOnIce) + hLineMatchBonus + homeLastChangeMod + parityBoost - hFatiguePen + hPressureMod + hStreakMod + rivalBonus + hMomentum * 0.375) * hAuraMod * homeCrowdEnergy;
-        let aLiveOvr = (getLiveLineOvr(aOnIce) + aLineMatchBonus - aFatiguePen + aPressureMod + aStreakMod + rivalBonus + aMomentum * 0.375) * aAuraMod;
-
-        // Cap the effective OVR gap so blowout-sized roster mismatches (20+ pts) stop scaling
-        // linearly — beyond this point extra roster strength gives diminishing returns instead
-        // of compounding indefinitely across 84 games.
-        let diff = Math.max(-18, Math.min(18, hLiveOvr - aLiveOvr + chaosOffset));
-
-        // SCORE EFFECT — trailing team presses harder (more shots, more risk)
-        // Leading team plays conservative (fewer shots, tighter D)
-        const scoreDiff = hG - aG;
-        const scoreEffectH = scoreDiff * -0.007; // trailing home team gets boost
-        const scoreEffectA = scoreDiff *  0.007; // trailing away team gets boost
-
-        // Shot generation — activeChaos scales with period and game closeness
-        // 3rd period in a tied/1-goal game = peak chaos; blowouts dampen it
-        const absDiff = Math.abs(hG - aG);
-        const periodMult = period === 3 ? 1.5 : period === 2 ? 1.1 : 1.0;
-        const closeMult  = absDiff === 0 ? 1.4 : absDiff === 1 ? 1.15 : absDiff >= 3 ? 0.6 : 1.0;
+        // Per-event live OVR and diff
+        const absDiff     = Math.abs(hG - aG);
+        const periodMult  = period===3?1.5:period===2?1.1:1.0;
+        const closeMult   = absDiff===0?1.4:absDiff===1?1.15:absDiff>=3?0.6:1.0;
         const activeChaos = chaosScale * periodMult * closeMult;
-        const chaosSpike = (Math.random() - 0.5) * activeChaos * 0.12;
-        // Halved from the 30-sec-tick values (0.22 base) so shots/game stay the same at 240 ticks
-        let hShotChance = (0.235 + (diff * 0.0002) * asgBoost + scoreEffectH + chaosSpike) * 0.5;
-        let aShotChance = (0.235 - (diff * 0.0002) * asgBoost + scoreEffectA - chaosSpike) * 0.5;
+        const hLiveOvr = (getLiveLineOvr(hOnIce) + hLineMatchBonus + homeLastChangeMod + parityBoost + hPressureMod + hStreakMod + rivalBonus + hMomentum*0.375)*hAuraMod*homeCrowdEnergy;
+        const aLiveOvr = (getLiveLineOvr(aOnIce) + aLineMatchBonus + aPressureMod + aStreakMod + rivalBonus + aMomentum*0.375)*aAuraMod;
+        const diff = Math.max(-18, Math.min(18, hLiveOvr - aLiveOvr + chaosOffset));
 
-        period = minute <= 20 ? 1 : (minute <= 40 ? 2 : 3);
-        let sec = (step % 4) * 15; // exact quarter-minute stamps: :00 / :15 / :30 / :45
-        let timeStr = `P${period} ${minute % 20 || 20}:${sec < 10 ? '0'+sec : sec}`;
+        // EVEN-STRENGTH SHOT
+        if (ev.type === 'shot') {
+            const isHome  = ev.side === 'h';
+            const onIce   = isHome ? hOnIce : aOnIce;
+            const defGNm  = isHome ? aG_name : hG_name;
+            const teamObj = isHome ? g.h : g.a;
+            const sLog    = isHome ? hShiftLog : aShiftLog;
+            const oppOnIce= isHome ? aOnIce : hOnIce;
 
-        // PENALTY SHOT — ~0.2% chance per 15-sec tick (~0-1 per game)
-        if (!isASG && Math.random() < 0.002) {
-            const psHome = Math.random() < 0.5;
-            const psTeam = psHome ? g.h : g.a;
-            const psGoalie = psHome ? aG_obj : hG_obj;
-            const psOnIce = (psHome ? hOnIce : aOnIce).filter(p => p.pos !== 'G');
+            if (!onIce.length || !defGNm) continue;
+            const skaters = onIce.filter(p => p.pos !== 'G');
+            if (!skaters.length) continue;
+
+            const shooter   = selectShooter(skaters);
+            if (!shooter) continue;
+
+            trk(shooter.name, 's', 1);
+            trk(defGNm, 'sa', 1);
+            if (isHome) hShots++; else aShots++;
+
+            const tag       = getPlayerWeightedStats(shooter.name)?.tag;
+            const sniperMod = getEliteShooterMod(tag);
+            const chaosMod  = 1.0 + (Math.random()-0.5)*activeChaos*0.08;
+            const wallMod   = isHome ? aWallMod : hWallMod;
+            const dSign     = isHome ? 1 : -1;
+            const prob      = (0.079 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0);
+
+            if (Math.random() < Math.max(0.015, Math.min(0.26, prob))) {
+                if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
+
+                // Option A: draw assisters from expanded shift pool (last 90 sec of shifts)
+                const pool    = expandPool(sLog, onIce, t);
+                const assistP = pool.filter(p => p.name !== shooter.name);
+
+                const goalEv = processSingleGoal(teamObj.nrm, teamObj.code, shooter, assistP, timeStr, period, minute%20||20, sec);
+                if (goalEv) {
+                    goalEv.tm  = teamObj.code;
+                    goalEv.cl  = teamColors[teamObj.nrm]?.[0] || '#fff';
+                    goalEv.txt = buildGoalText(goalEv.scorer, goalEv.pAssist, goalEv.sAssist, tag, false, false, false, isHome?hG:aG, isHome?aG:hG, period);
+                    goalEv.hMom = hMomentum; goalEv.aMom = aMomentum;
+                    allGoals.push(goalEv);
+                    trk(goalEv.scorer, 'g', 1);
+                    if (goalEv.pAssist) trk(goalEv.pAssist, 'a', 1);
+                    if (goalEv.sAssist) trk(goalEv.sAssist, 'a', 1);
+                    onIce.forEach(p   => trk(p.name, 'pm',  1));
+                    oppOnIce.forEach(p => trk(p.name, 'pm', -1));
+                    if (isHome) hMomentum=8; else aMomentum=8;
+                }
+            } else {
+                trk(defGNm, 'sv', 1);
+            }
+
+        // NON-COINCIDENTAL PENALTY (PP / SH resolution)
+        } else if (ev.type === 'pen') {
+            let penTeam  = Math.random()>0.5 ? g.h : g.a;
+            let advTeam  = penTeam.nrm===g.h.nrm ? g.a : g.h;
+            let activeSk = (penTeam.nrm===g.h.nrm ? hOnIce : aOnIce).filter(p=>p.pos!=='G');
+            if (!activeSk.length) continue;
+
+            const offender   = pickOffender(activeSk);
+            const isMajor    = Math.random() < 0.06;
+            const pimAmt     = isMajor ? 5 : 2;
+            const overCap2   = Math.max(0, (playerStats[offender]?.season?.pim||0) - 150);
+            const skipChance = 1 - Math.pow(0.85, overCap2/10);
+            if (skipChance > 0 && Math.random() < skipChance) continue;
+
+            trk(offender, 'pim', pimAmt);
+            penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:penTeam.code,
+                cl:teamColors[penTeam.nrm]?.[0]||'#fff',
+                txt:`PENALTY: ${offender} (${isMajor?'5 min major':'2 min minor'})`, isPenalty:true});
+
+            if (isMajor && Math.random()<0.01 && playerStats[offender] && !(playerStats[offender].suspended?.days>0)) {
+                const days = Math.ceil(Math.random()*3);
+                if (!playerStats[offender].suspended) playerStats[offender].suspended={days:0,reason:''};
+                playerStats[offender].suspended.days += days;
+                playerStats[offender].suspended.reason = 'Match penalty';
+                penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:penTeam.code,
+                    cl:'#FF8800', txt:`SUSPENSION: ${offender} — ${days} game(s) (match penalty)`, isNote:true});
+            }
+
+            const advTeamObj = league.find(t2=>t2.nrm===advTeam.nrm);
+            const penTeamObj = league.find(t2=>t2.nrm===penTeam.nrm);
+            if (!isASG && !isPlayoffs) {
+                if (advTeamObj) advTeamObj.season.ppo=(advTeamObj.season.ppo||0)+1;
+                if (penTeamObj) penTeamObj.season.pka=(penTeamObj.season.pka||0)+1;
+            }
+
+            const ppStratMod = (!isPlayoffs&&!isASG&&advTeam.nrm===selectedTeam)
+                ? (coachAdj.pp===-1?1.10:coachAdj.pp===1?0.90:1.0) : 1.0;
+            const ppConvRate = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm)*ppStratMod;
+            const ppRoll     = Math.random();
+            const advTeamObj2 = advTeam.nrm===g.h.nrm ? hTeamObj : aTeamObj;
+            const pp1Names   = advTeamObj2?.specialTeams?.pp1 || [];
+            const advRoster  = rosters[advTeam.nrm] || [];
+            const pp1Roster  = pp1Names
+                .map(n=>(n&&typeof n==='object')?n:advRoster.find(p=>p.name===n))
+                .filter(p=>p&&!(playerStats[p.name]?.injury?.daysRemaining>0)&&!(playerStats[p.name]?.suspended?.days>0));
+            const ppUnit = pp1Roster.length>=3 ? pp1Roster : (advTeam.nrm===g.h.nrm?hOnIce:aOnIce);
+            const pkUnit = advTeam.nrm===g.h.nrm ? aOnIce : hOnIce;
+
+            if (ppRoll < ppConvRate && ppUnit.length > 0) {
+                const ppShooter = selectShooter(ppUnit);
+                const ppEv = processSingleGoal(advTeam.nrm, advTeam.code, ppShooter, ppUnit, timeStr, period, minute%20||20, sec);
+                if (ppEv) {
+                    ppEv.isPP=true; ppEv.tm=advTeam.code; ppEv.cl=teamColors[advTeam.nrm]?.[0]||'#FFD700';
+                    ppEv.txt=buildGoalText(ppEv.scorer, ppEv.pAssist, ppEv.sAssist, null, true, false, false, 0, 0, 0);
+                    allGoals.push(ppEv);
+                    if (advTeam.nrm===g.h.nrm){hG++;hShots++;}else{aG++;aShots++;}
+                    const pkGoalie = penTeam.nrm===g.h.nrm ? hG_name : aG_name;
+                    trk(pkGoalie,'sa',1); trk(pkGoalie,'ga',1);
+                    trk(ppEv.scorer,'g',1); trk(ppEv.scorer,'s',1);
+                    if (ppEv.pAssist) trk(ppEv.pAssist,'a',1);
+                    if (ppEv.sAssist) trk(ppEv.sAssist,'a',1);
+                    if (!isASG) {
+                        const kk=isPlayoffs?'playoff':'season';
+                        if (playerStats[ppEv.scorer]) playerStats[ppEv.scorer][kk].ppg=(playerStats[ppEv.scorer][kk].ppg||0)+1;
+                        if (ppEv.pAssist&&playerStats[ppEv.pAssist]) playerStats[ppEv.pAssist][kk].ppa=(playerStats[ppEv.pAssist][kk].ppa||0)+1;
+                        if (ppEv.sAssist&&playerStats[ppEv.sAssist]) playerStats[ppEv.sAssist][kk].ppa=(playerStats[ppEv.sAssist][kk].ppa||0)+1;
+                        if (advTeamObj) advTeamObj.season.ppg=(advTeamObj.season.ppg||0)+1;
+                        if (penTeamObj) penTeamObj.season.pkg=(penTeamObj.season.pkg||0)+1;
+                    }
+                    if (advTeam.nrm===g.h.nrm) hMomentum=8; else aMomentum=8;
+                }
+            } else if (ppRoll>=ppConvRate && Math.random()<0.02 && pkUnit.length>0) {
+                const shShooter = selectShooter(pkUnit);
+                const shEv = processSingleGoal(penTeam.nrm, penTeam.code, shShooter, pkUnit, timeStr, period, minute%20||20, sec);
+                if (shEv) {
+                    shEv.isSH=true; shEv.tm=penTeam.code; shEv.cl=teamColors[penTeam.nrm]?.[0]||'#00FFFF';
+                    shEv.txt=buildGoalText(shEv.scorer, shEv.pAssist, shEv.sAssist, null, false, true, false, 0, 0, 0);
+                    allGoals.push(shEv);
+                    if (penTeam.nrm===g.h.nrm){hG++;hShots++;}else{aG++;aShots++;}
+                    const ppGoalie = advTeam.nrm===g.h.nrm ? hG_name : aG_name;
+                    trk(ppGoalie,'sa',1); trk(ppGoalie,'ga',1);
+                    trk(shEv.scorer,'g',1); trk(shEv.scorer,'s',1);
+                    if (shEv.pAssist) trk(shEv.pAssist,'a',1);
+                    if (shEv.sAssist) trk(shEv.sAssist,'a',1);
+                    if (!isASG&&playerStats[shEv.scorer]) {
+                        const kk2=isPlayoffs?'playoff':'season';
+                        playerStats[shEv.scorer][kk2].shg=(playerStats[shEv.scorer][kk2].shg||0)+1;
+                    }
+                    if (penTeam.nrm===g.h.nrm) hMomentum=8; else aMomentum=8;
+                }
+            }
+
+        // COINCIDENTAL MINORS (4-on-4, no PP)
+        } else if (ev.type === 'coin') {
+            if (isASG) continue;
+            const hSk = hOnIce.filter(p=>p.pos!=='G');
+            const aSk = aOnIce.filter(p=>p.pos!=='G');
+            if (!hSk.length || !aSk.length) continue;
+            const hOff = pickOffender(hSk);
+            const aOff = pickOffender(aSk);
+            if (hOff && aOff) {
+                const capSkip = (name) => { const ov=Math.max(0,(playerStats[name]?.season?.pim||0)-150); return ov>0&&Math.random()<1-Math.pow(0.85,ov/10); };
+                if (!capSkip(hOff)) trk(hOff,'pim',2);
+                if (!capSkip(aOff)) trk(aOff,'pim',2);
+                penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:g.h.code,
+                    cl:'#FFAA66', txt:`COINCIDENTAL MINORS: ${hOff} & ${aOff} — roughing (2 min each)`, isPenalty:true});
+            }
+
+        // GOON ROLL
+        } else if (ev.type === 'goon') {
+            if (isASG) continue;
+            const goonTeam = Math.random()<0.5 ? g.h : g.a;
+            const tStruct  = goonTeam.nrm===g.h.nrm ? hStruct : aStruct;
+            const roster   = [...tStruct.f.flat(), ...tStruct.d.flat()];
+            const gPool    = roster.filter(p => {
+                const ps=playerStats[p.name];
+                if (!ps||ps.pos==='G'||ps.injury?.daysRemaining>0||ps.suspended?.days>0) return false;
+                return (gradeToNum(ps.attr?.rough)||0) >= 56;
+            });
+            if (!gPool.length) continue;
+            const gWt    = gPool.map(p => { const ps=playerStats[p.name]; const a2=gradeToNum(ps.attr?.aggr)||50; const r2=gradeToNum(ps.attr?.rough)||50; const tm=(getPlayerWeightedStats(p.name)?.tag||'').includes('ENFORCER')?3:1; const ov=Math.max(0,(ps.season?.pim||0)-150); return Math.pow((a2+r2)/2,1.8)*tm*Math.pow(0.85,ov/10); });
+            const gTotal = gWt.reduce((a2,b)=>a2+b,0);
+            if (gTotal<=0) continue;
+            let gr=Math.random()*gTotal, gPicked=gPool[gPool.length-1];
+            for (let i=0;i<gPool.length;i++){gr-=gWt[i];if(gr<=0){gPicked=gPool[i];break;}}
+            trk(gPicked.name,'pim',2);
+
+        // FIGHT
+        } else if (ev.type === 'fight') {
+            if (isASG) continue;
+            const canFight    = (p) => { const ps=playerStats[p.name]; if(!ps) return false; return (gradeToNum(ps.attr?.aggr)||50)>=56 && (gradeToNum(ps.attr?.rough)||50)>=56; };
+            const fightWt     = (name) => { const ps=playerStats[name]; if(!ps) return 0; const a2=gradeToNum(ps.attr?.aggr)||50; const r2=gradeToNum(ps.attr?.rough)||50; const tm=(getPlayerWeightedStats(name)?.tag||'').includes('ENFORCER')?4:1; return Math.pow((a2+r2)/2,2)*tm; };
+            const pickFighter = (pool) => { if(!pool.length) return null; const w=pool.map(p=>fightWt(p.name)); const tot=w.reduce((a2,b)=>a2+b,0); if(!tot) return pool[0]; let r2=Math.random()*tot; for(let i=0;i<pool.length;i++){r2-=w[i];if(r2<=0)return pool[i];} return pool[0]; };
+            const hF = pickFighter(hOnIce.filter(p=>p.pos!=='G'&&canFight(p)));
+            const aF = pickFighter(aOnIce.filter(p=>p.pos!=='G'&&canFight(p)));
+            if (hF && aF) {
+                trk(hF.name,'pim',5); trk(aF.name,'pim',5);
+                penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:g.h.code,
+                    cl:'#FF4444', txt:`FIGHT: ${hF.name} vs ${aF.name} — coincidental majors (5 min each)`, isPenalty:false, isFight:true});
+                [hF,aF].forEach(fighter => {
+                    if (Math.random()<0.004 && playerStats[fighter.name] && !(playerStats[fighter.name].suspended?.days>0)) {
+                        const days=Math.ceil(Math.random()*3);
+                        if (!playerStats[fighter.name].suspended) playerStats[fighter.name].suspended={days:0,reason:''};
+                        playerStats[fighter.name].suspended.days+=days;
+                        playerStats[fighter.name].suspended.reason='Match penalty';
+                        penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:g.h.code,
+                            cl:'#FF8800', txt:`SUSPENSION: ${fighter.name} — ${days} game(s) (match penalty)`, isNote:true});
+                    }
+                });
+            }
+
+        // PENALTY SHOT
+        } else if (ev.type === 'pshot') {
+            const psHome   = Math.random()<0.5;
+            const psTeam   = psHome?g.h:g.a;
+            const psGoalie = psHome?aG_obj:hG_obj;
+            const psOnIce  = (psHome?hOnIce:aOnIce).filter(p=>p.pos!=='G');
             const psShooter = psOnIce.length ? selectShooter(psOnIce) : null;
             if (psShooter && psGoalie) {
-                const shooterOvr = getPlayerWeightedStats(psShooter.name).ovr || 75;
-                const goalieOvr  = getPlayerWeightedStats(psGoalie.name).ovr  || 75;
-                const psScoreProb = 0.30 + (shooterOvr - goalieOvr) * 0.005;
-                const psScored = Math.random() < Math.max(0.15, Math.min(0.65, psScoreProb));
-                trk(psShooter.name, 's', 1);
-                if (psScored) {
-                    if (psHome) { hG++; trk(psShooter.name, 'g', 1); trk(aG_name, 'ga', 1); trk(aG_name, 'sa', 1); }
-                    else        { aG++; trk(psShooter.name, 'g', 1); trk(hG_name, 'ga', 1); trk(hG_name, 'sa', 1); }
+                const sOvr = getPlayerWeightedStats(psShooter.name).ovr||75;
+                const gOvr = getPlayerWeightedStats(psGoalie.name).ovr||75;
+                const psPr = 0.30+(sOvr-gOvr)*0.005;
+                const psSc = Math.random()<Math.max(0.15,Math.min(0.65,psPr));
+                trk(psShooter.name,'s',1);
+                if (psSc) {
+                    if (psHome){hG++;trk(psShooter.name,'g',1);trk(aG_name,'ga',1);trk(aG_name,'sa',1);}
+                    else{aG++;trk(psShooter.name,'g',1);trk(hG_name,'ga',1);trk(hG_name,'sa',1);}
                 } else {
-                    if (psHome) { trk(aG_name, 'sv', 1); trk(aG_name, 'sa', 1); }
-                    else        { trk(hG_name, 'sv', 1); trk(hG_name, 'sa', 1); }
+                    if (psHome){trk(aG_name,'sv',1);trk(aG_name,'sa',1);}
+                    else{trk(hG_name,'sv',1);trk(hG_name,'sa',1);}
                 }
-                const psResult = psScored ? 'GOAL' : 'STOPPED';
-                const psTxt = `${psShooter.name} on a PENALTY SHOT — ${psResult}! (${psTeam.code} vs ${psGoalie.name})`;
-                allGoals.push({ p: period, m: minute % 20 || 20, s: sec, tm: psTeam.code,
-                    cl: psScored ? (teamColors[psTeam.nrm]?.[0] || '#fff') : '#888',
-                    txt: psTxt, isPenaltyShot: true, isGoal: psScored,
-                    scorer: psScored ? psShooter.name : null, code: psTeam.code });
-                if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `PENALTY SHOT: ${psTxt}` });
+                const psTxt=`${psShooter.name} on a PENALTY SHOT — ${psSc?'GOAL':'STOPPED'}! (${psTeam.code} vs ${psGoalie.name})`;
+                allGoals.push({p:period, m:minute%20||20, s:sec, tm:psTeam.code,
+                    cl:psSc?(teamColors[psTeam.nrm]?.[0]||'#fff'):'#888',
+                    txt:psTxt, isPenaltyShot:true, isGoal:psSc,
+                    scorer:psSc?psShooter.name:null, code:psTeam.code});
+                if (awardConfig.headlines) tradeLog.unshift({day:`DAY ${currentDay+1}`, details:`PENALTY SHOT: ${psTxt}`});
             }
         }
-
-        // HOME TEAM ATTACK FLOW
-        if (Math.random() < hShotChance) {
-            hShots++;
-            let shooter = selectShooter(hOnIce);
-            trk(shooter.name, 's', 1); // Record Skater Shot
-            trk(aG_name, 'sa', 1);     // Record Goalie Shot Against
-
-            // Conversion Roll  -  base 8.2%, sniper gets +30% multiplier, softer diff scaling
-            // (tuned so ES + PP + EN goals land near ~7.0 total/game)
-            const hShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
-            const hSniperMod = getEliteShooterMod(hShooterTag);
-            const hChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.074 + (diff * 0.0002)) * aWallMod * hSniperMod * hChaosMod * (isASG ? 1.6 : 1.0);
-            if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
-                hG++;
-                trk(aG_name, 'ga', 1); // Record Goalie Goal Against
-                let ev = processSingleGoal(g.h.nrm, g.h.code, shooter, hOnIce, timeStr, period, (minute % 20 || 20), sec);
-                if (ev) {
-                    ev.tm = g.h.code;
-                    ev.cl = teamColors[g.h.nrm] ? teamColors[g.h.nrm][0] : '#fff';
-                    ev.txt = buildGoalText(ev.scorer, ev.pAssist, ev.sAssist, getPlayerWeightedStats(shooter.name)?.tag, false, false, false, hG, aG, period);
-                    ev.hMom = 8; ev.aMom = aMomentum;
-                    allGoals.push(ev);
-                    if (ev.scorer) trk(ev.scorer, 'g', 1);
-                    if (ev.pAssist) trk(ev.pAssist, 'a', 1);
-                    if (ev.sAssist) trk(ev.sAssist, 'a', 1);
-                    hOnIce.forEach(p => { if(p && p.name) trk(p.name, 'pm', 1); });
-                    aOnIce.forEach(p => { if(p && p.name) trk(p.name, 'pm', -1); });
-                    hMomentum = 8;
-                }
-            } else {
-                trk(aG_name, 'sv', 1); // Record Goalie Save
-            }
-        }
-
-        // AWAY TEAM ATTACK FLOW
-        if (Math.random() < aShotChance) {
-            aShots++;
-            let shooter = selectShooter(aOnIce);
-            trk(shooter.name, 's', 1); // Record Skater Shot
-            trk(hG_name, 'sa', 1);     // Record Goalie Shot Against
-
-            const aShooterTag = getPlayerWeightedStats(shooter.name)?.tag;
-            const aSniperMod = getEliteShooterMod(aShooterTag);
-            const aChaosMod = 1.0 + (Math.random() - 0.5) * activeChaos * 0.08;
-            let scoringProb = (0.074 - (diff * 0.0002)) * hWallMod * aSniperMod * aChaosMod * (isASG ? 1.6 : 1.0);
-            if (Math.random() < Math.max(0.015, Math.min(0.26, scoringProb))) {
-                aG++;
-                trk(hG_name, 'ga', 1); // Record Goalie Goal Against
-                let ev = processSingleGoal(g.a.nrm, g.a.code, shooter, aOnIce, timeStr, period, (minute % 20 || 20), sec);
-                if (ev) {
-                    ev.tm = g.a.code;
-                    ev.cl = teamColors[g.a.nrm] ? teamColors[g.a.nrm][0] : '#fff';
-                    ev.txt = buildGoalText(ev.scorer, ev.pAssist, ev.sAssist, getPlayerWeightedStats(shooter.name)?.tag, false, false, false, aG, hG, period);
-                    allGoals.push(ev);
-                    if (ev.scorer) trk(ev.scorer, 'g', 1);
-                    if (ev.pAssist) trk(ev.pAssist, 'a', 1);
-                    if (ev.sAssist) trk(ev.sAssist, 'a', 1);
-                    ev.hMom = hMomentum; ev.aMom = 8;
-                    aOnIce.forEach(p => { if(p.name) trk(p.name, 'pm', 1); });
-                    hOnIce.forEach(p => { if(p.name) trk(p.name, 'pm', -1); });
-                    aMomentum = 8; // ~4 min surge for scoring team
-                }
-            } else {
-                trk(hG_name, 'sv', 1); // Record Goalie Save
-            }
-        }
-
-        // Quick Penalty Roll — 0.038 per 15-sec step ≈ 9.1 penalties/game. ~40% of the minors are
-        // COINCIDENTAL (roughing scrums after the whistle — one offender per side, no power
-        // play), which keeps actual PP opportunities in check so league scoring stays realistic.
-        if (Math.random() < 0.038) {
-            // Weight the offender toward high aggression/roughness but with a flatter curve
-            // (exponent 1.1 instead of 1.5, enforcer mult 1.8 instead of 3) so PIM spreads
-            // more broadly across the roster rather than piling onto a single enforcer.
-            const penWeight = (name) => {
-                const ps = playerStats[name];
-                if (!ps) return 1;
-                const aggr = gradeToNum(ps.attr?.aggr) || 50;
-                const rough = gradeToNum(ps.attr?.rough) || 50;
-                const tagMult = (getPlayerWeightedStats(name)?.tag || '').includes('ENFORCER') ? 2.0 : 1;
-                const base = Math.pow((aggr + rough) / 2, 1.3) * tagMult;
-                // Soft PIM cap: starts reducing weight at 150 PIM, drops by 15% per 10 PIM over the cap
-                const seasonPim = ps.season?.pim || 0;
-                const overCap = Math.max(0, seasonPim - 150);
-                const capPenalty = Math.pow(0.85, overCap / 10);
-                return base * capPenalty;
-            };
-            const pickOffender = (skaters) => {
-                const w = skaters.map(p => penWeight(p.name));
-                const total = w.reduce((a, b) => a + b, 0);
-                if (total === 0) return skaters[Math.floor(Math.random() * skaters.length)].name;
-                let r = Math.random() * total;
-                for (let i = 0; i < skaters.length; i++) { r -= w[i]; if (r <= 0) return skaters[i].name; }
-                return skaters[skaters.length - 1].name;
-            };
-
-            if (!isASG && Math.random() < 0.40 && hOnIce.length > 0 && aOnIce.length > 0) {
-                // COINCIDENTAL MINORS — 2 PIM each side, 4-on-4, no power play
-                const hOff = pickOffender(hOnIce.filter(p => p.pos !== 'G'));
-                const aOff = pickOffender(aOnIce.filter(p => p.pos !== 'G'));
-                if (hOff && aOff) {
-                    const capSkip = (name) => { const ov = Math.max(0, (playerStats[name]?.season?.pim||0) - 150); return ov > 0 && Math.random() < 1 - Math.pow(0.85, ov/10); };
-                    if (!capSkip(hOff)) trk(hOff, 'pim', 2);
-                    if (!capSkip(aOff)) trk(aOff, 'pim', 2);
-                    penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: g.h.code,
-                        cl: '#FFAA66', txt: `COINCIDENTAL MINORS: ${hOff} & ${aOff} — roughing (2 min each)`, isPenalty: true });
-                }
-            } else {
-            let penTeam = Math.random() > 0.5 ? g.h : g.a;
-            let advTeam = penTeam.nrm === g.h.nrm ? g.a : g.h;
-            let activeSkaters = penTeam.nrm === g.h.nrm ? hOnIce : aOnIce;
-            if (activeSkaters.length > 0) {
-                const offender = pickOffender(activeSkaters);
-                // ~6% of penalties are majors (fighting/boarding) → possible suspension
-                const isMajor = Math.random() < 0.06;
-                const pimAmt = isMajor ? 5 : 2;
-                // Soft PIM cap: once a player is over 150 season PIM, roll to skip the call
-                // (referee "lets it go") — 25% chance to skip per 10 PIM over the threshold
-                const offPim = playerStats[offender]?.season?.pim || 0;
-                const overCap2 = Math.max(0, offPim - 150);
-                const skipChance = 1 - Math.pow(0.85, overCap2 / 10);
-                if (skipChance > 0 && Math.random() < skipChance) { /* penalty waved off */ } else {
-                trk(offender, 'pim', pimAmt);
-                penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: penTeam.code, cl: teamColors[penTeam.nrm] ? teamColors[penTeam.nrm][0] : '#fff', txt: `PENALTY: ${offender} (${isMajor ? '5 min major' : '2 min minor'})`, isPenalty: true });
-                // Major penalty → 1% chance of 1-3 game suspension
-                // Guard: a player already serving a suspension shouldn't be on the ice at all
-                // (getRosterStructure filters them out), so this should never fire twice on
-                // the same player — but skip rather than stack if that guarantee is ever broken.
-                if (isMajor && Math.random() < 0.01 && playerStats[offender] && !(playerStats[offender].suspended?.days > 0)) {
-                    const days = Math.ceil(Math.random() * 3);
-                    if (!playerStats[offender].suspended) playerStats[offender].suspended = { days: 0, reason: '' };
-                    playerStats[offender].suspended.days += days;
-                    playerStats[offender].suspended.reason = 'Match penalty';
-                    penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: penTeam.code,
-                        cl: '#FF8800', txt: `SUSPENSION: ${offender} — ${days} game(s) (match penalty)`, isNote: true });
-                }
-                
-                // Track power play opportunity on the team with the advantage
-                const advTeamObj = league.find(t => t.nrm === advTeam.nrm);
-                const penTeamObj = league.find(t => t.nrm === penTeam.nrm);
-                if (!isASG && !isPlayoffs) {
-                    if (advTeamObj) advTeamObj.season.ppo = (advTeamObj.season.ppo || 0) + 1;
-                    if (penTeamObj) penTeamObj.season.pka = (penTeamObj.season.pka || 0) + 1;
-                }
-
-                // Resolve the powerplay using team PP/PK ratings (not a flat 20%)
-                // PP strategy: CYCLE (-1) = patient setup, higher conversion; SHOOT (1) = quick shots, lower conversion
-                const ppStratMod = (!isPlayoffs && !isASG && advTeam.nrm === selectedTeam) ? (coachAdj.pp === -1 ? 1.10 : coachAdj.pp === 1 ? 0.90 : 1.0) : 1.0;
-                const ppConvRate = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm) * ppStratMod;
-                const ppRoll = Math.random();
-                const advTeamObj2 = advTeam.nrm === g.h.nrm ? hTeamObj : aTeamObj;
-                const pp1Names = advTeamObj2?.specialTeams?.pp1 || [];
-                const advTeamRoster = rosters[advTeam.nrm] || [];
-                const pp1Roster = pp1Names
-                    .map(n => (n && typeof n === 'object') ? n : advTeamRoster.find(p => p.name === n))
-                    .filter(p => p && !(playerStats[p.name]?.injury?.daysRemaining > 0) && !(playerStats[p.name]?.suspended?.days > 0));
-                const ppUnit = pp1Roster.length >= 3 ? pp1Roster : (advTeam.nrm === g.h.nrm ? hOnIce : aOnIce);
-                const pkUnit = advTeam.nrm === g.h.nrm ? aOnIce : hOnIce;
-
-                if (ppRoll < ppConvRate && ppUnit.length > 0) {
-                    // POWERPLAY GOAL
-                    const ppShooter = selectShooter(ppUnit);
-                    const ppShooterName = (ppShooter && typeof ppShooter === 'object') ? ppShooter.name : ppShooter;
-                    const ppEv = processSingleGoal(advTeam.nrm, advTeam.code, ppShooter, ppUnit, timeStr, period, (minute % 20 || 20), sec);
-                    if (ppEv) {
-                        ppEv.isPP = true;
-                        ppEv.tm = advTeam.code;
-                        ppEv.cl = teamColors[advTeam.nrm] ? teamColors[advTeam.nrm][0] : '#FFD700';
-                        ppEv.txt = buildGoalText(ppEv.scorer, ppEv.pAssist, ppEv.sAssist, null, true, false, false, 0, 0, 0);
-                        allGoals.push(ppEv);
-                        if (advTeam.nrm === g.h.nrm) { hG++; hShots++; } else { aG++; aShots++; }
-                        // Charge the penalised team's goalie with the shot + goal
-                        const pkGoalie = penTeam.nrm === g.h.nrm ? hG_name : aG_name;
-                        trk(pkGoalie, 'sa', 1); trk(pkGoalie, 'ga', 1);
-                        trk(ppEv.scorer, 'g', 1); trk(ppEv.scorer, 's', 1);
-                        if (ppEv.pAssist) trk(ppEv.pAssist, 'a', 1);
-                        if (ppEv.sAssist) trk(ppEv.sAssist, 'a', 1);
-                        if (!isASG) {
-                            const kk = isPlayoffs?'playoff':'season';
-                            if (playerStats[ppEv.scorer]) { playerStats[ppEv.scorer][kk].ppg = (playerStats[ppEv.scorer][kk].ppg||0)+1; }
-                            if (ppEv.pAssist && playerStats[ppEv.pAssist]) { playerStats[ppEv.pAssist][kk].ppa = (playerStats[ppEv.pAssist][kk].ppa||0)+1; }
-                            if (ppEv.sAssist && playerStats[ppEv.sAssist]) { playerStats[ppEv.sAssist][kk].ppa = (playerStats[ppEv.sAssist][kk].ppa||0)+1; }
-                            if (advTeamObj) advTeamObj.season.ppg = (advTeamObj.season.ppg || 0) + 1;
-                            if (penTeamObj) penTeamObj.season.pkg = (penTeamObj.season.pkg || 0) + 1;
-                        }
-                    }
-                } else if (ppRoll >= ppConvRate && Math.random() < 0.02 && pkUnit.length > 0) {
-                    // SHORTHANDED GOAL — independent ~2% roll so strong PP teams can still give up SHGs
-                    const shShooter = selectShooter(pkUnit);
-                    const shEv = processSingleGoal(penTeam.nrm, penTeam.code, shShooter, pkUnit, timeStr, period, (minute % 20 || 20), sec);
-                    if (shEv) {
-                        shEv.isSH = true;
-                        shEv.tm = penTeam.code;
-                        shEv.cl = teamColors[penTeam.nrm] ? teamColors[penTeam.nrm][0] : '#00FFFF';
-                        shEv.txt = buildGoalText(shEv.scorer, shEv.pAssist, shEv.sAssist, null, false, true, false, 0, 0, 0);
-                        allGoals.push(shEv);
-                        if (penTeam.nrm === g.h.nrm) { hG++; hShots++; } else { aG++; aShots++; }
-                        // SH goal is charged to the advantaged team's goalie
-                        const ppGoalie = advTeam.nrm === g.h.nrm ? hG_name : aG_name;
-                        trk(ppGoalie, 'sa', 1); trk(ppGoalie, 'ga', 1);
-                        trk(shEv.scorer, 'g', 1); trk(shEv.scorer, 's', 1);
-                        if (shEv.pAssist) trk(shEv.pAssist, 'a', 1);
-                        if (shEv.sAssist) trk(shEv.sAssist, 'a', 1);
-                        if (!isASG && playerStats[shEv.scorer]) { const kk2 = isPlayoffs?'playoff':'season'; playerStats[shEv.scorer][kk2].shg = (playerStats[shEv.scorer][kk2].shg||0)+1; }
-                    }
-                }
-            }
-                } // end soft-cap else
-            } // end non-coincidental branch
-        }
-
-        // GOON ROLL — extra PIM for high-rough/enforcer players regardless of ice time.
-        // Only targets players with rough grade ≥ C (56+) to avoid spreading PIM to skill players.
-        // Uses hRoster/aRoster from the game object — no full playerStats scan.
-        if (!isASG && Math.random() < 0.008) {
-            const goonTeam = Math.random() < 0.5 ? g.h : g.a;
-            const tStruct = goonTeam.nrm === g.h.nrm ? hStruct : aStruct;
-            const teamRoster = [...tStruct.f.flat(), ...tStruct.d.flat()];
-            if (teamRoster && teamRoster.length > 0) {
-                const gPool = teamRoster.filter(p => {
-                    const ps = playerStats[p.name];
-                    if (!ps || ps.pos === 'G' || ps.injury?.daysRemaining > 0 || ps.suspended?.days > 0) return false;
-                    const rough = gradeToNum(ps.attr?.rough) || 0;
-                    return rough >= 56; // C grade minimum — filters out skill players
-                });
-                if (gPool.length > 0) {
-                    const gWt = gPool.map(p => {
-                        const ps = playerStats[p.name];
-                        const aggr = gradeToNum(ps.attr?.aggr) || 50;
-                        const rough = gradeToNum(ps.attr?.rough) || 50;
-                        const tagMult = (getPlayerWeightedStats(p.name)?.tag||'').includes('ENFORCER') ? 3 : 1;
-                        const base = Math.pow((aggr + rough) / 2, 1.8) * tagMult;
-                        const overCap = Math.max(0, (ps.season?.pim||0) - 200);
-                        return base * Math.pow(0.85, overCap / 10);
-                    });
-                    const gTotal = gWt.reduce((a,b)=>a+b,0);
-                    if (gTotal > 0) {
-                        let gr = Math.random() * gTotal;
-                        let gPicked = gPool[gPool.length-1];
-                        for (let i=0;i<gPool.length;i++){gr-=gWt[i];if(gr<=0){gPicked=gPool[i];break;}}
-                        trk(gPicked.name, 'pim', 2);
-                    }
-                }
-            }
-        }
-
-        // FIGHTING — coincidental 5-min majors, weighted toward high aggr/rough players
-        // ~0.085% per 15-sec tick → ~0.2 fights/game (1 in 5). Only skaters with at least a C
-        // in BOTH aggression and roughness will drop the gloves; ENFORCER-tagged players carry
-        // a 4x weight on top of the quadratic aggr/rough curve, so the goons take most fights.
-        if (!isASG && Math.random() < 0.0006) {
-            const fightWeight = (name) => {
-                const ps = playerStats[name];
-                if (!ps) return 0;
-                const aggr = gradeToNum(ps.attr?.aggr) || 50;
-                const rough = gradeToNum(ps.attr?.rough) || 50;
-                const tagMult = (getPlayerWeightedStats(name)?.tag || '').includes('ENFORCER') ? 4 : 1;
-                return Math.pow((aggr + rough) / 2, 2) * tagMult; // quadratic so high-aggr players dominate
-            };
-            // Minimum C (56+) in BOTH aggr and rough to be fight-eligible — skill players with
-            // F-grade aggression never end up in a bout just because they were on the ice.
-            const canFight = (p) => {
-                const ps = playerStats[p.name];
-                if (!ps) return false;
-                const aggr = gradeToNum(ps.attr?.aggr) || 50;
-                const rough = gradeToNum(ps.attr?.rough) || 50;
-                return aggr >= 56 && rough >= 56;
-            };
-            const pickFighter = (pool) => {
-                if (!pool.length) return null;
-                const w = pool.map(p => fightWeight(p.name));
-                const total = w.reduce((a, b) => a + b, 0);
-                if (total === 0) return pool[Math.floor(Math.random() * pool.length)];
-                let r = Math.random() * total;
-                for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) return pool[i]; }
-                return pool[0];
-            };
-            const hFighter = pickFighter(hOnIce.filter(p => p.pos !== 'G' && canFight(p)));
-            const aFighter = pickFighter(aOnIce.filter(p => p.pos !== 'G' && canFight(p)));
-            if (hFighter && aFighter) {
-                trk(hFighter.name, 'pim', 5);
-                trk(aFighter.name, 'pim', 5);
-                penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr,
-                    tm: g.h.code, cl: '#FF4444',
-                    txt: `FIGHT: ${hFighter.name} vs ${aFighter.name} — coincidental majors (5 min each)`, isPenalty: false, isFight: true });
-
-                // Same major-penalty suspension risk applies here — a fight hands out an identical
-                // 5-min major to the regular penalty path above, which already rolls this. A lower
-                // rate than a boarding/charging major, since a "clean" fight draws supplemental
-                // discipline far less often in practice.
-                [hFighter, aFighter].forEach(fighter => {
-                    if (Math.random() < 0.004 && playerStats[fighter.name] && !(playerStats[fighter.name].suspended?.days > 0)) {
-                        const days = Math.ceil(Math.random() * 3);
-                        if (!playerStats[fighter.name].suspended) playerStats[fighter.name].suspended = { days: 0, reason: '' };
-                        playerStats[fighter.name].suspended.days += days;
-                        playerStats[fighter.name].suspended.reason = 'Match penalty';
-                        penaltyEvents.push({ p: period, m: (minute % 20 || 20), s: sec, str: timeStr, tm: g.h.code,
-                            cl: '#FF8800', txt: `SUSPENSION: ${fighter.name} — ${days} game(s) (match penalty)`, isNote: true });
-                    }
-                });
-            }
-        }
-    }
+    } // end event stream
 
     // EMPTY NETTER — trailing team pulls goalie in final 2 min (steps 116-119)
     // ~50% chance they actually pull; leading team has ~65% chance to score EN goal
