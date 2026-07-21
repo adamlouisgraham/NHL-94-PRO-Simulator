@@ -1611,9 +1611,10 @@ function getPlayerWeightedStats(pName) {
             if (baseOvr >= 85) tag = "SUPERSTAR";
             else if (shotAcc >= 80 && pwr >= 75 && off >= 80) tag = "SNIPER";
             else if (pass >= 80 && off >= 80) tag = "PLAYMAKER";
-            // ENFORCER = both aggression AND roughness at B or above. Sits high in the
-            // waterfall so a true goon profile is never re-labeled as something else.
-            else if (rough >= 75 && aggr >= 75) tag = "ENFORCER F";
+            // ENFORCER = pure goon: high rough+aggr WITH low offense AND low defensive skill.
+            // off<72 gates out scoring tough guys (Tocchet 79, Guerin 77) → they fall to POWER FORWARD.
+            // def<75 gates out defensive specialists (Sutter def=92, Otto def=90) → DEFENSIVE SPECIALIST.
+            else if (rough >= 75 && aggr >= 75 && off < 72 && def < 75) tag = "ENFORCER F";
             // POWER FORWARD: physical offensive player with size. Evaluated BEFORE TWO-WAY STAR F.
             // Route 1 — offensive-first PF (lower def): size/toughness profile without strong D.
             // Route 2 — elite physical PF: very high rough+check qualifies even with decent def,
@@ -1627,13 +1628,16 @@ function getPlayerWeightedStats(pName) {
             else if (off >= 70 && def < 70 && agl >= 75 && spd >= 82) tag = "SPEEDSTER";
             // DANGLER: skill/hands player. def<70 keeps two-way wizards in TWO-WAY STAR F.
             else if (off >= 70 && def < 70 && agl >= 76 && stkHnd >= 78) tag = "DANGLER";
+            // GRINDER: physical two-way worker. off<73 ceiling keeps two-way stars (TWO-WAY STAR F
+            // route 1 starts at off>=73) from landing here. Evaluated before TWO-WAY STAR F.
+            // weight<=230 is generous — grinders come in all sizes. Rough floor 55 (not 75)
+            // keeps ENFORCER-bound goons separate since ENFORCER is checked earlier.
+            else if (def >= 63 && off >= 55 && off < 73 && check >= 58 && aggr >= 60 && rough >= 55 && weight <= 230) tag = "GRINDER";
             // TWO-WAY STAR F: genuine two-way contributor — requires real defensive value (def>=70).
             // Removed the shotAcc>=75 standalone trigger that was labeling 60+ players as two-way.
             else if ((off >= 73 && def >= 70) || (off >= 75 && check >= 70 && aggr >= 68)) tag = "TWO-WAY STAR F";
-            else if (def >= 65 && off >= 65 && check >= 60 && aggr >= 62 && rough >= 60 && weight <= 215) tag = "GRINDER";
-            // Shutdown-style forward: strong defensive awareness without meeting any other archetype's
-            // criteria above. Distinct from PRO DEFENSIVE FWD (which only requires def>=70 with no
-            // offense floor) so a true 75+ defensive specialist reads as a distinct, named archetype.
+            // DEFENSIVE SPECIALIST: strong D without meeting GRINDER's offense/physicality floor
+            // (e.g. Sutter def=92/off=51, Otto def=90/off=45 — defensive-only forwards).
             else if (def >= 75) tag = "DEFENSIVE SPECIALIST";
             else if (off >= 70) tag = "PRO OFFENSIVE FWD";
             else if (def >= 70) tag = "PRO DEFENSIVE FWD";
