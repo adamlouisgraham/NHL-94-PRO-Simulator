@@ -1611,31 +1611,24 @@ function getPlayerWeightedStats(pName) {
             if (baseOvr >= 85) tag = "SUPERSTAR";
             else if (shotAcc >= 80 && pwr >= 75 && off >= 80) tag = "SNIPER";
             else if (pass >= 80 && off >= 80) tag = "PLAYMAKER";
-            // ENFORCER = pure goon: high rough+aggr WITH low offense AND low defensive skill.
-            // off<72 gates out scoring tough guys (Tocchet 79, Guerin 77) → they fall to POWER FORWARD.
-            // def<75 gates out defensive specialists (Sutter def=92, Otto def=90) → DEFENSIVE SPECIALIST.
-            else if (rough >= 75 && aggr >= 75 && off < 72 && def < 75) tag = "ENFORCER F";
-            // POWER FORWARD: physical offensive player with size. Evaluated BEFORE TWO-WAY STAR F.
-            // Route 1 — offensive-first PF (lower def): size/toughness profile without strong D.
-            // Route 2 — elite physical PF: very high rough+check qualifies even with decent def,
-            //   but high rough threshold (>=70) keeps true two-way players (Corson rough=62,
-            //   BrindAmour rough=44, Modano rough=56) in TWO-WAY STAR F where they belong.
+            // POWER FORWARD: physical offensive player with size.
+            // Route 1 — offensive-first PF: lower def, physical profile.
+            // Route 2 — elite physical PF: high rough qualifies even with decent def.
             else if (
-              (off >= 68 && def < 70  && check >= 60 && pwr >= 68 && aggr >= 65 && rough >= 58 && weight >= 185) ||
-              (off >= 68 && rough >= 70 && check >= 68 && pwr >= 68 && aggr >= 65 && weight >= 185)
+              (off >= 65 && def < 70  && check >= 60 && pwr >= 65 && aggr >= 65 && rough >= 60 && weight >= 185) ||
+              (off >= 70 && rough >= 70 && check >= 65 && pwr >= 65 && aggr >= 65 && weight >= 185)
             ) tag = "POWER FORWARD";
-            // SPEEDSTER: pure pace players. def<70 keeps two-way speedsters in TWO-WAY STAR F.
-            else if (off >= 70 && def < 70 && agl >= 75 && spd >= 82) tag = "SPEEDSTER";
-            // DANGLER: skill/hands player. def<70 keeps two-way wizards in TWO-WAY STAR F.
-            else if (off >= 70 && def < 70 && agl >= 76 && stkHnd >= 78) tag = "DANGLER";
-            // GRINDER: physical two-way worker. off<73 ceiling keeps two-way stars (TWO-WAY STAR F
-            // route 1 starts at off>=73) from landing here. Evaluated before TWO-WAY STAR F.
-            // weight<=230 is generous — grinders come in all sizes. Rough floor 55 (not 75)
-            // keeps ENFORCER-bound goons separate since ENFORCER is checked earlier.
-            else if (def >= 63 && off >= 55 && off < 73 && check >= 58 && aggr >= 60 && rough >= 55 && weight <= 230) tag = "GRINDER";
-            // TWO-WAY STAR F: genuine two-way contributor — requires real defensive value (def>=70).
-            // Removed the shotAcc>=75 standalone trigger that was labeling 60+ players as two-way.
-            else if ((off >= 73 && def >= 70) || (off >= 75 && check >= 70 && aggr >= 68)) tag = "TWO-WAY STAR F";
+            // SPEEDSTER: pure pace players. def<70 keeps two-way speedsters out.
+            else if (off >= 70 && def < 70 && agl >= 70 && spd >= 80) tag = "SPEEDSTER";
+            // DANGLER: skill/hands player. def<70 keeps two-way wizards out.
+            else if (off >= 70 && def < 70 && agl >= 75 && stkHnd >= 75) tag = "DANGLER";
+            // GRINDER: physical two-way worker. off<70 ceiling aligns with TWSF floor.
+            else if (def >= 60 && off >= 55 && off < 70 && check >= 55 && aggr >= 55 && rough >= 50 && weight <= 225) tag = "GRINDER";
+            // TWO-WAY STAR F: genuine two-way contributor — requires real defensive value.
+            else if ((off >= 70 && def >= 70) || (off >= 75 && check >= 70 && aggr >= 65)) tag = "TWO-WAY STAR F";
+            // ENFORCER: pure goon — checked last among named tags so any player with
+            // offensive/skill/two-way value is already claimed above.
+            else if (rough >= 75 && aggr >= 75 && def < 75) tag = "ENFORCER F";
             // DEFENSIVE SPECIALIST: strong D without meeting GRINDER's offense/physicality floor
             // (e.g. Sutter def=92/off=51, Otto def=90/off=45 — defensive-only forwards).
             else if (def >= 75) tag = "DEFENSIVE SPECIALIST";
