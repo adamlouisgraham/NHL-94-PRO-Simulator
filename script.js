@@ -3206,7 +3206,19 @@ function getOffAttr(player) {
 
 function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
     const isPP = mode === 'PP'; const players = getSpecialTeamsUnit(tk, mode, unitNum, isEN);
-    let score = players.reduce((sum, p) => { const stats = playerStats[p.name]; if (!stats) return sum; const ovr = getLiveIceOvr(p.name); const grades = stats.attr.grades || {}; if (isPP) { return sum + ovr + getGradeMod(grades.pass || 'C') * 2.5 + getGradeMod(grades.shotPwr || 'C') * 2.0 + getGradeMod(grades.shotAcc || 'C') * 1.5; } else { return sum + ovr * 0.9 + getGradeMod(grades.check || 'C') * 2.0 + getGradeMod(grades.stkHnd || 'C') * 1.0 + getGradeMod(grades.agil || 'C') * 1.0; } }, 0);
+    const ppArchBonus = { 'PLAYMAKER': 5, 'SNIPER': 4, 'SUPERSTAR': 4, 'DANGLER': 2, 'POWER FORWARD': 2 };
+    const pkArchBonus = { 'DEFENSIVE SPECIALIST': 4, 'TWO-WAY STAR F': 3, 'TWO-WAY FWD': 2, 'GRINDER': 2, 'SPEEDSTER': 2 };
+    let score = players.reduce((sum, p) => {
+        const stats = playerStats[p.name]; if (!stats) return sum;
+        const ovr = getLiveIceOvr(p.name);
+        const grades = stats.attr.grades || {};
+        const tag = PLAYER_TAG_OVERRIDES[p.name] || (getPlayerWeightedStats(p.name)?.tag || '');
+        if (isPP) {
+            return sum + ovr + getGradeMod(grades.pass || 'C') * 2.5 + getGradeMod(grades.shotPwr || 'C') * 2.0 + getGradeMod(grades.shotAcc || 'C') * 1.5 + (ppArchBonus[tag] || 0);
+        } else {
+            return sum + ovr * 0.9 + getGradeMod(grades.check || 'C') * 2.0 + getGradeMod(grades.stkHnd || 'C') * 1.0 + getGradeMod(grades.agil || 'C') * 1.0 + (pkArchBonus[tag] || 0);
+        }
+    }, 0);
     return Math.max(0, score / Math.max(players.length, 1));
 }
 
@@ -3947,7 +3959,7 @@ function simGame(idx) {
                     if (advTeam.nrm===g.h.nrm) hMomentum=8; else aMomentum=8;
                 }
             } else if (ppRoll>=ppConvRate && Math.random()<0.02 && pkUnit.length>0) {
-                const shShooter = selectShooter(pkUnit);
+                const shShooter = selectShooter(pkUnit, 'SH');
                 const shEv = processSingleGoal(penTeam.nrm, penTeam.code, shShooter, pkUnit, timeStr, period, minute%20||20, sec);
                 if (shEv) {
                     shEv.isSH=true; shEv.tm=penTeam.code; shEv.cl=teamColors[penTeam.nrm]?.[0]||'#00FFFF';
@@ -4502,10 +4514,17 @@ function simGame(idx) {
 // --- Weighted Shooter Selection Helper ---
 // We don't want a 50/50 shot between a Defender and a Center.
 // We assign weight probabilities based on Position.
-function selectShooter(unit) {
+function selectShooter(unit, context = 'ES') {
     if (!unit || unit.length === 0) return null;
 
-    const weights = unit.map(player => {
+    // Pre-scan unit tags for linemate synergy detection
+    const unitTags = unit.map(player => {
+        const name = (player && typeof player === 'object') ? player.name : player;
+        return name ? (PLAYER_TAG_OVERRIDES[name] || (typeof getPlayerWeightedStats === 'function' ? getPlayerWeightedStats(name)?.tag || '' : '')) : '';
+    });
+    const hasPlaymaker = unitTags.some(t => t === 'PLAYMAKER');
+
+    const weights = unit.map((player, i) => {
         // Normalize: unit may contain objects or name strings
         const name = (player && typeof player === 'object') ? player.name : player;
         if (!name) return 0;
@@ -4514,7 +4533,7 @@ function selectShooter(unit) {
         if (!ps) return 1;
 
         const pA = ps.attr || {};
-        const tag = PLAYER_TAG_OVERRIDES[name] || ((typeof getPlayerWeightedStats === 'function') ? (getPlayerWeightedStats(name)?.tag || 'GENERIC') : 'GENERIC');
+        const tag = unitTags[i] || 'GENERIC';
         const arch = (typeof archMods !== 'undefined' && archMods[tag]) ? archMods[tag] : { shotRate: 1.0 };
 
         // Attributes: Off, ShotPwr, ShotAcc
@@ -4527,6 +4546,21 @@ function selectShooter(unit) {
 
         // Archetype multiplier
         weight *= (arch.shotRate || 1.0);
+
+        // SH context: speed/grit archetypes preferred on shorthanded goals
+        if (context === 'SH') {
+            if (tag === 'SPEEDSTER')                                         weight *= 1.40;
+            else if (tag === 'GRINDER')                                      weight *= 1.20;
+            else if (tag === 'TWO-WAY STAR F' || tag === 'TWO-WAY FWD')     weight *= 1.15;
+        }
+
+        // Linemate synergy: PLAYMAKER feeds linemates, shoots less himself
+        if (hasPlaymaker) {
+            const pos = ps.pos || 'D';
+            const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
+            if (tag === 'PLAYMAKER')       weight *= 0.90;
+            else if (!isD)                 weight *= 1.15;
+        }
 
         // Position modifier  -  wingers shoot a bit more, centers distribute, D ~20% less
         const pos = ps.pos || 'D';
