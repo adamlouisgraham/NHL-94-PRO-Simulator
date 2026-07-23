@@ -13,35 +13,37 @@ const PLAYER_TAG_OVERRIDES = {};
     //  ARCHETYPE BEHAVIOR MULTIPLIERS (Complete Master List)
     // =========================================================
     const archMods = {
-    // --- FORWARDS (Balanced for higher goal/assist totals) ---
-    "SUPERSTAR":      { shotRate: 1.32, penaltyRate: 0.70,  assistRate: 2.30 }, // Elite well-rounded dominance — should push top players toward 100+ point seasons
-    "SNIPER":         { shotRate: 1.25, penaltyRate: 0.85,  assistRate: 1.00 }, // Higher shotRate, neutral assistRate — goals specialist but still earns assists
-    "PLAYMAKER":      { shotRate: 0.97, penaltyRate: 0.80,  assistRate: 2.50 }, // Lower shotRate, significantly higher assistRate
-    "SPEEDSTER":      { shotRate: 1.19, penaltyRate: 0.80,  assistRate: 1.15 },
-    "DANGLER":        { shotRate: 1.14, penaltyRate: 0.80,  assistRate: 1.30 },
-    "POWER FORWARD":  { shotRate: 1.20, penaltyRate: 1.20,  assistRate: 0.97 },
-    "TWO-WAY STAR F": { shotRate: 1.15, penaltyRate: 0.95,  assistRate: 1.20 },
-    "TWO-WAY FWD":    { shotRate: 0.99, penaltyRate: 0.95,  assistRate: 1.05 },
-    "GRINDER":        { shotRate: 0.98, penaltyRate: 1.30,  assistRate: 0.90 },
-    "ENFORCER F":     { shotRate: 0.50, penaltyRate: 1.60,  assistRate: 0.50 },
-    "PRO OFFENSIVE FWD": { shotRate: 1.14, penaltyRate: 0.75,  assistRate: 1.14 },
-    "PRO DEFENSIVE FWD": { shotRate: 0.89, penaltyRate: 0.75,  assistRate: 1.05 },
-    "DEFENSIVE SPECIALIST": { shotRate: 0.82, penaltyRate: 0.80,  assistRate: 0.98 },
-    "OFFENSIVE FWD":  { shotRate: 0.90, penaltyRate: 1.00,  assistRate: 1.00 },
-    "DEFENSIVE FWD":  { shotRate: 0.75, penaltyRate: 1.00,  assistRate: 0.95 },
+    // --- FORWARDS ---
+    "SUPERSTAR":          { shotRate: 1.32, penaltyRate: 0.70,  assistRate: 2.30 },
+    "PRO SNIPER":         { shotRate: 1.25, penaltyRate: 0.85,  assistRate: 1.00 }, // Elite goal scorer — Hull, Mogilny, Bure
+    "PRO PLAYMAKER":      { shotRate: 0.97, penaltyRate: 0.80,  assistRate: 2.50 }, // Elite playmaker — Gretzky, Oates, Lemieux
+    "SNIPER":             { shotRate: 1.12, penaltyRate: 0.85,  assistRate: 0.95 }, // Solid 30-40G scorer
+    "PLAYMAKER":          { shotRate: 1.00, penaltyRate: 0.85,  assistRate: 1.60 }, // Solid passer — Francis, Janney, Juneau
+    "SPEEDSTER":          { shotRate: 1.19, penaltyRate: 0.80,  assistRate: 1.15 },
+    "DANGLER":            { shotRate: 1.14, penaltyRate: 0.80,  assistRate: 1.30 },
+    "POWER FORWARD":      { shotRate: 1.20, penaltyRate: 1.20,  assistRate: 0.97 },
+    "TWO-WAY STAR F":     { shotRate: 1.15, penaltyRate: 0.95,  assistRate: 1.20 },
+    "TWO-WAY FWD":        { shotRate: 0.99, penaltyRate: 0.95,  assistRate: 1.05 },
+    "GRINDER":            { shotRate: 0.98, penaltyRate: 1.30,  assistRate: 0.90 },
+    "ENFORCER F":         { shotRate: 0.50, penaltyRate: 1.60,  assistRate: 0.50 },
+    "PEST":               { shotRate: 0.92, penaltyRate: 1.30,  assistRate: 0.95 }, // Agitator — draws calls, gets under skin
+    "OFFENSIVE FORWARD":  { shotRate: 1.14, penaltyRate: 0.75,  assistRate: 1.14 },
+    "DEFENSIVE FORWARD":  { shotRate: 0.89, penaltyRate: 0.75,  assistRate: 1.05 },
+    "DEFENSIVE SPECIALIST": { shotRate: 0.82, penaltyRate: 0.80, assistRate: 0.98 },
+    "OFFENSIVE FWD":      { shotRate: 0.90, penaltyRate: 1.00,  assistRate: 1.00 },
+    "DEFENSIVE FWD":      { shotRate: 0.75, penaltyRate: 1.00,  assistRate: 0.95 },
 
     // --- DEFENSEMEN ---
-    "FRANCHISE D":    { shotRate: 1.15, penaltyRate: 0.80,  assistRate: 1.25 }, // High assistRate to reflect their role in starting plays and quarterbacking from the blueline
-    "QUARTERBACK":    { shotRate: 0.99, penaltyRate: 0.85,  assistRate: 1.35 }, // Maximize playmaking from the blueline
-    "BOOMER":         { shotRate: 1.20, penaltyRate: 1.00,  assistRate: 1.11 }, // Higher shotRate, slightly lower assistRate to reflect their focus on powerful shots
-    "BIG HITTER":     { shotRate: 1.00, penaltyRate: 1.40,  assistRate: 1.00 }, // Lower shotRate, higher penaltyRate to reflect their physical style
-    "SHUTDOWN":       { shotRate: 0.80, penaltyRate: 1.00,  assistRate: 1.00 }, // Lower shotRate, balanced assistRate to reflect their defensive focus
+    "FRANCHISE D":    { shotRate: 1.15, penaltyRate: 0.80,  assistRate: 1.35 },
+    "QUARTERBACK":    { shotRate: 0.99, penaltyRate: 0.85,  assistRate: 1.35 },
+    "BOOMER":         { shotRate: 1.20, penaltyRate: 1.00,  assistRate: 1.05 },
+    "BIG HITTER":     { shotRate: 1.00, penaltyRate: 1.40,  assistRate: 1.00 },
+    "SHUTDOWN":       { shotRate: 0.80, penaltyRate: 1.00,  assistRate: 0.85 },
     "TWO-WAY STAR D": { shotRate: 1.09, penaltyRate: 0.90,  assistRate: 1.25 },
     "TWO-WAY D":      { shotRate: 0.97, penaltyRate: 1.00,  assistRate: 1.05 },
-    "PRO OFFENSIVE D":{ shotRate: 1.05, penaltyRate: 0.70,  assistRate: 1.15 },
-    "PRO DEFENSIVE D":{ shotRate: 0.80, penaltyRate: 0.70,  assistRate: 0.95 },
-    "OFFENSIVE D":    { shotRate: 0.99, penaltyRate: 1.00,  assistRate: 1.05 },
-    "DEFENSIVE D":    { shotRate: 0.75, penaltyRate: 1.10,  assistRate: 0.95 },
+    "STAY-AT-HOME":   { shotRate: 0.65, penaltyRate: 0.90,  assistRate: 0.80 }, // Positional defender — no offense, no fighting
+    "OFFENSIVE D":    { shotRate: 1.05, penaltyRate: 0.70,  assistRate: 1.15 },
+    "DEFENSIVE D":    { shotRate: 0.80, penaltyRate: 0.70,  assistRate: 0.95 },
     "ENFORCER D":     { shotRate: 0.70, penaltyRate: 1.60,  assistRate: 0.60 }
 };
 
@@ -52,9 +54,11 @@ const PLAYER_TAG_OVERRIDES = {};
 // real point-total lift, not just pure snipers.
 function getEliteShooterMod(tag) {
     switch (tag) {
-        case 'SNIPER': return 1.45;
+        case 'PRO SNIPER': return 1.45;
         case 'SUPERSTAR': return 1.42;
-        case 'PLAYMAKER': return 1.18;
+        case 'SNIPER': return 1.28;
+        case 'PRO PLAYMAKER': return 1.18;
+        case 'PLAYMAKER': return 1.10;
         case 'DANGLER': return 1.14;
         case 'POWER FORWARD': return 1.12;
         case 'SPEEDSTER': return 1.08;
@@ -1584,70 +1588,41 @@ function getPlayerWeightedStats(pName) {
         if (p.pos === 'D') {
             if (off >= 80 && def >= 80) tag = "FRANCHISE D";
             else if (off >= 75 && pass >= 80) tag = "QUARTERBACK";
-            else if (pwr >= 85 && off >= 75) tag = "BOOMER"; 
-            else if (def >= 75 && def > off && check >= 65 && aggr >= 65) tag = "SHUTDOWN"; 
-            else if (rough >= 75 && aggr >= 75) tag = "ENFORCER D"; 
+            else if (pwr >= 85 && off >= 75) tag = "BOOMER";
+            else if (def >= 75 && def > off && check >= 65 && aggr >= 65) tag = "SHUTDOWN";
+            else if (rough >= 75 && aggr >= 75) tag = "ENFORCER D";
             else if (def >= 70 && off >= 70) tag = "TWO-WAY STAR D";
-            else if (check >= 75) tag = "BIG HITTER";    
-            // ==========================================
-            // !! THE NEW PRO TIERS (DEFENSE)
-            // ==========================================
-            else if (off > def) {
-                tag = (off >= 70) ? "PRO OFFENSIVE D" : tag;
-                tag = (off <= 70) ? "OFFENSIVE D" : tag;
-            }
-            else if (diff <= 8) {
-                tag = "TWO-WAY D"; 
-            }
-            else {
-                tag = (def >= 70) ? "PRO DEFENSIVE D" : tag;
-                tag = (def <= 70) ? "DEFENSIVE D" : tag;
-            }
-            
+            else if (check >= 75) tag = "BIG HITTER";
+            else if (def >= 65 && off < 55 && check < 60 && aggr < 55) tag = "STAY-AT-HOME";
+            else if (off > def) tag = "OFFENSIVE D";
+            else if (diff <= 10) tag = "TWO-WAY D";
+            else tag = "DEFENSIVE D";
         }
-        
+
         // --- FORWARDS ---
         else {
             if (baseOvr >= 85) tag = "SUPERSTAR";
-            else if (shotAcc >= 80 && pwr >= 75 && off >= 80) tag = "SNIPER";
-            else if (pass >= 80 && off >= 80) tag = "PLAYMAKER";
+            else if (shotAcc >= 85 && pwr >= 80 && off >= 85) tag = "PRO SNIPER";
+            else if (pass >= 85 && off >= 80) tag = "PRO PLAYMAKER";
+            else if (shotAcc >= 75 && pwr >= 70 && off >= 75) tag = "SNIPER";
+            else if (pass >= 75 && off >= 70) tag = "PLAYMAKER";
             // POWER FORWARD: physical offensive player with size.
-            // Route 1 — offensive-first PF: lower def, physical profile.
-            // Route 2 — elite physical PF: high rough qualifies even with decent def.
             else if (
-              (off >= 65 && def < 70  && check >= 60 && pwr >= 65 && aggr >= 65 && rough >= 60 && weight >= 185) ||
+              (off >= 65 && def < 70 && check >= 60 && pwr >= 65 && aggr >= 65 && rough >= 60 && weight >= 185) ||
               (off >= 70 && rough >= 70 && check >= 65 && pwr >= 65 && aggr >= 65 && weight >= 185)
             ) tag = "POWER FORWARD";
-            // SPEEDSTER: pure pace players. def<70 keeps two-way speedsters out.
             else if (off >= 70 && def < 70 && agl >= 70 && spd >= 80) tag = "SPEEDSTER";
-            // DANGLER: skill/hands player. def<70 keeps two-way wizards out.
             else if (off >= 70 && def < 70 && agl >= 75 && stkHnd >= 75) tag = "DANGLER";
-            // GRINDER: physical two-way worker. off<70 ceiling aligns with TWSF floor.
             else if (def >= 60 && off >= 55 && off < 70 && check >= 55 && aggr >= 55 && rough >= 50 && weight <= 225) tag = "GRINDER";
-            // TWO-WAY STAR F: genuine two-way contributor — requires real defensive value.
             else if ((off >= 70 && def >= 70) || (off >= 75 && check >= 70 && aggr >= 65)) tag = "TWO-WAY STAR F";
-            // ENFORCER: pure goon — checked last among named tags so any player with
-            // offensive/skill/two-way value is already claimed above.
             else if (rough >= 75 && aggr >= 75 && def < 75) tag = "ENFORCER F";
-            // DEFENSIVE SPECIALIST: strong D without meeting GRINDER's offense/physicality floor
-            // (e.g. Sutter def=92/off=51, Otto def=90/off=45 — defensive-only forwards).
+            else if (aggr >= 70 && rough >= 65 && off >= 55 && off < 70) tag = "PEST";
             else if (def >= 75) tag = "DEFENSIVE SPECIALIST";
-            else if (off >= 70) tag = "PRO OFFENSIVE FWD";
-            else if (def >= 70) tag = "PRO DEFENSIVE FWD";
-            
-            // ==========================================
-            // !! THE NEW PRO TIERS (FORWARDS)
-            // ==========================================
-            else if (off > def) {
-                tag = (off <= 70) ? "OFFENSIVE FWD" : tag;
-            }
-            else if (diff <= 8) {
-                tag = "TWO-WAY FWD";
-            }
-            else {
-                tag = (def <= 70) ? "DEFENSIVE FWD" : tag;
-            }
-             
+            else if (off >= 70) tag = "OFFENSIVE FORWARD";
+            else if (def >= 70) tag = "DEFENSIVE FORWARD";
+            else if (off > def) tag = "OFFENSIVE FWD";
+            else if (diff <= 8) tag = "TWO-WAY FWD";
+            else tag = "DEFENSIVE FWD";
         }
     }
         
@@ -1948,10 +1923,12 @@ function getArchetypeBadge(pName) {
     if (!tag || tag === 'NONE' || tag === 'GOALTENDER') return ''; 
     
     const abbrevMap = {
+        'PRO SNIPER': 'PSN',
+        'PRO PLAYMAKER': 'PPM',
+        'SNIPER': 'SN',
         'PLAYMAKER': 'PL',
         'SUPERSTAR': 'SS',
         'TWO-WAY STAR F': 'TSF',
-        'SNIPER': 'SN',
         'DANGLER': 'DA',
         'SPEEDSTER': 'SP',
         'BOOMER': 'TNT',
@@ -1960,19 +1937,19 @@ function getArchetypeBadge(pName) {
         'TWO-WAY FWD': 'TWF',
         'GRINDER': 'GR',
         'ENFORCER F': 'EF',
+        'PEST': 'PST',
         'FRANCHISE D': 'FD',
         'QUARTERBACK': 'QB',
         'SHUTDOWN': 'SD',
         'BIG HITTER': 'KO',
+        'STAY-AT-HOME': 'SAH',
         'DEFENSIVE D': 'DD',
         'OFFENSIVE D': 'OD',
         'TWO-WAY D': 'TD',
-        'PRO OFFENSIVE D': 'POD',
-        'PRO DEFENSIVE D': 'PDD',
         'OFFENSIVE FWD': 'OF',
         'DEFENSIVE FWD': 'DF',
-        'PRO OFFENSIVE FWD': 'POF',
-        'PRO DEFENSIVE FWD': 'PDF',
+        'OFFENSIVE FORWARD': 'OFW',
+        'DEFENSIVE FORWARD': 'DFW',
         'DEFENSIVE SPECIALIST': 'DS',
         'ENFORCER D': 'ED',
         'WALL': 'WL'
@@ -2491,6 +2468,8 @@ const getRosterStructure = (tk) => {
         if (isSynergyMate) return true; // Synergy mates ignore archetype rules
         let tag = getTag(p);
         if (tag === 'SUPERSTAR' && line.some(x => getTag(x) === 'SUPERSTAR')) return false;
+        if (tag === 'PRO SNIPER' && line.some(x => getTag(x) === 'PRO SNIPER')) return false;
+        if (tag === 'PRO PLAYMAKER' && line.some(x => getTag(x) === 'PRO PLAYMAKER')) return false;
         if (tag === 'SNIPER' && line.some(x => getTag(x) === 'SNIPER')) return false;
         if (tag === 'PLAYMAKER' && line.some(x => getTag(x) === 'PLAYMAKER')) return false;
         return true;
@@ -2531,7 +2510,7 @@ const getRosterStructure = (tk) => {
         // Archetype Match (Sniper + Playmaker) — only if room remains
         if (line.length >= 3) return;
         let tag = getTag(player);
-        let synTarget = tag === 'SNIPER' ? 'PLAYMAKER' : (tag === 'PLAYMAKER' ? 'SNIPER' : null);
+        let synTarget = tag === 'PRO SNIPER' ? 'PRO PLAYMAKER' : tag === 'PRO PLAYMAKER' ? 'PRO SNIPER' : tag === 'SNIPER' ? 'PLAYMAKER' : (tag === 'PLAYMAKER' ? 'SNIPER' : null);
         if (synTarget && line.length < 3) {
             let partner = fPool.find(x => !usedNames.has(x.name) && getTag(x) === synTarget && canAddPlayer(x, line, false));
             if (partner) {
@@ -2687,6 +2666,8 @@ const getRosterStructure = (tk) => {
         let mates = getLineMates(p.name);
         if (mates && line.some(x => mates.includes(x.name))) return true;
         let tag = getTag(p);
+        if (tag === 'PRO SNIPER' && line.some(x => getTag(x) === 'PRO PLAYMAKER')) return true;
+        if (tag === 'PRO PLAYMAKER' && line.some(x => getTag(x) === 'PRO SNIPER')) return true;
         if (tag === 'SNIPER' && line.some(x => getTag(x) === 'PLAYMAKER')) return true;
         if (tag === 'PLAYMAKER' && line.some(x => getTag(x) === 'SNIPER')) return true;
         return false;
@@ -3206,8 +3187,8 @@ function getOffAttr(player) {
 
 function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
     const isPP = mode === 'PP'; const players = getSpecialTeamsUnit(tk, mode, unitNum, isEN);
-    const ppArchBonus = { 'PLAYMAKER': 5, 'SNIPER': 4, 'SUPERSTAR': 4, 'DANGLER': 2, 'POWER FORWARD': 2 };
-    const pkArchBonus = { 'DEFENSIVE SPECIALIST': 4, 'TWO-WAY STAR F': 3, 'TWO-WAY FWD': 2, 'GRINDER': 2, 'SPEEDSTER': 2 };
+    const ppArchBonus = { 'PRO PLAYMAKER': 5, 'PRO SNIPER': 4, 'SUPERSTAR': 4, 'PLAYMAKER': 3, 'SNIPER': 2, 'DANGLER': 2, 'POWER FORWARD': 2 };
+    const pkArchBonus = { 'DEFENSIVE SPECIALIST': 4, 'TWO-WAY STAR F': 3, 'STAY-AT-HOME': 3, 'TWO-WAY FWD': 2, 'GRINDER': 2, 'SPEEDSTER': 2, 'PEST': 2 };
     let score = players.reduce((sum, p) => {
         const stats = playerStats[p.name]; if (!stats) return sum;
         const ovr = getLiveIceOvr(p.name);
@@ -3848,7 +3829,8 @@ function simGame(idx) {
             const skaters = onIce.filter(p => p.pos !== 'G');
             if (!skaters.length) continue;
 
-            const shooter   = selectShooter(skaters);
+            const isClutch  = period === 3 && Math.abs(hG - aG) <= 1;
+            const shooter   = selectShooter(skaters, isClutch ? 'CLUTCH' : 'ES');
             if (!shooter) continue;
 
             trk(shooter.name, 's', 1);
@@ -3860,7 +3842,20 @@ function simGame(idx) {
             const chaosMod  = 1.0 + (Math.random()-0.5)*activeChaos*0.08;
             const wallMod   = isHome ? aWallMod : hWallMod;
             const dSign     = isHome ? 1 : -1;
-            const prob      = (0.076 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0);
+            // Line match: TWO-WAY/DS defenders reduce opponent's conversion when matched up
+            let lineMatchDefMod = 1.0;
+            if (lineMatchActive) {
+                const defSide = isHome ? g.a : g.h;
+                if (defSide.nrm === selectedTeam) {
+                    const defOnIce = isHome ? aOnIce : hOnIce;
+                    const hasMatchupDef = defOnIce.some(p => {
+                        const t = PLAYER_TAG_OVERRIDES[p.name] || getPlayerWeightedStats(p.name)?.tag || '';
+                        return t === 'TWO-WAY STAR F' || t === 'DEFENSIVE SPECIALIST' || t === 'TWO-WAY FWD' || t === 'DEFENSIVE FORWARD' || t === 'SHUTDOWN' || t === 'STAY-AT-HOME';
+                    });
+                    if (hasMatchupDef) lineMatchDefMod = 0.88;
+                }
+            }
+            const prob      = (0.076 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0)*lineMatchDefMod;
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
@@ -4036,6 +4031,46 @@ function simGame(idx) {
                             cl:'#FF8800', txt:`SUSPENSION: ${fighter.name} — ${days} game(s) (match penalty)`, isNote:true});
                     }
                 });
+
+                // ENFORCER intimidation: ~35% chance opponent retaliates with a minor penalty
+                const hFTag = getPlayerWeightedStats(hF.name)?.tag || '';
+                const aFTag = getPlayerWeightedStats(aF.name)?.tag || '';
+                const hEnf  = hFTag === 'ENFORCER F', aEnf = aFTag === 'ENFORCER F';
+                if ((hEnf || aEnf) && Math.random() < 0.35 && !isASG) {
+                    const advObj  = hEnf ? g.h : g.a;
+                    const penObj  = hEnf ? g.a : g.h;
+                    const retPool = (hEnf ? aOnIce : hOnIce).filter(p => p.pos !== 'G');
+                    const ppPool  = (hEnf ? hOnIce : aOnIce).filter(p => p.pos !== 'G');
+                    if (retPool.length && ppPool.length) {
+                        const ret = retPool[Math.floor(Math.random() * retPool.length)];
+                        trk(ret.name, 'pim', 2);
+                        penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:penObj.code,
+                            cl:teamColors[penObj.nrm]?.[0]||'#fff',
+                            txt:`RETALIATION: ${ret.name} — 2 min minor (intimidation)`, isPenalty:true});
+                        const ppConvR = getSpecialTeamsChance(advObj.nrm, penObj.nrm);
+                        if (Math.random() < ppConvR) {
+                            const ppSh2 = selectShooter(ppPool);
+                            const ppEv2 = processSingleGoal(advObj.nrm, advObj.code, ppSh2, ppPool, timeStr, period, minute%20||20, sec);
+                            if (ppEv2) {
+                                ppEv2.isPP=true; ppEv2.tm=advObj.code; ppEv2.cl=teamColors[advObj.nrm]?.[0]||'#FFD700';
+                                ppEv2.txt=buildGoalText(ppEv2.scorer,ppEv2.pAssist,ppEv2.sAssist,null,true,false,false,0,0,0);
+                                allGoals.push(ppEv2);
+                                if(advObj.nrm===g.h.nrm){hG++;hShots++;}else{aG++;aShots++;}
+                                const pkG2=penObj.nrm===g.h.nrm?hG_name:aG_name;
+                                trk(pkG2,'sa',1); trk(pkG2,'ga',1);
+                                trk(ppEv2.scorer,'g',1); trk(ppEv2.scorer,'s',1);
+                                if(ppEv2.pAssist) trk(ppEv2.pAssist,'a',1);
+                                if(ppEv2.sAssist) trk(ppEv2.sAssist,'a',1);
+                                if(!isASG){ const kk3=isPlayoffs?'playoff':'season';
+                                    if(playerStats[ppEv2.scorer]) playerStats[ppEv2.scorer][kk3].ppg=(playerStats[ppEv2.scorer][kk3].ppg||0)+1;
+                                    if(ppEv2.pAssist&&playerStats[ppEv2.pAssist]) playerStats[ppEv2.pAssist][kk3].ppa=(playerStats[ppEv2.pAssist][kk3].ppa||0)+1;
+                                    if(ppEv2.sAssist&&playerStats[ppEv2.sAssist]) playerStats[ppEv2.sAssist][kk3].ppa=(playerStats[ppEv2.sAssist][kk3].ppa||0)+1;
+                                }
+                                if(advObj.nrm===g.h.nrm) hMomentum=8; else aMomentum=8;
+                            }
+                        }
+                    }
+                }
             }
 
         // PENALTY SHOT
@@ -4162,7 +4197,7 @@ function simGame(idx) {
                 if (!line.length) return { ovr: 75, name: null };
                 const best = line.reduce((a,b) => (getPlayerWeightedStats(b.name).ovr||70) > (getPlayerWeightedStats(a.name).ovr||70) ? b : a);
                 const tag = getPlayerWeightedStats(best.name)?.tag;
-                return { ovr: (getPlayerWeightedStats(best.name).ovr||70) + (tag === 'SNIPER' ? 3 : tag === 'SUPERSTAR' ? 5 : 0), name: best.name };
+                return { ovr: (getPlayerWeightedStats(best.name).ovr||70) + (tag === 'PRO SNIPER' ? 5 : tag === 'SNIPER' ? 3 : tag === 'SUPERSTAR' ? 5 : 0), name: best.name };
             };
             const otAssist = (struct, starName) => {
                 const line = otLine(struct).filter(p => p.name !== starName);
@@ -4209,7 +4244,7 @@ function simGame(idx) {
             if (!line.length) return { ovr: 75, name: null };
             const best = line.reduce((a,b) => (getPlayerWeightedStats(b.name).ovr||70) > (getPlayerWeightedStats(a.name).ovr||70) ? b : a);
             const tag = getPlayerWeightedStats(best.name)?.tag;
-            const sniperBonus = tag === 'SNIPER' ? 3 : tag === 'SUPERSTAR' ? 5 : 0;
+            const sniperBonus = tag === 'PRO SNIPER' ? 5 : tag === 'SNIPER' ? 3 : tag === 'SUPERSTAR' ? 5 : 0;
             return { ovr: (getPlayerWeightedStats(best.name).ovr||70) + sniperBonus, name: best.name };
         };
         const otShooterAssist = (struct, starName) => {
@@ -4522,7 +4557,7 @@ function selectShooter(unit, context = 'ES') {
         const name = (player && typeof player === 'object') ? player.name : player;
         return name ? (PLAYER_TAG_OVERRIDES[name] || (typeof getPlayerWeightedStats === 'function' ? getPlayerWeightedStats(name)?.tag || '' : '')) : '';
     });
-    const hasPlaymaker = unitTags.some(t => t === 'PLAYMAKER');
+    const hasPlaymaker = unitTags.some(t => t === 'PRO PLAYMAKER' || t === 'PLAYMAKER');
 
     const weights = unit.map((player, i) => {
         // Normalize: unit may contain objects or name strings
@@ -4551,15 +4586,24 @@ function selectShooter(unit, context = 'ES') {
         if (context === 'SH') {
             if (tag === 'SPEEDSTER')                                         weight *= 1.40;
             else if (tag === 'GRINDER')                                      weight *= 1.20;
+            else if (tag === 'PEST')                                         weight *= 1.15;
             else if (tag === 'TWO-WAY STAR F' || tag === 'TWO-WAY FWD')     weight *= 1.15;
         }
 
-        // Linemate synergy: PLAYMAKER feeds linemates, shoots less himself
+        // CLUTCH context: elite scorers elevate in tight 3rd-period situations
+        if (context === 'CLUTCH') {
+            if (tag === 'SUPERSTAR')                                         weight *= 1.30;
+            else if (tag === 'PRO SNIPER')                                   weight *= 1.28;
+            else if (tag === 'SNIPER')                                       weight *= 1.20;
+            else if (tag === 'TWO-WAY STAR F')                               weight *= 1.10;
+        }
+
+        // Linemate synergy: PLAYMAKER/PRO PLAYMAKER feeds linemates, shoots less himself
         if (hasPlaymaker) {
             const pos = ps.pos || 'D';
             const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
-            if (tag === 'PLAYMAKER')       weight *= 0.90;
-            else if (!isD)                 weight *= 1.15;
+            if (tag === 'PRO PLAYMAKER' || tag === 'PLAYMAKER') weight *= 0.90;
+            else if (!isD)                                       weight *= 1.15;
         }
 
         // Position modifier  -  wingers shoot a bit more, centers distribute, D ~20% less
@@ -4597,7 +4641,7 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
     const eligiblePool = onIceNames.filter(name => name && name !== scorerStr);
 
     // --- Attribute + Archetype + Position weight for assists ---
-    const getAssistWeight = (name) => {
+    const getAssistWeight = (name, assistType = 'primary') => {
         const ps = playerStats[name];
         if (!ps) return 1;
 
@@ -4616,6 +4660,17 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         // Archetype modifier
         weight *= (arch.assistRate || 1.0);
 
+        // Primary vs secondary assist split by archetype:
+        // SNIPERs/SUPERSTARs tend to earn primary assists (they're on the puck);
+        // PLAYMAKERs dominate secondary assists (the setup behind the setup).
+        if (assistType === 'primary') {
+            if (tag === 'PRO SNIPER' || tag === 'SNIPER' || tag === 'SUPERSTAR') weight *= 1.10;
+            else if (tag === 'PRO PLAYMAKER' || tag === 'PLAYMAKER')             weight *= 0.90;
+        } else {
+            if (tag === 'PRO PLAYMAKER' || tag === 'PLAYMAKER') weight *= 1.50;
+            else if (tag === 'PRO SNIPER' || tag === 'SNIPER')  weight *= 0.75;
+        }
+
         // Position modifier  -  centers are primary distributors, D penalized ~20%
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
@@ -4625,13 +4680,12 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         if (ps.isHot)  weight *= 1.15;
         if (ps.isCold) weight *= 0.85;
 
-
         return Math.max(1, weight);
     };
 
     // Weighted random picker
-    const weightedPick = (pool) => {
-        const weights = pool.map(name => getAssistWeight(name));
+    const weightedPick = (pool, assistType = 'primary') => {
+        const weights = pool.map(name => getAssistWeight(name, assistType));
         const total = weights.reduce((a, b) => a + b, 0);
         if (total <= 0) return pool[Math.floor(Math.random() * pool.length)];
         let rand = Math.random() * total;
@@ -4650,13 +4704,13 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
     // ~71.5% of all goals getting two assists, ~21.6% one assist, ~6.9% unassisted (the increase
     // to two-assist goals is taken entirely from the unassisted bucket, one-assist unchanged).
     if (remaining.length > 0 && Math.random() < 0.931) {
-        primaryAssist = weightedPick(remaining);
+        primaryAssist = weightedPick(remaining, 'primary');
         remaining = remaining.filter(n => n !== primaryAssist);
     }
 
     // Secondary Assist (~76.8% chance if primary exists and players remain)
     if (primaryAssist && remaining.length > 0 && Math.random() < 0.768) {
-        secondaryAssist = weightedPick(remaining);
+        secondaryAssist = weightedPick(remaining, 'secondary');
     }
 
     return {
@@ -4815,7 +4869,7 @@ function buildGoalText(scorer, a1, a2, tag, isPP, isSH, isEN, scorerScore, oppon
     const tense = period === 3;
     const trailing = scorerScore < opponentScore;
 
-    if (tag === 'SNIPER' || tag === 'SUPERSTAR') return pick([
+    if (tag === 'PRO SNIPER' || tag === 'SNIPER' || tag === 'SUPERSTAR') return pick([
         `${name} winds up from the circle and RIFLES it top shelf!${assists}`,
         `Textbook snipe — ${name} picks the corner and the goalie had no chance!${assists}`,
         `${name} with the laser — perfectly placed!${assists}`,
@@ -7268,7 +7322,7 @@ function runEndOfSeasonAwards() {
     // out-vote an actual shutdown/two-way forward.
     const selkeDefTagBonus = (tag) => {
         if (tag === 'DEFENSIVE SPECIALIST') return 8;
-        if (tag === 'PRO DEFENSIVE FWD' || tag === 'DEFENSIVE FWD') return 6;
+        if (tag === 'DEFENSIVE FORWARD' || tag === 'DEFENSIVE FWD') return 6;
         if (tag === 'TWO-WAY STAR F' || tag === 'GRINDER') return 4;
         if (tag === 'TWO-WAY FWD') return 2;
         return 0;
