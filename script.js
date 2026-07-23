@@ -1544,10 +1544,10 @@ function getPlayerWeightedStats(pName) {
         let gAgl    = gradeToNum(p.attr.agil);
         let gSpd    = gradeToNum(p.attr.speed);
         let gStkHnd = gradeToNum(p.attr.stkHnd);
-        if      (gDef > 84)                        tag = 'WALL';
-        else if (gAgl >= 88 && gDef >= 65)         tag = 'ACROBAT';
+        if      (gDef >= 85)                        tag = 'WALL';
+        else if (gAgl >= 90 && gDef >= 65)         tag = 'ACROBAT';
         else if (gAgl < 70 && gDef >= 55)          tag = 'SCREENER';
-        else if (gStkHnd >= 85 && gSpd >= 72 && gDef >= 55) tag = 'PUCK HANDLER';
+        else if (gStkHnd >= 85 && gSpd >= 70 && gDef >= 55) tag = 'PUCK HANDLER';
         else if (gDef >= 60)                       tag = 'STOPPER';
         else                                       tag = 'GOALTENDER';
     }
@@ -1634,9 +1634,9 @@ function getPlayerWeightedStats(pName) {
             else if (shotAcc >= 85 && pwr >= 80 && off >= 85) tag = "PRO SNIPER";
             else if (pass >= 85 && off >= 80) tag = "PRO PLAYMAKER";
             // PEST early gate: extreme agitators who also score (Lemieux types)
-            else if (aggr >= 85 && rough >= 78 && off >= 65 && off < 83) tag = "PEST";
+            else if (aggr >= 85 && rough >= 80 && off >= 65 && off < 85) tag = "PEST";
             // POWER FORWARD early gate: heavy hitters who'd otherwise land in SNIPER or PLAYMAKER
-            else if (pwr >= 82 && rough >= 70 && off >= 70 && weight >= 210) tag = "POWER FORWARD";
+            else if (pwr >= 80 && rough >= 70 && off >= 70 && weight >= 210) tag = "POWER FORWARD";
             else if (shotAcc >= 75 && pwr >= 70 && off >= 75) tag = "SNIPER";
             else if (pass >= 75 && off >= 70) tag = "PLAYMAKER";
             // POWER FORWARD: physical offensive player with size.
