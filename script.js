@@ -1645,7 +1645,7 @@ function getPlayerWeightedStats(pName) {
               (off >= 70 && rough >= 70 && check >= 65 && pwr >= 65 && aggr >= 65 && weight >= 185)
             ) tag = "POWER FORWARD";
             else if (off >= 70 && def < 70 && agl >= 70 && spd >= 75) tag = "SPEEDSTER";
-            else if (off >= 70 && def < 70 && agl >= 75 && stkHnd >= 75) tag = "DANGLER";
+            else if (off >= 70 && def < 70 && agl >= 70 && stkHnd >= 70) tag = "DANGLER";
             else if (def >= 60 && off >= 55 && off < 70 && check >= 55 && aggr >= 55 && rough >= 50 && weight <= 225) tag = "GRINDER";
             else if ((off >= 70 && def >= 70) || (off >= 75 && check >= 70 && aggr >= 65)) tag = "TWO-WAY STAR F";
             else if (rough >= 75 && aggr >= 75 && def < 75) tag = "ENFORCER F";
@@ -7655,7 +7655,7 @@ function getConnSmytheScore(p) {
 function handleEndOfSeasonRestart() {
     document.getElementById('awardOverlay').style.display='none'; 
     calendar = []; currentDay = 0; 
-    ['btnSimRnd', 'btnSimPlayoffs', 'btnNextRound'].forEach(id => { const b = document.getElementById(id); if(b) b.remove(); });
+    ['simRoundBtn', 'simPlayoffsBtn', 'btnNextRound'].forEach(id => { const b = document.getElementById(id); if(b) b.remove(); });
     document.querySelectorAll('#officeControls button, #btnSimGame').forEach(b => { const act = b.getAttribute('onclick') || ''; if(act === 'simDay()' || act === 'simNextGame()' || act === 'advanceCalendar()') b.style.display = 'none'; });    
     if(!document.getElementById('btnStartNextSeason')) {
         const nBtn = document.createElement('button'); nBtn.id = 'btnStartNextSeason'; nBtn.innerText = `START SEASON ${currentSeason + 1}`; nBtn.style.borderColor = "var(--neon-cyan)"; nBtn.style.color = "var(--neon-cyan)"; nBtn.onclick = beginNewYear;
@@ -7676,9 +7676,9 @@ function updateTradeDropdowns() {
     }
 }
 
-function openTradeModal() { 
-    if (currentDay > 60 || isPlayoffs) return alert("TRADE DEADLINE PASSED."); 
-    updateTradeDropdowns(); document.getElementById('tradeOverlay').style.display = 'flex'; 
+function openTradeModal() {
+    if (isPlayoffs || getTradeProbabilityMultiplier() === 0) return alert("TRADE DEADLINE PASSED.");
+    updateTradeDropdowns(); document.getElementById('tradeOverlay').style.display = 'flex';
 }
 
 function executeTrade() { 
@@ -7843,8 +7843,11 @@ function openScoutingReport(day, gIdx) {
         const streak = ps ? (ps.macro_streak || ps.micro_streak || 'STABLE') : 'STABLE';
         const streakColor = streak === 'HOT' ? '#FF6600' : streak === 'COLD' ? '#55FFFF' : '#555';
         const b2b = playedYesterday(tkNrm) ? '<span style="color:#FFAA44;font-size:5px;"> [B2B]</span>' : '';
+        const gArch = getArch(gp.name);
+        const archColors = { 'WALL':'#FFD700','ACROBAT':'#00FFCC','SCREENER':'#FF69B4','PUCK HANDLER':'#FFA500','STOPPER':'#88AAFF','GOALTENDER':'#888' };
+        const archBadge = gArch ? `<span style="color:${archColors[gArch]||'#888'};margin-left:6px;font-size:5px;">[${gArch}]</span>` : '';
         return `<div style="font-size:6px;">
-            <span style="color:#ccc;">${gp.name}</span>${b2b}
+            <span style="color:#ccc;">${gp.name}</span>${archBadge}${b2b}
             <span style="color:var(--neon-cyan);margin-left:8px;">SV% ${svp}</span>
             <span style="color:${streakColor};margin-left:8px;">${streak}</span>
             <span style="color:#555;margin-left:8px;">${ps?.season?.w||0}W-${ps?.season?.l||0}L</span>
@@ -7959,7 +7962,11 @@ function openScoutingReport(day, gIdx) {
             <span>PP STYLE: <span style="color:${ppColor};">${ppLabel}</span></span>
             <span>LINE MATCH: <span style="color:${coachAdj.lineMatch?'#FFA500':'#555'};">${coachAdj.lineMatch?'ON':'OFF'}</span></span>
         </div>
-        <button onclick="openCoachingPanel()" style="margin-top:8px;font-size:5px;padding:3px 10px;border-color:#FFA500;color:#FFA500;">ADJUST ▶</button>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+            <button onclick="openCoachingPanel()" style="font-size:5px;padding:3px 10px;border-color:#FFA500;color:#FFA500;">ADJUST ▶</button>
+            <button onclick="document.getElementById('scoutingOverlay').style.display='none';openLineEditor('${hNrm}')" style="font-size:5px;padding:3px 10px;border-color:#00FFCC;color:#00FFCC;">${hCode} LINES ▶</button>
+            <button onclick="document.getElementById('scoutingOverlay').style.display='none';openLineEditor('${aNrm}')" style="font-size:5px;padding:3px 10px;border-color:#00FFCC;color:#00FFCC;">${aCode} LINES ▶</button>
+        </div>
     </div>`;
 
     document.getElementById('scoutingContent').innerHTML = html;
@@ -9479,7 +9486,7 @@ function updateUI() {
 
     const renderLeaderboard = (id, ti, d, sf, vf, lim) => {    
         let h = `<div style="background:#111; padding:10px; text-align:center; color:var(--ea-yellow); text-shadow:2px 2px 0px #000;">${ti}</div><table><tr style="background:#222;"><th>#</th><th>PLAYER</th><th>VAL</th></tr>`; 
-        d.sort(sf).slice(0,lim).forEach((p,idx) => { h += `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')"><td>${idx+1}</td><td>${p.injury?.daysRemaining > 0 ? '[INJ] ' : ''}${p.name} <span class="team-hl">${p.teamCode}</span></td><td class="pts-hl">${vf(p)}</td></tr>`; }); h += `</table>`; document.getElementById(id).innerHTML = h; 
+        d.sort(sf).slice(0,lim).forEach((p,idx) => { const arch = getArch(p.name); const archAbbr = arch ? `<span style="color:#555;font-size:5px;margin-left:4px;">${arch}</span>` : ''; h += `<tr style="cursor:pointer;" onclick="showPlayerCard('${p.name}')"><td>${idx+1}</td><td>${p.injury?.daysRemaining > 0 ? '[INJ] ' : ''}${p.name}${archAbbr} <span class="team-hl">${p.teamCode}</span></td><td class="pts-hl">${vf(p)}</td></tr>`; }); h += `</table>`; document.getElementById(id).innerHTML = h; 
     };
     
     renderLeaderboard('pointsContainer', 'POINTS', [...sks], (a,b) => ((b[k].g+b[k].a) - (a[k].g+a[k].a)), x => x[k].g+x[k].a, 25); 
