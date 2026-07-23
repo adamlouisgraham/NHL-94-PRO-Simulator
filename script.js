@@ -38,14 +38,14 @@ const PLAYER_TAG_OVERRIDES = {};
     "QUARTERBACK":    { shotRate: 0.99, penaltyRate: 0.85,  assistRate: 1.35 },
     "BOOMER":         { shotRate: 1.20, penaltyRate: 1.00,  assistRate: 1.05 },
     "BIG HITTER":     { shotRate: 1.00, penaltyRate: 1.40,  assistRate: 1.00 },
-    "SHUTDOWN":       { shotRate: 0.80, penaltyRate: 1.00,  assistRate: 0.85 },
+    "SHUTDOWN":       { shotRate: 0.80, penaltyRate: 1.10,  assistRate: 0.85 },
     "TWO-WAY STAR D": { shotRate: 1.09, penaltyRate: 0.90,  assistRate: 1.25 },
     "TWO-WAY D":      { shotRate: 0.97, penaltyRate: 1.00,  assistRate: 1.05 },
     "STAY-AT-HOME":   { shotRate: 0.65, penaltyRate: 0.90,  assistRate: 0.80 }, // Positional defender — no offense, no fighting
     "PUCK RUSHER":    { shotRate: 1.08, penaltyRate: 0.85,  assistRate: 1.10 }, // Carries the puck with speed/agility rather than passing — Potvin/Niedermayer type
-    "IRONMAN":        { shotRate: 0.72, penaltyRate: 0.85,  assistRate: 0.85 }, // Workhorse D — high endurance, plays heavy minutes, doesn't show up in stats
+    "IRONMAN":        { shotRate: 0.72, penaltyRate: 0.95,  assistRate: 0.85 }, // Workhorse D — high endurance, plays heavy minutes, doesn't show up in stats
     "INTIMIDATOR":    { shotRate: 0.85, penaltyRate: 1.20,  assistRate: 0.90 }, // Physical defensive presence — hits hard and covers his man. Stevens/Samuelsson type
-    "PRO OFFENSIVE D":{ shotRate: 1.05, penaltyRate: 0.70,  assistRate: 1.15 }, // Solid offensive D — above-average but not FRANCHISE/QB level
+    "PRO OFFENSIVE D":{ shotRate: 1.05, penaltyRate: 0.85,  assistRate: 1.15 }, // Solid offensive D — above-average but not FRANCHISE/QB level
     "PRO DEFENSIVE D":{ shotRate: 0.78, penaltyRate: 0.90,  assistRate: 0.90 }, // Solid defensive D — above-average but not SHUTDOWN level
     "OFFENSIVE D":    { shotRate: 0.95, penaltyRate: 1.00,  assistRate: 1.05 },
     "DEFENSIVE D":    { shotRate: 0.72, penaltyRate: 1.00,  assistRate: 0.88 },
@@ -209,6 +209,8 @@ function getWeightModifier(lbs, arch) {
         case 'SNIPER':          return w <= 204 ? 1.08 : (w >= 230 ? 0.95 : 1.0);
         case 'FRANCHISE D':
         case 'TWO-WAY D':       return w >= 205 && w <= 225 ? 1.05 : 1.0;
+        case 'BOOMER':          return w >= 210 ? 1.10 : (w <= 190 ? 0.92 : 1.0);
+        case 'INTIMIDATOR':     return w >= 205 ? 1.08 : (w <= 185 ? 0.90 : 1.0);
         default:                return 1.0;
     }
 }
@@ -3202,7 +3204,7 @@ function getOffAttr(player) {
 
 function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
     const isPP = mode === 'PP'; const players = getSpecialTeamsUnit(tk, mode, unitNum, isEN);
-    const ppArchBonus = { 'PRO PLAYMAKER': 5, 'PRO SNIPER': 4, 'SUPERSTAR': 4, 'PLAYMAKER': 3, 'SNIPER': 2, 'DANGLER': 2, 'POWER FORWARD': 2, 'PRO OFFENSIVE D': 2 };
+    const ppArchBonus = { 'PRO PLAYMAKER': 5, 'PRO SNIPER': 4, 'SUPERSTAR': 4, 'QUARTERBACK': 4, 'PLAYMAKER': 3, 'BOOMER': 3, 'FRANCHISE D': 3, 'SNIPER': 2, 'DANGLER': 2, 'POWER FORWARD': 2, 'PRO OFFENSIVE D': 2, 'TWO-WAY STAR D': 1 };
     const pkArchBonus = { 'DEFENSIVE SPECIALIST': 4, 'TWO-WAY STAR F': 3, 'STAY-AT-HOME': 3, 'SHUTDOWN': 3, 'INTIMIDATOR': 3, 'IRONMAN': 2, 'TWO-WAY FWD': 2, 'GRINDER': 2, 'SPEEDSTER': 2, 'PEST': 2, 'PRO DEFENSIVE D': 2 };
     let score = players.reduce((sum, p) => {
         const stats = playerStats[p.name]; if (!stats) return sum;
@@ -3865,7 +3867,7 @@ function simGame(idx) {
                     const defOnIce = isHome ? aOnIce : hOnIce;
                     const hasMatchupDef = defOnIce.some(p => {
                         const t = PLAYER_TAG_OVERRIDES[p.name] || getPlayerWeightedStats(p.name)?.tag || '';
-                        return t === 'TWO-WAY STAR F' || t === 'DEFENSIVE SPECIALIST' || t === 'TWO-WAY FWD' || t === 'DEFENSIVE FORWARD' || t === 'SHUTDOWN' || t === 'STAY-AT-HOME';
+                        return t === 'TWO-WAY STAR F' || t === 'DEFENSIVE SPECIALIST' || t === 'TWO-WAY FWD' || t === 'DEFENSIVE FORWARD' || t === 'SHUTDOWN' || t === 'STAY-AT-HOME' || t === 'INTIMIDATOR' || t === 'TWO-WAY STAR D' || t === 'PRO DEFENSIVE D';
                     });
                     if (hasMatchupDef) lineMatchDefMod = 0.88;
                 }
