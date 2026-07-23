@@ -6616,6 +6616,13 @@ function closeWatchGame() {
 
 // --- LINE EDITORS & SPECIAL TEAMS MENUS ---
 
+function openLineEditor(tk) {
+    const overlay = document.getElementById('lineEditorOverlay');
+    if (!overlay) return;
+    overlay.style.display = 'flex';
+    renderLineEditor(tk);
+}
+
 // --- renderLineEditor --------------------------------------------------------
 // Draws the interactive line/pairing editor inside #lineEditorContent.
 // Click any player slot to open a dropdown swap. Preset pairs (Dynamic Duos)
