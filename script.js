@@ -1623,6 +1623,10 @@ function getPlayerWeightedStats(pName) {
             if (baseOvr >= 85) tag = "SUPERSTAR";
             else if (shotAcc >= 85 && pwr >= 80 && off >= 85) tag = "PRO SNIPER";
             else if (pass >= 85 && off >= 80) tag = "PRO PLAYMAKER";
+            // PEST early gate: extreme agitators who also score (Lemieux types)
+            else if (aggr >= 85 && rough >= 78 && off >= 65 && off < 83) tag = "PEST";
+            // POWER FORWARD early gate: heavy hitters who'd otherwise land in SNIPER or PLAYMAKER
+            else if (pwr >= 82 && rough >= 70 && off >= 70 && weight >= 210) tag = "POWER FORWARD";
             else if (shotAcc >= 75 && pwr >= 70 && off >= 75) tag = "SNIPER";
             else if (pass >= 75 && off >= 70) tag = "PLAYMAKER";
             // POWER FORWARD: physical offensive player with size.
@@ -1630,7 +1634,7 @@ function getPlayerWeightedStats(pName) {
               (off >= 65 && def < 70 && check >= 60 && pwr >= 65 && aggr >= 65 && rough >= 60 && weight >= 185) ||
               (off >= 70 && rough >= 70 && check >= 65 && pwr >= 65 && aggr >= 65 && weight >= 185)
             ) tag = "POWER FORWARD";
-            else if (off >= 70 && def < 70 && agl >= 70 && spd >= 80) tag = "SPEEDSTER";
+            else if (off >= 70 && def < 70 && agl >= 70 && spd >= 75) tag = "SPEEDSTER";
             else if (off >= 70 && def < 70 && agl >= 75 && stkHnd >= 75) tag = "DANGLER";
             else if (def >= 60 && off >= 55 && off < 70 && check >= 55 && aggr >= 55 && rough >= 50 && weight <= 225) tag = "GRINDER";
             else if ((off >= 70 && def >= 70) || (off >= 75 && check >= 70 && aggr >= 65)) tag = "TWO-WAY STAR F";
@@ -3234,7 +3238,13 @@ function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
             return sum + ovr * 0.9 + getGradeMod(grades.check || 'C') * 2.0 + getGradeMod(grades.stkHnd || 'C') * 1.0 + getGradeMod(grades.agil || 'C') * 1.0 + (pkArchBonus[tag] || 0);
         }
     }, 0);
-    return Math.max(0, score / Math.max(players.length, 1));
+    let goaliePkBonus = 0;
+    if (!isPP) {
+        const goalieArchPkBonus = { 'WALL': 3, 'SCREENER': 2, 'ACROBAT': 1 };
+        const activeGoalie = (rosters[tk] || []).find(p => p.pos === 'G' && playerStats[p.name]?.injury?.daysRemaining === 0 && !(playerStats[p.name]?.suspended?.days > 0));
+        if (activeGoalie) goaliePkBonus = goalieArchPkBonus[getArch(activeGoalie.name)] || 0;
+    }
+    return Math.max(0, score / Math.max(players.length, 1) + goaliePkBonus);
 }
 
 // Helper function to build the Special Teams HTML dynamically
@@ -4233,7 +4243,7 @@ function simGame(idx) {
                 if (!line.length) return { ovr: 75, name: null };
                 const best = line.reduce((a,b) => (getPlayerWeightedStats(b.name).ovr||70) > (getPlayerWeightedStats(a.name).ovr||70) ? b : a);
                 const tag = getPlayerWeightedStats(best.name)?.tag;
-                return { ovr: (getPlayerWeightedStats(best.name).ovr||70) + (tag === 'PRO SNIPER' ? 5 : tag === 'SNIPER' ? 3 : tag === 'SUPERSTAR' ? 5 : 0), name: best.name };
+                return { ovr: (getPlayerWeightedStats(best.name).ovr||70) + (tag === 'PRO SNIPER' ? 5 : tag === 'SUPERSTAR' ? 5 : tag === 'SNIPER' ? 3 : tag === 'DANGLER' ? 2 : tag === 'SPEEDSTER' ? 1 : 0), name: best.name };
             };
             const otAssist = (struct, starName) => {
                 const line = otLine(struct).filter(p => p.name !== starName);
@@ -4280,7 +4290,7 @@ function simGame(idx) {
             if (!line.length) return { ovr: 75, name: null };
             const best = line.reduce((a,b) => (getPlayerWeightedStats(b.name).ovr||70) > (getPlayerWeightedStats(a.name).ovr||70) ? b : a);
             const tag = getPlayerWeightedStats(best.name)?.tag;
-            const sniperBonus = tag === 'PRO SNIPER' ? 5 : tag === 'SNIPER' ? 3 : tag === 'SUPERSTAR' ? 5 : 0;
+            const sniperBonus = tag === 'PRO SNIPER' ? 5 : tag === 'SUPERSTAR' ? 5 : tag === 'SNIPER' ? 3 : tag === 'DANGLER' ? 2 : tag === 'SPEEDSTER' ? 1 : 0;
             return { ovr: (getPlayerWeightedStats(best.name).ovr||70) + sniperBonus, name: best.name };
         };
         const otShooterAssist = (struct, starName) => {
