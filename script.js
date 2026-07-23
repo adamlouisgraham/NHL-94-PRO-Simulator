@@ -1530,10 +1530,17 @@ function getPlayerWeightedStats(pName) {
     if (p.pos === 'G') {
         // !! FALLBACK UPDATE: Default goalie rating is now 53
         let gDef = parseInt(p.attr.gDef || p.attr.def) || 53;
-        baseOvr = gDef; 
-        if (gDef > 84) tag = 'WALL';
-        else tag = 'GOALTENDER';
-    } 
+        baseOvr = gDef;
+        let gAgl    = gradeToNum(p.attr.agil);
+        let gSpd    = gradeToNum(p.attr.speed);
+        let gStkHnd = gradeToNum(p.attr.stkHnd);
+        if      (gDef > 84)                        tag = 'WALL';
+        else if (gAgl >= 88 && gDef >= 65)         tag = 'ACROBAT';
+        else if (gAgl < 70 && gDef >= 55)          tag = 'SCREENER';
+        else if (gStkHnd >= 85 && gSpd >= 72 && gDef >= 55) tag = 'PUCK HANDLER';
+        else if (gDef >= 60)                       tag = 'STOPPER';
+        else                                       tag = 'GOALTENDER';
+    }
 
     // --- SKATERS ---
     else {
@@ -1969,12 +1976,22 @@ function getArchetypeBadge(pName) {
         'DEFENSIVE FORWARD': 'DFW',
         'DEFENSIVE SPECIALIST': 'DS',
         'ENFORCER D': 'ED',
-        'WALL': 'WL'
+        'WALL': 'WL', 'ACROBAT': 'ACR', 'SCREENER': 'SCR', 'PUCK HANDLER': 'PKH', 'STOPPER': 'STP', 'GOALTENDER': 'GTR'
     };
 
     const abbrev = abbrevMap[tag] || tag.substring(0, 2).toUpperCase();
     return `<span style="margin-left: 6px; font-weight: bold; font-size: 0.85em; color: #888;">[${abbrev}]</span>`;
 }
+// --- GOALIE ARCHETYPE WALL MOD ---
+function getGoalieWallMod(tag) {
+    switch (tag) {
+        case 'ACROBAT':     return -0.025;
+        case 'SCREENER':    return -0.020;
+        case 'GOALTENDER':  return  0.025;
+        default:            return  0;
+    }
+}
+
 // --- MACRO TEAM AURA CALCULATOR ---
 function getTeamSystemAura(tk) {
     // Failsafe: Strictly enforce 3-letter team codes
@@ -3556,8 +3573,10 @@ function simGame(idx) {
     const aB2BPen = (!isPlayoffs && aG_obj && playerStats[aG_obj.name]?.lastPlayedDay === currentDay - 1) ? 0.06 : 0;
     const hHurtPen = (hG_name && playerStats[hG_name]?.playingHurt) ? 0.15 : 0;
     const aHurtPen = (aG_name && playerStats[aG_name]?.playingHurt) ? 0.15 : 0;
-    let hWallMod = Math.max(0.82, Math.min(1.18, 1.0 + (75 - hGOvr) * 0.008 + hB2BPen - hHurtPen));
-    let aWallMod = Math.max(0.82, Math.min(1.18, 1.0 + (75 - aGOvr) * 0.008 + aB2BPen - aHurtPen));
+    const hGArch = hG_obj ? getArch(hG_obj.name) : '';
+    const aGArch = aG_obj ? getArch(aG_obj.name) : '';
+    let hWallMod = Math.max(0.82, Math.min(1.18, 1.0 + (75 - hGOvr) * 0.008 + getGoalieWallMod(hGArch) + hB2BPen - hHurtPen));
+    let aWallMod = Math.max(0.82, Math.min(1.18, 1.0 + (75 - aGOvr) * 0.008 + getGoalieWallMod(aGArch) + aB2BPen - aHurtPen));
     // Coaching adjustments: forecheck 1=aggressive(open game), -1=defensive(tight); pp 1=shoot, -1=cycle
     if (!isPlayoffs && !isASG && selectedTeam && (g.h.nrm === selectedTeam || g.a.nrm === selectedTeam)) {
         const fMod = coachAdj.forecheck * 0.025; // aggressive opens scoring both ways — only affects the user's own games
