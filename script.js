@@ -44,7 +44,7 @@ const PLAYER_TAG_OVERRIDES = {};
     "STAY-AT-HOME":   { shotRate: 0.65, penaltyRate: 0.90,  assistRate: 0.80 }, // Positional defender — no offense, no fighting
     "PUCK RUSHER":    { shotRate: 1.08, penaltyRate: 0.85,  assistRate: 1.10 }, // Carries the puck with speed/agility rather than passing — Potvin/Niedermayer type
     "IRONMAN":        { shotRate: 0.72, penaltyRate: 0.95,  assistRate: 0.85 }, // Workhorse D — high endurance, plays heavy minutes, doesn't show up in stats
-    "INTIMIDATOR":    { shotRate: 0.85, penaltyRate: 1.20,  assistRate: 0.90 }, // Physical defensive presence — hits hard and covers his man. Stevens/Samuelsson type
+    "INTIMIDATOR":    { shotRate: 0.85, penaltyRate: 1.12,  assistRate: 0.90 }, // Physical defensive presence — hits hard and covers his man. Stevens/Samuelsson type
     "PRO OFFENSIVE D":{ shotRate: 1.05, penaltyRate: 0.85,  assistRate: 1.15 }, // Solid offensive D — above-average but not FRANCHISE/QB level
     "PRO DEFENSIVE D":{ shotRate: 0.78, penaltyRate: 0.90,  assistRate: 0.90 }, // Solid defensive D — above-average but not SHUTDOWN level
     "OFFENSIVE D":    { shotRate: 0.95, penaltyRate: 1.00,  assistRate: 1.05 },
