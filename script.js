@@ -1594,18 +1594,18 @@ function getPlayerWeightedStats(pName) {
             if (off >= 80 && def >= 80) tag = "FRANCHISE D";
             else if (off >= 75 && pass >= 80) tag = "QUARTERBACK";
             else if (pwr >= 85 && off >= 75) tag = "BOOMER";
-            else if (def >= 75 && def > off && check >= 60 && aggr >= 60) tag = "SHUTDOWN";
-            else if (rough >= 75 && aggr >= 75 && off < 70) tag = "ENFORCER D";
+            else if (def >= 75 && def > off && off < 70 && check >= 60 && aggr >= 60) tag = "SHUTDOWN";
+            else if (rough >= 75 && aggr >= 75 && off < 70 && def < 70) tag = "ENFORCER D";
             else if (aggr >= 70 && check >= 65 && def >= 60 && off < 70) tag = "INTIMIDATOR";
             else if (def >= 70 && off >= 70) tag = "TWO-WAY STAR D";
             else if (check >= 75 && off < 70) tag = "BIG HITTER";
             else if (spd >= 70 && agl >= 70 && off >= 60) tag = "PUCK RUSHER";
-            else if (def >= 65 && off < 55 && check < 60 && aggr < 55) tag = "STAY-AT-HOME";
             else if (off >= 65 && off > def) tag = "PRO OFFENSIVE D";
             else if (def >= 65 && diff > 10) tag = "PRO DEFENSIVE D";
+            else if (def >= 65 && off < 55 && check < 60 && aggr < 55) tag = "STAY-AT-HOME";
             else if (endur >= 75 && def >= 65 && off < 65) tag = "IRONMAN";
-            else if (off > def) tag = "OFFENSIVE D";
             else if (diff <= 10) tag = "TWO-WAY D";
+            else if (off > def) tag = "OFFENSIVE D";
             else tag = "DEFENSIVE D";
         }
 
