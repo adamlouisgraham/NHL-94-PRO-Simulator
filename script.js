@@ -42,8 +42,10 @@ const PLAYER_TAG_OVERRIDES = {};
     "TWO-WAY STAR D": { shotRate: 1.09, penaltyRate: 0.90,  assistRate: 1.25 },
     "TWO-WAY D":      { shotRate: 0.97, penaltyRate: 1.00,  assistRate: 1.05 },
     "STAY-AT-HOME":   { shotRate: 0.65, penaltyRate: 0.90,  assistRate: 0.80 }, // Positional defender — no offense, no fighting
-    "OFFENSIVE D":    { shotRate: 1.05, penaltyRate: 0.70,  assistRate: 1.15 },
-    "DEFENSIVE D":    { shotRate: 0.80, penaltyRate: 0.70,  assistRate: 0.95 },
+    "PRO OFFENSIVE D":{ shotRate: 1.05, penaltyRate: 0.70,  assistRate: 1.15 }, // Solid offensive D — above-average but not FRANCHISE/QB level
+    "PRO DEFENSIVE D":{ shotRate: 0.78, penaltyRate: 0.90,  assistRate: 0.90 }, // Solid defensive D — above-average but not SHUTDOWN level
+    "OFFENSIVE D":    { shotRate: 0.95, penaltyRate: 1.00,  assistRate: 1.05 },
+    "DEFENSIVE D":    { shotRate: 0.72, penaltyRate: 1.00,  assistRate: 0.88 },
     "ENFORCER D":     { shotRate: 0.70, penaltyRate: 1.60,  assistRate: 0.60 }
 };
 
@@ -1589,11 +1591,13 @@ function getPlayerWeightedStats(pName) {
             if (off >= 80 && def >= 80) tag = "FRANCHISE D";
             else if (off >= 75 && pass >= 80) tag = "QUARTERBACK";
             else if (pwr >= 85 && off >= 75) tag = "BOOMER";
-            else if (def >= 75 && def > off && check >= 65 && aggr >= 65) tag = "SHUTDOWN";
+            else if (def >= 75 && def > off && check >= 60 && aggr >= 65) tag = "SHUTDOWN";
             else if (rough >= 75 && aggr >= 75) tag = "ENFORCER D";
             else if (def >= 70 && off >= 70) tag = "TWO-WAY STAR D";
-            else if (check >= 75) tag = "BIG HITTER";
+            else if (check >= 75 && off < 70) tag = "BIG HITTER";
             else if (def >= 65 && off < 55 && check < 60 && aggr < 55) tag = "STAY-AT-HOME";
+            else if (off >= 65 && off > def) tag = "PRO OFFENSIVE D";
+            else if (def >= 65 && diff > 10) tag = "PRO DEFENSIVE D";
             else if (off > def) tag = "OFFENSIVE D";
             else if (diff <= 10) tag = "TWO-WAY D";
             else tag = "DEFENSIVE D";
@@ -1943,6 +1947,8 @@ function getArchetypeBadge(pName) {
         'SHUTDOWN': 'SD',
         'BIG HITTER': 'KO',
         'STAY-AT-HOME': 'SAH',
+        'PRO OFFENSIVE D': 'POD',
+        'PRO DEFENSIVE D': 'PDD',
         'DEFENSIVE D': 'DD',
         'OFFENSIVE D': 'OD',
         'TWO-WAY D': 'TD',
@@ -3187,8 +3193,8 @@ function getOffAttr(player) {
 
 function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
     const isPP = mode === 'PP'; const players = getSpecialTeamsUnit(tk, mode, unitNum, isEN);
-    const ppArchBonus = { 'PRO PLAYMAKER': 5, 'PRO SNIPER': 4, 'SUPERSTAR': 4, 'PLAYMAKER': 3, 'SNIPER': 2, 'DANGLER': 2, 'POWER FORWARD': 2 };
-    const pkArchBonus = { 'DEFENSIVE SPECIALIST': 4, 'TWO-WAY STAR F': 3, 'STAY-AT-HOME': 3, 'TWO-WAY FWD': 2, 'GRINDER': 2, 'SPEEDSTER': 2, 'PEST': 2 };
+    const ppArchBonus = { 'PRO PLAYMAKER': 5, 'PRO SNIPER': 4, 'SUPERSTAR': 4, 'PLAYMAKER': 3, 'SNIPER': 2, 'DANGLER': 2, 'POWER FORWARD': 2, 'PRO OFFENSIVE D': 2 };
+    const pkArchBonus = { 'DEFENSIVE SPECIALIST': 4, 'TWO-WAY STAR F': 3, 'STAY-AT-HOME': 3, 'SHUTDOWN': 3, 'TWO-WAY FWD': 2, 'GRINDER': 2, 'SPEEDSTER': 2, 'PEST': 2, 'PRO DEFENSIVE D': 2 };
     let score = players.reduce((sum, p) => {
         const stats = playerStats[p.name]; if (!stats) return sum;
         const ovr = getLiveIceOvr(p.name);
