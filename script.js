@@ -439,13 +439,23 @@ function getSaveSlotKey(slot = 'AUTO') { return SAVE_SLOT_KEYS[slot] || SAVE_STO
 function getSelectedSaveSlot() { const select = document.getElementById('saveSlotSelect'); return select ? select.value : 'AUTO'; }
 function setSelectedSaveSlot(slot) { const select = document.getElementById('saveSlotSelect'); if (!select) return; select.value = slot; renderSaveSlotHistory(); updateSaveMetadataDisplay(slot); renderScheduleDashboard(); }
 function getSelectedSaveSlotLabel() { const slot = getSelectedSaveSlot(); return slot === 'AUTO' ? 'Auto Save' : slot.replace('_', ' '); }
-function writeSavePayload(data) {
+function readSaveRaw(key) {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    // Try LZ decompression first; fall back to raw string for legacy plain-JSON saves
+    let jsonStr = null;
+    try { jsonStr = LZString.decompressFromUTF16(raw); } catch(e) { jsonStr = null; }
+    if (!jsonStr) jsonStr = raw;
+    try { return JSON.parse(jsonStr); } catch(e) { return null; }
+}
+function writeSavePayload(data, slot = 'AUTO') {
+    const key = getSaveSlotKey(slot);
     try {
         const json = JSON.stringify(data);
         // Yield between stringify and compress so the browser can breathe
         setTimeout(() => {
             try {
-                localStorage.setItem('nhl94dynasty', LZString.compressToUTF16(json));
+                localStorage.setItem(key, LZString.compressToUTF16(json));
             } catch (e) {
                 console.error("[SAVE ERROR] Storage full or inaccessible:", e);
             }
@@ -464,10 +474,10 @@ function saveGame({slot = 'AUTO', force = false} = {}) {
     }
     // Force-save (e.g. manual save slot): build + write synchronously this tick,
     // but still split stringify/compress across two ticks via writeSavePayload.
-    if (force) { writeSavePayload(buildSavePayload()); return; }
+    if (force) { writeSavePayload(buildSavePayload(), slot); return; }
     // Debounced auto-save: defer until the browser reports idle time,
     // so the heavy JSON.stringify + LZString work never blocks interaction.
-    const doSave = () => { writeSavePayload(buildSavePayload()); saveGameTimer = null; };
+    const doSave = () => { writeSavePayload(buildSavePayload(), slot); saveGameTimer = null; };
     if (window.requestIdleCallback) {
         saveGameTimer = requestIdleCallback(doSave, { timeout: 4000 });
     } else {
@@ -518,7 +528,7 @@ function buildSavePayload() {
 }
 function normalizeSavePackage(raw) { if (!raw || typeof raw !== 'object') return null; if (raw.meta && raw.data) { if (!isSupportedSaveVersion(raw.meta.version)) return null; return { payload: raw.data, meta: raw.meta }; } return { payload: raw, meta: { version: LEGACY_SAVE_VERSION, savedAt: null, label: 'Legacy EASN Save', migratedFromLegacy: true } }; }
 function isSupportedSaveVersion(version) { return SUPPORTED_SAVE_VERSIONS.includes(Number(version)); }
-function getSaveMeta(slot = 'AUTO') { try { const raw = localStorage.getItem(getSaveSlotKey(slot)); if (!raw) return null; const parsed = JSON.parse(raw); const normalized = normalizeSavePackage(parsed); return normalized ? normalized.meta : null; } catch { return null; } }
+function getSaveMeta(slot = 'AUTO') { try { const parsed = readSaveRaw(getSaveSlotKey(slot)); if (!parsed) return null; const normalized = normalizeSavePackage(parsed); return normalized ? normalized.meta : null; } catch { return null; } }
 function getAllSaveSlotHistory() { return Object.keys(SAVE_SLOT_KEYS).map(slot => { const meta = getSaveMeta(slot); return { slot, label: slot === 'AUTO' ? 'Auto Save' : slot.replace('_', ' '), savedAt: meta ? meta.savedAt : null, version: meta ? meta.version : null, valid: Boolean(meta) }; }); }
 function selectHistorySaveSlot(slot) { setSelectedSaveSlot(slot); const meta = getSaveMeta(slot); if (!meta) { displaySaveStateInfo(`${slot === 'AUTO' ? 'Auto Save' : slot.replace('_', ' ')} is empty.`, 'info'); return; } const label = slot === 'AUTO' ? 'Auto Save' : slot.replace('_', ' '); const savedAt = formatSaveTimestamp(meta.savedAt); if (!confirm(`Load ${label} saved at ${savedAt}? This will replace current progress.`)) return; loadSlot(); }
 function renderSaveSlotHistory() { const container = document.getElementById('saveSlotHistory'); if (!container) return; const history = getAllSaveSlotHistory(); container.innerHTML = history.map(item => { const timestamp = item.savedAt ? formatSaveTimestamp(item.savedAt) : 'empty'; const version = item.version ? `v${item.version}` : '--'; const activeClass = item.slot === getSelectedSaveSlot() ? ' save-slot-history-active' : ''; return `<div class="save-slot-history-item${activeClass}" onclick="selectHistorySaveSlot('${item.slot}')"><span>${item.label}</span><span>${timestamp}  |  ${version}</span></div>`; }).join(''); }
@@ -606,7 +616,7 @@ function loadSlot() {
     const slot = getSelectedSaveSlot(); const raw = localStorage.getItem(getSaveSlotKey(slot));
     if (!raw) return displaySaveStateInfo(`No save stored in ${getSelectedSaveSlotLabel()}.`, 'error');
     try {
-        const parsed = JSON.parse(raw); const normalized = normalizeSavePackage(parsed);
+        const parsed = readSaveRaw(getSaveSlotKey(slot)); const normalized = parsed ? normalizeSavePackage(parsed) : null;
         if (!normalized || !isSupportedSaveVersion(normalized.meta.version)) return displaySaveStateInfo(`Unsupported save version.`, 'error');
         if (!isValidSaveData(normalized.payload)) return displaySaveStateInfo(`Invalid save data.`, 'error');
         applyLoadedSave(normalized.payload);
@@ -618,9 +628,9 @@ function loadSlot() {
 }
 
 function loadGame() {
-    const raw = localStorage.getItem(SAVE_STORAGE_KEY); if (!raw) return alert('No saved dynasty found.');
+    if (!localStorage.getItem(SAVE_STORAGE_KEY)) return alert('No saved dynasty found.');
     try {
-        const parsed = JSON.parse(raw); const normalized = normalizeSavePackage(parsed);
+        const parsed = readSaveRaw(SAVE_STORAGE_KEY); const normalized = parsed ? normalizeSavePackage(parsed) : null;
         if (!normalized || !isSupportedSaveVersion(normalized.meta.version)) throw new Error('Unsupported schema version.');
         if (!isValidSaveData(normalized.payload)) throw new Error('Missing league data.');
         applyLoadedSave(normalized.payload); saveGame({force: true});
@@ -8863,9 +8873,9 @@ window.dispatchEvent(new Event('resize'));
 
 function initStartScreen() {
     loadSheetUrlPreferences(); const btn = document.getElementById('btnContinue'); if (!btn) return;
-    const raw = localStorage.getItem(SAVE_STORAGE_KEY); if (!raw) { btn.style.display = 'none'; return; }
+    if (!localStorage.getItem(SAVE_STORAGE_KEY)) { btn.style.display = 'none'; return; }
     try {
-        const parsed = JSON.parse(raw); const normalized = normalizeSavePackage(parsed);
+        const parsed = readSaveRaw(SAVE_STORAGE_KEY); const normalized = parsed ? normalizeSavePackage(parsed) : null;
         const valid = normalized !== null && isValidSaveData(normalized.payload);
         btn.style.display = valid ? 'inline-block' : 'none';
         if (!valid) { displaySaveStateInfo('Unsupported or corrupt save detected. It has been cleared.', 'error'); localStorage.removeItem(SAVE_STORAGE_KEY); }
