@@ -9559,16 +9559,12 @@ function clearSaveSlot() {
     const selectedSlot = slotSelect.value;
     
     // Prevent accidental deletions with a confirmation prompt
-    if (confirm(`Are you sure you want to delete the data in ${selectedSlot}? This cannot be undone.`)) {
-        
-        // Remove the specific slot from local storage
-        localStorage.removeItem(`nhl94_save_${selectedSlot}`);
-        
-        console.log(`${selectedSlot} data cleared.`);
-        
-        // Refresh the UI if these helper functions are defined
-        if (typeof renderSaveSlotHistory === 'function') renderSaveSlotHistory();
-        if (typeof updateSaveMetadataDisplay === 'function') updateSaveMetadataDisplay(selectedSlot);
+    const label = selectedSlot === 'AUTO' ? 'Auto Save' : selectedSlot.replace('_', ' ');
+    if (confirm(`Are you sure you want to delete ${label}? This cannot be undone.`)) {
+        localStorage.removeItem(getSaveSlotKey(selectedSlot));
+        renderSaveSlotHistory();
+        updateSaveMetadataDisplay(selectedSlot);
+        displaySaveStateInfo(`${label} cleared.`, 'info');
     }
 }
 
