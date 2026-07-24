@@ -1544,12 +1544,12 @@ function getPlayerWeightedStats(pName) {
         let gAgl    = gradeToNum(p.attr.agil);
         let gSpd    = gradeToNum(p.attr.speed);
         let gStkHnd = gradeToNum(p.attr.stkHnd);
-        if      (gDef >= 85)                        tag = 'WALL';
-        else if (gAgl >= 90 && gDef >= 65)         tag = 'ACROBAT';
-        else if (gAgl < 70 && gDef >= 55)          tag = 'SCREENER';
-        else if (gStkHnd >= 85 && gSpd >= 70 && gDef >= 55) tag = 'PUCK HANDLER';
-        else if (gDef >= 60)                       tag = 'STOPPER';
-        else                                       tag = 'GOALTENDER';
+        if      (gDef >= 85)                                        tag = 'WALL';
+        else if (gAgl >= 90 && gDef >= 65)                         tag = 'ACROBAT';
+        else if (gStkHnd >= 85 && gSpd >= 70 && gDef >= 55)       tag = 'PUCK HANDLER';
+        else if (gAgl < 70 && gDef >= 55)                          tag = 'SCREENER';
+        else if (gDef >= 60)                                        tag = 'STOPPER';
+        else                                                        tag = 'GOALTENDER';
     }
 
     // --- SKATERS ---
@@ -1613,10 +1613,10 @@ function getPlayerWeightedStats(pName) {
             if (off >= 80 && def >= 80) tag = "FRANCHISE D";
             else if (off >= 75 && pass >= 80) tag = "QUARTERBACK";
             else if (pwr >= 85 && off >= 75) tag = "BOOMER";
-            else if (def >= 75 && def > off && off < 70 && check >= 60 && aggr >= 60) tag = "SHUTDOWN";
+            else if (def >= 75 && off >= 70) tag = "TWO-WAY STAR D";
+            else if (def >= 75 && off < 70 && check >= 70) tag = "SHUTDOWN";
             else if (rough >= 75 && aggr >= 75 && off < 70 && def < 70) tag = "ENFORCER D";
             else if (aggr >= 70 && check >= 65 && def >= 60 && off < 70) tag = "INTIMIDATOR";
-            else if (def >= 70 && off >= 70) tag = "TWO-WAY STAR D";
             else if (check >= 75 && off < 70) tag = "BIG HITTER";
             else if (spd >= 70 && agl >= 70 && off >= 60) tag = "PUCK RUSHER";
             else if (off >= 65 && off > def) tag = "PRO OFFENSIVE D";
@@ -1633,12 +1633,18 @@ function getPlayerWeightedStats(pName) {
             if (baseOvr >= 85) tag = "SUPERSTAR";
             else if (shotAcc >= 85 && pwr >= 80 && off >= 85) tag = "PRO SNIPER";
             else if (pass >= 85 && off >= 80) tag = "PRO PLAYMAKER";
+            // POWER SNIPER: elite physical goal scorer — Neely/Roberts type
+            else if (pwr >= 80 && shotAcc >= 70 && off >= 80 && rough >= 65) tag = "POWER SNIPER";
+            // TWO-WAY STAR F: elite two-way forwards catch here before SNIPER/PLAYMAKER
+            else if (off >= 75 && def >= 70) tag = "TWO-WAY STAR F";
             // PEST early gate: extreme agitators who also score (Lemieux types)
             else if (aggr >= 85 && rough >= 80 && off >= 65 && off < 85) tag = "PEST";
             // POWER FORWARD early gate: heavy hitters who'd otherwise land in SNIPER or PLAYMAKER
-            else if (pwr >= 80 && rough >= 70 && off >= 70 && weight >= 210) tag = "POWER FORWARD";
-            else if (shotAcc >= 75 && pwr >= 70 && off >= 75) tag = "SNIPER";
-            else if (pass >= 75 && off >= 70) tag = "PLAYMAKER";
+            else if (pwr >= 80 && rough >= 70 && off >= 70 && weight >= 205) tag = "POWER FORWARD";
+            // SNIPER: pure goal scorer; def ceiling keeps two-way players out
+            else if (shotAcc >= 75 && pwr >= 65 && off >= 75 && def < 65) tag = "SNIPER";
+            // PLAYMAKER: pass-first forward; def/rough ceilings keep defensive/pest types out
+            else if (pass >= 75 && off >= 70 && def < 70 && rough < 65) tag = "PLAYMAKER";
             // POWER FORWARD: physical offensive player with size.
             else if (
               (off >= 65 && def < 70 && check >= 60 && pwr >= 65 && aggr >= 65 && rough >= 60 && weight >= 185) ||
@@ -1647,7 +1653,6 @@ function getPlayerWeightedStats(pName) {
             else if (off >= 70 && def < 70 && agl >= 70 && spd >= 80) tag = "SPEEDSTER";
             else if (off >= 70 && def < 70 && agl >= 70 && stkHnd >= 70) tag = "DANGLER";
             else if (def >= 60 && off >= 55 && off < 70 && check >= 55 && aggr >= 55 && rough >= 50 && weight <= 225) tag = "GRINDER";
-            else if ((off >= 70 && def >= 70) || (off >= 75 && check >= 70 && aggr >= 65)) tag = "TWO-WAY STAR F";
             else if (rough >= 75 && aggr >= 75 && def < 75) tag = "ENFORCER F";
             else if (aggr >= 70 && rough >= 65 && off >= 55 && off < 70) tag = "PEST";
             else if (def >= 75) tag = "DEFENSIVE SPECIALIST";
