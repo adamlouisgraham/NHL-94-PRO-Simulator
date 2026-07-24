@@ -1631,12 +1631,13 @@ function getPlayerWeightedStats(pName) {
         // --- FORWARDS ---
         else {
             if (baseOvr >= 85) tag = "SUPERSTAR";
-            else if (shotAcc >= 85 && pwr >= 80 && off >= 85) tag = "PRO SNIPER";
+            else if (shotAcc >= 85 && pwr >= 80 && off >= 85 && rough < 75) tag = "PRO SNIPER";
             else if (pass >= 85 && off >= 80) tag = "PRO PLAYMAKER";
             // POWER SNIPER: elite physical goal scorer — Neely/Roberts type
             else if (pwr >= 80 && shotAcc >= 70 && off >= 80 && rough >= 65) tag = "POWER SNIPER";
             // TWO-WAY STAR F: elite two-way forwards catch here before SNIPER/PLAYMAKER
-            else if (off >= 75 && def >= 70) tag = "TWO-WAY STAR F";
+            // rough < 75 pushes agitators/pests (Lemieux) out to their correct gate
+            else if (off >= 75 && def >= 70 && rough < 75) tag = "TWO-WAY STAR F";
             // PEST early gate: extreme agitators who also score (Lemieux types)
             else if (aggr >= 85 && rough >= 80 && off >= 65 && off < 85) tag = "PEST";
             // POWER FORWARD early gate: heavy hitters who'd otherwise land in SNIPER or PLAYMAKER
@@ -1653,7 +1654,8 @@ function getPlayerWeightedStats(pName) {
             else if (off >= 70 && def < 70 && agl >= 70 && spd >= 80) tag = "SPEEDSTER";
             else if (off >= 70 && def < 70 && agl >= 70 && stkHnd >= 70) tag = "DANGLER";
             else if (def >= 60 && off >= 55 && off < 70 && check >= 55 && aggr >= 55 && rough >= 50 && weight <= 225) tag = "GRINDER";
-            else if (rough >= 75 && aggr >= 75 && def < 75) tag = "ENFORCER F";
+            // aggr>=90 alternate path catches extreme aggressors with low rough (Odjick, Churla)
+            else if ((rough >= 75 && aggr >= 75 && def < 75) || (aggr >= 90 && off < 55)) tag = "ENFORCER F";
             else if (aggr >= 70 && rough >= 65 && off >= 55 && off < 70) tag = "PEST";
             else if (def >= 75) tag = "DEFENSIVE SPECIALIST";
             else if (off >= 70) tag = "OFFENSIVE FORWARD";
