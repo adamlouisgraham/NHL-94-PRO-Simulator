@@ -21,6 +21,7 @@ const PLAYER_TAG_OVERRIDES = {};
     "PLAYMAKER":          { shotRate: 1.00, penaltyRate: 0.85,  assistRate: 1.60 }, // Solid passer — Francis, Janney, Juneau
     "SPEEDSTER":          { shotRate: 1.19, penaltyRate: 0.80,  assistRate: 1.15 },
     "DANGLER":            { shotRate: 1.14, penaltyRate: 0.80,  assistRate: 1.30 },
+    "POWER SNIPER":       { shotRate: 1.22, penaltyRate: 1.15,  assistRate: 0.90 }, // Physical goal scorer — Neely/Roberts type
     "POWER FORWARD":      { shotRate: 1.20, penaltyRate: 1.20,  assistRate: 0.97 },
     "TWO-WAY STAR F":     { shotRate: 1.15, penaltyRate: 0.95,  assistRate: 1.20 },
     "TWO-WAY FWD":        { shotRate: 0.99, penaltyRate: 0.95,  assistRate: 1.05 },
@@ -34,22 +35,20 @@ const PLAYER_TAG_OVERRIDES = {};
     "DEFENSIVE FWD":      { shotRate: 0.75, penaltyRate: 1.00,  assistRate: 0.95 },
 
     // --- DEFENSEMEN ---
-    "FRANCHISE D":    { shotRate: 1.15, penaltyRate: 0.80,  assistRate: 1.35 },
-    "QUARTERBACK":    { shotRate: 0.99, penaltyRate: 0.85,  assistRate: 1.35 },
-    "BOOMER":         { shotRate: 1.20, penaltyRate: 1.00,  assistRate: 1.05 },
-    "BIG HITTER":     { shotRate: 1.00, penaltyRate: 1.40,  assistRate: 1.00 },
-    "SHUTDOWN":       { shotRate: 0.80, penaltyRate: 1.10,  assistRate: 0.85 },
-    "TWO-WAY STAR D": { shotRate: 1.09, penaltyRate: 0.90,  assistRate: 1.25 },
-    "TWO-WAY D":      { shotRate: 0.97, penaltyRate: 1.00,  assistRate: 1.05 },
-    "STAY-AT-HOME":   { shotRate: 0.65, penaltyRate: 0.90,  assistRate: 0.80 }, // Positional defender — no offense, no fighting
-    "PUCK RUSHER":    { shotRate: 1.08, penaltyRate: 0.85,  assistRate: 1.10 }, // Carries the puck with speed/agility rather than passing — Potvin/Niedermayer type
-    "IRONMAN":        { shotRate: 0.72, penaltyRate: 0.95,  assistRate: 0.85 }, // Workhorse D — high endurance, plays heavy minutes, doesn't show up in stats
-    "INTIMIDATOR":    { shotRate: 0.85, penaltyRate: 1.12,  assistRate: 0.90 }, // Physical defensive presence — hits hard and covers his man. Stevens/Samuelsson type
-    "PRO OFFENSIVE D":{ shotRate: 1.05, penaltyRate: 0.85,  assistRate: 1.15 }, // Solid offensive D — above-average but not FRANCHISE/QB level
-    "PRO DEFENSIVE D":{ shotRate: 0.78, penaltyRate: 0.90,  assistRate: 0.90 }, // Solid defensive D — above-average but not SHUTDOWN level
-    "OFFENSIVE D":    { shotRate: 0.95, penaltyRate: 1.00,  assistRate: 1.05 },
-    "DEFENSIVE D":    { shotRate: 0.72, penaltyRate: 1.00,  assistRate: 0.88 },
-    "ENFORCER D":     { shotRate: 0.70, penaltyRate: 1.60,  assistRate: 0.60 }
+    "FRANCHISE D":    { shotRate: 1.15, penaltyRate: 0.75,  assistRate: 1.40 }, // Elite two-way D — Bourque/Leetch/Murphy
+    "QUARTERBACK":    { shotRate: 1.00, penaltyRate: 0.80,  assistRate: 1.45 }, // Pass-first offensive D — Coffey/Housley
+    "BOOMER":         { shotRate: 1.25, penaltyRate: 1.05,  assistRate: 1.00 }, // Big-shot D — MacInnis/Iafrate
+    "TWO-WAY STAR D": { shotRate: 1.08, penaltyRate: 0.88,  assistRate: 1.20 }, // Elite two-way — Lidstrom/Chelios
+    "SHUTDOWN":       { shotRate: 0.78, penaltyRate: 1.15,  assistRate: 0.82 }, // Defensive stopper — physical, low offense
+    "ENFORCER D":     { shotRate: 0.55, penaltyRate: 1.70,  assistRate: 0.55 }, // Pure fighter — lots of PIMs, almost no points
+    "INTIMIDATOR":    { shotRate: 0.82, penaltyRate: 1.25,  assistRate: 0.85 }, // Physical presence — hits, penalties, minimal offense
+    "PUCK RUSHER":    { shotRate: 1.10, penaltyRate: 0.85,  assistRate: 1.12 }, // Mobile puck-carrier — Niedermayer/Zhitnik type
+    "PRO OFFENSIVE D":{ shotRate: 1.05, penaltyRate: 0.88,  assistRate: 1.18 }, // Solid offensive D — above average but not elite
+    "PRO DEFENSIVE D":{ shotRate: 0.76, penaltyRate: 0.92,  assistRate: 0.88 }, // Solid defensive D — above average but not SHUTDOWN
+    "IRONMAN":        { shotRate: 0.74, penaltyRate: 0.95,  assistRate: 0.85 }, // Workhorse — plays big minutes, won't show in stats
+    "OFFENSIVE D":    { shotRate: 0.95, penaltyRate: 1.00,  assistRate: 1.05 }, // Offensively-minded but not proven at top level
+    "TWO-WAY D":      { shotRate: 0.95, penaltyRate: 1.00,  assistRate: 1.00 }, // Balanced D — no standout trait
+    "STAY-AT-HOME":   { shotRate: 0.62, penaltyRate: 0.92,  assistRate: 0.78 }  // Positional defender — clears the crease, no offense
 };
 
 // Goal-conversion bonus by archetype, applied on top of archMods shot/assist attempt-rate
@@ -65,6 +64,7 @@ function getEliteShooterMod(tag) {
         case 'PRO PLAYMAKER': return 1.18;
         case 'PLAYMAKER': return 1.10;
         case 'DANGLER': return 1.14;
+        case 'POWER SNIPER': return 1.35;
         case 'POWER FORWARD': return 1.12;
         case 'SPEEDSTER': return 1.08;
         case 'TWO-WAY STAR F': return 1.08;
@@ -1615,17 +1615,15 @@ function getPlayerWeightedStats(pName) {
             else if (pwr >= 85 && off >= 75) tag = "BOOMER";
             else if (def >= 75 && off >= 70) tag = "TWO-WAY STAR D";
             else if (def >= 75 && off < 70 && check >= 70) tag = "SHUTDOWN";
-            else if (rough >= 75 && aggr >= 75 && off < 70 && def < 70) tag = "ENFORCER D";
-            else if (aggr >= 70 && check >= 65 && def >= 60 && off < 70) tag = "INTIMIDATOR";
-            else if (check >= 75 && off < 70) tag = "BIG HITTER";
+            else if (rough >= 75 && aggr >= 75 && off < 60 && def < 60) tag = "ENFORCER D";
+            else if (off < 70 && (check >= 80 || (aggr >= 70 && check >= 65 && def >= 60))) tag = "INTIMIDATOR";
             else if (spd >= 70 && agl >= 70 && off >= 60) tag = "PUCK RUSHER";
             else if (off >= 65 && off > def) tag = "PRO OFFENSIVE D";
-            else if (def >= 65 && diff > 10) tag = "PRO DEFENSIVE D";
-            else if (def >= 65 && off < 55 && check < 60 && aggr < 55) tag = "STAY-AT-HOME";
-            else if (endur >= 75 && def >= 65 && off < 65) tag = "IRONMAN";
-            else if (diff <= 10) tag = "TWO-WAY D";
+            else if (endur >= 75) tag = "IRONMAN";
+            else if (def >= 70 && diff > 15) tag = "PRO DEFENSIVE D";
             else if (off > def) tag = "OFFENSIVE D";
-            else tag = "DEFENSIVE D";
+            else if (diff <= 10) tag = "TWO-WAY D";
+            else tag = "STAY-AT-HOME";
         }
 
         // --- FORWARDS ---
@@ -1659,7 +1657,7 @@ function getPlayerWeightedStats(pName) {
             else if (aggr >= 70 && rough >= 65 && off >= 55 && off < 70) tag = "PEST";
             else if (def >= 75) tag = "DEFENSIVE SPECIALIST";
             else if (off >= 70) tag = "OFFENSIVE FORWARD";
-            else if (def >= 70) tag = "DEFENSIVE FORWARD";
+            else if (def >= 70) tag = "DEFENSIVE FWD";
             else if (off > def) tag = "OFFENSIVE FWD";
             else if (diff <= 8) tag = "TWO-WAY FWD";
             else tag = "DEFENSIVE FWD";
