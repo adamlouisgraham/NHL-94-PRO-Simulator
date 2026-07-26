@@ -5539,7 +5539,7 @@ async function simRestOfSeason() {
             const dayScores = (calendar[currentDay - 1] || []).filter(g => g && g.result).map(g => `${g.a.code} ${g.result.aG}-${g.result.hG} ${g.h.code}`).join('  ');
             const ticker = document.getElementById('tickerScroll');
             if (ticker) ticker.innerText = `⚡ SIMULATING... DAY ${currentDay}/${calendar.length} (${pct}%) | ${dayScores || '---'}`;
-            refreshScheduleDashboardUI(); // keep progress bar + upcoming games live
+            if (currentDay % 5 === 0) refreshScheduleDashboardUI(); // throttle DOM rebuild to every 5 days
             await sleep(0); // yield every day so scores flash in ticker
             const keepGoing = advanceCalendar();
             if (!keepGoing) break;
