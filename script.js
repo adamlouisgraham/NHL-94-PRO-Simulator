@@ -7515,7 +7515,7 @@ function getConnSmytheScore(p) {
         if (smytheSorted.length > 0) {
             const winner = smytheSorted[0];
             awardTrophy(winner.name, currentSeason, "Conn Smythe");
-            runnersUp["Conn Smythe"] = smytheSorted.slice(1, 4).map(p => `${p.name} (${getConnSmytheScore(p)} pts)`).join(', ');
+            runnersUp["Conn Smythe"] = smytheSorted.slice(1, 4).map(p => `${p.name} (${Math.round(getConnSmytheScore(p))} pts)`).join(', ');
             const csW = winner; winnerStats["Conn Smythe"] = csW.pos === 'G'
                 ? `${csW.playoff?.w||0}W  ${csW.playoff?.so||0}SO`
                 : `${csW.playoff?.g||0}G  ${csW.playoff?.a||0}A  ${(csW.playoff?.g||0)+(csW.playoff?.a||0)}PTS`;
