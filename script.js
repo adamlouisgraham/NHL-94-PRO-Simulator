@@ -5393,11 +5393,11 @@ async function simDay(slowMode = true, bypassLock = false) {
             // ------------------------------------------------
             simGame(i);
             activeIdx = i;   // keep jumbotron pointed at the most recently finished game
-            updateUI();
+            if (!isTurboMode) updateUI();
             if (slowMode) await sleep(200);
         }
         if (!bypassLock) { advanceCalendar(); }
-    } finally { if (!bypassLock) isSimulating = false; updateUI(); }
+    } finally { if (!bypassLock) isSimulating = false; if (!isTurboMode) updateUI(); }
 }
 
 //  GAME-BY-GAME SIMULATION ENGINE
@@ -5457,7 +5457,7 @@ function advanceCalendar() {
     }
     // Heal injuries and recover stamina for teams that had the day off!
     processDailyUpdates();
-    updateUI(); saveGame(); return true; 
+    if (!isTurboMode) { updateUI(); saveGame(); } return true;
 }
 
 async function simWeek() {
@@ -5537,10 +5537,12 @@ async function simRestOfSeason() {
             await simDay(false, true);
             const pct = Math.floor((currentDay / calendar.length) * 100);
             const dayScores = (calendar[currentDay - 1] || []).filter(g => g && g.result).map(g => `${g.a.code} ${g.result.aG}-${g.result.hG} ${g.h.code}`).join('  ');
-            const ticker = document.getElementById('tickerScroll');
-            if (ticker) ticker.innerText = `⚡ SIMULATING... DAY ${currentDay}/${calendar.length} (${pct}%) | ${dayScores || '---'}`;
-            if (currentDay % 5 === 0) refreshScheduleDashboardUI(); // throttle DOM rebuild to every 5 days
-            await sleep(0); // yield every day so scores flash in ticker
+            if (currentDay % 5 === 0) {
+                const ticker = document.getElementById('tickerScroll');
+                if (ticker) ticker.innerText = `⚡ SIMULATING... DAY ${currentDay}/${calendar.length} (${pct}%) | ${dayScores || '---'}`;
+                refreshScheduleDashboardUI();
+                await sleep(0); // yield every 5 days — enough to keep browser responsive
+            }
             const keepGoing = advanceCalendar();
             if (!keepGoing) break;
         }
