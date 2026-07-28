@@ -15,12 +15,12 @@ const PLAYER_TAG_OVERRIDES = {};
     const archMods = {
     // --- FORWARDS ---
     "SUPERSTAR":          { shotRate: 1.32, penaltyRate: 0.70,  assistRate: 2.30 },
-    "PRO SNIPER":         { shotRate: 1.25, penaltyRate: 0.85,  assistRate: 1.00 }, // Elite goal scorer — Hull, Mogilny, Bure
+    "PRO SNIPER":         { shotRate: 1.32, penaltyRate: 0.85,  assistRate: 1.15 }, // Elite goal scorer — Hull, Mogilny, Bure
     "PRO PLAYMAKER":      { shotRate: 0.97, penaltyRate: 0.80,  assistRate: 2.50 }, // Elite playmaker — Gretzky, Oates, Lemieux
-    "SNIPER":             { shotRate: 1.12, penaltyRate: 0.85,  assistRate: 0.95 }, // Solid 30-40G scorer
+    "SNIPER":             { shotRate: 1.16, penaltyRate: 0.85,  assistRate: 0.82 }, // Solid 30-40G scorer
     "PLAYMAKER":          { shotRate: 1.00, penaltyRate: 0.85,  assistRate: 1.60 }, // Solid passer — Francis, Janney, Juneau
-    "SPEEDSTER":          { shotRate: 1.19, penaltyRate: 0.80,  assistRate: 1.15 },
-    "DANGLER":            { shotRate: 1.14, penaltyRate: 0.80,  assistRate: 1.30 },
+    "SPEEDSTER":          { shotRate: 1.28, penaltyRate: 0.80,  assistRate: 1.30 },
+    "DANGLER":            { shotRate: 1.22, penaltyRate: 0.80,  assistRate: 1.45 },
     "POWER SNIPER":       { shotRate: 1.22, penaltyRate: 1.15,  assistRate: 0.90 }, // Physical goal scorer — Neely/Roberts type
     "POWER FORWARD":      { shotRate: 1.20, penaltyRate: 1.20,  assistRate: 0.97 },
     "TWO-WAY STAR F":     { shotRate: 1.15, penaltyRate: 0.95,  assistRate: 1.20 },
@@ -42,7 +42,7 @@ const PLAYER_TAG_OVERRIDES = {};
     "SHUTDOWN":       { shotRate: 0.78, penaltyRate: 1.15,  assistRate: 0.82 }, // Defensive stopper — physical, low offense
     "ENFORCER D":     { shotRate: 0.55, penaltyRate: 1.70,  assistRate: 0.55 }, // Pure fighter — lots of PIMs, almost no points
     "INTIMIDATOR":    { shotRate: 0.82, penaltyRate: 1.25,  assistRate: 0.85 }, // Physical presence — hits, penalties, minimal offense
-    "PUCK RUSHER":    { shotRate: 1.10, penaltyRate: 0.85,  assistRate: 1.12 }, // Mobile puck-carrier — Niedermayer/Zhitnik type
+    "PUCK RUSHER":    { shotRate: 1.20, penaltyRate: 0.85,  assistRate: 1.25 }, // Mobile puck-carrier — Niedermayer/Zhitnik type
     "PRO OFFENSIVE D":{ shotRate: 1.05, penaltyRate: 0.88,  assistRate: 1.18 }, // Solid offensive D — above average but not elite
     "PRO DEFENSIVE D":{ shotRate: 0.76, penaltyRate: 0.92,  assistRate: 0.88 }, // Solid defensive D — above average but not SHUTDOWN
     "IRONMAN":        { shotRate: 0.74, penaltyRate: 0.95,  assistRate: 0.85 }, // Workhorse — plays big minutes, won't show in stats
@@ -63,10 +63,10 @@ function getEliteShooterMod(tag) {
         case 'SNIPER': return 1.28;
         case 'PRO PLAYMAKER': return 1.18;
         case 'PLAYMAKER': return 1.10;
-        case 'DANGLER': return 1.14;
+        case 'DANGLER': return 1.22;
         case 'POWER SNIPER': return 1.35;
         case 'POWER FORWARD': return 1.12;
-        case 'SPEEDSTER': return 1.08;
+        case 'SPEEDSTER': return 1.18;
         case 'TWO-WAY STAR F': return 1.08;
         default: return 1.0;
     }
@@ -4761,16 +4761,15 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
     let secondaryAssist = null;
     let remaining = [...eligiblePool];
 
-    // Primary Assist (~93.1% chance) — combined with the secondary rate below, this targets
-    // ~71.5% of all goals getting two assists, ~21.6% one assist, ~6.9% unassisted (the increase
-    // to two-assist goals is taken entirely from the unassisted bucket, one-assist unchanged).
-    if (remaining.length > 0 && Math.random() < 0.931) {
+    // Primary Assist (~95% chance) — combined with the secondary rate below, this targets
+    // ~80% of all goals getting two assists, ~15% one assist, ~5% unassisted.
+    if (remaining.length > 0 && Math.random() < 0.95) {
         primaryAssist = weightedPick(remaining, 'primary');
         remaining = remaining.filter(n => n !== primaryAssist);
     }
 
-    // Secondary Assist (~76.8% chance if primary exists and players remain)
-    if (primaryAssist && remaining.length > 0 && Math.random() < 0.768) {
+    // Secondary Assist (~84.2% chance if primary exists and players remain)
+    if (primaryAssist && remaining.length > 0 && Math.random() < 0.842) {
         secondaryAssist = weightedPick(remaining, 'secondary');
     }
 
