@@ -15,7 +15,7 @@ const PLAYER_TAG_OVERRIDES = {};
     const archMods = {
     // --- FORWARDS ---
     "SUPERSTAR":          { shotRate: 1.32, penaltyRate: 0.70,  assistRate: 2.30 },
-    "PRO SNIPER":         { shotRate: 1.32, penaltyRate: 0.85,  assistRate: 1.15 }, // Elite goal scorer — Hull, Mogilny, Bure
+    "PRO SNIPER":         { shotRate: 1.38, penaltyRate: 0.85,  assistRate: 1.25 }, // Elite goal scorer — Hull, Mogilny, Bure
     "PRO PLAYMAKER":      { shotRate: 0.97, penaltyRate: 0.80,  assistRate: 2.50 }, // Elite playmaker — Gretzky, Oates, Lemieux
     "SNIPER":             { shotRate: 1.16, penaltyRate: 0.85,  assistRate: 0.82 }, // Solid 30-40G scorer
     "PLAYMAKER":          { shotRate: 1.00, penaltyRate: 0.85,  assistRate: 1.60 }, // Solid passer — Francis, Janney, Juneau
@@ -25,7 +25,7 @@ const PLAYER_TAG_OVERRIDES = {};
     "POWER FORWARD":      { shotRate: 1.20, penaltyRate: 1.20,  assistRate: 0.97 },
     "TWO-WAY STAR F":     { shotRate: 1.15, penaltyRate: 0.95,  assistRate: 1.20 },
     "TWO-WAY FWD":        { shotRate: 0.99, penaltyRate: 0.95,  assistRate: 1.05 },
-    "GRINDER":            { shotRate: 0.98, penaltyRate: 1.30,  assistRate: 0.90 },
+    "GRINDER":            { shotRate: 1.12, penaltyRate: 1.30,  assistRate: 0.90 },
     "ENFORCER F":         { shotRate: 0.50, penaltyRate: 1.60,  assistRate: 0.50 },
     "PEST":               { shotRate: 0.92, penaltyRate: 1.30,  assistRate: 0.95 }, // Agitator — draws calls, gets under skin
     "OFFENSIVE FORWARD":  { shotRate: 1.14, penaltyRate: 0.75,  assistRate: 1.14 },
