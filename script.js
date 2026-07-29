@@ -68,6 +68,14 @@ function getEliteShooterMod(tag) {
         case 'POWER FORWARD': return 1.12;
         case 'SPEEDSTER': return 1.18;
         case 'TWO-WAY STAR F': return 1.08;
+        // Offensive defensemen — smaller lift than forwards (point shots convert worse),
+        // but enough that elite blueliners aren't stuck at the baseline conversion rate.
+        case 'BOOMER': return 1.20;
+        case 'FRANCHISE D': return 1.14;
+        case 'QUARTERBACK': return 1.08;
+        case 'PUCK RUSHER': return 1.10;
+        case 'TWO-WAY STAR D': return 1.06;
+        case 'PRO OFFENSIVE D': return 1.05;
         default: return 1.0;
     }
 }
@@ -2208,6 +2216,7 @@ const dynamicDuos = [
     ['Lyle Odelein', 'Kevin Haller'],
     // NJD
     ['Stephane Richer', 'Bernie Nicholls', 'Claude Lemieux'],
+    // NOTE: 'Alexnder' is the spelling used by the live Google Sheet — do not "correct" it.
     ['Alexnder Semak', 'John MacLean', 'Valeri Zelepukin'],
     ['Bobby Holik', 'Randy McKay', 'Bill Guerin'],
     ['Scott Stevens', 'Bruce Driver'],
@@ -2371,7 +2380,7 @@ function renderTeamDirectory(tk) {
             let posLabel = positions[i];
             h += `<div style="display:flex; gap:8px; margin-bottom:6px; align-items:center;">`;
             h += `<span style="color:var(--ea-yellow); font-weight:bold; min-width:30px;">${posLabel}</span>`;
-            h += `<span style="color:#fff;">${p ? p.name : '---'} ${getPlayerBadges(p.name)}</span>`;
+            h += `<span style="color:#fff;">${p ? p.name : '---'} ${p ? getPlayerBadges(p.name) : ''}</span>`;
             h += `</div>`;
         }
         h += `</div>`;
@@ -2389,7 +2398,7 @@ function renderTeamDirectory(tk) {
             let p = pair[i];
             h += `<div style="display:flex; gap:8px; margin-bottom:6px; align-items:center;">`;
             h += `<span style="color:var(--line-red); font-weight:bold; min-width:30px;">D</span>`;
-            h += `<span style="color:#fff;">${p ? p.name : '---'} ${getPlayerBadges(p.name)}</span>`;
+            h += `<span style="color:#fff;">${p ? p.name : '---'} ${p ? getPlayerBadges(p.name) : ''}</span>`;
             h += `</div>`;
         }
         h += `</div>`;
@@ -3911,7 +3920,7 @@ function simGame(idx) {
                     const defOnIce = isHome ? aOnIce : hOnIce;
                     const hasMatchupDef = defOnIce.some(p => {
                         const t = PLAYER_TAG_OVERRIDES[p.name] || getPlayerWeightedStats(p.name)?.tag || '';
-                        return t === 'TWO-WAY STAR F' || t === 'DEFENSIVE SPECIALIST' || t === 'TWO-WAY FWD' || t === 'DEFENSIVE FORWARD' || t === 'SHUTDOWN' || t === 'STAY-AT-HOME' || t === 'INTIMIDATOR' || t === 'TWO-WAY STAR D' || t === 'PRO DEFENSIVE D';
+                        return t === 'TWO-WAY STAR F' || t === 'DEFENSIVE SPECIALIST' || t === 'TWO-WAY FWD' || t === 'DEFENSIVE FORWARD' || t === 'DEFENSIVE FWD' || t === 'SHUTDOWN' || t === 'STAY-AT-HOME' || t === 'INTIMIDATOR' || t === 'TWO-WAY STAR D' || t === 'PRO DEFENSIVE D';
                     });
                     if (hasMatchupDef) lineMatchDefMod = 0.88;
                 }
@@ -5588,25 +5597,49 @@ async function simRound() {
     saveGame();
 }
 
-async function simPlayoffs() {
-    const turbo = confirm("TURBO: simulate all playoff rounds instantly?\n\nCancel = normal speed (300ms/game).");
+// turboOpt: leave undefined for the interactive prompt. Pass true/false to drive this
+// programmatically (console, automated sim runs) — confirm() has no one to dismiss it in
+// that case and would block the renderer indefinitely.
+async function simPlayoffs(turboOpt) {
+    // Guard BEFORE prompting: a re-entrant call used to still pop the dialog and hang.
     if (isSimulating) return;
+    const turbo = (turboOpt === undefined)
+        ? confirm("TURBO: simulate all playoff rounds instantly?\n\nCancel = normal speed (300ms/game).")
+        : !!turboOpt;
     isSimulating = true;
     try {
-        while (isSimulating && isPlayoffs && !currentCupChamp) {
-            // Sim all games remaining in this round's slate
-            while (currentDay < calendar.length) {
+        // The playoff calendar only ever holds ONE day of games (genPlayoffSlate builds
+        // a single slate for whichever series are still alive). So a round is played by
+        // repeatedly: sim the slate -> rebuild the slate for series still under 4 wins.
+        // Only once every series is decided may the bracket advance a round.
+        // Bounded so a wedged bracket can never spin forever (this froze the tab before).
+        let guard = 0;
+        const seriesLive = () => playoffBracket.series.filter(s => s.hW < 4 && s.aW < 4).length;
+
+        while (isSimulating && isPlayoffs && !currentCupChamp && guard++ < 600) {
+            if (currentDay < calendar.length) {
                 await simDay(false, true);
                 if (!turbo) { updateUI(); await sleep(300); }
                 advanceCalendar();
+            } else if (seriesLive() > 0) {
+                // Round still in progress — build the next day's slate.
+                genPlayoffSlate();
+                if (calendar.length === 0 || (calendar[0] && calendar[0].length === 0)) {
+                    console.warn('simPlayoffs: live series but empty slate — stopping.');
+                    break;
+                }
+            } else {
+                // Every series decided — advance the bracket.
+                showBracket();
+                if (!turbo) await sleep(1500);
+                _doRoundAdvance();
+                if (!turbo) await sleep(500);
+                if (currentCupChamp) break;
             }
-            // All series in this round are done — advance without waiting for modal
-            if (currentCupChamp) break;
-            showBracket();
-            if (!turbo) await sleep(1500);
-            _doRoundAdvance();
-            if (!turbo) await sleep(500);
+            // Always yield, even in turbo, so the renderer stays responsive.
+            await sleep(0);
         }
+        if (guard >= 600) console.warn('simPlayoffs: iteration guard tripped — stopping.');
     } finally {
         isSimulating = false;
         updateUI();
