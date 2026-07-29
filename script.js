@@ -2237,8 +2237,8 @@ const dynamicDuos = [
     ['Dimitri Yushkevich', 'Yves Racine'],
     ['Garry Galley', 'Rob Ramage'],
     // PIT
-    ['Ron Francis', 'Jaromir Jagr', 'Rick Tocchet'],
-    ['Mario Lemieux', 'Kevin Stevens', 'Tomas Sandstrom'],
+    ['Mario Lemieux', 'Jaromir Jagr', 'Rick Tocchet'],
+    ['Ron Francis', 'Kevin Stevens', 'Tomas Sandstrom'],
     ['Joe Mullen', 'Martin Straka', 'Markus Naslund'],
     ['Larry Murphy', 'Kjell Samuelsson'],
     ['Greg Hawgood', 'Ulf Samuelsson'],
