@@ -5112,7 +5112,11 @@ function buildPlayoffRound() {
     playoffBracket.series.forEach(s => { if (typeof s.h === 'string') s.h = league.find(t => t.nrm === s.h); if (typeof s.a === 'string') s.a = league.find(t => t.nrm === s.a); });
     genPlayoffSlate();
 }
-function genPlayoffSlate() { calendar = [[]]; playoffBracket.series.filter(s => s.hW < 4 && s.aW < 4).forEach(s => { calendar[0].push({h:s.h, a:s.a, result:null, series:s}); }); currentDay = 0; updateUI(); showBracket(); }
+// quiet=true skips the UI work. The playoff loop rebuilds the slate once per simulated
+// day, so rendering here means a full updateUI() + showBracket() on every pass — and
+// showBracket() gets steadily more expensive as bracket history accumulates. In turbo
+// nobody is watching the intermediate frames, so the loop renders once per round instead.
+function genPlayoffSlate(quiet = false) { calendar = [[]]; playoffBracket.series.filter(s => s.hW < 4 && s.aW < 4).forEach(s => { calendar[0].push({h:s.h, a:s.a, result:null, series:s}); }); currentDay = 0; if (!quiet) { updateUI(); showBracket(); } }
 
 let _pendingRoundAdvance = null;
 
@@ -5192,7 +5196,7 @@ function handleRoundEnd() {
     showSeriesRecap(() => _doRoundAdvance());
 }
 
-function _doRoundAdvance() {
+function _doRoundAdvance(turbo = false) {
     const w = playoffBracket.series.map(s => s.hW === 4 ? s.h : s.a);
     // Save completed round to history before clearing
     if (!playoffBracket.history) playoffBracket.history = [];
@@ -5203,8 +5207,16 @@ function _doRoundAdvance() {
     });
     if(playoffBracket.round === 4) {
         if(w[0]) currentCupChamp = w[0].name;
-        _awardsPending = true;
-        openAwardsVoting();
+        // Interactive runs vote on the awards; an unattended turbo run has nobody to click
+        // through the modal, and leaving _awardsPending set would block beginNewYear() on
+        // an alert() afterwards. Resolve them directly instead.
+        if (turbo) {
+            runEndOfSeasonAwards();
+            _awardsPending = false;
+        } else {
+            _awardsPending = true;
+            openAwardsVoting();
+        }
 
         // !! Spawn the button to jump straight into the next year!
         if (!document.getElementById('btnStartNextSeason')) {
@@ -5251,8 +5263,8 @@ function _doRoundAdvance() {
         const wS = prevSeries.find(s => s.conf === 'CAMPBELL');
         if (eS && wS) playoffBracket.series.push(mkNext(getWinner(eS), getWinner(wS), 'FINALS', 'FINALS'));
     }
-    const btnNR = document.getElementById('btnNextRound'); if(btnNR) btnNR.remove(); 
-    genPlayoffSlate();
+    const btnNR = document.getElementById('btnNextRound'); if(btnNR) btnNR.remove();
+    genPlayoffSlate(turbo);
 }
 
 function processOffseasonGrowth() {
@@ -5378,6 +5390,19 @@ async function beginNewYear() {
 
 // --- SIMULATION CONTROLLERS ---
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+// Yield to the renderer WITHOUT going through setTimeout. Chrome throttles timers in
+// backgrounded tabs to roughly one per minute, so a loop that awaits sleep(0) each
+// iteration slows to a crawl the moment the tab loses focus — it looks frozen but is
+// just being throttled. MessageChannel posts a macrotask that isn't subject to that
+// clamp, so long sims keep running at full speed in the background.
+function yieldToRenderer() {
+    return new Promise(resolve => {
+        const ch = new MessageChannel();
+        ch.port1.onmessage = () => { ch.port1.close(); ch.port2.close(); resolve(); };
+        ch.port2.postMessage(0);
+    });
+}
 
 async function simDay(slowMode = true, bypassLock = false) {
     if (currentDay >= calendar.length) return;
@@ -5514,7 +5539,7 @@ async function simSeason(useTurbo = false) {
         await simDay(false, true); updateUI();
         let percent = Math.floor((currentDay / calendar.length) * 100);
         document.getElementById('tickerScroll').innerText = `${useTurbo ? ' TURBO SIMULATING' : ' CALCULATING SEASON ALGORITHMS'}: DAY ${currentDay} OF ${calendar.length} (${percent}% COMPLETE)...`;
-        if (!useTurbo) { await sleep(50); } else if (currentDay % 15 === 0) { await sleep(0); }
+        if (!useTurbo) { await sleep(50); } else if (currentDay % 15 === 0) { await yieldToRenderer(); }
         let keepGoing = advanceCalendar();
         if (!keepGoing) break;
     }
@@ -5549,7 +5574,8 @@ async function simRestOfSeason() {
                 const ticker = document.getElementById('tickerScroll');
                 if (ticker) ticker.innerText = `⚡ SIMULATING... DAY ${currentDay}/${calendar.length} (${pct}%) | ${dayScores || '---'}`;
                 refreshScheduleDashboardUI();
-                await sleep(0); // yield every 5 days — enough to keep browser responsive
+                await yieldToRenderer(); // yield every 5 days — keeps the browser responsive
+                                         // without setTimeout throttling in a background tab
             }
             const keepGoing = advanceCalendar();
             if (!keepGoing) break;
@@ -5614,6 +5640,8 @@ async function simPlayoffs(turboOpt) {
         // Only once every series is decided may the bracket advance a round.
         // Bounded so a wedged bracket can never spin forever (this froze the tab before).
         let guard = 0;
+        const _simPlayoffsTrail = [];
+        try { localStorage.removeItem('nhl94_playoffTrail'); } catch (e) {}
         const seriesLive = () => playoffBracket.series.filter(s => s.hW < 4 && s.aW < 4).length;
 
         while (isSimulating && isPlayoffs && !currentCupChamp && guard++ < 600) {
@@ -5622,24 +5650,49 @@ async function simPlayoffs(turboOpt) {
                 if (!turbo) { updateUI(); await sleep(300); }
                 advanceCalendar();
             } else if (seriesLive() > 0) {
-                // Round still in progress — build the next day's slate.
-                genPlayoffSlate();
+                // Round still in progress — build the next day's slate. Quiet in turbo:
+                // this runs once per simulated day, and the UI work dominated the loop.
+                genPlayoffSlate(turbo);
                 if (calendar.length === 0 || (calendar[0] && calendar[0].length === 0)) {
                     console.warn('simPlayoffs: live series but empty slate — stopping.');
                     break;
                 }
             } else {
-                // Every series decided — advance the bracket.
+                // Every series decided — advance the bracket. Render here even in turbo:
+                // once per round is cheap, and it keeps the bracket visibly current.
                 showBracket();
                 if (!turbo) await sleep(1500);
-                _doRoundAdvance();
+                _doRoundAdvance(turbo);
                 if (!turbo) await sleep(500);
                 if (currentCupChamp) break;
             }
-            // Always yield, even in turbo, so the renderer stays responsive.
-            await sleep(0);
+            // Heartbeat so a stalled/slow sim can be diagnosed from the console.
+            const beat = { guard, round: playoffBracket.round, live: seriesLive(), at: Date.now() };
+            window.__simPlayoffsProgress = beat;
+            // Also mirror to localStorage. When the tab stops answering the devtools
+            // protocol there is no way to read window state, so it is impossible to tell
+            // a loop that is merely slow from one that is genuinely wedged. localStorage
+            // survives that blackout and can be read after a reload, which settles it.
+            // Keeps a short trail so the last few iterations before a stall are visible.
+            try {
+                _simPlayoffsTrail.push(beat);
+                if (_simPlayoffsTrail.length > 40) _simPlayoffsTrail.shift();
+                localStorage.setItem('nhl94_playoffTrail', JSON.stringify(_simPlayoffsTrail));
+            } catch (e) { /* quota or private mode — diagnostics only, never break the sim */ }
+            // Yield via MessageChannel (not sleep(0)) so background tab timer throttling
+            // can't stall an unattended sim.
+            //
+            // Yield EVERY iteration. An earlier version yielded only every 5th to reduce
+            // task-queue churn, which was a mistake: the localStorage trail showed each
+            // iteration blocking ~11.5s, so batching five of them meant ~46s with no yield
+            // at all — long enough to look completely frozen and to blow past tooling
+            // timeouts. The yield itself is nearly free; the iteration is what costs.
+            await yieldToRenderer();
         }
         if (guard >= 600) console.warn('simPlayoffs: iteration guard tripped — stopping.');
+        // Mark a clean exit, so a trail that just stops can be told apart from one that
+        // ran to completion. Absence of this after a stall means the loop never returned.
+        try { localStorage.setItem('nhl94_playoffExit', JSON.stringify({ guard, champ: currentCupChamp || null, at: Date.now() })); } catch (e) {}
     } finally {
         isSimulating = false;
         updateUI();
