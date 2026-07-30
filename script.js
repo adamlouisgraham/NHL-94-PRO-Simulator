@@ -5379,6 +5379,19 @@ async function beginNewYear() {
 // --- SIMULATION CONTROLLERS ---
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
+// Yield to the renderer WITHOUT going through setTimeout. Chrome throttles timers in
+// backgrounded tabs to roughly one per minute, so a loop that awaits sleep(0) each
+// iteration slows to a crawl the moment the tab loses focus — it looks frozen but is
+// just being throttled. MessageChannel posts a macrotask that isn't subject to that
+// clamp, so long sims keep running at full speed in the background.
+function yieldToRenderer() {
+    return new Promise(resolve => {
+        const ch = new MessageChannel();
+        ch.port1.onmessage = () => { ch.port1.close(); ch.port2.close(); resolve(); };
+        ch.port2.postMessage(0);
+    });
+}
+
 async function simDay(slowMode = true, bypassLock = false) {
     if (currentDay >= calendar.length) return;
     if (!bypassLock && isSimulating) return;
@@ -5514,7 +5527,7 @@ async function simSeason(useTurbo = false) {
         await simDay(false, true); updateUI();
         let percent = Math.floor((currentDay / calendar.length) * 100);
         document.getElementById('tickerScroll').innerText = `${useTurbo ? ' TURBO SIMULATING' : ' CALCULATING SEASON ALGORITHMS'}: DAY ${currentDay} OF ${calendar.length} (${percent}% COMPLETE)...`;
-        if (!useTurbo) { await sleep(50); } else if (currentDay % 15 === 0) { await sleep(0); }
+        if (!useTurbo) { await sleep(50); } else if (currentDay % 15 === 0) { await yieldToRenderer(); }
         let keepGoing = advanceCalendar();
         if (!keepGoing) break;
     }
@@ -5549,7 +5562,8 @@ async function simRestOfSeason() {
                 const ticker = document.getElementById('tickerScroll');
                 if (ticker) ticker.innerText = `⚡ SIMULATING... DAY ${currentDay}/${calendar.length} (${pct}%) | ${dayScores || '---'}`;
                 refreshScheduleDashboardUI();
-                await sleep(0); // yield every 5 days — enough to keep browser responsive
+                await yieldToRenderer(); // yield every 5 days — keeps the browser responsive
+                                         // without setTimeout throttling in a background tab
             }
             const keepGoing = advanceCalendar();
             if (!keepGoing) break;
@@ -5636,8 +5650,10 @@ async function simPlayoffs(turboOpt) {
                 if (!turbo) await sleep(500);
                 if (currentCupChamp) break;
             }
-            // Always yield, even in turbo, so the renderer stays responsive.
-            await sleep(0);
+            // Always yield, even in turbo, so the renderer stays responsive. Uses
+            // yieldToRenderer rather than sleep(0) so background tab timer throttling
+            // can't stall an unattended playoff sim.
+            await yieldToRenderer();
         }
         if (guard >= 600) console.warn('simPlayoffs: iteration guard tripped — stopping.');
     } finally {
