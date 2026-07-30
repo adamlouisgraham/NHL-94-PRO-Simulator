@@ -5650,10 +5650,14 @@ async function simPlayoffs(turboOpt) {
                 if (!turbo) await sleep(500);
                 if (currentCupChamp) break;
             }
-            // Always yield, even in turbo, so the renderer stays responsive. Uses
-            // yieldToRenderer rather than sleep(0) so background tab timer throttling
-            // can't stall an unattended playoff sim.
-            await yieldToRenderer();
+            // Heartbeat so a stalled/slow sim can be diagnosed from the console.
+            window.__simPlayoffsProgress = { guard, round: playoffBracket.round, live: seriesLive(), at: Date.now() };
+            // Yield via MessageChannel (not sleep(0)) so background tab timer throttling
+            // can't stall an unattended sim. Yield every few iterations rather than every
+            // one: a MessageChannel yield is nearly free, so yielding on every pass floods
+            // the task queue and starves other work on the thread. Each iteration already
+            // does a full simDay, so this still yields many times per round.
+            if (guard % 5 === 0) await yieldToRenderer();
         }
         if (guard >= 600) console.warn('simPlayoffs: iteration guard tripped — stopping.');
     } finally {
