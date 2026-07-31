@@ -35,9 +35,9 @@ const PLAYER_TAG_OVERRIDES = {};
     "DEFENSIVE FWD":      { shotRate: 0.75, penaltyRate: 1.00,  assistRate: 0.95 },
 
     // --- DEFENSEMEN ---
-    "FRANCHISE D":    { shotRate: 1.15, penaltyRate: 0.75,  assistRate: 1.40 }, // Elite two-way D — Bourque/Leetch/Murphy
-    "QUARTERBACK":    { shotRate: 1.00, penaltyRate: 0.80,  assistRate: 1.45 }, // Pass-first offensive D — Coffey/Housley
-    "BOOMER":         { shotRate: 1.25, penaltyRate: 1.05,  assistRate: 1.00 }, // Big-shot D — MacInnis/Iafrate
+    "FRANCHISE D":    { shotRate: 1.15, penaltyRate: 0.75,  assistRate: 1.45 }, // Elite two-way D — Bourque/Leetch/Murphy
+    "QUARTERBACK":    { shotRate: 1.00, penaltyRate: 0.80,  assistRate: 1.50 }, // Pass-first offensive D — Coffey/Housley
+    "BOOMER":         { shotRate: 1.25, penaltyRate: 1.05,  assistRate: 1.18 }, // Big-shot D — MacInnis/Iafrate
     "TWO-WAY STAR D": { shotRate: 1.08, penaltyRate: 0.88,  assistRate: 1.20 }, // Elite two-way — Lidstrom/Chelios
     "SHUTDOWN":       { shotRate: 0.78, penaltyRate: 1.15,  assistRate: 0.82 }, // Defensive stopper — physical, low offense
     "ENFORCER D":     { shotRate: 0.55, penaltyRate: 1.70,  assistRate: 0.55 }, // Pure fighter — lots of PIMs, almost no points
