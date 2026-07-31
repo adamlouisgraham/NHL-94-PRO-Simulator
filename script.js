@@ -5641,7 +5641,9 @@ async function simPlayoffs(turboOpt) {
         // Bounded so a wedged bracket can never spin forever (this froze the tab before).
         let guard = 0;
         const _simPlayoffsTrail = [];
-        try { localStorage.removeItem('nhl94_playoffTrail'); } catch (e) {}
+        // Clear BOTH keys. Clearing only the trail leaves a stale exit marker from a
+        // previous run, which reads as "this run completed" and is actively misleading.
+        try { localStorage.removeItem('nhl94_playoffTrail'); localStorage.removeItem('nhl94_playoffExit'); } catch (e) {}
         const seriesLive = () => playoffBracket.series.filter(s => s.hW < 4 && s.aW < 4).length;
 
         while (isSimulating && isPlayoffs && !currentCupChamp && guard++ < 600) {
