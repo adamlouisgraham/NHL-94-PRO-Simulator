@@ -3861,7 +3861,27 @@ function simGame(idx) {
     grantTOI(aStruct, awayIceData);
 
     // Hoisted outside event loop — fallback to first non-empty line if the scheduled line is depleted
-    const pickLine = (lines, idx) => { const l = lines[idx]||[]; if (l.length) return l; return lines.find(x=>x&&x.length) || []; };
+    // size = how many skaters this unit should ice (3 F, 2 D). A depleted line used to go
+    // out short, which is both unrealistic (teams always ice five skaters at even strength)
+    // and quietly broke plus/minus: +1 to each scorer-side skater and -1 to each opponent
+    // no longer cancel when the two units differ in size, so the league +/- did not sum to
+    // zero. Top up from the other lines instead, skipping anyone already on the ice.
+    const pickLine = (lines, idx, size) => {
+        let l = lines[idx] || [];
+        if (!l.length) l = lines.find(x => x && x.length) || [];
+        if (!size || l.length >= size) return l;
+        const out = [...l];
+        const have = new Set(out.map(p => p && p.name));
+        for (const other of lines) {
+            if (!other) continue;
+            for (const p of other) {
+                if (out.length >= size) break;
+                if (p && !have.has(p.name)) { out.push(p); have.add(p.name); }
+            }
+            if (out.length >= size) break;
+        }
+        return out;
+    };
 
     let period = 1; // hoisted so PATRICK ROY PROTOCOL can read it after the loop
     let prevEvTick = 0;
@@ -3877,8 +3897,8 @@ function simGame(idx) {
         const hDPair  = homeDSchedule[t] || 0;
         const aFLine  = awayFSchedule[t] || 0;
         const aDPair  = awayDSchedule[t] || 0;
-        const hOnIce  = [...pickLine(hStruct.f, hFLine), ...pickLine(hStruct.d, hDPair)];
-        const aOnIce  = [...pickLine(aStruct.f, aFLine), ...pickLine(aStruct.d, aDPair)];
+        const hOnIce  = [...pickLine(hStruct.f, hFLine, 3), ...pickLine(hStruct.d, hDPair, 2)];
+        const aOnIce  = [...pickLine(aStruct.f, aFLine, 3), ...pickLine(aStruct.d, aDPair, 2)];
 
         // Update rolling shift pools (Option A)
         pushShift(hShiftLog, hOnIce, t);
@@ -4031,8 +4051,13 @@ function simGame(idx) {
                         if (playerStats[ppEv.scorer]) playerStats[ppEv.scorer][kk].ppg=(playerStats[ppEv.scorer][kk].ppg||0)+1;
                         if (ppEv.pAssist&&playerStats[ppEv.pAssist]) playerStats[ppEv.pAssist][kk].ppa=(playerStats[ppEv.pAssist][kk].ppa||0)+1;
                         if (ppEv.sAssist&&playerStats[ppEv.sAssist]) playerStats[ppEv.sAssist][kk].ppa=(playerStats[ppEv.sAssist][kk].ppa||0)+1;
-                        if (advTeamObj) advTeamObj.season.ppg=(advTeamObj.season.ppg||0)+1;
-                        if (penTeamObj) penTeamObj.season.pkg=(penTeamObj.season.pkg||0)+1;
+                        // !isPlayoffs to match the ppo/pka guard above. Without it the PP%
+                        // numerator gained playoff goals while the denominator did not, so
+                        // every playoff run permanently inflated the team's season PP%.
+                        if (!isPlayoffs) {
+                            if (advTeamObj) advTeamObj.season.ppg=(advTeamObj.season.ppg||0)+1;
+                            if (penTeamObj) penTeamObj.season.pkg=(penTeamObj.season.pkg||0)+1;
+                        }
                     }
                     if (advTeam.nrm===g.h.nrm) hMomentum=8; else aMomentum=8;
                 }
@@ -4053,6 +4078,13 @@ function simGame(idx) {
                         const kk2=isPlayoffs?'playoff':'season';
                         playerStats[shEv.scorer][kk2].shg=(playerStats[shEv.scorer][kk2].shg||0)+1;
                     }
+                    // Shorthanded goals DO count for plus/minus (unlike power play goals,
+                    // which correctly award none). Killers on ice get +1, the power play
+                    // unit that surrendered it gets -1.
+                    const shOn = pkUnit.filter(p=>p&&p.pos!=='G');
+                    const shOpp = ppUnit.filter(p=>p&&p.pos!=='G');
+                    const n = Math.min(shOn.length, shOpp.length);
+                    for (let i=0;i<n;i++){ trk(shOn[i].name,'pm',1); trk(shOpp[i].name,'pm',-1); }
                     if (penTeam.nrm===g.h.nrm) hMomentum=8; else aMomentum=8;
                 }
             }
