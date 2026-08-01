@@ -87,8 +87,9 @@ function getEliteShooterMod(tag) {
     // We derive leadership from Experience (using Age if you have it, 
     // otherwise Aggressiveness/Stick Handling to represent veteran savvy)
     let age = parseInt(p.age) || 25;
-    let aggr = gradeToNum(p.attr.aggr) || 50;
-    let stk = gradeToNum(p.attr.stkHnd) || 50;
+    const pa = p.attr || {};
+    let aggr = gradeToNum(pa.aggr) || 50;
+    let stk = gradeToNum(pa.stkHnd) || 50;
     let asgAppearances = p.asgAppearances || 0;
     // Experience bonus for older players, high skill bonus for leaders
     let score = (Math.min(age, 35) * 1.5) + (aggr * 0.3) + (stk * 0.2) + (asgAppearances * 2);
@@ -243,8 +244,14 @@ const getGradeMod = (grade) => {
 
 function gradeToNum(val) {
     // If it's somehow already a number in the spreadsheet, just keep it!
-    if (!isNaN(val) && val !== '') return parseInt(val);
-    
+    // Test the PARSED value, not isNaN(val). isNaN() coerces first, so isNaN(null),
+    // isNaN(' ') and isNaN([]) are all false — those used to slip into parseInt() and
+    // return NaN, skipping the safe fallback below. A single stray space in a sheet cell
+    // was enough to give a player a NaN rating, which then failed every archetype gate
+    // silently. Anything that isn't a real number now falls through to the letter map.
+    const asNum = parseInt(val, 10);
+    if (typeof val !== 'string' ? Number.isFinite(asNum) : (val.trim() !== '' && Number.isFinite(asNum))) return asNum;
+
     // Helper function to pick a random number between a min and max (inclusive)
     const roll = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
     
@@ -286,11 +293,14 @@ function gradeToNum(val) {
 // ==========================================
 
 // Attribute Getters: Handle potential naming inconsistencies in spreadsheet headers
-const getOff  = (pName) => parseInt(playerStats[pName]?.attr.off   || playerStats[pName]?.attr.OFF  || 0);
-const getDef  = (pName) => parseInt(playerStats[pName]?.attr.def   || playerStats[pName]?.attr.DEF  || 0);
-const getChk  = (pName) => { const p = playerStats[pName]; return p ? (gradeToNum(p.attr.check) || 50) : 50; };
+// All of these guard `p.attr`, not just `p`. A player row can exist without an attr object,
+// and `playerStats[pName]?.attr.off` only looks safe — the ?. covers the lookup but the very
+// next `.off` still throws. getAggr always did this correctly; the rest now match it.
+const getOff  = (pName) => { const p = playerStats[pName]; return parseInt((p && p.attr) ? (p.attr.off || p.attr.OFF || 0) : 0); };
+const getDef  = (pName) => { const p = playerStats[pName]; return parseInt((p && p.attr) ? (p.attr.def || p.attr.DEF || 0) : 0); };
+const getChk  = (pName) => { const p = playerStats[pName]; return (p && p.attr) ? (gradeToNum(p.attr.check) || 50) : 50; };
 const getAggr = (pName) => { const p = playerStats[pName]; return (p && p.attr) ? (gradeToNum(p.attr.aggr) || 50) : 50; };
-const getWgt  = (pName) => { const p = playerStats[pName]; return p ? (p.weight || getWeightLbs(p.attr.weight || 'C')) : 180; };
+const getWgt  = (pName) => { const p = playerStats[pName]; return p ? (p.weight || getWeightLbs((p.attr && p.attr.weight) || 'C')) : 180; };
 const getArch = (pName) => getPlayerWeightedStats(pName).tag || 'Unknown';
 
 
@@ -1420,7 +1430,9 @@ async function startNewGame(useCustomRoster = false) {
                             pim: 0, ppg: 0, shg: 0, 
                             gwg: parseInt(getCol(r, ["CAREER GWG"], -1)) || 0, 
                             asg: parseInt(getCol(r, ["CAREER ASG", "ALL STAR"], -1)) || 0,
-                            s: 0, awards: 0 
+                            // toi/svg are present on careerPlayoff, season and playoff; without
+                            // them here career TOI reads undefined until the first rollover.
+                            s: 0, awards: 0, toi: 0, svg: 0
                         },
                         careerPlayoff: {
                             gp: parseInt(getCol(r, ["CAREER PLAYOFF GP"], -1)) || 0,
@@ -1502,7 +1514,8 @@ async function startNewGame(useCustomRoster = false) {
                     t: parseInt(getCol(r, ["CAREER T", "C_T", "CAR T"], -1)) || 0,
                     so: parseInt(getCol(r, ["CAREER SO", "C_SO", "CAR SO"], -1)) || 0,
                     sv: parseInt(getCol(r, ["CAREER SV", "C_SV", "CAR SV"], -1)) || 0,
-                    sa: parseInt(getCol(r, ["CAREER SA", "C_SA", "CAR SA"], -1)) || 0
+                    sa: parseInt(getCol(r, ["CAREER SA", "C_SA", "CAR SA"], -1)) || 0,
+                    toi: 0
                 },
                 careerPlayoff: {
                     gp: parseInt(getCol(r, ["CAREER PLAYOFF GP"], -1)) || 0,
@@ -7095,21 +7108,10 @@ function clearArchives() {
 // Reverse of gradeToNum's randomized bucket ranges — used only for re-exporting a numeric
 // attribute back into a letter grade for the roster CSV. Not an exact inverse (gradeToNum
 // itself is a random roll within a bucket), but round-trips within the same tier.
-function numToGrade(n) {
-    const v = parseInt(n);
-    if (isNaN(v)) return 'C';
-    if (v >= 95) return 'A+';
-    if (v >= 90) return 'A';
-    if (v >= 85) return 'A-';
-    if (v >= 80) return 'B+';
-    if (v >= 75) return 'B';
-    if (v >= 70) return 'B-';
-    if (v >= 63) return 'C+';
-    if (v >= 56) return 'C';
-    if (v >= 50) return 'C-';
-    if (v >= 40) return 'D';
-    return 'F';
-}
+// numToGrade is defined once, near the top of this file. A second copy used to live here
+// and, being the later declaration, silently won. It differed in two ways that mattered:
+// it returned 'C' for missing values (fabricating a plausible grade for absent data) and
+// it had no 'F+' tier, so 30-39 exported as 'F'.
 
 // Exports the CURRENT state of the league (post-trades, post-retirements, updated career
 // totals, current age/team) as a re-importable roster CSV in the same one-row-per-player
