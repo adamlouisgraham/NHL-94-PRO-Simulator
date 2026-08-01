@@ -2167,7 +2167,7 @@ function getPlayerFatigueAmount(pName) {
 const dynamicDuos = [
     // ANA
     ['Terry Yake', 'Anatoli Semenov', 'Stephan Lebeau'],
-    ['Bob Corkum', 'Garry Valk', 'Tim Sweeney'],
+    ['Bob Corkum', 'Garry Valk'],
     ['Bobby Dollas', 'Sean Hill'],
     ['Bill Houlder', 'Randy Ladouceur'],
     // BOS
@@ -2188,7 +2188,7 @@ const dynamicDuos = [
     ['Zarley Zalapski', 'James Patrick'],
     // CHI
     ['Jeremy Roenick', 'Tony Amonte', 'Dirk Graham'],
-    ['Brent Sutter', 'Rich Sutter', 'Christian Ruuttu'],
+    ['Brent Sutter', 'Rich Sutter', 'Paul Ysebaert'],
     ['Chris Chelios', 'Eric Weinrich'],
     ['Gary Suter', 'Steve Smith'],
     // DET
@@ -2210,7 +2210,7 @@ const dynamicDuos = [
     ['Gord Murphy', 'Peter Andersson'],
     ['Geoff Smith', 'Brian Benning'],
     // HFD
-    ['Andrew Cassels', 'Brendan Shanahan', 'Pat Verbeek', 'Geoff Sanderson'],
+    ['Andrew Cassels', 'Pat Verbeek', 'Geoff Sanderson'],
     ['Darren Turcotte', 'Robert Kron'],
     ['Mark Janssens', 'Jim Storm'],
     ['Chris Pronger', 'Adam Burt'],
@@ -2249,11 +2249,12 @@ const dynamicDuos = [
     ['Mark Messier', 'Glenn Anderson', 'Adam Graves'],
     ['Steve Larmer', 'Alexei Kovalev', 'Sergei Nemchinov'],
     ['Craig MacTavish', 'Esa Tikkanen', 'Ed Olczyk'],
+    ['Brian Noonan', 'Stephane Matteau', 'Joey Kocur'],
     ['Brian Leetch', 'Alex Karpotsev'],
     ['Sergei Zubov', 'Jeff Beukeboom'],
     // OTW
     ['Alexei Yashin', 'Sylvain Turgeon'],
-    ['Alexandre Daigle', 'Evgeny Davydov'],
+    ['Alexander Daigle', 'Evgeny Davydov'],
     ['Norm Maciver', 'Kerry Huffman'],
     ['Brad Shaw', 'Steve Konroyd'],
     // PHI
@@ -2266,6 +2267,7 @@ const dynamicDuos = [
     ['Mario Lemieux', 'Jaromir Jagr', 'Rick Tocchet'],
     ['Ron Francis', 'Kevin Stevens', 'Tomas Sandstrom'],
     ['Joe Mullen', 'Martin Straka', 'Markus Naslund'],
+    ['Brian Trottier', 'Shawn McEachern'],
     ['Larry Murphy', 'Kjell Samuelsson'],
     ['Greg Hawgood', 'Ulf Samuelsson'],
     // QUE
@@ -2307,9 +2309,8 @@ const dynamicDuos = [
     ['Jeff Brown', 'Gerald Diduck'],
     ['Jyrki Lumme', 'Jiri Slegr'],
     // WAS
-    ['Joe Juneau', 'Peter Bondra', 'Dimitri Khristich'],
-    ['Mike Ridley', 'Michal Pivonka'],
-    ['Dale Hunter', 'Kelly Miller'],
+    ['Joe Juneau', 'Peter Bondra'],
+    ['Mike Ridley', 'Dmitri Khristich'],
     ['Craig Berube', 'Todd Krygier'],
     ['Kevin Hatcher', 'John Slaney'],
     ['Calle Johansson', 'Joe Reekie'],
@@ -4376,6 +4377,14 @@ function simGame(idx) {
         const aOtUnit = [...(aStruct.f[0]||[]), ...(aStruct.d[0]||[])];
         hOtUnit.forEach(p => trk(p.name, 'toi', 5));
         aOtUnit.forEach(p => trk(p.name, 'toi', 5));
+        // An OT winner counts for plus/minus (5-on-5 under 93-94 rules), same as any even
+        // strength goal. Only when the period actually resolved — a game left tied has no goal.
+        if (hG !== aG) {
+            const won = hG > aG ? hOtUnit : aOtUnit;
+            const lost = hG > aG ? aOtUnit : hOtUnit;
+            const n = Math.min(won.length, lost.length);
+            for (let i=0;i<n;i++){ trk(won[i].name,'pm',1); trk(lost[i].name,'pm',-1); }
+        }
     }
     if(isPlayoffs && hG === aG) {
         // OT uses top lines + star player modifier — not a coin flip
@@ -4428,6 +4437,11 @@ function simGame(idx) {
             const aOtUnit = [...(aStruct.f[0]||[]), ...(aStruct.d[0]||[])];
             hOtUnit.forEach(p => trk(p.name, 'toi', otPeriods * 20));
             aOtUnit.forEach(p => trk(p.name, 'toi', otPeriods * 20));
+            // Playoff OT always resolves, so the winner's unit gets +1, the loser's -1.
+            const won = hG > aG ? hOtUnit : aOtUnit;
+            const lost = hG > aG ? aOtUnit : hOtUnit;
+            const n = Math.min(won.length, lost.length);
+            for (let i=0;i<n;i++){ trk(won[i].name,'pm',1); trk(lost[i].name,'pm',-1); }
         }
     }
 
