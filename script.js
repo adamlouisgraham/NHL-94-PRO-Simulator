@@ -683,7 +683,11 @@ function getProjectedGoalie(nrm) {
     // On a back-to-back with a close backup, likely sit the starter
     if (playedYesterday(nrm) && gs.length > 1) {
         const diff = getPlayerWeightedStats(gs[0].name).ovr - getPlayerWeightedStats(gs[1].name).ovr;
-        const consStarts = (playerStats[gs[0].name]?.season?.consStarts || 0);
+        // Read the ACTIVE bucket, matching pickStarter. Hardcoding .season meant that during
+        // the playoffs this projection read a frozen regular-season value and could name a
+        // different goalie than the one the game actually starts.
+        const _gk = (typeof isPlayoffs !== 'undefined' && isPlayoffs) ? 'playoff' : 'season';
+        const consStarts = (playerStats[gs[0].name]?.[_gk]?.consStarts || 0);
         if (diff <= 10 || consStarts >= 7) return gs[1];
     }
     return gs[0];
@@ -3995,7 +3999,9 @@ function simGame(idx) {
             const offender   = pickOffender(activeSk);
             const isMajor    = Math.random() < 0.06;
             const pimAmt     = isMajor ? 5 : 2;
-            const overCap2   = Math.max(0, (playerStats[offender]?.season?.pim||0) - 150);
+            // Active bucket, not always .season — otherwise playoff PIMs never accrue toward
+            // the discipline cap while a frozen regular-season total keeps gating the player.
+            const overCap2   = Math.max(0, (playerStats[offender]?.[k]?.pim||0) - 150);
             const skipChance = 1 - Math.pow(0.85, overCap2/10);
             if (skipChance > 0 && Math.random() < skipChance) continue;
 
@@ -4061,7 +4067,26 @@ function simGame(idx) {
                     }
                     if (advTeam.nrm===g.h.nrm) hMomentum=8; else aMomentum=8;
                 }
-            } else if (ppRoll>=ppConvRate && Math.random()<0.02 && pkUnit.length>0) {
+            }
+
+            // A power play that does not score still puts pucks on net. Only PP GOALS used to
+            // register a shot, so failed power plays were invisible in shot totals and in the
+            // penalty killer's save count. Credit 1-2 saved shots to keep shot volume honest.
+            // Goals are unaffected: these are saves, so save percentage moves only because the
+            // shots that were always really happening are now actually being counted.
+            if (!(ppRoll < ppConvRate && ppUnit.length > 0) && ppUnit.length > 0) {
+                const pkGoalieMiss = penTeam.nrm===g.h.nrm ? hG_name : aG_name;
+                const nAtt = 1 + (Math.random() < 0.5 ? 1 : 0);
+                for (let i=0;i<nAtt;i++) {
+                    const sh = selectShooter(ppUnit);
+                    if (!sh) break;
+                    trk(sh.name,'s',1);
+                    if (pkGoalieMiss) { trk(pkGoalieMiss,'sa',1); trk(pkGoalieMiss,'sv',1); }
+                    if (advTeam.nrm===g.h.nrm) hShots++; else aShots++;
+                }
+            }
+
+            if (ppRoll>=ppConvRate && Math.random()<0.02 && pkUnit.length>0) {
                 const shShooter = selectShooter(pkUnit, 'SH');
                 const shEv = processSingleGoal(penTeam.nrm, penTeam.code, shShooter, pkUnit, timeStr, period, minute%20||20, sec);
                 if (shEv) {
@@ -4098,7 +4123,7 @@ function simGame(idx) {
             const hOff = pickOffender(hSk);
             const aOff = pickOffender(aSk);
             if (hOff && aOff) {
-                const capSkip = (name) => { const ov=Math.max(0,(playerStats[name]?.season?.pim||0)-150); return ov>0&&Math.random()<1-Math.pow(0.85,ov/10); };
+                const capSkip = (name) => { const ov=Math.max(0,(playerStats[name]?.[k]?.pim||0)-150); return ov>0&&Math.random()<1-Math.pow(0.85,ov/10); };
                 if (!capSkip(hOff)) trk(hOff,'pim',2);
                 if (!capSkip(aOff)) trk(aOff,'pim',2);
                 penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:g.h.code,
@@ -9338,11 +9363,6 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
 // Mid-game injury system — fires during the sim tick loop (called per game, not per tick)
 // Low base rate; goalie injuries trigger backup pull event and get logged prominently
 // Returns count of healthy goalie scratches — used to check if a backup exists mid-game
-function getBenchDepth(tk) {
-    if (!rosters[tk]) return 0;
-    return rosters[tk].filter(p => p.pos === 'G' && p.line === 'BENCH' && (playerStats[p.name]?.injury?.daysRemaining ?? 0) === 0 && !playerStats[p.name]?.onIR).length;
-}
-
 // A team with exactly (or fewer than) 12 forwards on its whole roster has zero bench depth beyond
 // what's dressed each game — a multi-game injury there forces the roster builder to run every
 // remaining line short for the injury's full duration with no possible replacement (no call-up
