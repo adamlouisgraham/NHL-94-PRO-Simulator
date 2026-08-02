@@ -1464,7 +1464,7 @@ async function startNewGame(useCustomRoster = false) {
             
             // 4. PULL ALL RAW GRADES AND CONVERT THEM TO NUMBERS
             let gAgil = gradeToNum(getCol(r, ["GOALIE AGILITY", "AGILITY", "AGL"], 17));
-            let gDefAware = gradeToNum(getCol(r, ["GOALIE DEFENSE RATING", "DEFENSE AWARENESS", "DEFENSE"], 7));
+            let gDefAware = gradeToNum(getCol(r, ["GOALIE DEFENSE RATING", "G DEF"], 35));
             let gPuckCtrl = gradeToNum(getCol(r, ["PUCK CONTROL", "STICK HANDLING", "STICK", "STK"], 16));
             let gSpeed = gradeToNum(getCol(r, ["GOALIE SPEED", "SPEED", "SPD"], 18));
             
@@ -1474,21 +1474,9 @@ async function startNewGame(useCustomRoster = false) {
             let gGloveR = gradeToNum(getCol(r, ["GLOVE RIGHT"], -1));
             let gGloveL = gradeToNum(getCol(r, ["GLOVE LEFT", "GLOVE LIEFT"], -1));
 
-            // 5. APPLY YOUR CUSTOM WEIGHT MATRIX (Total Weight: 19.5)
-            let calcOvr = (
-                (gAgil * 5.0) + 
-                (gDefAware * 5.0) + 
-                (gPuckCtrl * 4.5) + 
-                (gSpeed * 1.0) + 
-                (gStickR * 1.0) + 
-                (gStickL * 1.0) + 
-                (gGloveR * 1.0) + 
-                (gGloveL * 1.0)
-            ) / 19.5;
-
             playerStats[gN] = {
-                name: gN, team: teamObj.name, teamCode: teamObj.code, pos: 'G', age: parseInt(getCol(r, ["AGE"], -1)) || (Math.floor(Math.random()*15)+18), 
-                streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false, 
+                name: gN, team: teamObj.name, teamCode: teamObj.code, pos: 'G', age: parseInt(getCol(r, ["AGE"], -1)) || (Math.floor(Math.random()*15)+18),
+                streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false,
                 injury: { severity: 0, daysRemaining: 0 },
                 cumulativeFatigue: 0,
                 morale: 100,
@@ -1497,16 +1485,15 @@ async function startNewGame(useCustomRoster = false) {
                 lastStart: -1,
                 asgAppearances: parseInt(getCol(r, ["GOALIE CAREER ALLSTAR GAMES", "GOALIE CAREER ALLSTAR"], -1)) || 0,
 
-                // !! INJECT THE CALCULATED STATS DIRECTLY !!
-                attr: { 
-                    off: gradeToNum(getCol(r, ["GOALIE OFFENSE AWARENESS", "OFFENSE"], 10)) || 20, 
-                    def: gDefAware || 20, 
-                    gDef: gDefAware, 
-                    agil: gAgil, 
+                attr: {
+                    off: gradeToNum(getCol(r, ["GOALIE OFFENSE AWARENESS", "OFFENSE"], 10)) || 20,
+                    def: gDefAware || 20,
+                    gDef: gDefAware,
+                    agil: gAgil,
                     speed: gSpeed,
                     stkHnd: gPuckCtrl,
                     stickR: gStickR, stickL: gStickL, gloveR: gGloveR, gloveL: gGloveL,
-                    ovr: Math.round(calcOvr) // Bypass CSV overall and use custom calc!
+                    ovr: gDefAware || 70
                 },
                 
                 potential: 'Depth',
