@@ -683,7 +683,11 @@ function getProjectedGoalie(nrm) {
     // On a back-to-back with a close backup, likely sit the starter
     if (playedYesterday(nrm) && gs.length > 1) {
         const diff = getPlayerWeightedStats(gs[0].name).ovr - getPlayerWeightedStats(gs[1].name).ovr;
-        const consStarts = (playerStats[gs[0].name]?.season?.consStarts || 0);
+        // Read the ACTIVE bucket, matching pickStarter. Hardcoding .season meant that during
+        // the playoffs this projection read a frozen regular-season value and could name a
+        // different goalie than the one the game actually starts.
+        const _gk = (typeof isPlayoffs !== 'undefined' && isPlayoffs) ? 'playoff' : 'season';
+        const consStarts = (playerStats[gs[0].name]?.[_gk]?.consStarts || 0);
         if (diff <= 10 || consStarts >= 7) return gs[1];
     }
     return gs[0];
@@ -1460,7 +1464,7 @@ async function startNewGame(useCustomRoster = false) {
             
             // 4. PULL ALL RAW GRADES AND CONVERT THEM TO NUMBERS
             let gAgil = gradeToNum(getCol(r, ["GOALIE AGILITY", "AGILITY", "AGL"], 17));
-            let gDefAware = gradeToNum(getCol(r, ["GOALIE DEFENSE RATING", "DEFENSE AWARENESS", "DEFENSE"], 7));
+            let gDefAware = gradeToNum(getCol(r, ["GOALIE DEFENSE RATING", "G DEF"], 35));
             let gPuckCtrl = gradeToNum(getCol(r, ["PUCK CONTROL", "STICK HANDLING", "STICK", "STK"], 16));
             let gSpeed = gradeToNum(getCol(r, ["GOALIE SPEED", "SPEED", "SPD"], 18));
             
@@ -1470,21 +1474,9 @@ async function startNewGame(useCustomRoster = false) {
             let gGloveR = gradeToNum(getCol(r, ["GLOVE RIGHT"], -1));
             let gGloveL = gradeToNum(getCol(r, ["GLOVE LEFT", "GLOVE LIEFT"], -1));
 
-            // 5. APPLY YOUR CUSTOM WEIGHT MATRIX (Total Weight: 19.5)
-            let calcOvr = (
-                (gAgil * 5.0) + 
-                (gDefAware * 5.0) + 
-                (gPuckCtrl * 4.5) + 
-                (gSpeed * 1.0) + 
-                (gStickR * 1.0) + 
-                (gStickL * 1.0) + 
-                (gGloveR * 1.0) + 
-                (gGloveL * 1.0)
-            ) / 19.5;
-
             playerStats[gN] = {
-                name: gN, team: teamObj.name, teamCode: teamObj.code, pos: 'G', age: parseInt(getCol(r, ["AGE"], -1)) || (Math.floor(Math.random()*15)+18), 
-                streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false, 
+                name: gN, team: teamObj.name, teamCode: teamObj.code, pos: 'G', age: parseInt(getCol(r, ["AGE"], -1)) || (Math.floor(Math.random()*15)+18),
+                streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false,
                 injury: { severity: 0, daysRemaining: 0 },
                 cumulativeFatigue: 0,
                 morale: 100,
@@ -1493,16 +1485,15 @@ async function startNewGame(useCustomRoster = false) {
                 lastStart: -1,
                 asgAppearances: parseInt(getCol(r, ["GOALIE CAREER ALLSTAR GAMES", "GOALIE CAREER ALLSTAR"], -1)) || 0,
 
-                // !! INJECT THE CALCULATED STATS DIRECTLY !!
-                attr: { 
-                    off: gradeToNum(getCol(r, ["GOALIE OFFENSE AWARENESS", "OFFENSE"], 10)) || 20, 
-                    def: gDefAware || 20, 
-                    gDef: gDefAware, 
-                    agil: gAgil, 
+                attr: {
+                    off: gradeToNum(getCol(r, ["GOALIE OFFENSE AWARENESS", "OFFENSE"], 10)) || 20,
+                    def: gDefAware || 20,
+                    gDef: gDefAware,
+                    agil: gAgil,
                     speed: gSpeed,
                     stkHnd: gPuckCtrl,
                     stickR: gStickR, stickL: gStickL, gloveR: gGloveR, gloveL: gGloveL,
-                    ovr: Math.round(calcOvr) // Bypass CSV overall and use custom calc!
+                    ovr: gDefAware || 70
                 },
                 
                 potential: 'Depth',
@@ -2163,7 +2154,7 @@ function getPlayerFatigueAmount(pName) {
 const dynamicDuos = [
     // ANA
     ['Terry Yake', 'Anatoli Semenov', 'Stephan Lebeau'],
-    ['Bob Corkum', 'Garry Valk', 'Tim Sweeney'],
+    ['Bob Corkum', 'Garry Valk'],
     ['Bobby Dollas', 'Sean Hill'],
     ['Bill Houlder', 'Randy Ladouceur'],
     // BOS
@@ -2184,7 +2175,7 @@ const dynamicDuos = [
     ['Zarley Zalapski', 'James Patrick'],
     // CHI
     ['Jeremy Roenick', 'Tony Amonte', 'Dirk Graham'],
-    ['Brent Sutter', 'Rich Sutter', 'Christian Ruuttu'],
+    ['Brent Sutter', 'Rich Sutter', 'Paul Ysebaert'],
     ['Chris Chelios', 'Eric Weinrich'],
     ['Gary Suter', 'Steve Smith'],
     // DET
@@ -2206,7 +2197,7 @@ const dynamicDuos = [
     ['Gord Murphy', 'Peter Andersson'],
     ['Geoff Smith', 'Brian Benning'],
     // HFD
-    ['Andrew Cassels', 'Brendan Shanahan', 'Pat Verbeek', 'Geoff Sanderson'],
+    ['Andrew Cassels', 'Pat Verbeek', 'Geoff Sanderson'],
     ['Darren Turcotte', 'Robert Kron'],
     ['Mark Janssens', 'Jim Storm'],
     ['Chris Pronger', 'Adam Burt'],
@@ -2245,11 +2236,12 @@ const dynamicDuos = [
     ['Mark Messier', 'Glenn Anderson', 'Adam Graves'],
     ['Steve Larmer', 'Alexei Kovalev', 'Sergei Nemchinov'],
     ['Craig MacTavish', 'Esa Tikkanen', 'Ed Olczyk'],
+    ['Brian Noonan', 'Stephane Matteau', 'Joey Kocur'],
     ['Brian Leetch', 'Alex Karpotsev'],
     ['Sergei Zubov', 'Jeff Beukeboom'],
     // OTW
     ['Alexei Yashin', 'Sylvain Turgeon'],
-    ['Alexandre Daigle', 'Evgeny Davydov'],
+    ['Alexander Daigle', 'Evgeny Davydov'],
     ['Norm Maciver', 'Kerry Huffman'],
     ['Brad Shaw', 'Steve Konroyd'],
     // PHI
@@ -2262,6 +2254,7 @@ const dynamicDuos = [
     ['Mario Lemieux', 'Jaromir Jagr', 'Rick Tocchet'],
     ['Ron Francis', 'Kevin Stevens', 'Tomas Sandstrom'],
     ['Joe Mullen', 'Martin Straka', 'Markus Naslund'],
+    ['Brian Trottier', 'Shawn McEachern'],
     ['Larry Murphy', 'Kjell Samuelsson'],
     ['Greg Hawgood', 'Ulf Samuelsson'],
     // QUE
@@ -2303,9 +2296,8 @@ const dynamicDuos = [
     ['Jeff Brown', 'Gerald Diduck'],
     ['Jyrki Lumme', 'Jiri Slegr'],
     // WAS
-    ['Joe Juneau', 'Peter Bondra', 'Dimitri Khristich'],
-    ['Mike Ridley', 'Michal Pivonka'],
-    ['Dale Hunter', 'Kelly Miller'],
+    ['Joe Juneau', 'Peter Bondra'],
+    ['Mike Ridley', 'Dmitri Khristich'],
     ['Craig Berube', 'Todd Krygier'],
     ['Kevin Hatcher', 'John Slaney'],
     ['Calle Johansson', 'Joe Reekie'],
@@ -3861,7 +3853,27 @@ function simGame(idx) {
     grantTOI(aStruct, awayIceData);
 
     // Hoisted outside event loop — fallback to first non-empty line if the scheduled line is depleted
-    const pickLine = (lines, idx) => { const l = lines[idx]||[]; if (l.length) return l; return lines.find(x=>x&&x.length) || []; };
+    // size = how many skaters this unit should ice (3 F, 2 D). A depleted line used to go
+    // out short, which is both unrealistic (teams always ice five skaters at even strength)
+    // and quietly broke plus/minus: +1 to each scorer-side skater and -1 to each opponent
+    // no longer cancel when the two units differ in size, so the league +/- did not sum to
+    // zero. Top up from the other lines instead, skipping anyone already on the ice.
+    const pickLine = (lines, idx, size) => {
+        let l = lines[idx] || [];
+        if (!l.length) l = lines.find(x => x && x.length) || [];
+        if (!size || l.length >= size) return l;
+        const out = [...l];
+        const have = new Set(out.map(p => p && p.name));
+        for (const other of lines) {
+            if (!other) continue;
+            for (const p of other) {
+                if (out.length >= size) break;
+                if (p && !have.has(p.name)) { out.push(p); have.add(p.name); }
+            }
+            if (out.length >= size) break;
+        }
+        return out;
+    };
 
     let period = 1; // hoisted so PATRICK ROY PROTOCOL can read it after the loop
     let prevEvTick = 0;
@@ -3877,8 +3889,8 @@ function simGame(idx) {
         const hDPair  = homeDSchedule[t] || 0;
         const aFLine  = awayFSchedule[t] || 0;
         const aDPair  = awayDSchedule[t] || 0;
-        const hOnIce  = [...pickLine(hStruct.f, hFLine), ...pickLine(hStruct.d, hDPair)];
-        const aOnIce  = [...pickLine(aStruct.f, aFLine), ...pickLine(aStruct.d, aDPair)];
+        const hOnIce  = [...pickLine(hStruct.f, hFLine, 3), ...pickLine(hStruct.d, hDPair, 2)];
+        const aOnIce  = [...pickLine(aStruct.f, aFLine, 3), ...pickLine(aStruct.d, aDPair, 2)];
 
         // Update rolling shift pools (Option A)
         pushShift(hShiftLog, hOnIce, t);
@@ -3975,7 +3987,9 @@ function simGame(idx) {
             const offender   = pickOffender(activeSk);
             const isMajor    = Math.random() < 0.06;
             const pimAmt     = isMajor ? 5 : 2;
-            const overCap2   = Math.max(0, (playerStats[offender]?.season?.pim||0) - 150);
+            // Active bucket, not always .season — otherwise playoff PIMs never accrue toward
+            // the discipline cap while a frozen regular-season total keeps gating the player.
+            const overCap2   = Math.max(0, (playerStats[offender]?.[k]?.pim||0) - 150);
             const skipChance = 1 - Math.pow(0.85, overCap2/10);
             if (skipChance > 0 && Math.random() < skipChance) continue;
 
@@ -4031,12 +4045,36 @@ function simGame(idx) {
                         if (playerStats[ppEv.scorer]) playerStats[ppEv.scorer][kk].ppg=(playerStats[ppEv.scorer][kk].ppg||0)+1;
                         if (ppEv.pAssist&&playerStats[ppEv.pAssist]) playerStats[ppEv.pAssist][kk].ppa=(playerStats[ppEv.pAssist][kk].ppa||0)+1;
                         if (ppEv.sAssist&&playerStats[ppEv.sAssist]) playerStats[ppEv.sAssist][kk].ppa=(playerStats[ppEv.sAssist][kk].ppa||0)+1;
-                        if (advTeamObj) advTeamObj.season.ppg=(advTeamObj.season.ppg||0)+1;
-                        if (penTeamObj) penTeamObj.season.pkg=(penTeamObj.season.pkg||0)+1;
+                        // !isPlayoffs to match the ppo/pka guard above. Without it the PP%
+                        // numerator gained playoff goals while the denominator did not, so
+                        // every playoff run permanently inflated the team's season PP%.
+                        if (!isPlayoffs) {
+                            if (advTeamObj) advTeamObj.season.ppg=(advTeamObj.season.ppg||0)+1;
+                            if (penTeamObj) penTeamObj.season.pkg=(penTeamObj.season.pkg||0)+1;
+                        }
                     }
                     if (advTeam.nrm===g.h.nrm) hMomentum=8; else aMomentum=8;
                 }
-            } else if (ppRoll>=ppConvRate && Math.random()<0.02 && pkUnit.length>0) {
+            }
+
+            // A power play that does not score still puts pucks on net. Only PP GOALS used to
+            // register a shot, so failed power plays were invisible in shot totals and in the
+            // penalty killer's save count. Credit 1-2 saved shots to keep shot volume honest.
+            // Goals are unaffected: these are saves, so save percentage moves only because the
+            // shots that were always really happening are now actually being counted.
+            if (!(ppRoll < ppConvRate && ppUnit.length > 0) && ppUnit.length > 0) {
+                const pkGoalieMiss = penTeam.nrm===g.h.nrm ? hG_name : aG_name;
+                const nAtt = 1 + (Math.random() < 0.5 ? 1 : 0);
+                for (let i=0;i<nAtt;i++) {
+                    const sh = selectShooter(ppUnit);
+                    if (!sh) break;
+                    trk(sh.name,'s',1);
+                    if (pkGoalieMiss) { trk(pkGoalieMiss,'sa',1); trk(pkGoalieMiss,'sv',1); }
+                    if (advTeam.nrm===g.h.nrm) hShots++; else aShots++;
+                }
+            }
+
+            if (ppRoll>=ppConvRate && Math.random()<0.02 && pkUnit.length>0) {
                 const shShooter = selectShooter(pkUnit, 'SH');
                 const shEv = processSingleGoal(penTeam.nrm, penTeam.code, shShooter, pkUnit, timeStr, period, minute%20||20, sec);
                 if (shEv) {
@@ -4053,6 +4091,13 @@ function simGame(idx) {
                         const kk2=isPlayoffs?'playoff':'season';
                         playerStats[shEv.scorer][kk2].shg=(playerStats[shEv.scorer][kk2].shg||0)+1;
                     }
+                    // Shorthanded goals DO count for plus/minus (unlike power play goals,
+                    // which correctly award none). Killers on ice get +1, the power play
+                    // unit that surrendered it gets -1.
+                    const shOn = pkUnit.filter(p=>p&&p.pos!=='G');
+                    const shOpp = ppUnit.filter(p=>p&&p.pos!=='G');
+                    const n = Math.min(shOn.length, shOpp.length);
+                    for (let i=0;i<n;i++){ trk(shOn[i].name,'pm',1); trk(shOpp[i].name,'pm',-1); }
                     if (penTeam.nrm===g.h.nrm) hMomentum=8; else aMomentum=8;
                 }
             }
@@ -4066,7 +4111,7 @@ function simGame(idx) {
             const hOff = pickOffender(hSk);
             const aOff = pickOffender(aSk);
             if (hOff && aOff) {
-                const capSkip = (name) => { const ov=Math.max(0,(playerStats[name]?.season?.pim||0)-150); return ov>0&&Math.random()<1-Math.pow(0.85,ov/10); };
+                const capSkip = (name) => { const ov=Math.max(0,(playerStats[name]?.[k]?.pim||0)-150); return ov>0&&Math.random()<1-Math.pow(0.85,ov/10); };
                 if (!capSkip(hOff)) trk(hOff,'pim',2);
                 if (!capSkip(aOff)) trk(aOff,'pim',2);
                 penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:g.h.code,
@@ -4319,6 +4364,14 @@ function simGame(idx) {
         const aOtUnit = [...(aStruct.f[0]||[]), ...(aStruct.d[0]||[])];
         hOtUnit.forEach(p => trk(p.name, 'toi', 5));
         aOtUnit.forEach(p => trk(p.name, 'toi', 5));
+        // An OT winner counts for plus/minus (5-on-5 under 93-94 rules), same as any even
+        // strength goal. Only when the period actually resolved — a game left tied has no goal.
+        if (hG !== aG) {
+            const won = hG > aG ? hOtUnit : aOtUnit;
+            const lost = hG > aG ? aOtUnit : hOtUnit;
+            const n = Math.min(won.length, lost.length);
+            for (let i=0;i<n;i++){ trk(won[i].name,'pm',1); trk(lost[i].name,'pm',-1); }
+        }
     }
     if(isPlayoffs && hG === aG) {
         // OT uses top lines + star player modifier — not a coin flip
@@ -4371,6 +4424,11 @@ function simGame(idx) {
             const aOtUnit = [...(aStruct.f[0]||[]), ...(aStruct.d[0]||[])];
             hOtUnit.forEach(p => trk(p.name, 'toi', otPeriods * 20));
             aOtUnit.forEach(p => trk(p.name, 'toi', otPeriods * 20));
+            // Playoff OT always resolves, so the winner's unit gets +1, the loser's -1.
+            const won = hG > aG ? hOtUnit : aOtUnit;
+            const lost = hG > aG ? aOtUnit : hOtUnit;
+            const n = Math.min(won.length, lost.length);
+            for (let i=0;i<n;i++){ trk(won[i].name,'pm',1); trk(lost[i].name,'pm',-1); }
         }
     }
 
@@ -9306,11 +9364,6 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
 // Mid-game injury system — fires during the sim tick loop (called per game, not per tick)
 // Low base rate; goalie injuries trigger backup pull event and get logged prominently
 // Returns count of healthy goalie scratches — used to check if a backup exists mid-game
-function getBenchDepth(tk) {
-    if (!rosters[tk]) return 0;
-    return rosters[tk].filter(p => p.pos === 'G' && p.line === 'BENCH' && (playerStats[p.name]?.injury?.daysRemaining ?? 0) === 0 && !playerStats[p.name]?.onIR).length;
-}
-
 // A team with exactly (or fewer than) 12 forwards on its whole roster has zero bench depth beyond
 // what's dressed each game — a multi-game injury there forces the roster builder to run every
 // remaining line short for the injury's full duration with no possible replacement (no call-up
