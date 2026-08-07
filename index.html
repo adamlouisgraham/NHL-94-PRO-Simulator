@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
-    <script src="script.js?v=21"></script>
+    <script src="script.js?v=104"></script>
 </head>
 <body>
 
@@ -103,27 +103,27 @@
                 <span>LEAGUE OFFICE | SEASON: <span id="seasonYearDisplay">1</span> <span id="dayDisplay" class="day-display"></span></span>
                 <div>
                     <span id="saveStatus" class="save-status">SAVED</span>
-                    <span class="toggle-icon">[-]</span>
+                    <span class="toggle-icon" title="Collapse/Expand panel">▲</span>
                 </div>
             </div>
                 <div class="collapsible-content">
                     <div style="padding:15px; background:#111; display:flex; flex-wrap:wrap; gap:10px;">
-                        <button onclick="toggleAwardConfig('streaks')" id="btnStreaks" class="award-toggle-btn" style="border-color:#FFD700; color:#FFD700;">STREAKS: ON</button>
-                        <button onclick="toggleAwardConfig('chemistry')" id="btnChemistry" class="award-toggle-btn" style="border-color:#FF69B4; color:#FF69B4;">CHEMISTRY: ON</button>
-                        <button onclick="toggleAwardConfig('rivalries')" id="btnRivalries" class="award-toggle-btn" style="border-color:#FF4500; color:#FF4500;">RIVALRIES: ON</button>
-                        <button onclick="toggleAwardConfig('aging')" id="btnAging" class="award-toggle-btn" style="border-color:#32CD32; color:#32CD32;">PROGRESSION: OFF</button>
-                        <button onclick="toggleAwardConfig('draft')" id="btnDraft" class="award-toggle-btn" style="border-color:#1E90FF; color:#1E90FF;">DRAFT: OFF</button>
-                        <button onclick="toggleAwardConfig('retirements')" id="btnRetirements" class="award-toggle-btn" style="border-color:#DC143C; color:#DC143C;">RETIREMENTS: OFF</button>
-                        <button onclick="toggleAwardConfig('headlines')" id="btnHeadlines" class="award-toggle-btn" style="border-color:#FFA500; color:#FFA500;">HEADLINES: ON</button>
-                        <button onclick="toggleAwardConfig('milestones')" id="btnMilestones" class="award-toggle-btn" style="border-color:#9370DB; color:#9370DB;">MILESTONES: ON</button>
-                        <button onclick="toggleAwardConfig('injuries')" id="btnInjuries" class="award-toggle-btn" style="border-color:#FF6347; color:#FF6347;">INJURIES: ON</button>
-                        <button onclick="toggleAwardConfig('legacy_schedule')" id="btnLegacySchedule" class="award-toggle-btn" class="btn-teal">LEGACY SCHEDULE: ON</button>
-                        <button onclick="toggleAwardConfig('trades')" id="btnTrades" class="award-toggle-btn btn-purple">TRADES: OFF</button>
-                        <button onclick="toggleAwardConfig('tradeBlock')" id="btnTradeBlock" class="award-toggle-btn" style="border-color:#FF8C00;color:#FF8C00;opacity:0.5;">TRADE BLOCK: OFF</button>
+                        <button onclick="toggleAwardConfig('streaks')" id="btnStreaks" class="award-toggle-btn">STREAKS: ON</button>
+                        <button onclick="toggleAwardConfig('chemistry')" id="btnChemistry" class="award-toggle-btn">CHEMISTRY: ON</button>
+                        <button onclick="toggleAwardConfig('rivalries')" id="btnRivalries" class="award-toggle-btn">RIVALRIES: ON</button>
+                        <button onclick="toggleAwardConfig('aging')" id="btnAging" class="award-toggle-btn toggle-off">PROGRESSION: OFF</button>
+                        <button onclick="toggleAwardConfig('draft')" id="btnDraft" class="award-toggle-btn toggle-off">DRAFT: OFF</button>
+                        <button onclick="toggleAwardConfig('retirements')" id="btnRetirements" class="award-toggle-btn toggle-off">RETIREMENTS: OFF</button>
+                        <button onclick="toggleAwardConfig('headlines')" id="btnHeadlines" class="award-toggle-btn">HEADLINES: ON</button>
+                        <button onclick="toggleAwardConfig('milestones')" id="btnMilestones" class="award-toggle-btn">MILESTONES: ON</button>
+                        <button onclick="toggleAwardConfig('injuries')" id="btnInjuries" class="award-toggle-btn">INJURIES: ON</button>
+                        <button onclick="toggleAwardConfig('legacy_schedule')" id="btnLegacySchedule" class="award-toggle-btn">LEGACY SCHEDULE: ON</button>
+                        <button onclick="toggleAwardConfig('trades')" id="btnTrades" class="award-toggle-btn toggle-off">TRADES: OFF</button>
+                        <button onclick="toggleAwardConfig('tradeBlock')" id="btnTradeBlock" class="award-toggle-btn toggle-off">TRADE BLOCK: OFF</button>
 
                 </div>
             <div class="schedule-progress-wrapper">
-                <div class="schedule-progress-label">Schedule Progress</div>
+                <div class="schedule-progress-label">Schedule Progress<span id="scheduleProgressPct" class="schedule-progress-pct">DAY 0/0 &middot; 0%</span></div>
                 <div class="schedule-progress-bar"><div id="scheduleProgressFill"></div></div>
                 <div id="saveMetadata" class="save-metadata">SAVE: none</div>
                 <div class="save-slot-panel">
@@ -255,7 +255,7 @@
             <div class="menu-box beveled">
                 <div class="menu-header" style="cursor:pointer;" onclick="toggleBox(this)">
                     <span>TEAM STATS</span>
-                    <span class="toggle-icon" style="color:var(--silver-mid);">[-]</span>
+                    <span class="toggle-icon" title="Collapse/Expand panel" style="color:var(--silver-mid);">▲</span>
                 </div>
                 <div class="collapsible-content">
                     <div style="overflow-x:auto; padding:10px;">
@@ -267,7 +267,7 @@
             <div class="menu-box beveled">
                 <div class="menu-header" style="cursor:pointer;" onclick="toggleBox(this)">
                     <span>TEAM DIRECTORY & TACTICAL UNITS</span>
-                    <span class="toggle-icon" style="color:var(--silver-mid);">[-]</span>
+                    <span class="toggle-icon" title="Collapse/Expand panel" style="color:var(--silver-mid);">▲</span>
                 </div>
                 <div class="collapsible-content">
                     <div style="padding:15px; background:#111; display:flex; gap:15px; align-items:center;">
@@ -298,7 +298,7 @@
             <div class="menu-box beveled">
                 <div class="menu-header" style="cursor:pointer;" onclick="toggleBox(this)">
                     <span>TRANSACTION LOG</span>
-                    <span class="toggle-icon" style="color:var(--silver-mid);">[-]</span>
+                    <span class="toggle-icon" title="Collapse/Expand panel" style="color:var(--silver-mid);">▲</span>
                 </div>
                 <div id="tradeLogContainer" class="collapsible-content" style="padding:15px; max-height:200px; overflow-y:auto; font-size:8px;">
                     <table id="tradeLogTable">
