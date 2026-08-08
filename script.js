@@ -4863,7 +4863,33 @@ function selectShooter(unit, context = 'ES') {
         return Math.max(1, weight);
     });
 
-    const total = weights.reduce((a, b) => a + b, 0);
+    // Weight normalization cap — no single player can hold more than 42% of total
+    // shot weight. Excess is redistributed proportionally to the rest of the unit.
+    // Prevents one dominant scorer from claiming an unrealistic share of team goals.
+    const SHOOTER_CAP = 0.42;
+    let total = weights.reduce((a, b) => a + b, 0);
+    if (total > 0) {
+        for (let iter = 0; iter < 3; iter++) { // iterate to converge
+            const t = weights.reduce((a, b) => a + b, 0);
+            let capped = false;
+            for (let i = 0; i < weights.length; i++) {
+                const share = weights[i] / t;
+                if (share > SHOOTER_CAP) {
+                    const excess = (share - SHOOTER_CAP) * t;
+                    weights[i] = SHOOTER_CAP * t;
+                    const others = weights.reduce((a, b) => a + b, 0) - weights[i];
+                    if (others > 0) {
+                        for (let j = 0; j < weights.length; j++) {
+                            if (j !== i) weights[j] += excess * (weights[j] / others);
+                        }
+                    }
+                    capped = true;
+                }
+            }
+            if (!capped) break;
+        }
+    }
+    total = weights.reduce((a, b) => a + b, 0);
     if (total <= 0) return unit[0];
 
     let rand = Math.random() * total;
@@ -4958,9 +4984,28 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         return Math.max(1, weight);
     };
 
-    // Weighted random picker
+    // Weighted random picker — with 40% share cap so no single player dominates assists
+    const ASSIST_CAP = 0.40;
     const weightedPick = (pool, assistType = 'primary') => {
         const weights = pool.map(name => getAssistWeight(name, assistType));
+        // Redistribute excess above cap iteratively (converges in ≤3 passes)
+        for (let iter = 0; iter < 3; iter++) {
+            const t = weights.reduce((a, b) => a + b, 0);
+            if (t <= 0) break;
+            let capped = false;
+            for (let i = 0; i < weights.length; i++) {
+                if (weights[i] / t > ASSIST_CAP) {
+                    const excess = (weights[i] / t - ASSIST_CAP) * t;
+                    weights[i] = ASSIST_CAP * t;
+                    const others = weights.reduce((a, b) => a + b, 0) - weights[i];
+                    if (others > 0) for (let j = 0; j < weights.length; j++) {
+                        if (j !== i) weights[j] += excess * (weights[j] / others);
+                    }
+                    capped = true;
+                }
+            }
+            if (!capped) break;
+        }
         const total = weights.reduce((a, b) => a + b, 0);
         if (total <= 0) return pool[Math.floor(Math.random() * pool.length)];
         let rand = Math.random() * total;
