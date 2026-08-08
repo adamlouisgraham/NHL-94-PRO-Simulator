@@ -3803,8 +3803,8 @@ function simGame(idx) {
 
     // Pre-game OVR gap drives shot distribution (static proxy for per-tick diff)
     const preGameDiff = Math.max(-12, Math.min(12, (hAvgOvr + homeLastChangeMod + parityBoost - aAvgOvr)));
-    const hShotCount  = poissonRand(28 * (1 + preGameDiff * 0.008));
-    const aShotCount  = poissonRand(28 * (1 - preGameDiff * 0.008));
+    const hShotCount  = poissonRand(29.75 * (1 + preGameDiff * 0.008)); // +1.75/team (+3.5/game)
+    const aShotCount  = poissonRand(29.75 * (1 - preGameDiff * 0.008));
     // Penalty counts derived from per-tick rates × 240 steps
     const penCount    = poissonRand(5.638); // 5.5 × 1.025 — +2.5% penalty frequency
     const coinCount   = poissonRand(3.6);   // 0.038×240×0.40 ≈ 3.65 coincidentals
