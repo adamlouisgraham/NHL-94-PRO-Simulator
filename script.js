@@ -2126,7 +2126,7 @@ function getDynamicTeamOvr(tk) {
     const goalie = struct.g && struct.g.length > 0 ? struct.g[0] : null;
     const goalieOvr = goalie ? getLiveIceOvr(goalie.name) : 60;
     
-    let finalOvr = Math.round((calcAvg(topSkaters) * 0.40) + (calcAvg(bottomSkaters) * 0.30) + (goalieOvr * 0.30));
+    let finalOvr = Math.round((calcAvg(topSkaters) * 0.475) + (calcAvg(bottomSkaters) * 0.35) + (goalieOvr * 0.175));
     const allSkaters = [...topSkaters, ...bottomSkaters];
     if (allSkaters.length > 0) { 
         const bestOvr = getLiveIceOvr(allSkaters.reduce((b, c) => getLiveIceOvr(c.name) > getLiveIceOvr(b.name) ? c : b).name); 
@@ -2265,13 +2265,15 @@ const dynamicDuos = [
     ['Larry Murphy', 'Kjell Samuelsson'],
     ['Greg Hawgood', 'Ulf Samuelsson'],
     // QUE
-    ['Joe Sakic', 'Andrei Kovalenko', 'Martin Rucinsky'],
+    ['Joe Sakic', 'Andrei Kovalenko', 'Mike Ricci'],
+    ['Dale Hunter', 'Mike Gartner'],
     ['Ron Sutter', 'Claude Lapointe'],
     ['Bob Bassen', 'Chris Simon'],
     ['Curtis Leschyshyn', 'Alexei Gusarov'],
     // SJS
     ['Igor Larionov', 'Sergei Makarov', 'Valeri Kamensky'],
-    ['Jeff Odgers', 'Gaetan Duchesne'],
+    ['Rob Gaudreau', 'Ray Whitney', 'Vitali Prokhorov'],
+    ['Bob Errey', 'John Cullen', 'Gaetan Duchesne'],
     ['Sandis Ozolinsh', 'Mike Rathje'],
     // STL
     ['Brett Hull', 'Craig Janney', 'Vitali Prokhorov'],
@@ -3366,7 +3368,7 @@ function calculateDynamicIceTime(struct) {
     // ==========================================
     
     // Base Baseline Targets (Per Player Average)
-    let fShares = [20, 17, 14, 6]; // Baseline points corresponding to midpoints of your request
+    let fShares = [21, 19, 12, 5]; // L1/L2 get more ice time; L3/L4 scaled back
 
     // RULE A: Line 1 heavily outweighs all other lines -> Play near max (22 mins per player)
     const line1DominantThreshold = 8; // If Line 1 is 8+ points better than average of lines 2, 3, 4
@@ -3787,7 +3789,7 @@ function simGame(idx) {
     const hShotCount  = poissonRand(28 * (1 + preGameDiff * 0.008));
     const aShotCount  = poissonRand(28 * (1 - preGameDiff * 0.008));
     // Penalty counts derived from per-tick rates × 240 steps
-    const penCount    = poissonRand(5.5);   // 0.038×240×0.60 ≈ 5.47 non-coincidental
+    const penCount    = poissonRand(5.638); // 5.5 × 1.025 — +2.5% penalty frequency
     const coinCount   = poissonRand(3.6);   // 0.038×240×0.40 ≈ 3.65 coincidentals
     const goonCount   = poissonRand(1.9);   // 0.008×240 ≈ 1.92
     const fightCount  = Math.random() < 0.144 ? 1 : 0; // 0.0006×240 ≈ 0.144/game
