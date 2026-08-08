@@ -1707,14 +1707,7 @@ function getPlayerWeightedStats(pName) {
     // Use stored numeric lbs  -  no random re-roll
     let weightMod = getWeightModifier(getWgt(pName), tag);
     
-    // Instead of massively multiplying the rating, we apply a balanced flat adjustment
-    if (weightMod >= 1.15) {
-        baseOvr += 2; // +2 OVR boost for perfect archetype/weight synergy
-    } else if (weightMod < 1.0) {
-        baseOvr -= 2; // -2 OVR penalty for poor archetype/weight synergy
-    } else if (weightMod > 1.0 && weightMod < 1.15) {
-        baseOvr += 1; // +1 OVR minor boost
-    }
+    // Weight/archetype synergy removed — was ±1-2 OVR flat, now has no OVR effect
 
     // Notice we completely removed the archMods.shotRate calculation from here!
 
@@ -1730,7 +1723,7 @@ function getPlayerWeightedStats(pName) {
     const endResistance = 1.2 - (endurance / 100);
     const penaltyPct = Math.min(fatiguePenalty / 100, 1) * 0.05 * endResistance;
     finalOvr = Math.round(baseOvr * (1 - penaltyPct));
-    finalOvr += Math.round((morale - 100) * 0.18); // morale 50–150; 100 = neutral; softened further to a believable +-9 max
+    finalOvr += Math.round((morale - 100) * 0.02); // morale 50–150; 100 = neutral; ±1 OVR max swing
 
     // HOT/COLD streaks modify the player's own OVR — macro > micro; both can stack with dailySwing
     const ps = playerStats[pName];
@@ -2082,9 +2075,23 @@ function getLiveIceOvr(pName) {
     // Return-from-injury penalty: eases off over several games (not in getPlayerWeightedStats)
     if (p.returnFromInjury && p.returnFromInjury > 0) live = Math.round(live * 0.93);
     
-    // 4b. Captain Effect - a healthy/hot captain lifts team-wide morale; an injured/cold captain hurts it harder than a regular player would
+    // 4b. Captain Effect - captain's form now scales fatigue resistance, not OVR directly.
+    // A hot/healthy captain reduces the effective fatigue penalty; an injured/cold captain amplifies it.
     const tObj = league.find(t => t.code === p.teamCode);
-    if (tObj) live += getCaptainChemModifier(tObj.nrm);
+    if (tObj) {
+        const capMod = getCaptainChemModifier(tObj.nrm); // -3/-2/0/1/2
+        // capMod > 0 → reduce fatigue impact; capMod < 0 → amplify it
+        const fatiguePenaltyLive = typeof getPlayerFatigueAmount === 'function' ? getPlayerFatigueAmount(pName) : 0;
+        if (fatiguePenaltyLive > 0 && capMod !== 0) {
+            const endurVal = gradeToNum(p.attr?.endur) || 70;
+            const endRes = 1.2 - (endurVal / 100);
+            const basePct = Math.min(fatiguePenaltyLive / 100, 1) * 0.05 * endRes;
+            // Captain scales fatigue by up to ±30%
+            const capFatigueMod = 1 - (capMod * 0.06);
+            const adjustedPct = basePct * capFatigueMod;
+            live += Math.round(live * (basePct - adjustedPct)); // delta OVR from fatigue reduction/increase
+        }
+    }
 
     // 5. Apply Line Chemistry
     if (tObj && tObj.chem && tObj.chem.lastUnit) {
@@ -2101,9 +2108,19 @@ function getLiveIceOvr(pName) {
                 if (tObj.chem.dYears && tObj.chem.dYears[pairIdx] >= 2) isTelepathic = true; 
             } 
         }
-        if (chemVal >= 10 && isTelepathic) live += 3;
-        else if (chemVal >= 10) live += 2;
-        else if (chemVal >= 5) live += 1;
+        // Chemistry boosts off/def/pass stats, then feeds into OVR formula
+        // rather than a flat OVR add — so stars benefit more than grinders
+        if (chemVal >= 5) {
+            const offBoost  = chemVal >= 10 && isTelepathic ? 6 : chemVal >= 10 ? 4 : 2;
+            const defBoost  = chemVal >= 10 && isTelepathic ? 4 : chemVal >= 10 ? 2 : 1;
+            const passBoost = chemVal >= 10 && isTelepathic ? 5 : chemVal >= 10 ? 3 : 2;
+            const isD = p?.pos === 'D';
+            // Use the same weights as the OVR formula
+            const ovrDelta = isD
+                ? (defBoost * 0.37) + (offBoost * 0.20) + (passBoost * 0.10)
+                : (offBoost * 0.33) + (defBoost * 0.10) + (passBoost * 0.12);
+            live += Math.round(ovrDelta);
+        }
     }
 
     return Math.max(40, Math.min(99, Math.round(live)));
