@@ -58,7 +58,7 @@ const PLAYER_TAG_OVERRIDES = {};
 // real point-total lift, not just pure snipers.
 function getEliteShooterMod(tag) {
     switch (tag) {
-        case 'PRO SNIPER': return 1.45;
+        case 'PRO SNIPER': return 1.38;
         case 'SUPERSTAR': return 1.42;
         case 'SNIPER': return 1.28;
         case 'PRO PLAYMAKER': return 1.18;
@@ -164,7 +164,7 @@ function buildStatusBadges(pName) {
 
 // Deterministic midpoint lbs for display (card, tooltip, etc.)
 function getWeightLbs(grade) {
-    const lbs = {'A+':182,'A':190,'B':200,'C':210,'D':220,'F':230,'F+':242,'F-':242};
+    const lbs = {'A+':182,'A':190,'A-':194,'B+':197,'B':200,'B-':204,'C+':207,'C':210,'C-':214,'D+':217,'D':220,'D-':224,'F-':226,'F':230,'F+':235};
     return lbs[grade] || 210;
 }
 // Reverse-map a stored numeric attr value back to a display grade string
@@ -183,6 +183,14 @@ function numToGrade(n) {
     if (v >= 40) return 'D';
     if (v >= 30) return 'F+';
     return 'F';
+}
+
+// Shared helper - goals-against average is per 60 MINUTES, not per game. Overtime
+// pushes a game past 60, so ga/gp drifts high on OT games. Falls back to gp*60 when
+// a record has no toi (older saves) so results degrade gracefully.
+function calcGAA(ga, gp, toi) {
+    const mins = toi > 0 ? toi : (gp || 0) * 60;
+    return mins > 0 ? ga / (mins / 60) : 0;
 }
 
 // Shared helper  -  parse a raw weight cell (grade string OR numeric string) into
@@ -311,7 +319,7 @@ const getArch = (pName) => getPlayerWeightedStats(pName).tag || 'Unknown';
 let customLines = JSON.parse(localStorage.getItem('nhl94_customLines')) || {};
 
 
-let awardConfig = { streaks: true, chemistry: true, rivalries: true, aging: false, draft: false, retirements: false, headlines: true, milestones: true, injuries: true, legacy_schedule: true, trades: false, tradeBlock: false };
+let awardConfig = { streaks: true, chemistry: false, rivalries: true, aging: false, draft: false, retirements: false, headlines: true, milestones: true, injuries: true, legacy_schedule: true, trades: false, tradeBlock: false };
 let coachAdj = { forecheck: 0, pp: 0, lineMatch: false };
 let coachTrust = 50; // 0-100; updated after each user-team game
 let _awardsPending = false; // true between playoff-round-4 end and awards being revealed; blocks beginNewYear
@@ -816,10 +824,13 @@ function refreshScheduleDashboardUI() {
         }
     }
     const progressFill = document.getElementById('scheduleProgressFill');
-    if (progressFill) { 
-        const totalDays = Math.max(calendar.length, 1); 
-        const percent = currentDay >= calendar.length ? 100 : Math.round((currentDay / totalDays) * 100); 
-        progressFill.style.width = `${percent}%`; 
+    if (progressFill) {
+        const totalDays = Math.max(calendar.length, 1);
+        const percent = currentDay >= calendar.length ? 100 : Math.round((currentDay / totalDays) * 100);
+        progressFill.style.width = `${percent}%`;
+        // Surface the raw day count + percent so the bar is readable without doing the math
+        const pctEl = document.getElementById('scheduleProgressPct');
+        if (pctEl) pctEl.innerText = `DAY ${Math.min(currentDay, totalDays)}/${totalDays}  ·  ${percent}%`;
     }
     renderScheduleDashboard(); 
     updateSaveMetadataDisplay();
@@ -1388,7 +1399,7 @@ async function startNewGame(useCustomRoster = false) {
 
     // --- GOALIE CORE STATS ---
     // Looks for your specific goalie columns first!
-    gDef: gradeToNum(getCol(r, ["GOALIE NEW OVERALL", "GOALIE DEFENSE RATING", "G DEF"], 7)),
+    gDef: gradeToNum(getCol(r, ["GOALIE DEFENSE RATING", "GOALIE DEF RATING"], 45)),
     gOff: gradeToNum(getCol(r, ["GOALIE OFFENSE AWARENESS"], 10)),
     handed: getCol(r, ["HANDED"], -1) || 'L',
 
@@ -1408,7 +1419,7 @@ async function startNewGame(useCustomRoster = false) {
     weight: parseWeightCell(getCol(r, ["WEIGHT", "WGT"], 21)).grade,
 
     // --- OVERALL (Safe Fallback) ---
-    ovr: parseInt(getCol(r, ["GOALIE NEW OVERALL", "OVERALL RATING", "OVERALL", "OVR"], 19)) || 70,
+    ovr: parseInt(getCol(r, ["GOALIE OVERALL"], 35)) || 70,
 
     // --- ORIGINAL GRADE STRINGS for exact card display ---
     grades: {
@@ -1431,8 +1442,8 @@ async function startNewGame(useCustomRoster = false) {
                             a: parseInt(getCol(r, ["CAREER A", "C_A", "CAR A"], -1)) || 0, 
                             pts: parseInt(getCol(r, ["CAREER PTS", "C_PTS", "CAR PTS"], -1)) || 0, 
                             pm: parseInt(getCol(r, ["CAREER PM", "C_PM", "CAR PM", "CAREER +/-"], -1)) || 0, 
-                            pim: 0, ppg: 0, shg: 0, 
-                            gwg: parseInt(getCol(r, ["CAREER GWG"], -1)) || 0, 
+                            pim: 0, ppg: 0, ppa: 0, shg: 0,
+                            gwg: parseInt(getCol(r, ["CAREER GWG"], -1)) || 0,
                             asg: parseInt(getCol(r, ["CAREER ASG", "ALL STAR"], -1)) || 0,
                             // toi/svg are present on careerPlayoff, season and playoff; without
                             // them here career TOI reads undefined until the first rollover.
@@ -1443,10 +1454,11 @@ async function startNewGame(useCustomRoster = false) {
                             g: parseInt(getCol(r, ["CAREER PLAYOFF G"], -1)) || 0,
                             a: parseInt(getCol(r, ["CAREER PLAYOFF A"], -1)) || 0,
                             pts: parseInt(getCol(r, ["CAREER PLAYOFF PTS"], -1)) || 0,
-                            pm: 0, pim: 0, ppg: 0, shg: 0, gwg: 0, s: 0, toi: 0, svg: 0
+                            pm: 0, pim: 0, ppg: 0, ppa: 0, shg: 0, gwg: 0, s: 0, toi: 0, svg: 0
                         },
-                        season: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, svg:0}, playoff: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, svg:0}
+                        season: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, svg:0}, playoff: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, svg:0}
                     };
+                    playerStats[pN].preSimCareerGP = playerStats[pN].career.gp;
                 }
             }
             // --- GOALIE CREATION ---
@@ -1463,16 +1475,20 @@ async function startNewGame(useCustomRoster = false) {
             rosters[tk].push({ name: gN, pos: 'G' });
             
             // 4. PULL ALL RAW GRADES AND CONVERT THEM TO NUMBERS
-            let gAgil = gradeToNum(getCol(r, ["GOALIE AGILITY", "AGILITY", "AGL"], 17));
-            let gDefAware = gradeToNum(getCol(r, ["GOALIE DEFENSE RATING", "G DEF"], 35));
-            let gPuckCtrl = gradeToNum(getCol(r, ["PUCK CONTROL", "STICK HANDLING", "STICK", "STK"], 16));
-            let gSpeed = gradeToNum(getCol(r, ["GOALIE SPEED", "SPEED", "SPD"], 18));
-            
+            // Goalie-specific columns are read by direct index to avoid partial keyword matches
+            // hitting skater columns (e.g. "AGILITY" at col 15) which are blank on goalie rows.
+            const gc = (idx) => r[idx] != null && r[idx] !== '' ? String(r[idx]).trim() : '';
+            let gOverall  = parseInt(gc(35)) || 70;
+            let gAgil     = gradeToNum(gc(36)) || 70;
+            let gDefAware = gradeToNum(getCol(r, ["GOALIE DEFENSE RATING", "GOALIE DEF RATING"], 45));
+            let gPuckCtrl = gradeToNum(gc(39)) || 70;
+            let gSpeed    = gradeToNum(gc(37)) || 70;
+
             // Pull the specific goalie pad stats
-            let gStickR = gradeToNum(getCol(r, ["STICK RIGHT"], -1));
-            let gStickL = gradeToNum(getCol(r, ["STICK LEFT"], -1));
-            let gGloveR = gradeToNum(getCol(r, ["GLOVE RIGHT"], -1));
-            let gGloveL = gradeToNum(getCol(r, ["GLOVE LEFT", "GLOVE LIEFT"], -1));
+            let gStickR = gradeToNum(gc(40));
+            let gStickL = gradeToNum(gc(41));
+            let gGloveR = gradeToNum(gc(42));
+            let gGloveL = gradeToNum(gc(43));
 
             playerStats[gN] = {
                 name: gN, team: teamObj.name, teamCode: teamObj.code, pos: 'G', age: parseInt(getCol(r, ["AGE"], -1)) || (Math.floor(Math.random()*15)+18),
@@ -1487,13 +1503,13 @@ async function startNewGame(useCustomRoster = false) {
 
                 attr: {
                     off: gradeToNum(getCol(r, ["GOALIE OFFENSE AWARENESS", "OFFENSE"], 10)) || 20,
-                    def: gDefAware || 20,
                     gDef: gDefAware,
                     agil: gAgil,
                     speed: gSpeed,
                     stkHnd: gPuckCtrl,
                     stickR: gStickR, stickL: gStickL, gloveR: gGloveR, gloveL: gGloveL,
-                    ovr: gDefAware || 70
+                    ovr: gOverall || 70,
+                    weight: getWeightLbs(gc(34)) || 210
                 },
                 
                 potential: 'Depth',
@@ -1518,11 +1534,12 @@ async function startNewGame(useCustomRoster = false) {
                     sa: parseInt(getCol(r, ["CAREER PLAYOFF SA"], -1)) || 0,
                     toi: 0, svg: 0
                 },
-                season: {gp:0, g:0, a:0, pm:0, so:0, sv:0, sa:0, w:0, l:0, t:0, pim:0, ppg:0,lastGAA: 0, lastSV: 0, consStarts: 0, toi:0, svg:0}, 
-                playoff: {gp:0, g:0, a:0, pm:0, so:0, sv:0, sa:0, w:0, l:0, pim:0, ppg:0,lastGAA: 0, lastSV: 0, consStarts: 0, toi:0, svg:0}                    
+                season: {gp:0, g:0, a:0, pm:0, so:0, sv:0, sa:0, w:0, l:0, t:0, pim:0, ppg:0,lastGAA: 0, lastSV: 0, consStarts: 0, toi:0, svg:0},
+                playoff: {gp:0, g:0, a:0, pm:0, so:0, sv:0, sa:0, w:0, l:0, pim:0, ppg:0,lastGAA: 0, lastSV: 0, consStarts: 0, toi:0, svg:0}
             };
+            playerStats[gN].preSimCareerGP = playerStats[gN].career.gp;
         }
-    }     
+    }
         });
 
         await loadScheduleFromCSV(customScheduleData); populateTeamSelect(); updateTradeDropdowns(); takeMonthSnapshot(); assignTeamCaptains(); updateUI(); saveGame();
@@ -1550,18 +1567,22 @@ function getPlayerWeightedStats(pName) {
 
     // --- GOALIES ---
     if (p.pos === 'G') {
-        // !! FALLBACK UPDATE: Default goalie rating is now 53
-        let gDef = parseInt(p.attr.gDef || p.attr.def) || 53;
-        baseOvr = gDef;
+        let gDef    = parseInt(p.attr.gDef || p.attr.def) || 53;
+        let gOvr    = parseInt(p.attr.ovr) || gDef;
+        baseOvr = gOvr;
         let gAgl    = gradeToNum(p.attr.agil);
         let gSpd    = gradeToNum(p.attr.speed);
-        let gStkHnd = gradeToNum(p.attr.stkHnd);
-        if      (gDef >= 85)                                        tag = 'WALL';
-        else if (gAgl >= 90 && gDef >= 65)                         tag = 'ACROBAT';
-        else if (gStkHnd >= 85 && gSpd >= 70 && gDef >= 55)       tag = 'PUCK HANDLER';
-        else if (gAgl < 70 && gDef >= 55)                          tag = 'SCREENER';
-        else if (gDef >= 60)                                        tag = 'STOPPER';
-        else                                                        tag = 'GOALTENDER';
+        let gPuckCtrl = gradeToNum(p.attr.stkHnd); // stkHnd stores Puck Control (col 39)
+        let gWeight = parseInt(p.attr.weight) || 0;
+        if      (gOvr >= 85)                                                         tag = 'WALL';
+        else if (gAgl >= 75 && gDef >= 75 && gSpd >= 70 && gWeight < 200)         tag = 'ACROBAT';
+        else if (gPuckCtrl >= 85 && gDef >= 65)                                   tag = 'PUCK HANDLER';
+        else if (gPuckCtrl >= 70 && gDef >= 75)                                   tag = 'STOPPER';
+        else if (gAgl <= 58 && gDef >= 75)                                         tag = 'SCRAMBLER';
+        else if (gAgl >= 60 && gPuckCtrl >= 60 && gDef >= 70)                     tag = 'HYBRID';
+        else if (gWeight >= 230 && gDef >= 70)                                     tag = 'FORTRESS';
+        else if (gAgl >= 60 && gWeight >= 201 && gDef >= 70)                      tag = 'SCREENER';
+        else                                                                       tag = 'BACKUP';
     }
 
     // --- SKATERS ---
@@ -2153,25 +2174,22 @@ function getPlayerFatigueAmount(pName) {
 // Forces the auto-coach to draft these players onto the same line if both are healthy
 const dynamicDuos = [
     // ANA
-    ['Terry Yake', 'Anatoli Semenov', 'Stephan Lebeau'],
-    ['Bob Corkum', 'Garry Valk'],
+    ['Anatoli Semenov', 'Stephan Lebeau'],
     ['Bobby Dollas', 'Sean Hill'],
     ['Bill Houlder', 'Randy Ladouceur'],
     // BOS
     ['Adam Oates', 'Cam Neely', 'Glen Murray'],
     ['Bryan Smolinski', 'Dmitri Kvartalnov'],
-    ['Ray Bourque', 'Al Iafrate'],
     ['Glen Wesley', 'Don Sweeney'],
     // BUF
-    ['Pat LaFontaine', 'Yuri Khmylev', 'Donald Audette'],
-    ['Alexander Mogilny', 'Dale Hawerchuk', 'Derek Plante'],
+    ['Derek Plante', 'Donald Audette'],
+    ['Alexander Mogilny', 'Dale Hawerchuk', 'Yuri Khmylev'],
     ['Brad May', 'Rob Ray', 'Dave Hannan'],
     ['Doug Bodger', 'Richard Smehlik'],
     ['Petr Svoboda', 'Philippe Boucher'],
     // CGY
     ['Gary Roberts', 'Joe Nieuwendyk', 'German Titov'],
     ['Theoren Fleury', 'Robert Reichel'],
-    ['Michael Nylander', 'Kelly Kisio', 'Joel Otto'],
     ['Zarley Zalapski', 'James Patrick'],
     // CHI
     ['Jeremy Roenick', 'Tony Amonte', 'Dirk Graham'],
@@ -2179,17 +2197,12 @@ const dynamicDuos = [
     ['Chris Chelios', 'Eric Weinrich'],
     ['Gary Suter', 'Steve Smith'],
     // DET
-    ['Sergei Fedorov', 'Vachslav Kozlov'],
+    ['Sergei Fedorov', 'Vachslav Kozlov', 'Keith Primeau'],
     ['Ray Sheppard', 'Steve Yzerman', 'Dino Ciccarelli'],
-    ['Bob Probert', 'Shawn Burr'],
-    ['Kris Draper', 'Darren McCarty'],
+    ['Kris Draper', 'Bob Probert', 'Darren McCarty'],
     ['Nicklas Lidstrom', 'Vladimir Konstantinov'],
     // EDM
-    ['Jason Arnott', 'Zdeno Ciger'],
-    ['Doug Weight', 'Shayne Corson'],
-    ['Kelly Buchberger', 'Kirk Maltby'],
-    ['Igor Kravchuk', 'Boris Mironov'],
-    ['Bob Beers', 'Fredrik Olausson'],
+    ['Wayne Gretzky', 'Jari Kurri', 'Glenn Anderson'],
     // FLA
     ['Andrei Lomakin', 'Jesse Belanger', 'Scott Mellanby'],
     ['Stu Barnes', 'Bob Kudelski', 'Rob Niedermayer'],
@@ -2198,18 +2211,16 @@ const dynamicDuos = [
     ['Geoff Smith', 'Brian Benning'],
     // HFD
     ['Andrew Cassels', 'Pat Verbeek', 'Geoff Sanderson'],
-    ['Darren Turcotte', 'Robert Kron'],
-    ['Mark Janssens', 'Jim Storm'],
-    ['Chris Pronger', 'Adam Burt'],
+    ['Brendan Shanahan', 'Darren Turcotte', 'Robert Kron'],
+    ['Mark Janssens', 'Jim Storm', 'Paul Ranheim'],
     ['Frantisek Kucera', 'Alexander Godynyuk'],
     // LAK
-    ['Wayne Gretzky', 'Jari Kurri', 'Luc Robitaille'],
+    ['Luc Robitaille', 'Pat LaFontaine'],
     ['Rob Blake', 'Alexei Zhitnik'],
     ['Darryl Sydor', 'Marty McSorley'],
     // MIN
     ['Mike Modano', 'Russ Courtnall', 'Trent Klatt'],
     ['Dave Gagner', 'Pelle Eklund', 'Brent Gilchrist'],
-    ['Mark Tinordi', 'Paul Cavallini'],
     ['Derian Hatcher', 'Doug Zmolek'],
     // MTL
     ['Vincent Damphousse', 'Brian Bellows', 'Benoit Brunet'],
@@ -2220,28 +2231,25 @@ const dynamicDuos = [
     ['Lyle Odelein', 'Kevin Haller'],
     // NJD
     ['Stephane Richer', 'Bernie Nicholls', 'Claude Lemieux'],
-    // NOTE: 'Alexnder' is the spelling used by the live Google Sheet — do not "correct" it.
-    ['Alexnder Semak', 'John MacLean', 'Valeri Zelepukin'],
     ['Bobby Holik', 'Randy McKay', 'Bill Guerin'],
     ['Scott Stevens', 'Bruce Driver'],
     ['Scott Niedermayer', 'Vachslav Fetisov'],
     // NYI
-    ['Derek King', 'Pierre Turgeon'],
+    ['Benoit Hogue', 'Derek King', 'Pierre Turgeon'],
     ['Ray Ferraro', 'Steve Thomas', 'Marty McInnis'],
     ['Patrick Flatley', 'Dave Volek'],
-    ['Claude Loiselle', 'Mick Vukota'],
     ['Vladimir Malakhov', 'Uwe Krupp'],
     ['Darius Kasparaitis', 'Scott Lachance'],
     // NYR
-    ['Mark Messier', 'Glenn Anderson', 'Adam Graves'],
+    ['Mark Messier', 'Adam Graves'],
     ['Steve Larmer', 'Alexei Kovalev', 'Sergei Nemchinov'],
-    ['Craig MacTavish', 'Esa Tikkanen', 'Ed Olczyk'],
-    ['Brian Noonan', 'Stephane Matteau', 'Joey Kocur'],
+    ['Craig MacTavish', 'Ed Olczyk'],
+    ['Stephane Matteau', 'Joey Kocur'],
     ['Brian Leetch', 'Alex Karpotsev'],
     ['Sergei Zubov', 'Jeff Beukeboom'],
-    // OTW
-    ['Alexei Yashin', 'Sylvain Turgeon'],
-    ['Alexander Daigle', 'Evgeny Davydov'],
+    // OTT
+    ['Alexei Yashin', 'Sylvain Turgeon', 'Brian Noonan'],
+    ['Alexnder Daigle', 'Evgeny Davydov'],
     ['Norm Maciver', 'Kerry Huffman'],
     ['Brad Shaw', 'Steve Konroyd'],
     // PHI
@@ -2251,32 +2259,25 @@ const dynamicDuos = [
     ['Dimitri Yushkevich', 'Yves Racine'],
     ['Garry Galley', 'Rob Ramage'],
     // PIT
-    ['Mario Lemieux', 'Jaromir Jagr', 'Rick Tocchet'],
-    ['Ron Francis', 'Kevin Stevens', 'Tomas Sandstrom'],
-    ['Joe Mullen', 'Martin Straka', 'Markus Naslund'],
-    ['Brian Trottier', 'Shawn McEachern'],
+    ['Mario Lemieux', 'Rick Tocchet', 'Owen Nolan'],
+    ['Ron Francis', 'Jaromir Jagr', 'Tomas Sandstrom'],
+    ['Martin Straka', 'Markus Naslund'],
     ['Larry Murphy', 'Kjell Samuelsson'],
     ['Greg Hawgood', 'Ulf Samuelsson'],
     // QUE
-    ['Andrei Kovalenko', 'Mats Sundin', 'Valeri Kamensky'],
-    ['Joe Sakic', 'Owen Nolan', 'Mike Ricci'],
+    ['Joe Sakic', 'Andrei Kovalenko', 'Martin Rucinsky'],
     ['Ron Sutter', 'Claude Lapointe'],
     ['Bob Bassen', 'Chris Simon'],
     ['Curtis Leschyshyn', 'Alexei Gusarov'],
-    ['Tommy Sjodin', 'Garth Butcher'],
     // SJS
-    ['Igor Larionov', 'Sergei Makarov', 'Ray Whitney'],
-    ['Ulf Dahlen', 'Pat Falloon'],
+    ['Igor Larionov', 'Sergei Makarov', 'Valeri Kamensky'],
     ['Jeff Odgers', 'Gaetan Duchesne'],
     ['Sandis Ozolinsh', 'Mike Rathje'],
-    ['Jeff Norton', 'Jay More'],
     // STL
     ['Brett Hull', 'Craig Janney', 'Vitali Prokhorov'],
-    ['Brendan Shanahan', 'Petr Nedved'],
-    ['Peter Stastny', 'Kevin Miller'],
+    ['Petr Nedved', 'Kevin Miller'],
     ['Phil Housley', 'Alexei Kasatonov'],
     ['Steve Duchesne', 'Doug Crossman'],
-    ['Rick Zombo', 'Murray Baron'],
     // TBL
     ['Denis Savard', 'Rob Zamuner'],
     ['Brian Bradley', 'Petr Klima'],
@@ -2284,15 +2285,13 @@ const dynamicDuos = [
     ['Roman Hamrlik', 'Marc Bergevin'],
     // TOR
     ['Doug Gilmour', 'Dave Andreychuk'],
-    ['Wendel Clark', 'Mike Gartner'],
-    ['Rob Pearson', 'Bill Berg'],
+    ['Wendel Clark', 'Mats Sundin'],
     ['Dave Ellett', 'Todd Gill'],
     ['Jamie Macoun', 'Dmitri Mironov'],
     // VAN
     ['Pavel Bure', 'Trevor Linden', 'Greg Adams'],
-    ['Cliff Ronning', 'Geoff Courtnall'],
-    ['Sergio Momesso', 'Martin Gelinas'],
-    ['Gino Odjick', 'Shawn Antoski'],
+    ['Cliff Ronning', 'Geoff Courtnall', 'Sergio Momesso'],
+    ['Martin Gelinas', 'Gino Odjick'],
     ['Jeff Brown', 'Gerald Diduck'],
     ['Jyrki Lumme', 'Jiri Slegr'],
     // WAS
@@ -2304,7 +2303,6 @@ const dynamicDuos = [
     ['Sylvain Cote', 'Shawn Anderson'],
     // WPG
     ['Teemu Selanne', 'Alexei Zhamnov'],
-    ['Thomas Steen', 'Keith Tkachuk'],
     ['Kris King', 'Tie Domi'],
     ['Igor Ulanov', 'Dave Manson'],
     ['Teppo Numminen', 'Stephane Quintal'],
@@ -2550,7 +2548,7 @@ const getRosterStructure = (tk) => {
         // If the line is full, bump the lowest-OVR non-center non-duo player to make room.
         let mates = getLineMates(player.name);
         if (mates) {
-            let mateList = Array.isArray(mates) ? mates : [mates];
+            let mateList = (Array.isArray(mates) ? mates : [mates]).filter(n => fPool.some(x => x.name === n));
             const duoSet = new Set([player.name, ...mateList]);
             mateList.forEach(mateName => {
                 let mate = fPool.find(x => x.name === mateName && !usedNames.has(x.name));
@@ -2672,9 +2670,12 @@ const getRosterStructure = (tk) => {
     // ==========================================
     //  5. WINGER DRAFT (TOP 6 SNAKE SEQUENCE)
     // ==========================================
-    let sortOff = (a, b) => (getOvr(b) - getOvr(a)) || (getOff(b) - getOff(a));
-    let sortDef = (a, b) => (getDef(b) - getDef(a)) || (getOvr(b) - getOvr(a));
-    let sortOvrDesc = (a, b) => getOvr(b) - getOvr(a);
+    // Natural wingers (LW/RW) get a +5 effective-OVR bonus when competing for wing slots,
+    // so a same-OVR winger always beats a center, but a significantly better center can still play wing.
+    const wingBonus = (p) => { const pos = getPos(p); return (pos === 'LW' || pos === 'RW') ? 10 : 0; };
+    let sortOff    = (a, b) => ((getOvr(b) + wingBonus(b)) - (getOvr(a) + wingBonus(a))) || (getOff(b) - getOff(a));
+    let sortDef    = (a, b) => ((getDef(b) + wingBonus(b)) - (getDef(a) + wingBonus(a))) || ((getOvr(b) + wingBonus(b)) - (getOvr(a) + wingBonus(a)));
+    let sortOvrDesc = (a, b) => (getOvr(b) + wingBonus(b)) - (getOvr(a) + wingBonus(a));
 
     // Custom function to draft exactly ONE winger at a time
     const draftSingleWinger = (lineIdx, sortFn) => {
@@ -3277,7 +3278,7 @@ function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
 }
 
 // Helper function to build the Special Teams HTML dynamically
-function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.08, Math.min(0.24, 0.145 + diff * 0.0028 * pace)); }
+function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.08, Math.min(0.28, 0.157 + diff * 0.0028 * pace)); }
 
 // --- GAME MATH & STATS ---
 function checkMilestones(pName) {
@@ -3414,15 +3415,13 @@ function calculateDynamicIceTime(struct) {
     let finalForwardLineMins = fShares.map(share => share * scaleF);
 
     // Apply strict clamping boundaries to safeguard requested ranges
-    finalForwardLineMins[0] = Math.max(18, Math.min(22, finalForwardLineMins[0]));
+    finalForwardLineMins[0] = Math.max(15, Math.min(24, finalForwardLineMins[0]));
     if (bottomThreeSplit) {
-        // Per-line ladder clamps would immediately un-equalize the even split (L2 forced back
-        // to 16+, L4 capped at 9) — use one shared range for all three bottom lines instead.
-        for (let i = 1; i <= 3; i++) finalForwardLineMins[i] = Math.max(10, Math.min(16, finalForwardLineMins[i]));
+        for (let i = 1; i <= 3; i++) finalForwardLineMins[i] = Math.max(10, Math.min(18, finalForwardLineMins[i]));
     } else {
-        finalForwardLineMins[1] = Math.max(16, Math.min(18, finalForwardLineMins[1]));
-        finalForwardLineMins[2] = Math.max(13, Math.min(15, finalForwardLineMins[2]));
-        finalForwardLineMins[3] = Math.max(4, Math.min(9, finalForwardLineMins[3]));
+        finalForwardLineMins[1] = Math.max(14, Math.min(22, finalForwardLineMins[1]));
+        finalForwardLineMins[2] = Math.max(12, Math.min(16, finalForwardLineMins[2]));
+        finalForwardLineMins[3] = Math.max(4,  Math.min(9,  finalForwardLineMins[3]));
     }
 
     // Normalize again if clamping caused a slight mathematical offset from 180
@@ -3465,7 +3464,7 @@ function calculateDynamicIceTime(struct) {
     const spreadBonus = Math.min(ovrGap / 8, 1); // 0→1 as gap goes 0→8
     finalDefensePairMins[0] = Math.max(22, Math.min(30 + spreadBonus * 2, finalDefensePairMins[0]));
     finalDefensePairMins[1] = Math.max(16, Math.min(23, finalDefensePairMins[1]));
-    finalDefensePairMins[2] = Math.max(12 - spreadBonus, Math.min(16, finalDefensePairMins[2]));
+    finalDefensePairMins[2] = Math.max(7, Math.min(16, finalDefensePairMins[2]));
 
     // Normalize again if clamping caused a offset from 120
     let clampedSumD = (finalDefensePairMins[0]*2) + (finalDefensePairMins[1]*2) + (finalDefensePairMins[2]*2);
@@ -3537,6 +3536,7 @@ function simGame(idx) {
                     });
                     if (sev >= 3) ps.returnFromInjury = Math.ceil(sev / 2);
                     ps.injury = { severity: 0, daysRemaining: 0 };
+                    ps.onIR = false; // [FIX] Clear IR status when injury heals on a game day (rest-day path already did this)
                 }
             } else if (ps.returnFromInjury > 0) {
                 // Decays once the player is actually back on the ice, independent of the injury guard above
@@ -3825,7 +3825,9 @@ function simGame(idx) {
         const rough = gradeToNum(ps.attr?.rough) || 50;
         const tagMult = (getPlayerWeightedStats(name)?.tag||'').includes('ENFORCER') ? 2.0 : 1;
         const base = Math.pow((aggr+rough)/2, 1.3) * tagMult;
-        const overCap = Math.max(0, (ps.season?.pim||0) - 150);
+        // [FIX] was ps.season?.pim — during playoffs k='playoff', so season PIM was
+        // used to cap playoff penalty rates. Use the active bucket instead.
+        const overCap = Math.max(0, (ps[k]?.pim||0) - 150);
         return base * Math.pow(0.85, overCap/10);
     };
     const pickOffender = (skaters) => {
@@ -3950,7 +3952,7 @@ function simGame(idx) {
                     if (hasMatchupDef) lineMatchDefMod = 0.88;
                 }
             }
-            const prob      = (0.076 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0)*lineMatchDefMod;
+            const prob      = (0.083 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0)*lineMatchDefMod;
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
@@ -4130,7 +4132,9 @@ function simGame(idx) {
                 return (gradeToNum(ps.attr?.rough)||0) >= 56;
             });
             if (!gPool.length) continue;
-            const gWt    = gPool.map(p => { const ps=playerStats[p.name]; const a2=gradeToNum(ps.attr?.aggr)||50; const r2=gradeToNum(ps.attr?.rough)||50; const tm=(getPlayerWeightedStats(p.name)?.tag||'').includes('ENFORCER')?3:1; const ov=Math.max(0,(ps.season?.pim||0)-150); return Math.pow((a2+r2)/2,1.8)*tm*Math.pow(0.85,ov/10); });
+            // [FIX] was ps.season?.pim — goon cap must use active bucket (k) so playoff
+            // PIMs count toward discipline suppression, matching penWeight above.
+            const gWt    = gPool.map(p => { const ps=playerStats[p.name]; const a2=gradeToNum(ps.attr?.aggr)||50; const r2=gradeToNum(ps.attr?.rough)||50; const tm=(getPlayerWeightedStats(p.name)?.tag||'').includes('ENFORCER')?3:1; const ov=Math.max(0,(ps[k]?.pim||0)-150); return Math.pow((a2+r2)/2,1.8)*tm*Math.pow(0.85,ov/10); });
             const gTotal = gWt.reduce((a2,b)=>a2+b,0);
             if (gTotal<=0) continue;
             let gr=Math.random()*gTotal, gPicked=gPool[gPool.length-1];
@@ -4193,6 +4197,15 @@ function simGame(idx) {
                                     if(playerStats[ppEv2.scorer]) playerStats[ppEv2.scorer][kk3].ppg=(playerStats[ppEv2.scorer][kk3].ppg||0)+1;
                                     if(ppEv2.pAssist&&playerStats[ppEv2.pAssist]) playerStats[ppEv2.pAssist][kk3].ppa=(playerStats[ppEv2.pAssist][kk3].ppa||0)+1;
                                     if(ppEv2.sAssist&&playerStats[ppEv2.sAssist]) playerStats[ppEv2.sAssist][kk3].ppa=(playerStats[ppEv2.sAssist][kk3].ppa||0)+1;
+                                    // [FIX] Retaliation PP goal was updating player ppg/ppa but skipping
+                                    // team-level season.ppg/season.pkg — inflating player totals without
+                                    // the matching team counters. Matches the main PP block at line ~4059.
+                                    if (!isPlayoffs) {
+                                        const _advTeamObj3 = league.find(t2 => t2.nrm === advObj.nrm);
+                                        const _penTeamObj3 = league.find(t2 => t2.nrm === penObj.nrm);
+                                        if (_advTeamObj3) _advTeamObj3.season.ppg = (_advTeamObj3.season.ppg||0)+1;
+                                        if (_penTeamObj3) _penTeamObj3.season.pkg = (_penTeamObj3.season.pkg||0)+1;
+                                    }
                                 }
                                 if(advObj.nrm===g.h.nrm) hMomentum=8; else aMomentum=8;
                             }
@@ -4259,6 +4272,16 @@ function simGame(idx) {
                         trk(enEv.scorer, 'g', 1); trk(enEv.scorer, 's', 1);
                         if (enEv.pAssist) trk(enEv.pAssist, 'a', 1);
                         if (enEv.sAssist) trk(enEv.sAssist, 'a', 1);
+                        // [FIX] EN goals count for plus/minus (NHL rules: scoring team's
+                        // on-ice skaters +1, trailing team's 6 skaters -1).
+                        // enShooters is the top unit of the leading team; the trailing team's
+                        // 6 skaters (top line + top pair) are the en-side unit.
+                        const _enLeadSkaters = enShooters.filter(p => p && p.pos !== 'G');
+                        const _enTrailSkaters = (trailerIsHome
+                            ? [...(hStruct.f[0]||[]), ...(hStruct.d[0]||[])]
+                            : [...(aStruct.f[0]||[]), ...(aStruct.d[0]||[])]).filter(p => p && p.pos !== 'G');
+                        _enLeadSkaters.forEach(p  => trk(p.name, 'pm',  1));
+                        _enTrailSkaters.forEach(p => trk(p.name, 'pm', -1));
                         // NHL rules: empty-net goals do NOT count against the pulled goalie
                     }
                 } else {
@@ -4479,6 +4502,12 @@ function simGame(idx) {
         // back up an appearance, so crediting them a bare GP was a phantom stat line.
         if (!hPulled && aG === 0) playerStats[hG_name][k].so++;
         trk(origHG_name, 'toi', totalGameMinutes);
+        // Persist computed GAA and SV% so saves/exports reflect real values
+        const _hGs = playerStats[origHG_name]?.[k];
+        if (_hGs && _hGs.toi > 0) {
+            _hGs.gaa = +( (_hGs.ga||0) / (_hGs.toi/60) ).toFixed(3);
+            _hGs.svp = _hGs.sa > 0 ? +( (_hGs.sv||0) / _hGs.sa ).toFixed(4) : 0;
+        }
     }
     if (aG_obj) {
         const decisionGoalie = aPulled ? origAG_name : aG_name;
@@ -4488,6 +4517,12 @@ function simGame(idx) {
         }
         if (!aPulled && hG === 0) playerStats[aG_name][k].so++;
         trk(origAG_name, 'toi', totalGameMinutes);
+        // Persist computed GAA and SV% so saves/exports reflect real values
+        const _aGs = playerStats[origAG_name]?.[k];
+        if (_aGs && _aGs.toi > 0) {
+            _aGs.gaa = +( (_aGs.ga||0) / (_aGs.toi/60) ).toFixed(3);
+            _aGs.svp = _aGs.sa > 0 ? +( (_aGs.sv||0) / _aGs.sa ).toFixed(4) : 0;
+        }
     }
 
     // Compute 3 Stars (skaters by pts+pm, goalies eligible by sv%)
@@ -4700,6 +4735,16 @@ function selectShooter(unit, context = 'ES') {
     });
     const hasPlaymaker = unitTags.some(t => t === 'PRO PLAYMAKER' || t === 'PLAYMAKER');
 
+    // 2C: Precompute team GF for goal-share dominance check (once per unit)
+    const unitTeamName = (() => { const p = unit[0]; if (!p) return null; const n = typeof p === 'object' ? p.name : p; return playerStats[n]?.team || null; })();
+    // [FIX] was p.season?.g — during playoffs this read frozen regular-season GF totals,
+    // making the 30%-team-share cap fire against RS numbers instead of live playoff stats.
+    // selectShooter is called from inside simGame where k is NOT in scope, so derive it here.
+    const _ssK = (typeof isPlayoffs !== 'undefined' && isPlayoffs) ? 'playoff' : 'season';
+    const teamGFTotal = unitTeamName
+        ? Object.values(playerStats).filter(p => p.team === unitTeamName && p.pos !== 'G').reduce((s, p) => s + (p[_ssK]?.g || 0), 0)
+        : 0;
+
     const weights = unit.map((player, i) => {
         // Normalize: unit may contain objects or name strings
         const name = (player && typeof player === 'object') ? player.name : player;
@@ -4747,6 +4792,33 @@ function selectShooter(unit, context = 'ES') {
             else if (!isD)                                       weight *= 1.15;
         }
 
+        // Attribute accuracy gates — linear scale around threshold (each pt = 1%)
+        // Playmaker: shot acc gates goal chance (acc 90=×1.15, acc 60=×0.85, floor ×0.70)
+        if (tag === 'PRO PLAYMAKER' || tag === 'PLAYMAKER') {
+            const shotAcc = parseInt(pA.shotAcc) || 70;
+            weight *= Math.max(0.70, 1.0 + (shotAcc - 75) * 0.01);
+        }
+        // Sniper/PRO SNIPER: shot acc gates goal chance (pure sniper with low acc scores less)
+        if (tag === 'PRO SNIPER' || tag === 'SNIPER' || tag === 'POWER SNIPER') {
+            const shotAcc = parseInt(pA.shotAcc) || 70;
+            weight *= Math.max(0.75, 1.0 + (shotAcc - 75) * 0.01);
+        }
+        // Superstar: shot acc gates goal scoring chance
+        if (tag === 'SUPERSTAR') {
+            const shotAcc = parseInt(pA.shotAcc) || 70;
+            weight *= Math.max(0.80, 1.0 + (shotAcc - 75) * 0.008);
+        }
+        // Offensive D archetypes: shot acc gates goal chance
+        if (tag === 'BOOMER' || tag === 'OFFENSIVE D' || tag === 'PRO OFFENSIVE D' || tag === 'QUARTERBACK') {
+            const shotAcc = parseInt(pA.shotAcc) || 70;
+            weight *= Math.max(0.75, 1.0 + (shotAcc - 75) * 0.01);
+        }
+        // Two-way D: lighter gate (more balanced)
+        if (tag === 'TWO-WAY STAR D' || tag === 'FRANCHISE D') {
+            const shotAcc = parseInt(pA.shotAcc) || 70;
+            weight *= Math.max(0.80, 1.0 + (shotAcc - 75) * 0.006);
+        }
+
         // Position modifier  -  wingers shoot a bit more, centers distribute, D ~20% less
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
@@ -4755,6 +4827,19 @@ function selectShooter(unit, context = 'ES') {
         // Hot/cold modifier
         if (ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT')  weight *= 1.20;
         if (ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD') weight *= 0.80;
+
+        // 2B: Diminishing returns on goals — soft brake above 0.60 G/GP
+        // [FIX] was ps.season?.g/gp — during playoffs this read frozen RS stats,
+        // penalising RS goal-scorers even with 0 playoff goals. Use _ssK (computed above).
+        const seasonG = ps[_ssK]?.g || 0;
+        const seasonGPG = Math.max(ps[_ssK]?.gp || 1, 1);
+        const gPG = seasonG / seasonGPG;
+        if (gPG > 0.60) weight *= Math.max(0.65, Math.sqrt(0.60 / gPG));
+
+        // 2C: Team goal-share dominance penalty — brakes a player scoring >30% of team GF
+        if (teamGFTotal > 20 && seasonG / teamGFTotal > 0.30) {
+            weight *= Math.max(0.70, 1.0 - (seasonG / teamGFTotal - 0.30) * 1.0);
+        }
 
         return Math.max(1, weight);
     });
@@ -4808,8 +4893,26 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
             if (tag === 'PRO SNIPER' || tag === 'SNIPER' || tag === 'SUPERSTAR') weight *= 1.10;
             else if (tag === 'PRO PLAYMAKER' || tag === 'PLAYMAKER')             weight *= 0.90;
         } else {
-            if (tag === 'PRO PLAYMAKER' || tag === 'PLAYMAKER') weight *= 1.50;
+            if (tag === 'PRO PLAYMAKER' || tag === 'PLAYMAKER') weight *= 0.95;
             else if (tag === 'PRO SNIPER' || tag === 'SNIPER')  weight *= 0.75;
+        }
+
+        // Passing attribute gates assist chance — each point above/below 75 = 1%
+        // Sniper/PRO SNIPER: high passing sniper racks assists, low passing pure finisher
+        if (tag === 'PRO SNIPER' || tag === 'SNIPER' || tag === 'POWER SNIPER') {
+            weight *= Math.max(0.70, 1.0 + (pass - 75) * 0.01);
+        }
+        // Superstar: passing gates assists (Fedorov/Lemieux type — high pass = playmaking too)
+        if (tag === 'SUPERSTAR') {
+            weight *= Math.max(0.75, 1.0 + (pass - 75) * 0.008);
+        }
+        // Offensive D archetypes: passing gates assist chance
+        if (tag === 'QUARTERBACK' || tag === 'OFFENSIVE D' || tag === 'PRO OFFENSIVE D' || tag === 'FRANCHISE D') {
+            weight *= Math.max(0.75, 1.0 + (pass - 75) * 0.01);
+        }
+        // Two-way D: lighter passing gate
+        if (tag === 'TWO-WAY STAR D') {
+            weight *= Math.max(0.80, 1.0 + (pass - 75) * 0.006);
         }
 
         // Position modifier  -  centers are primary distributors, D penalized ~20%
@@ -4818,8 +4921,20 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         weight *= isD ? 0.80 : (pos === 'C') ? 1.15 : 1.0;
 
         // Hot/cold streak modifier
-        if (ps.isHot)  weight *= 1.15;
-        if (ps.isCold) weight *= 0.85;
+        // [FIX] ps.isHot/isCold were never set — read the actual streak fields
+        const _isHot  = ps.macro_streak === 'HOT'  || ps.micro_streak === 'HOT'  || ps.streakType === 'hot';
+        const _isCold = ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD' || ps.streakType === 'cold';
+        if (_isHot)  weight *= 1.15;
+        if (_isCold) weight *= 0.85;
+
+        // Diminishing returns on assists — hard brake above 0.65 A/GP
+        // [FIX] was ps.season?.a/gp — processSingleGoal is outside simGame so k is not
+        // in scope; derive the active bucket the same way selectShooter does.
+        const _gaK = (typeof isPlayoffs !== 'undefined' && isPlayoffs) ? 'playoff' : 'season';
+        const seasonA = ps[_gaK]?.a || 0;
+        const seasonGP = Math.max(ps[_gaK]?.gp || 1, 1);
+        const aPG = seasonA / seasonGP;
+        if (aPG > 0.65) weight *= Math.max(0.38, Math.pow(0.65 / aPG, 1.0));
 
         return Math.max(1, weight);
     };
@@ -4848,8 +4963,9 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         remaining = remaining.filter(n => n !== primaryAssist);
     }
 
-    // Secondary Assist (~84.2% chance if primary exists and players remain)
-    if (primaryAssist && remaining.length > 0 && Math.random() < 0.842) {
+    // Secondary Assist — 90% if a playmaker is on the ice (eligible pool), else 84.2%
+    const hasPlaymaker = eligiblePool.some(n => { const t = getPlayerWeightedStats(n)?.tag || ''; return t === 'PRO PLAYMAKER' || t === 'PLAYMAKER'; });
+    if (primaryAssist && remaining.length > 0 && Math.random() < (hasPlaymaker ? 0.86 : 0.842)) {
         secondaryAssist = weightedPick(remaining, 'secondary');
     }
 
@@ -4870,7 +4986,9 @@ function applyDailyRandomSwing(tk) {
     if (!struct || !struct.f || !struct.d) return;
 
     const starters = [...struct.f.flat(), ...struct.d.flat()]
-        .filter(p => p && playerStats[p.name] && playerStats[p.name].injury.daysRemaining === 0);
+        // [FIX] ps.injury may be undefined for never-injured players — use optional chaining
+        // to avoid "Cannot read properties of undefined (reading 'daysRemaining')" crash
+        .filter(p => p && playerStats[p.name] && !(playerStats[p.name].injury?.daysRemaining > 0));
 
     // Reset daily swing for whole roster
     rosters[tk].forEach(p => { if (playerStats[p.name]) playerStats[p.name].dailySwing = 0; });
@@ -5379,7 +5497,10 @@ async function beginNewYear() {
     pendingTrades = [];
     refreshTradeBadge();
     league.forEach(t => {
-        t.season = {gp:0, w:0, l:0, t:0, pts:0, gf:0, ga:0, ppo:0, ppg:0, ts:0, ppga:0}; t.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
+        // [FIX] pka, pkg, sf, sa were missing from this reset — they accumulated across
+        // seasons because simGame writes them with (field||0)+1 patterns. ppo/ppg were
+        // already reset; this adds the four missing counters to match all written fields.
+        t.season = {gp:0, w:0, l:0, t:0, pts:0, gf:0, ga:0, ppo:0, ppg:0, pkg:0, pka:0, sf:0, sa:0, ts:0, ppga:0}; t.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
         // Preserve user-set PP/PK lines but drop any players no longer on this roster
         const rosterNames = new Set((rosters[t.nrm] || []).map(p => p.name));
         const filterUnit = (unit) => (unit || []).filter(p => p && rosterNames.has((p && typeof p === 'object') ? p.name : p));
@@ -5409,7 +5530,7 @@ async function beginNewYear() {
         // Safety net: Give existing players the careerPlayoff tracker if they don't have it yet
         if (!p.careerPlayoff) {
             if (p.pos === 'G') p.careerPlayoff = {gp:0, w:0, l:0, t:0, so:0, sv:0, sa:0};
-            else p.careerPlayoff = {gp:0, g:0, a:0, pts:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0};
+            else p.careerPlayoff = {gp:0, g:0, a:0, pts:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0};
         }
 
         if (p.pos === 'G') {
@@ -5424,14 +5545,14 @@ async function beginNewYear() {
             p.playoff = {gp:0, w:0, l:0, so:0, sv:0, sa:0, toi:0, consStarts:0};
         } else {
             // Archive Regular Season to Career Regular Season
-            p.career.gp += p.season.gp; p.career.g += p.season.g; p.career.a += p.season.a; p.career.pts += (p.season.g + p.season.a); p.career.pm += (p.season.pm || 0); p.career.pim += (p.season.pim || 0); p.career.ppg += (p.season.ppg || 0); p.career.shg += (p.season.shg || 0); p.career.gwg += (p.season.gwg || 0); p.career.s += (p.season.s || 0); p.career.toi = (p.career.toi || 0) + (p.season.toi || 0);
+            p.career.gp += p.season.gp; p.career.g += p.season.g; p.career.a += p.season.a; p.career.pts += (p.season.g + p.season.a); p.career.pm += (p.season.pm || 0); p.career.pim += (p.season.pim || 0); p.career.ppg += (p.season.ppg || 0); p.career.ppa = (p.career.ppa || 0) + (p.season.ppa || 0); p.career.shg += (p.season.shg || 0); p.career.gwg += (p.season.gwg || 0); p.career.s += (p.season.s || 0); p.career.toi = (p.career.toi || 0) + (p.season.toi || 0);
             
             // Archive Playoff to Career Playoff
-            p.careerPlayoff.gp += p.playoff.gp; p.careerPlayoff.g += p.playoff.g; p.careerPlayoff.a += p.playoff.a; p.careerPlayoff.pts += (p.playoff.g + p.playoff.a); p.careerPlayoff.pm += (p.playoff.pm || 0); p.careerPlayoff.pim += (p.playoff.pim || 0); p.careerPlayoff.ppg += (p.playoff.ppg || 0); p.careerPlayoff.shg += (p.playoff.shg || 0); p.careerPlayoff.gwg += (p.playoff.gwg || 0); p.careerPlayoff.s += (p.playoff.s || 0); p.careerPlayoff.toi = (p.careerPlayoff.toi || 0) + (p.playoff.toi || 0);
+            p.careerPlayoff.gp += p.playoff.gp; p.careerPlayoff.g += p.playoff.g; p.careerPlayoff.a += p.playoff.a; p.careerPlayoff.pts += (p.playoff.g + p.playoff.a); p.careerPlayoff.pm += (p.playoff.pm || 0); p.careerPlayoff.pim += (p.playoff.pim || 0); p.careerPlayoff.ppg += (p.playoff.ppg || 0); p.careerPlayoff.ppa = (p.careerPlayoff.ppa || 0) + (p.playoff.ppa || 0); p.careerPlayoff.shg += (p.playoff.shg || 0); p.careerPlayoff.gwg += (p.playoff.gwg || 0); p.careerPlayoff.s += (p.playoff.s || 0); p.careerPlayoff.toi = (p.careerPlayoff.toi || 0) + (p.playoff.toi || 0);
             
             // Wipe clean for the new year
-            p.season = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, consStarts:0};
-            p.playoff = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, consStarts:0};
+            p.season = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, consStarts:0};
+            p.playoff = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, consStarts:0};
         }
         p.streakType = 'stable'; p.hasScored = false; p.seasonTicks = 0;
         p.hotCounter = 0; p.coldCounter = 0;
@@ -5497,7 +5618,10 @@ async function simDay(slowMode = true, bypassLock = false) {
             // ------------------------------------------------
             simGame(i);
             activeIdx = i;   // keep jumbotron pointed at the most recently finished game
-            if (!isTurboMode) updateUI();
+            // Only repaint per-game when the day is being watched. In batch mode there is
+            // no await between games, so the browser never paints these — every render but
+            // the last is invisible work (~108ms each). The finally block does the final one.
+            if (slowMode && !isTurboMode) updateUI();
             if (slowMode) await sleep(200);
         }
         if (!bypassLock) { advanceCalendar(); }
@@ -5567,7 +5691,9 @@ function advanceCalendar() {
 async function simWeek() {
     if (isSimulating) return;
     isSimulating = true;
-    for (let i = 0; i < 7; i++) { if (currentDay >= calendar.length) break; await simDay(false, true); updateUI(); await sleep(800); let keepGoing = advanceCalendar(); if (!keepGoing) break; }
+    // simDay's finally already repainted, and advanceCalendar repaints after the day rolls
+    // over — no third render in between. Turbo skips the pacing sleep entirely.
+    for (let i = 0; i < 7; i++) { if (currentDay >= calendar.length) break; await simDay(false, true); if (!isTurboMode) await sleep(800); else await yieldToRenderer(); let keepGoing = advanceCalendar(); if (!keepGoing) break; }
     isSimulating = false; updateUI(); saveGame();
 }
 
@@ -5577,8 +5703,7 @@ async function simMonth() {
     for (let i = 0; i < 30; i++) {
         if (currentDay >= calendar.length) break;
         await simDay(false, true);
-        updateUI();
-        await sleep(800);
+        if (!isTurboMode) await sleep(800); else await yieldToRenderer();
         let keepGoing = advanceCalendar();
         if (!keepGoing) break;
     }
@@ -5607,10 +5732,13 @@ async function simSeason(useTurbo = false) {
     if (btnTurbo) { btnTurbo.innerText = 'PAUSE TURBO'; btnTurbo.style.borderColor = '#FFAA00'; btnTurbo.style.color = '#FFAA00'; }
 
     while (isSimulating && isSimSeason && currentDay < calendar.length) {
-        await simDay(false, true); updateUI();
+        // Turbo deliberately skips full repaints (simDay/advanceCalendar both gate on this);
+        // this call used to run unconditionally, so turbo still paid ~108ms/day for a frame
+        // nobody saw. The ticker line below plus the periodic yield give turbo its feedback.
+        await simDay(false, true); if (!isTurboMode) updateUI();
         let percent = Math.floor((currentDay / calendar.length) * 100);
         document.getElementById('tickerScroll').innerText = `${useTurbo ? ' TURBO SIMULATING' : ' CALCULATING SEASON ALGORITHMS'}: DAY ${currentDay} OF ${calendar.length} (${percent}% COMPLETE)...`;
-        if (!useTurbo) { await sleep(50); } else if (currentDay % 15 === 0) { await yieldToRenderer(); }
+        if (!useTurbo) { await sleep(50); } else { await yieldToRenderer(); }
         let keepGoing = advanceCalendar();
         if (!keepGoing) break;
     }
@@ -5645,11 +5773,18 @@ async function simRestOfSeason() {
                 const ticker = document.getElementById('tickerScroll');
                 if (ticker) ticker.innerText = `⚡ SIMULATING... DAY ${currentDay}/${calendar.length} (${pct}%) | ${dayScores || '---'}`;
                 refreshScheduleDashboardUI();
-                await yieldToRenderer(); // yield every 5 days — keeps the browser responsive
-                                         // without setTimeout throttling in a background tab
+                await yieldToRenderer();
             }
             const keepGoing = advanceCalendar();
-            if (!keepGoing) break;
+            if (!keepGoing) {
+                // If the all-star break just triggered, auto-sim the ASG and keep going
+                if (isASG && currentDay < calendar.length) {
+                    await simDay(false, true); // sim the ASG game
+                    advanceCalendar();          // step past it (clears isASG when next day has no ASG_game)
+                    continue;
+                }
+                break; // genuine end of season
+            }
         }
     } finally {
         isSimulating = false;
@@ -6066,7 +6201,7 @@ function renderTeamStats() {
         h += goalies.map(g => {
             const st = playerStats[g.name];
             const sa = st[k].sa || 0; const sv = st[k].sv || 0; const ga = Math.max(0, sa - sv);
-            const svPct = sa > 0 ? (sv / sa).toFixed(3) : '.000'; const gaa = st[k].gp > 0 ? (ga / st[k].gp).toFixed(2) : '0.00';
+            const svPct = sa > 0 ? (sv / sa).toFixed(3) : '.000'; const gaa = st[k].gp > 0 ? calcGAA(ga, st[k].gp, st[k].toi).toFixed(2) : '0.00';
             return `<tr style="cursor:pointer;" onclick="showPlayerCard('${g.name}')"><td style="text-align:left;">${g.name} ${getArchetypeBadge(g.name)} ${getEmoji(g.name)}</td><td>${st[k].gp}</td><td>${st[k].w}</td><td>${st[k].l || 0}</td><td>${st[k].t || 0}</td><td style="color:#aaa;">${sa}</td><td style="color:#FF6666;">${ga}</td><td style="color:#aaa;">${svPct}</td><td style="color:#aaa;">${gaa}</td><td style="color:var(--ea-yellow); font-weight:bold;">${st[k].so}</td></tr>`;
         }).join('');
     }
@@ -7106,10 +7241,10 @@ function toggleAwardConfig(setting) {
     if (!btn) return;
     if (awardConfig[setting]) {
         btn.textContent = btn.textContent.replace('OFF', 'ON');
-        btn.style.opacity = '1';
+        btn.classList.remove('toggle-off');
     } else {
         btn.textContent = btn.textContent.replace('ON', 'OFF');
-        btn.style.opacity = '0.5';
+        btn.classList.add('toggle-off');
     }
 }
 
@@ -7152,7 +7287,7 @@ function toggleBox(el) {
     if (!content) return;
     const isHidden = content.style.display === 'none' || window.getComputedStyle(content).display === 'none';
     content.style.display = isHidden ? 'block' : 'none';
-    const icon = header.querySelector('.toggle-icon'); if (icon) { icon.innerText = isHidden ? '[-]' : '[+]'; }
+    const icon = header.querySelector('.toggle-icon'); if (icon) { icon.innerText = isHidden ? '▲' : '▼'; }
 } 
 
 function clearArchives() { 
@@ -7244,7 +7379,7 @@ function exportUpdatedRosterCSV() {
 function exportCSV() {
     let csv = "Player,Team,Pos,Age,GP,G,A,PTS,W,SO,SV%,GAA,OVR,ASG_APP\n"; 
     Object.values(playerStats).forEach(p => { 
-        const s = p.season; const svp = s.sa > 0 ? (s.sv/s.sa).toFixed(3) : "0.000"; const gaa = s.gp > 0 ? ((s.sa-s.sv)/s.gp).toFixed(2) : "0.00"; 
+        const s = p.season; const svp = s.sa > 0 ? (s.sv/s.sa).toFixed(3) : "0.000"; const gaa = s.gp > 0 ? calcGAA(Math.max(0, s.sa-s.sv), s.gp, s.toi).toFixed(2) : "0.00";
         const ovr = getPlayerWeightedStats(p.name).baseOvr;
         csv += `${p.name},${p.team},${p.pos},${p.age},${s.gp},${s.g},${s.a},${s.g+s.a},${s.w},${s.so},${svp},${gaa},${ovr},${p.asgAppearances || 0}\n`; 
     }); 
@@ -7496,7 +7631,7 @@ function runEndOfSeasonAwards() {
     // late-arriving rookies with an artificial age cutoff in every later season.)
     const ROOKIE_GP_LIMIT = 31;
     const calderScore = p => p.pos === 'G' ? (p.season.w * 1.5) + (p.season.so * 3) : (p.season.g + p.season.a);
-    const calderEligible = allPlayers.filter(p => { const cGP = p.career.gp || 0; return p.pos === 'G' ? (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minGoalieGP) : (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minSkaterGP); });
+    const calderEligible = allPlayers.filter(p => { const cGP = p.preSimCareerGP ?? p.career.gp ?? 0; return p.pos === 'G' ? (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minGoalieGP) : (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minSkaterGP); });
     const calderSorted = [...calderEligible].sort((a, b) => calderScore(b) - calderScore(a));
     if (calderSorted.length > 0) {
         awardTrophy(calderSorted[0].name, currentSeason, "Calder");
@@ -7545,7 +7680,7 @@ function runEndOfSeasonAwards() {
         return 0;
     };
     const selkeSorted = skaters
-        .filter(p => p.pos !== 'D' && p.season.gp >= 40)
+        .filter(p => p.pos !== 'D' && p.season.gp >= 40 && (p.season.g + p.season.a) <= 60)
         .sort((a, b) => {
             const tagA = getPlayerWeightedStats(a.name).tag, tagB = getPlayerWeightedStats(b.name).tag;
             let scoreA = (getDef(a.name) * 0.6) + ((a.season.pm || 0) * 0.4) + selkeDefTagBonus(tagA);
@@ -7603,7 +7738,7 @@ function runEndOfSeasonAwards() {
     // 10. VEZINA — SV% and GAA weighted heavily, wins as minor modifier
     const vezinaScore = g => {
         const svp = g.season.sa > 0 ? g.season.sv / g.season.sa : 0;
-        const gaa = g.season.gp > 0 ? (g.season.sa - g.season.sv) / g.season.gp : 99;
+        const gaa = g.season.gp > 0 ? calcGAA(Math.max(0, g.season.sa - g.season.sv), g.season.gp, g.season.toi) : 99;
         const svBonus = svp > 0.880 ? (svp - 0.880) * 2000 : 0; // heavily weighted
         const gaaBonus = gaa < 4.0 ? (4.0 - gaa) * 8 : 0;       // heavily weighted
         const wMod = (g.season.w || 0) * 0.4;                    // wins: minor modifier
@@ -7791,6 +7926,7 @@ function getConnSmytheScore(p) {
                 name: rN, team: t.name, teamCode: t.code, pos: rPos, age: 18, streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false,
                 morale: 100, suspended: { days: 0, reason: "" }, weight: 190 + Math.floor(Math.random()*30),
                 injury: { severity: 0, daysRemaining: 0 }, attr: { off: 65 + Math.floor(Math.random()*15), def: 60 + Math.floor(Math.random()*15), gDef: 60 },
+                preSimCareerGP: 0,
                 career: {gp:0, g:0, a:0, pts:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, t:0, so:0, sv:0, sa:0},
                 careerPlayoff: {gp:0, g:0, a:0, pts:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, so:0, sv:0, sa:0},
                 season: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, t:0, so:0, sv:0, sa:0, consStarts:0},
@@ -8273,7 +8409,7 @@ function openAwardsVoting() {
     const vezinaCands = [...goalies]
         .map(p => {
             const svp = p.season.sa > 0 ? p.season.sv / p.season.sa : 0;
-            const gaa = p.season.gp > 0 ? (p.season.sa - p.season.sv) / p.season.gp : 99;
+            const gaa = p.season.gp > 0 ? calcGAA(Math.max(0, p.season.sa - p.season.sv), p.season.gp, p.season.toi) : 99;
             const score = (svp > 0.880 ? (svp - 0.880) * 2000 : 0) + (gaa < 4.0 ? (4.0 - gaa) * 8 : 0) + (p.season.w||0) * 0.4;
             const svpStr = p.season.sa > 0 ? (svp).toFixed(3) : '--.---';
             const gaaStr = p.season.gp > 0 ? gaa.toFixed(2) : '--';
@@ -8788,6 +8924,7 @@ function pcBuildStats(pName, tab) {
         const m = Math.floor(avg), s = Math.round((avg - m) * 60);
         return `${m}:${String(s).padStart(2,'0')}`;
     };
+    const fGAA = (ga, gp, toi) => (gp > 0 || toi > 0) ? calcGAA(ga, gp, toi).toFixed(2) : '0.00';
     const cell = (l,v,hi) => `<td style="color:#555;padding:2px 3px 2px 0;font-size:6px;white-space:nowrap">${l}</td><td style="color:${hi?'#FFD060':'#ccc'};padding:2px 8px 2px 0;font-weight:700;font-size:8px">${v}</td>`;
     const tbl = (pairs, his=[]) => {
         let h='<table style="width:100%;border-collapse:collapse">';
@@ -8802,7 +8939,7 @@ function pcBuildStats(pName, tab) {
         if (isG) {
             const sa=s.sa||0,sv=s.sv||0,ga=Math.max(0,sa-sv),gp=s.gp||0;
             return tbl([['GP',f(gp)],['W',f(s.w)],['L',f(s.l)],['SO',f(s.so)],
-                ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',gp>0?(ga/gp).toFixed(2):'0.00'],
+                ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',fGAA(ga,gp,s.toi)],
                 ['SVG',f(s.svg||sv)],['TOI',fTOI(s.toi,gp)]],[4,5]);
         }
         const g=s.g||0,a=s.a||0;
@@ -8814,7 +8951,7 @@ function pcBuildStats(pName, tab) {
         if (isG) {
             const sa=c.sa||0,sv=c.sv||0,ga=Math.max(0,sa-sv),gp=c.gp||0;
             return tbl([['GP',f(gp)],['W',f(c.w)],['L',f(c.l)],['SO',f(c.so)],
-                ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',gp>0?(ga/gp).toFixed(2):'0.00'],
+                ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',fGAA(ga,gp,c.toi)],
                 ['SVG',f(c.svg||0)],['TOI',fTOI(c.toi,gp)]],[4,5]);
         }
         return tbl([['GP',f(c.gp)],['G',f(c.g)],['A',f(c.a)],['PTS',c.pts||((c.g||0)+(c.a||0))],
@@ -8828,32 +8965,55 @@ function pcBuildStats(pName, tab) {
         if (isG) {
             const sa=src.sa||0,sv=src.sv||0,ga=Math.max(0,sa-sv),gp=src.gp||0;
             return tbl([['GP',f(gp)],['W',f(src.w)],['L',f(src.l)],['SO',f(src.so)],
-                ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',gp>0?(ga/gp).toFixed(2):'0.00'],
+                ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',fGAA(ga,gp,src.toi)],
                 ['SVG',f(src.svg||0)],['TOI',fTOI(src.toi,gp)]],[4,5]);
         }
         return tbl([['GP',f(src.gp)],['G',f(src.g)],['A',f(src.a)],['PTS',src.pts||((src.g||0)+(src.a||0))],
             ['+/-',pm(src.pm||0)],['PIM',f(src.pim)],['SOG',f(src.s)],['TOI',fTOI(src.toi,src.gp)]],[2,3]);
     }
-    // ATTR tab
+    // ATTR tab — visual bar display
     const wGrade = p.attr.weight || lbsToWeightGrade(p.weight) || 'C';
     const wLbs = p.weight || getWeightLbs(wGrade);
-    const wtRow = `<div style="text-align:center;color:#555;font-size:6px;margin-top:4px;letter-spacing:1px;">WEIGHT <span style="color:#aaa;font-size:8px;margin-left:4px;">${wLbs} LBS</span> <span style="color:#444;font-size:6px;">(${wGrade})</span></div>`;
+    const wtRow = `<div style="text-align:center;color:#555;font-size:6px;margin-top:4px;letter-spacing:1px;">WEIGHT <span style="color:#aaa;font-size:8px;margin-left:4px;">${wLbs} LBS</span></div>`;
     // Use stored grade strings for exact display; fall back to numToGrade for old saves
     const gr = p.attr.grades || {};
     const gd = (key, num) => gr[key] || numToGrade(num);
+    const _gPct = g => ({'A+':100,A:93,'A-':87,'B+':81,B:75,'B-':70,'C+':64,C:57,'C-':51,D:42,'F+':32,F:20}[g]||50);
+    const _gClr = g => /^A/.test(g)?'#FFD700':/^B/.test(g)?'#00CCCC':/^C/.test(g)?'#FFAA00':/^D/.test(g)?'#FF8800':'#FF4444';
+    // OFF/DEF/gDef/gOff are stored as raw 0-100 numbers, the rest as grade strings.
+    // Normalize both: numbers drive the bar width directly and get a grade label via numToGrade.
+    const barRow = (lbl, val) => {
+        // Numeric 0-100 values may arrive as numbers OR numeric strings ("36"); letter
+        // grades never parse as ints, so test the value, not its type.
+        const n = parseInt(val);
+        const isNum = !isNaN(n) && !/[A-F]/i.test(String(val));
+        const grade = isNum ? numToGrade(n) : (val || '--');
+        const pct = isNum ? Math.max(0, Math.min(100, n)) : _gPct(grade);
+        const clr = _gClr(grade);
+        return `<div style="display:flex;align-items:center;gap:5px;margin:3px 0;">` +
+            `<span style="font-size:6px;color:#777;width:34px;flex-shrink:0;letter-spacing:.4px;">${lbl}</span>` +
+            `<div style="flex:1;height:6px;background:#111;border-radius:3px;overflow:hidden;">` +
+            `<div style="width:${pct}%;height:100%;background:${clr};border-radius:3px;box-shadow:0 0 5px ${clr}88;"></div></div>` +
+            `<span style="font-size:7px;color:${clr};width:18px;text-align:right;font-weight:bold;">${grade}</span></div>`;
+    };
+    const attrWrap = rows => `<div style="padding:8px 10px;">${rows}</div>`;
     if (isG) {
         const gOvr = p.attr.gDef || p.attr.goalieDefense || p.attr.ovr || '--';
-        return tbl([['G.OVR', gOvr], ['G.OFF', p.attr.gOff || '--'],
-            ['SPD', gd('speed', p.attr.speed)], ['AGIL', gd('agil', p.attr.agil)],
-            ['STK', gd('stkHnd', p.attr.stkHnd)], ['ENDUR', gd('endur', p.attr.endur)],
-            ['AGGR', gd('aggr', p.attr.aggr)], ['ROUGH', gd('rough', p.attr.rough)]],[]) + wtRow;
+        return attrWrap(
+            barRow('G.OVR', gOvr) + barRow('G.OFF', p.attr.gOff||'--') +
+            barRow('SPD', gd('speed',p.attr.speed)) + barRow('AGIL', gd('agil',p.attr.agil)) +
+            barRow('STK', gd('stkHnd',p.attr.stkHnd)) + barRow('ENDUR', gd('endur',p.attr.endur)) +
+            barRow('AGGR', gd('aggr',p.attr.aggr)) + barRow('ROUGH', gd('rough',p.attr.rough))
+        ) + wtRow;
     }
-    return tbl([['OFF',p.attr.off||'--'],['DEF',p.attr.def||'--'],
-        ['SPD',gd('speed',p.attr.speed)],['AGIL',gd('agil',p.attr.agil)],
-        ['S.PWR',gd('shotPwr',p.attr.shotPwr)],['S.ACC',gd('shotAcc',p.attr.shotAcc)],
-        ['PASS',gd('pass',p.attr.pass)],['STK',gd('stkHnd',p.attr.stkHnd)],
-        ['CHK',gd('check',p.attr.check)],['ROUGH',gd('rough',p.attr.rough)],
-        ['ENDUR',gd('endur',p.attr.endur)],['AGGR',gd('aggr',p.attr.aggr)]],[]) + wtRow;
+    return attrWrap(
+        barRow('OFF', p.attr.off||'--') + barRow('DEF', p.attr.def||'--') +
+        barRow('SPD', gd('speed',p.attr.speed)) + barRow('AGIL', gd('agil',p.attr.agil)) +
+        barRow('S.PWR', gd('shotPwr',p.attr.shotPwr)) + barRow('S.ACC', gd('shotAcc',p.attr.shotAcc)) +
+        barRow('PASS', gd('pass',p.attr.pass)) + barRow('STK', gd('stkHnd',p.attr.stkHnd)) +
+        barRow('CHK', gd('check',p.attr.check)) + barRow('ROUGH', gd('rough',p.attr.rough)) +
+        barRow('ENDUR', gd('endur',p.attr.endur)) + barRow('AGGR', gd('aggr',p.attr.aggr))
+    ) + wtRow;
 }
 
 function pcBuildHonors(pName) {
@@ -8936,7 +9096,7 @@ function showPlayerCard(pName) {
   </div>
   <div style="background:#0a0a0a;padding:2px 8px 4px;">${buildStatusBadges(pName)}</div>
   <div style="display:flex;gap:2px;padding:5px 6px;background:#0e0e0e;">
-    ${['season','career','playoff','c-po','attr'].map((k,i)=>`<button onclick="pcSwitchTab('${pName}','${k}')" id="pc-tab-${k}" style="flex:1;font-size:6px;font-family:'Press Start 2P',cursive;padding:5px 1px;background:${i===0?'#333':'#1a1a1a'};color:${i===0?'#fff':'#555'};border:none;cursor:pointer;border-radius:2px;">${['SEASON','CAREER','PLAYOFF','C.PLYFF','ATTR'][i]}</button>`).join('')}
+    ${['season','career','playoff','c-po','attr'].map((k,i)=>`<button onclick="pcSwitchTab('${pName}','${k}')" id="pc-tab-${k}" style="flex:1;font-size:6px;font-family:'Press Start 2P',cursive;padding:5px 1px;background:${i===0?'#333':'#1a1a1a'};color:${i===0?'#fff':'#555'};border:none;cursor:pointer;border-radius:2px;">${['SEASON','CAREER','PLAYOFF','ALL PO','ATTR'][i]}</button>`).join('')}
   </div>
   <div id="pc-stats" style="background:#0e0e0e;padding:8px 10px;min-height:60px;">${pcBuildStats(pName,'season')}</div>
   ${pcBuildHonors(pName)}
@@ -9086,12 +9246,13 @@ function applyPostGameFatigue(awayTeamCode, homeTeamCode, awayGoalieName, homeGo
         rosters[tk].forEach(p => {
             if (!p.status) p.status = { fatigue: 0, morale: 0, injuryDays: 0, suspension: 0, consecutiveStarts: 0 };
 
-            // Skaters gain 8 fatigue per game (not if on IR)
-            if (p.pos !== 'G' && p.status.injuryDays === 0 && !playerStats[p.name]?.onIR) {
+            // Skaters gain 8 fatigue per game (not if on IR or actively injured)
+            // [FIX] p.status.injuryDays was legacy and always 0 — replaced with real injury check
+            const _ps9 = playerStats[p.name];
+            if (p.pos !== 'G' && !(_ps9?.injury?.daysRemaining > 0) && !_ps9?.onIR) {
                 p.status.fatigue = Math.min(100, p.status.fatigue + 8);
                 // Also accumulate real sim fatigue so getPlayerFatigueAmount / getPlayerWeightedStats sees it
-                const ps1 = playerStats[p.name];
-                if (ps1) ps1.seasonTicks = (ps1.seasonTicks || 0) + 20;
+                if (_ps9) _ps9.seasonTicks = (_ps9.seasonTicks || 0) + 20;
             }
             // Goalies
             else if (p.pos === 'G') {
@@ -9127,29 +9288,39 @@ function processDailyUpdates() {
     for (let tk in rosters) {
         let playedToday = teamsPlayedToday.has(tk);
         rosters[tk].forEach(p => {
-            if (!p.status) return;
-            if (p.status.injuryDays > 0) p.status.injuryDays--;
-            // Heal playerStats injury on rest days (game days are covered by heal() inside simulateGame)
             const ps4 = playerStats[p.name];
+
+            // [FIX] Suspension decrement runs for ALL players regardless of p.status
+            // (previously inside the p.status guard, causing stuck-suspended players)
+            if (ps4 && ps4.suspended && ps4.suspended.days > 0) {
+                const playerTk = ps4.teamCode || tk;
+                if (teamsPlayedToday.has(playerTk)) ps4.suspended.days--;
+            }
+
+            // [FIX] Rest-day injury healing — fully mirrors the game-start heal() logic
+            // so severity resets and injuryHistory is logged even on non-game days
             if (!playedToday && ps4 && ps4.injury && ps4.injury.daysRemaining > 0) {
                 ps4.injury.daysRemaining--;
-                if (ps4.injury.daysRemaining === 0) { ps4.onIR = false; }
+                if (ps4.injury.daysRemaining === 0) {
+                    const sev = ps4.injury.severity || 0;
+                    if (!ps4.injuryHistory) ps4.injuryHistory = [];
+                    ps4.injuryHistory.push({ date: currentDay, daysMissed: sev, gamesOut: sev, season: currentSeason, grade: sev >= 8 ? 'serious' : sev >= 3 ? 'moderate' : 'minor' });
+                    ps4.injury = { severity: 0, daysRemaining: 0 };
+                    ps4.onIR = false;
+                }
             }
-            // Morale decays 3% per day toward neutral (100) so extreme values don't persist all season
+
+            // Morale decays toward neutral
             if (ps4 && ps4.morale !== undefined && ps4.morale !== 100) {
                 ps4.morale = Math.round(ps4.morale * 0.97 + 100 * 0.03);
             }
+
+            if (!p.status) return;
+            if (p.status.injuryDays > 0) p.status.injuryDays--;
             if (!playedToday) {
                 p.status.fatigue = Math.max(0, p.status.fatigue - 25);
-                // Also recover real sim fatigue tracked via seasonTicks
                 const ps6 = playerStats[p.name];
                 if (ps6 && ps6.seasonTicks > 0) ps6.seasonTicks = Math.max(0, ps6.seasonTicks - 20);
-            }
-            // Decrement suspension based on the player's own current team schedule (safe after trades)
-            const ps = playerStats[p.name];
-            if (ps && ps.suspended && ps.suspended.days > 0) {
-                const playerTk = ps.teamCode || tk;
-                if (teamsPlayedToday.has(playerTk)) ps.suspended.days--;
             }
         });
     }
@@ -9387,8 +9558,8 @@ function hasSpareGoalie(tk) {
 
 function rollInGameInjuries(homeCode, awayCode) {
     if (!awardConfig.injuries) return;
-    const SKATER_CHANCE = 0.009;
-    const GOALIE_CHANCE = 0.004;
+    const SKATER_CHANCE = 0.012;
+    const GOALIE_CHANCE = 0.0050;
 
     [homeCode, awayCode].forEach(tk => {
         if (!rosters[tk]) return;
@@ -9404,11 +9575,10 @@ function rollInGameInjuries(homeCode, awayCode) {
             if (Math.random() < SKATER_CHANCE + fatigueBonus + aggrBonus) {
                 const roll = Math.random();
                 let days;
-                if      (roll < 0.45) days = 0;
-                else if (roll < 0.75) days = 1;
-                else if (roll < 0.92) days = Math.floor(Math.random() * 4) + 2;
-                else                  days = Math.floor(Math.random() * 5) + 6;
-                days = Math.min(days, 12);
+                if      (roll < 0.40) days = 0;
+                else if (roll < 0.80) days = Math.floor(Math.random() * 3) + 1;  // 1–3 games
+                else if (roll < 0.95) days = Math.floor(Math.random() * 6) + 4;  // 4–9 games
+                else                  days = Math.floor(Math.random() * 6) + 10; // 10–15 games
                 if (days > 1) {
                     if (p.pos !== 'D' && !hasSpareForward(tk)) days = 1;
                     else if (p.pos === 'D' && !hasSpareDefenseman(tk)) days = 1;
@@ -9442,11 +9612,13 @@ function rollInGameInjuries(homeCode, awayCode) {
 
 function triggerGameInjuries(matchStats, homeCode, awayCode) {
     if (!awardConfig.injuries) return;
-    const BASE_CHANCE = 0.008;
+    const BASE_CHANCE = 0.010;
     for (let pName in matchStats) {
         const ps = playerStats[pName];
-        if (!ps || !ps.injury) continue;
-        if (ps.injury.daysRemaining > 0) continue;
+        if (!ps) continue;
+        // [FIX] Don't require a prior injury object — players who've never been injured
+        // had ps.injury === undefined and were silently immune to post-game injuries.
+        if (ps.injury && ps.injury.daysRemaining > 0) continue;
         if (ps.shakenUpToday) { ps.shakenUpToday = false; continue; } // already dinged by rollInGameInjuries this game
         const stats = matchStats[pName];
         if (!stats.toi || stats.toi <= 0) continue;
@@ -9461,11 +9633,10 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
         if (Math.random() < chance) {
             const roll = Math.random();
             let days, label;
-            if      (roll < 0.30) { days = 0;                                   label = 'out for a period'; }
-            else if (roll < 0.58) { days = 1;                                   label = '1-game injury'; }
-            else if (roll < 0.78) { days = Math.floor(Math.random() * 4) + 2;  label = `${days}-game injury`; }
-            else if (roll < 0.93) { days = Math.floor(Math.random() * 6) + 6;  label = `${days}-game injury`; }
-            else                  { days = Math.floor(Math.random() * 4) + 12; label = `${days}-game injury`; }
+            if      (roll < 0.40) { days = 0;                                    label = 'out for a period'; }
+            else if (roll < 0.80) { days = Math.floor(Math.random() * 3) + 1;   label = `${days}-game injury`; }  // 1–3
+            else if (roll < 0.95) { days = Math.floor(Math.random() * 6) + 4;   label = `${days}-game injury`; }  // 4–9
+            else                  { days = Math.floor(Math.random() * 6) + 10;  label = `${days}-game injury`; }  // 10–15
 
             days = Math.min(days, 15);
 
@@ -9641,7 +9812,7 @@ function updateUI() {
     renderLeaderboard('pointsContainer', 'POINTS', [...sks], (a,b) => ((b[k].g+b[k].a) - (a[k].g+a[k].a)), x => x[k].g+x[k].a, 25); 
     renderLeaderboard('goalsContainer', 'GOALS', [...sks], (a,b) => (b[k].g - a[k].g), x => x[k].g, 25); 
     renderLeaderboard('assistsContainer', 'ASSISTS', [...sks], (a,b) => (b[k].a - a[k].a), x => x[k].a, 25); 
-    renderLeaderboard('gaaContainer', 'GAA', [...gls], (a,b) => { const ga = a[k].gp > 0 ? (a[k].sa - a[k].sv) / a[k].gp : 99; const gb = b[k].gp > 0 ? (b[k].sa - b[k].sv) / b[k].gp : 99; return ga - gb; }, x => x[k].gp > 0 ? ((x[k].sa - x[k].sv) / x[k].gp).toFixed(2) : "0.00", 25); 
+    renderLeaderboard('gaaContainer', 'GAA', [...gls], (a,b) => { const ga = a[k].gp > 0 ? calcGAA(Math.max(0, a[k].sa - a[k].sv), a[k].gp, a[k].toi) : 99; const gb = b[k].gp > 0 ? calcGAA(Math.max(0, b[k].sa - b[k].sv), b[k].gp, b[k].toi) : 99; return ga - gb; }, x => x[k].gp > 0 ? calcGAA(Math.max(0, x[k].sa - x[k].sv), x[k].gp, x[k].toi).toFixed(2) : "0.00", 25);
     renderLeaderboard('svContainer', 'SV%', [...gls], (a,b) => { const sa = a[k].sa > 0 ? a[k].sv / a[k].sa : 0; const sb = b[k].sa > 0 ? b[k].sv / b[k].sa : 0; return sb - sa; }, x => x[k].sa > 0 ? (x[k].sv / x[k].sa).toFixed(3) : ".000", 25); 
     renderLeaderboard('soContainer', 'SO', [...gls], (a,b) => (b[k].so - a[k].so), x => x[k].so, 10);
     
