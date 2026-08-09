@@ -5820,6 +5820,14 @@ function processOffseasonGrowth() {
             p.attr.gDef = Math.max(20, Math.min(99, (parseInt(p.attr.gDef) || 70) + dChg));
             p.attr.pass = Math.max(20, Math.min(99, (parseInt(p.attr.pass) || 60) + pChg));
             p.attr.stkHnd = Math.max(20, Math.min(99, (parseInt(p.attr.stkHnd) || 60) + pChg));
+            // v138: attr.ovr is what actually drives a goalie's in-game performance —
+            // getPlayerWeightedStats reads it directly as baseOvr, with gDef only a
+            // fallback if ovr is missing. Aging touched gDef/pass/stkHnd (archetype-tag
+            // inputs) but never ovr itself, so a goalie's real shot-stopping ability was
+            // frozen at whatever the CSV import set it to for their entire career — a
+            // 40-year-old performed identically to their 22-year-old self, while every
+            // skater around them aged normally. Apply the same oChg every skater gets.
+            p.attr.ovr = Math.max(20, Math.min(99, (parseInt(p.attr.ovr) || parseInt(p.attr.gDef) || 70) + oChg));
         }
         else { p.attr.off = Math.max(20, Math.min(99, p.attr.off + oChg)); p.attr.def = Math.max(20, Math.min(99, p.attr.def + dChg)); p.attr.ovr = getPlayerWeightedStats(p.name).ovr; }
         if (awardConfig.headlines) {
