@@ -3807,7 +3807,7 @@ function simGame(idx) {
     const hShotCount  = poissonRand(29.75 * (1 + preGameDiff * 0.008)); // +1.75/team (+3.5/game)
     const aShotCount  = poissonRand(29.75 * (1 - preGameDiff * 0.008));
     // Penalty counts derived from per-tick rates × 240 steps
-    const penCount    = poissonRand(8.5);   // v124: bumped from 7.5 to 8.5 to target 25-35 PP pts for elite players
+    const penCount    = poissonRand(7.5);   // v128: back to 7.5 now that PP units are properly built (v125-127 fix)
     const coinCount   = poissonRand(3.6);   // 0.038×240×0.40 ≈ 3.65 coincidentals
     const goonCount   = poissonRand(1.9);   // 0.008×240 ≈ 1.92
     const fightCount  = Math.random() < 0.144 ? 1 : 0; // 0.0006×240 ≈ 0.144/game
