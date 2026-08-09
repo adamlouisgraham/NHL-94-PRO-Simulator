@@ -382,6 +382,52 @@ function activateFromIR(pName, tk) {
 function duoKey(pair) { return [...pair].sort().join('|'); }
 function getChemScore(pair) { return chemScores[duoKey(pair)] ?? 100; }
 
+// v131: personnel-aware line chemistry. tObj.chem.f[i]/d[i] used to be keyed purely by
+// slot index — if the players occupying line/pair i changed (injury, trade, coach
+// reshuffle, the v129 auto-rebuild), the new occupants silently inherited whatever score
+// the old occupants had built up. fYears/dYears (the "2+ years together" telepathic bonus)
+// were read in three places but never written anywhere, so that bonus tier was dead code.
+//
+// Fix: fRoster/dRoster hold the actual name-set last seen in each slot and, unlike
+// f/d/lastUnit, are NOT wiped at season rollover — they're the durable memory of "who is
+// this unit." Each game, if the slot's personnel matches its stored roster, fYears ticks
+// up by 1/84 (so one full stable season ≈ +1.0, matching the "years" naming and letting a
+// truly stable duo/trio cross season boundaries toward the >=2 telepathic threshold).
+// If personnel differs, that slot's score AND years reset — a promoted call-up starts
+// building fresh chemistry rather than borrowing a departed star's.
+function syncChemPersonnel(tObj, newStruct) {
+    if (!tObj || !tObj.chem || !newStruct) return;
+    if (!tObj.chem.fYears)  tObj.chem.fYears  = [0,0,0,0];
+    if (!tObj.chem.dYears)  tObj.chem.dYears  = [0,0,0];
+    if (!tObj.chem.fRoster) tObj.chem.fRoster = [null,null,null,null];
+    if (!tObj.chem.dRoster) tObj.chem.dRoster = [null,null,null];
+    const namesOf  = (unit) => (unit || []).filter(p => p).map(p => p.name).sort();
+    const sameSet  = (names, baseline) => baseline && names.length > 0 && names.length === baseline.length
+        && names.every((n, i) => n === baseline[i]);
+
+    (newStruct.f || []).forEach((line, i) => {
+        const names = namesOf(line);
+        if (sameSet(names, tObj.chem.fRoster[i])) {
+            tObj.chem.fYears[i] = Math.min(10, (tObj.chem.fYears[i] || 0) + 1/84);
+        } else {
+            tObj.chem.f[i] = 0;
+            tObj.chem.fYears[i] = 0;
+            tObj.chem.fRoster[i] = names.length ? names : null;
+        }
+    });
+    (newStruct.d || []).forEach((pair, i) => {
+        const names = namesOf(pair);
+        if (sameSet(names, tObj.chem.dRoster[i])) {
+            tObj.chem.dYears[i] = Math.min(10, (tObj.chem.dYears[i] || 0) + 1/84);
+        } else {
+            tObj.chem.d[i] = 0;
+            tObj.chem.dYears[i] = 0;
+            tObj.chem.dRoster[i] = names.length ? names : null;
+        }
+    });
+    tObj.chem.lastUnit = { f: newStruct.f, d: newStruct.d };
+}
+
 function getCaptainChemModifier(teamNrm) {
     const capName = teamCaptains[teamNrm];
     if (!capName) return 0;
@@ -3754,8 +3800,8 @@ function simGame(idx) {
     // Snapshot current unit so per-line chemistry can track which line scored
     const hTeamObj = league.find(t => t.nrm === g.h.nrm);
     const aTeamObj = league.find(t => t.nrm === g.a.nrm);
-    if (hTeamObj && hTeamObj.chem) hTeamObj.chem.lastUnit = { f: hStruct.f, d: hStruct.d };
-    if (aTeamObj && aTeamObj.chem) aTeamObj.chem.lastUnit = { f: aStruct.f, d: aStruct.d };
+    syncChemPersonnel(hTeamObj, hStruct);
+    syncChemPersonnel(aTeamObj, aStruct);
 
     function buildLineSchedule(minsArray) {
         // Weighted random draw: each step picks a line proportional to its minute share.
@@ -5698,7 +5744,12 @@ async function beginNewYear() {
         // [FIX] pka, pkg, sf, sa were missing from this reset — they accumulated across
         // seasons because simGame writes them with (field||0)+1 patterns. ppo/ppg were
         // already reset; this adds the four missing counters to match all written fields.
-        t.season = {gp:0, w:0, l:0, t:0, pts:0, gf:0, ga:0, ppo:0, ppg:0, pkg:0, pka:0, sf:0, sa:0, ts:0, ppga:0}; t.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
+        t.season = {gp:0, w:0, l:0, t:0, pts:0, gf:0, ga:0, ppo:0, ppg:0, pkg:0, pka:0, sf:0, sa:0, ts:0, ppga:0};
+        // v131: reset the numeric score/snapshot each season (a fresh season = a fresh hot
+        // streak), but keep fYears/dYears/fRoster/dRoster — the "same personnel survived
+        // into a new season" memory is exactly what should carry the telepathic bonus across
+        // the rollover instead of being wiped with everything else.
+        t.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null, fYears: t.chem?.fYears || [0,0,0,0], dYears: t.chem?.dYears || [0,0,0], fRoster: t.chem?.fRoster || [null,null,null,null], dRoster: t.chem?.dRoster || [null,null,null]};
         // Preserve user-set PP/PK lines but drop any players no longer on this roster
         const rosterNames = new Set((rosters[t.nrm] || []).map(p => p.name));
         const filterUnit = (unit) => (unit || []).filter(p => p && rosterNames.has((p && typeof p === 'object') ? p.name : p));
