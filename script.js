@@ -3680,6 +3680,14 @@ function simGame(idx) {
     heal(g.h.nrm);
     heal(g.a.nrm);
 
+    // v136: extra_shifts existed (read by getPlayerFatigueAmount for a "covering for
+    // injured teammates" fatigue penalty) but was never set anywhere. It's a per-game
+    // counter — reset it fresh each game so a shift covered weeks ago doesn't keep
+    // penalizing a player forever.
+    [g.h.nrm, g.a.nrm].forEach(tk => {
+        if (rosters[tk]) rosters[tk].forEach(p => { if (playerStats[p.name]) playerStats[p.name].extra_shifts = 0; });
+    });
+
     // Rest-day recovery: teams that didn't play yesterday shed 20 season ticks per rested day
     [g.h.nrm, g.a.nrm].forEach(tk => {
         if (!playedYesterday(tk)) {
@@ -4028,7 +4036,14 @@ function simGame(idx) {
             if (!other) continue;
             for (const p of other) {
                 if (out.length >= size) break;
-                if (p && !have.has(p.name)) { out.push(p); have.add(p.name); }
+                if (p && !have.has(p.name)) {
+                    out.push(p); have.add(p.name);
+                    // v136: player borrowed from another line to cover a depleted unit —
+                    // the exact "covering for injured teammates" scenario extra_shifts
+                    // was always meant to track.
+                    const psExtra = playerStats[p.name];
+                    if (psExtra) psExtra.extra_shifts = (psExtra.extra_shifts || 0) + 1;
+                }
             }
             if (out.length >= size) break;
         }
