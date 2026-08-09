@@ -2501,25 +2501,37 @@ const getRosterStructure = (tk) => {
         const cl = customLines[tk];
         const isHealthy = n => { const ps = playerStats[n]; return ps && !ps.onIR && (!ps.injury || ps.injury.daysRemaining === 0) && (!ps.suspended || ps.suspended.days === 0); };
         const byName = n => { const p = r.find(pl => pl.name === n); return (p && isHealthy(n)) ? p : null; };
-        // Dedupe across the whole group — a player may only occupy ONE slot
-        const resolveGroup = (nameArrays, fallback) => {
-            const seen = new Set();
-            return nameArrays.map(slots => slots
-                .filter(n => { if (seen.has(n)) return false; seen.add(n); return true; })
-                .map(n => byName(n)).filter(Boolean));
-        };
-        const customF = cl.f ? resolveGroup(cl.f) : null;
-        const customD = cl.d ? resolveGroup(cl.d) : null;
-        const customG = cl.g ? cl.g.map(n => byName(n)).filter(Boolean) : null;
-        if (customF && customF.flat().length > 0) {
-            // Pad missing lines with empty arrays
-            while (customF.length < 4) customF.push([]);
-            while ((customD||[]).length < 3) (customD||[]).push([]);
-            return {
-                f: customF,
-                d: customD || [[], [], []],
-                g: customG || r.filter(p => p.pos === 'G')
+        // v129: if anyone in the saved lines is currently out (injured/suspended/IR), don't
+        // freeze the snapshot and drop them from their slot — that left the line shorthanded
+        // and only got backfilled per-shift by whoever came first in array order (not by
+        // rating). Instead skip the custom snapshot entirely and fall through to the
+        // auto-build cascade below, which re-sorts every healthy skater by OVR and drafts
+        // top-down — so the whole depth chart shifts up/down properly, duos and synergy
+        // included only where they don't cost a line its best available player.
+        const allCustomNames = [...(cl.f||[]).flat(), ...(cl.d||[]).flat()];
+        const hasUnavailable = allCustomNames.some(n => !isHealthy(n));
+
+        if (!hasUnavailable) {
+            // Dedupe across the whole group — a player may only occupy ONE slot
+            const resolveGroup = (nameArrays, fallback) => {
+                const seen = new Set();
+                return nameArrays.map(slots => slots
+                    .filter(n => { if (seen.has(n)) return false; seen.add(n); return true; })
+                    .map(n => byName(n)).filter(Boolean));
             };
+            const customF = cl.f ? resolveGroup(cl.f) : null;
+            const customD = cl.d ? resolveGroup(cl.d) : null;
+            const customG = cl.g ? cl.g.map(n => byName(n)).filter(Boolean) : null;
+            if (customF && customF.flat().length > 0) {
+                // Pad missing lines with empty arrays
+                while (customF.length < 4) customF.push([]);
+                while ((customD||[]).length < 3) (customD||[]).push([]);
+                return {
+                    f: customF,
+                    d: customD || [[], [], []],
+                    g: customG || r.filter(p => p.pos === 'G')
+                };
+            }
         }
     }
 
