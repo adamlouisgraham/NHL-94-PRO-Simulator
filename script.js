@@ -8003,7 +8003,18 @@ function runEndOfSeasonAwards() {
     // late-arriving rookies with an artificial age cutoff in every later season.)
     const ROOKIE_GP_LIMIT = 31;
     const calderScore = p => p.pos === 'G' ? (p.season.w * 1.5) + (p.season.so * 3) : (p.season.g + p.season.a);
-    const calderEligible = allPlayers.filter(p => { const cGP = p.preSimCareerGP ?? p.career.gp ?? 0; return p.pos === 'G' ? (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minGoalieGP) : (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minSkaterGP); });
+    // v140: this used to be `p.preSimCareerGP ?? p.career.gp ?? 0` — preSimCareerGP is a
+    // snapshot frozen at player creation (never updated again), but it's ALWAYS a defined
+    // number (0 for a true rookie), so ?? never actually fell through to the live,
+    // season-by-season-accumulating career.gp. A genuine rookie's preSimCareerGP stays 0
+    // forever, meaning they stayed "eligible" (cGP <= 31) every season for their entire
+    // career, not just their actual rookie year — exactly how Alexei Yashin could win
+    // Calder in a season where he already had several years and hundreds of games logged.
+    // Taking the max of both keeps the year-1 bootstrap protection this was originally
+    // for (a real veteran whose career.gp import came in low/zero still gets caught by
+    // preSimCareerGP) while letting the correctly-growing career.gp take over and retire
+    // eligibility once a player has actually played real dynasty seasons.
+    const calderEligible = allPlayers.filter(p => { const cGP = Math.max(p.preSimCareerGP || 0, p.career?.gp || 0); return p.pos === 'G' ? (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minGoalieGP) : (cGP <= ROOKIE_GP_LIMIT && p.season.gp >= minSkaterGP); });
     const calderSorted = [...calderEligible].sort((a, b) => calderScore(b) - calderScore(a));
     if (calderSorted.length > 0) {
         awardTrophy(calderSorted[0].name, currentSeason, "Calder");
