@@ -4079,7 +4079,17 @@ function simGame(idx) {
             const pp1Roster  = pp1Names
                 .map(n=>(n&&typeof n==='object')?n:advRoster.find(p=>p.name===n))
                 .filter(p=>p&&!(playerStats[p.name]?.injury?.daysRemaining>0)&&!(playerStats[p.name]?.suspended?.days>0));
-            const ppUnit = pp1Roster.length>=3 ? pp1Roster : (advTeam.nrm===g.h.nrm?hOnIce:aOnIce);
+            // v125: if no PP1 configured, auto-build from roster — pick top 5 skaters by offensive tag priority
+            const PP_TAG_PRIORITY = {'SUPERSTAR':10,'PRO SNIPER':9,'SNIPER':8,'POWER SNIPER':8,'BOOMER':7,'QUARTERBACK':7,'PRO OFFENSIVE D':6,'OFFENSIVE D':6,'PRO PLAYMAKER':5,'PLAYMAKER':5,'TWO-WAY STAR F':4,'TWO-WAY FWD':3,'TWO-WAY STAR D':3,'ENFORCER F':1,'GRINDER':1};
+            const autoPP1 = pp1Roster.length < 3
+                ? advRoster.filter(p=>p&&p.pos!=='G'&&!(playerStats[p.name]?.injury?.daysRemaining>0)&&!(playerStats[p.name]?.suspended?.days>0))
+                    .sort((a,b)=>{
+                        const ta = PLAYER_TAG_OVERRIDES[a.name]||getPlayerWeightedStats(a.name)?.tag||'';
+                        const tb = PLAYER_TAG_OVERRIDES[b.name]||getPlayerWeightedStats(b.name)?.tag||'';
+                        return (PP_TAG_PRIORITY[tb]||2)-(PP_TAG_PRIORITY[ta]||2);
+                    }).slice(0,5)
+                : pp1Roster;
+            const ppUnit = autoPP1.length>=3 ? autoPP1 : (advTeam.nrm===g.h.nrm?hOnIce:aOnIce);
             const pkUnit = advTeam.nrm===g.h.nrm ? aOnIce : hOnIce;
 
             if (ppRoll < ppConvRate && ppUnit.length > 0) {
