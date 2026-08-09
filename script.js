@@ -7841,13 +7841,17 @@ function getConnSmytheScore(p) {
     if (p.pos === 'G' || p.position === 'G') {
         const wins = s.w || 0;
         const shutouts = s.so || 0;
-        return (wins * 5) + (shutouts * 10);
+        const svPct = s.sa > 0 ? (s.sv / s.sa) : 0.900;
+        // Baseline: a Cup-winning goalie goes ~16W, .920 svPct, 1-2 SO
+        // Score calibrated so an elite goalie (~16W, 2SO, .920) ≈ 35-40 pts
+        // matching a dominant skater (12G 14A = 28.4 + bonus)
+        return (wins * 1.8) + (shutouts * 4) + Math.max(0, (svPct - 0.880) * 200);
     }
-    
-    // Skater logic: Goals valued 1.2x, Assists 1x
+
+    // Skater: goals 1.5x, assists 1x — a 12G 14A playoff run ≈ 32 pts
     const goals = s.g || 0;
     const assists = s.a || 0;
-    return (goals * 1.2) + (assists * 1);
+    return (goals * 1.5) + (assists * 1.0);
 }
    
     if (currentCupChamp) { 
