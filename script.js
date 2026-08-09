@@ -7932,12 +7932,16 @@ function runEndOfSeasonAwards() {
         if (tag === 'TWO-WAY FWD') return 2;
         return 0;
     };
+    // v132: fold in actual game-tracked defensive stats (blocked shots weighted above
+    // hits — a forward stepping in front of a shot is a purer defensive signal than a
+    // hit, which can just as easily come from a middling checker) so the award reflects
+    // what a player DID defensively this season, not just their attribute + archetype.
     const selkeSorted = skaters
         .filter(p => p.pos !== 'D' && p.season.gp >= 40 && (p.season.g + p.season.a) <= 60)
         .sort((a, b) => {
             const tagA = getPlayerWeightedStats(a.name).tag, tagB = getPlayerWeightedStats(b.name).tag;
-            let scoreA = (getDef(a.name) * 0.6) + ((a.season.pm || 0) * 0.4) + selkeDefTagBonus(tagA);
-            let scoreB = (getDef(b.name) * 0.6) + ((b.season.pm || 0) * 0.4) + selkeDefTagBonus(tagB);
+            let scoreA = (getDef(a.name) * 0.6) + ((a.season.pm || 0) * 0.4) + selkeDefTagBonus(tagA) + ((a.season.blk||0) * 0.3) + ((a.season.hits||0) * 0.08);
+            let scoreB = (getDef(b.name) * 0.6) + ((b.season.pm || 0) * 0.4) + selkeDefTagBonus(tagB) + ((b.season.blk||0) * 0.3) + ((b.season.hits||0) * 0.08);
             if (scoreA === scoreB) {
                 const aTwoWay = tagA.startsWith('TWO-WAY') ? 1 : 0;
                 const bTwoWay = tagB.startsWith('TWO-WAY') ? 1 : 0;
@@ -7949,7 +7953,7 @@ function runEndOfSeasonAwards() {
     if (selkeSorted.length > 0) {
         awardTrophy(selkeSorted[0].name, currentSeason, "Selke");
         runnersUp["Selke"] = selkeSorted.slice(1, 4).map(p => p.name).join(', ');
-        winnerStats["Selke"] = `${selkeSorted[0].season.g+selkeSorted[0].season.a}PTS  ${selkeSorted[0].season.pm>=0?'+':''}${selkeSorted[0].season.pm||0}`;
+        winnerStats["Selke"] = `${selkeSorted[0].season.g+selkeSorted[0].season.a}PTS  ${selkeSorted[0].season.pm>=0?'+':''}${selkeSorted[0].season.pm||0}  ${selkeSorted[0].season.blk||0}BLK`;
     }
 
     // 7. TED LINDSAY
@@ -7979,13 +7983,17 @@ function runEndOfSeasonAwards() {
         winnerStats["Alka-Seltzer (+/-)"] = `+${plusMinusSorted[0].season.pm||0}`;
     }
 
-    // 9. NORRIS
+    // 9. NORRIS — "best all-round defenceman" used to be scored on pure offense (G/A/+-),
+    // v132: fold in blocked shots (the clearest defensive signal a D-man generates) and a
+    // smaller hits credit, so a true shutdown D has a real path against a pure offensive
+    // one, matching the award's actual name.
+    const norrisScore = p => (p.season.g * 2 + p.season.a) + ((p.season.pm || 0) * 1.5) + ((p.season.blk||0) * 0.18) + ((p.season.hits||0) * 0.05);
     const defense = skaters.filter(p => p.pos === 'D' && playoffQualifiers.has(p.team));
-    const norrisSorted = defense.sort((a, b) => ((b.season.g * 2 + b.season.a) + ((b.season.pm || 0) * 1.5)) - ((a.season.g * 2 + a.season.a) + ((a.season.pm || 0) * 1.5)));
-    if (norrisSorted.length > 0) { 
+    const norrisSorted = defense.sort((a, b) => norrisScore(b) - norrisScore(a));
+    if (norrisSorted.length > 0) {
         awardTrophy(norrisSorted[0].name, currentSeason, "Norris");
         runnersUp["Norris"] = norrisSorted.slice(1, 4).map(p => p.name).join(', ');
-        winnerStats["Norris"] = `${norrisSorted[0].season.g}G  ${norrisSorted[0].season.a}A  ${norrisSorted[0].season.pm>=0?'+':''}${norrisSorted[0].season.pm||0}`;
+        winnerStats["Norris"] = `${norrisSorted[0].season.g}G  ${norrisSorted[0].season.a}A  ${norrisSorted[0].season.pm>=0?'+':''}${norrisSorted[0].season.pm||0}  ${norrisSorted[0].season.blk||0}BLK`;
     }
     
     // 10. VEZINA — SV% and GAA weighted heavily, wins as minor modifier
