@@ -3610,6 +3610,21 @@ function checkCoachCrisis(team) {
     }
 }
 
+// v134: undefeated/winless existed on every team object (incremented every game right next
+// to winStreak/loseStreak) but were never read anywhere — winStreak/loseStreak reset on a
+// tie while undefeated/winless don't, so these are the only counters that track a true
+// point streak. Exact-match thresholds fire once per crossing with no extra state needed,
+// since the counter itself resets to 0 the moment the streak breaks.
+function checkStreakHeadline(team) {
+    if (!team || !awardConfig.headlines) return;
+    const headline = (msg) => tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: msg });
+    if      (team.undefeated === 20) headline(`🔥 ${team.code} have not lost in 20 straight games!`);
+    else if (team.undefeated === 15) headline(`🔥 ${team.code} riding an incredible 15-game unbeaten streak.`);
+    else if (team.undefeated === 10) headline(`${team.code} are unbeaten in 10 straight.`);
+    if      (team.winless === 12) headline(`❄️ ${team.code} still searching for a win after 12 straight without one.`);
+    else if (team.winless === 8)  headline(`❄️ ${team.code} winless in 8 straight — the pressure is mounting.`);
+}
+
 function simGame(idx) {
     clearWpCache(); // invalidate per-game OVR/tag cache at start of each game
     const dayGames = Array.isArray(calendar[currentDay]) ? calendar[currentDay] : [];
@@ -4814,6 +4829,20 @@ function simGame(idx) {
                 if (m.ga > 0) pStat.ga = (pStat.ga || 0) + m.ga;
 
                 if (typeof checkMilestones === 'function') checkMilestones(pName);
+
+                // v134: hasScored existed on every player (init false, reset each season
+                // rollover) but was never set true or read anywhere. Use it to gate a
+                // real "first career goal" headline — check the cumulative total across
+                // every bucket so a veteran's first goal of a NEW season (hasScored also
+                // resets each rollover) doesn't get mistaken for a rookie's actual debut.
+                if (m.g > 0 && !playerStats[pName].hasScored) {
+                    const ps2 = playerStats[pName];
+                    const totalG = (ps2.career?.g||0) + (ps2.season?.g||0) + (ps2.careerPlayoff?.g||0) + (ps2.playoff?.g||0);
+                    ps2.hasScored = true;
+                    if (totalG === m.g && awardConfig.headlines) {
+                        tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `🎉 FIRST CAREER GOAL: ${pName} lights the lamp for the first time in the NHL!` });
+                    }
+                }
             }
         }
 
@@ -4827,6 +4856,7 @@ function simGame(idx) {
             else if(aG > hG) { g.a.season.w++; g.a.season.pts += 2; g.h.season.l++; g.a.winStreak++; g.a.undefeated++; g.a.loseStreak = 0; g.a.winless = 0; g.h.loseStreak++; g.h.winless++; g.h.winStreak = 0; g.h.undefeated = 0; }
             else { g.h.season.t++; g.a.season.t++; g.h.season.pts++; g.a.season.pts++; g.h.winStreak = 0; g.h.undefeated++; g.h.loseStreak = 0; g.h.winless++; g.a.winStreak = 0; g.a.undefeated++; g.a.loseStreak = 0; g.a.winless++; }
             checkCoachCrisis(g.h); checkCoachCrisis(g.a);
+            checkStreakHeadline(g.h); checkStreakHeadline(g.a);
             g.h.season.gp++; g.a.season.gp++;
             g.h.season.gf += hG; g.h.season.ga += aG; g.h.season.sf = (g.h.season.sf||0) + hShots; g.h.season.sa = (g.h.season.sa||0) + aShots;
             g.a.season.gf += aG; g.a.season.ga += hG; g.a.season.sf = (g.a.season.sf||0) + aShots; g.a.season.sa = (g.a.season.sa||0) + hShots;
@@ -6946,6 +6976,7 @@ function submitAdvGame() {
         else if(aG > hG) { g.a.season.w++; g.a.season.pts += 2; g.h.season.l++; g.a.winStreak++; g.a.undefeated++; g.a.loseStreak=0; g.a.winless=0; g.h.loseStreak++; g.h.winless++; g.h.winStreak=0; g.h.undefeated=0; } 
         else { g.h.season.t++; g.a.season.t++; g.h.season.pts++; g.a.season.pts++; g.h.winStreak=0; g.h.undefeated++; g.h.loseStreak=0; g.h.winless++; g.a.winStreak=0; g.a.undefeated++; g.a.loseStreak=0; g.a.winless++; }
         checkCoachCrisis(g.h); checkCoachCrisis(g.a);
+        checkStreakHeadline(g.h); checkStreakHeadline(g.a);
         g.h.season.gp++; g.a.season.gp++; g.h.season.gf += hG; g.h.season.ga += aG; g.a.season.gf += aG; g.a.season.ga += hG;
     } else if(g.series) { if(hG > aG) g.series.hW++; else g.series.aW++; }
 
