@@ -9626,8 +9626,8 @@ function hasSpareGoalie(tk) {
 
 function rollInGameInjuries(homeCode, awayCode) {
     if (!awardConfig.injuries) return;
-    const SKATER_CHANCE = 0.005; // was 0.012 — too high, nearly every player hit per season
-    const GOALIE_CHANCE = 0.002; // was 0.005
+    const SKATER_CHANCE = 0.002; // tuned down — was causing ~218 players with missed time per season
+    const GOALIE_CHANCE = 0.001;
 
     [homeCode, awayCode].forEach(tk => {
         if (!rosters[tk]) return;
@@ -9680,7 +9680,7 @@ function rollInGameInjuries(homeCode, awayCode) {
 
 function triggerGameInjuries(matchStats, homeCode, awayCode) {
     if (!awardConfig.injuries) return;
-    const BASE_CHANCE = 0.004; // was 0.010 — caused every player to be injured 1-2x per season
+    const BASE_CHANCE = 0.0015; // was 0.010 — tuned down for realistic ~60-80 missed-time injuries/season
     for (let pName in matchStats) {
         const ps = playerStats[pName];
         if (!ps) continue;
