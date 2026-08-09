@@ -1960,9 +1960,14 @@ function processPostGameStreaks(skaters, goalies, matchStats) {
             }
 
             // Tags require counter = 3 (sustained run in either direction)
+            const prevStreak = ps.macro_streak;
             ps.macro_streak = null;
             if (ps.hotCounter  >= 3) ps.macro_streak = 'HOT';
             else if (ps.coldCounter >= 3) ps.macro_streak = 'COLD';
+            // v135: streakDur existed (read by buildStatusBadges for a "HOT 5G" duration
+            // badge) but was never incremented anywhere — badges could only ever show the
+            // bare "HOT" fallback. Track consecutive games the CURRENT streak has held.
+            ps.streakDur = (ps.macro_streak && ps.macro_streak === prevStreak) ? (ps.streakDur || 0) + 1 : (ps.macro_streak ? 1 : 0);
         }
     });
 
@@ -2019,9 +2024,11 @@ function processPostGameStreaks(skaters, goalies, matchStats) {
                 ps.coldCounter = Math.max(0, ps.coldCounter - 1);
             }
 
+            const prevStreakG = ps.macro_streak;
             ps.macro_streak = null;
             if (ps.hotCounter  >= 3) ps.macro_streak = 'HOT';
             else if (ps.coldCounter >= 3) ps.macro_streak = 'COLD';
+            ps.streakDur = (ps.macro_streak && ps.macro_streak === prevStreakG) ? (ps.streakDur || 0) + 1 : (ps.macro_streak ? 1 : 0);
         }
     });
 }
@@ -6097,6 +6104,16 @@ async function simRestOfSeason() {
                 // If the all-star break just triggered, auto-sim the ASG and keep going
                 if (isASG && currentDay < calendar.length) {
                     await simDay(false, true); // sim the ASG game
+                    // v135: asgMvp existed on every player (badge display + Hall of Fame
+                    // mvp field) but was never set true anywhere. The ASG game already runs
+                    // through the normal three-stars selection like any other game — just
+                    // read that result back instead of leaving it unused.
+                    const asgGameObj = (calendar[currentDay] || []).find(gm => gm && gm.isASG_game && gm.result);
+                    const mvpName = asgGameObj?.result?.stars?.[0];
+                    if (mvpName && playerStats[mvpName]) {
+                        playerStats[mvpName].asgMvp = true;
+                        if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `🏆 ALL-STAR GAME MVP: ${mvpName} takes home the hardware!` });
+                    }
                     advanceCalendar();          // step past it (clears isASG when next day has no ASG_game)
                     continue;
                 }
