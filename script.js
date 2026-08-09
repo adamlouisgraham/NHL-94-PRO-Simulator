@@ -9106,12 +9106,29 @@ function initPlayoffsUI() {
         if(b.id === 'btnSimRest') b.style.display = 'none';
     });
     
-    // Unhide the existing static buttons instead of creating new ones
-    const simRndBtn = document.getElementById('simRoundBtn');
-    if (simRndBtn) simRndBtn.style.display = 'inline-block';
-    
-    const simPlyBtn = document.getElementById('simPlayoffsBtn');
-    if (simPlyBtn) simPlyBtn.style.display = 'inline-block';
+    // v139: handleEndOfSeasonRestart permanently .remove()s these buttons at the end of
+    // every season's playoffs — this function used to only unhide them, assuming they'd
+    // always still exist as static markup from index.html. That held for season 1's
+    // playoffs (first time through, buttons are still there) but season 2+ had nothing
+    // left to unhide, so the buttons silently never came back. Recreate them if missing,
+    // matching the self-healing pattern already used for btnNextRound below.
+    let simRndBtn = document.getElementById('simRoundBtn');
+    if (!simRndBtn) {
+        simRndBtn = document.createElement('button');
+        simRndBtn.id = 'simRoundBtn'; simRndBtn.className = 'sim-btn btn-cyan';
+        simRndBtn.onclick = simRound; simRndBtn.innerText = 'SIM ROUND';
+        oc.appendChild(simRndBtn);
+    }
+    simRndBtn.style.display = 'inline-block';
+
+    let simPlyBtn = document.getElementById('simPlayoffsBtn');
+    if (!simPlyBtn) {
+        simPlyBtn = document.createElement('button');
+        simPlyBtn.id = 'simPlayoffsBtn'; simPlyBtn.className = 'sim-btn btn-amber';
+        simPlyBtn.onclick = simPlayoffs; simPlyBtn.innerText = 'SIM PLAYOFFS';
+        oc.appendChild(simPlyBtn);
+    }
+    simPlyBtn.style.display = 'inline-block';
 
     showBracket();
 }
