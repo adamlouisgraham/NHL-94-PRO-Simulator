@@ -3297,7 +3297,7 @@ function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
 }
 
 // Helper function to build the Special Teams HTML dynamically
-function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.09, Math.min(0.30, 0.168 + diff * 0.0028 * pace)); }
+function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.08, Math.min(0.28, 0.157 + diff * 0.0028 * pace)); }
 
 // --- GAME MATH & STATS ---
 function checkMilestones(pName) {
@@ -3807,7 +3807,7 @@ function simGame(idx) {
     const hShotCount  = poissonRand(29.75 * (1 + preGameDiff * 0.008)); // +1.75/team (+3.5/game)
     const aShotCount  = poissonRand(29.75 * (1 - preGameDiff * 0.008));
     // Penalty counts derived from per-tick rates × 240 steps
-    const penCount    = poissonRand(5.638); // 5.5 × 1.025 — +2.5% penalty frequency
+    const penCount    = poissonRand(8.0);   // v121: raised from 5.638 — more PPO so elite PP players hit 25-35 PP pts
     const coinCount   = poissonRand(3.6);   // 0.038×240×0.40 ≈ 3.65 coincidentals
     const goonCount   = poissonRand(1.9);   // 0.008×240 ≈ 1.92
     const fightCount  = Math.random() < 0.144 ? 1 : 0; // 0.0006×240 ≈ 0.144/game
