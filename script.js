@@ -2270,7 +2270,7 @@ const dynamicDuos = [
     ['Norm Maciver', 'Kerry Huffman'],
     ['Brad Shaw', 'Steve Konroyd'],
     // PHI
-    ['Eric Lindros', 'Mark Recchi', 'John LeClair', 'Brent Fedyk'],
+    ['Eric Lindros', 'John LeClair', 'Brent Fedyk'],
     ['Rod BrindAmour', 'Mikael Renberg', 'Josef Beranek'],
     ['Dave Tippett', 'Dave Brown'],
     ['Dimitri Yushkevich', 'Yves Racine'],
@@ -3812,8 +3812,18 @@ function simGame(idx) {
     const goonCount   = poissonRand(1.9);   // 0.008×240 ≈ 1.92
     const fightCount  = Math.random() < 0.144 ? 1 : 0; // 0.0006×240 ≈ 0.144/game
 
+    // PERIOD-WEIGHTED TICK DISTRIBUTION — 3rd period gets slightly more events (teams press late)
+    // P1: 31% | P2: 31% | P3 early: 30% | P3 final 4 min (ticks 224-239): 8%
+    const weightedTick = () => {
+        const r = Math.random();
+        if (r < 0.31) return Math.floor(Math.random() * 80);           // P1: 0–79
+        if (r < 0.62) return Math.floor(Math.random() * 80) + 80;      // P2: 80–159
+        if (r < 0.92) return Math.floor(Math.random() * 64) + 160;     // P3 body: 160–223
+        return Math.floor(Math.random() * 16) + 224;                    // P3 final 4 min: 224–239
+    };
+
     // Assign each event a random tick (0–239), then sort chronologically
-    const randTicks = (n) => Array.from({length:n}, () => Math.floor(Math.random()*240)).sort((a,b)=>a-b);
+    const randTicks = (n) => Array.from({length:n}, () => weightedTick()).sort((a,b)=>a-b);
     const evStream  = [];
     randTicks(hShotCount).forEach(t => evStream.push({t, type:'shot', side:'h'}));
     randTicks(aShotCount).forEach(t => evStream.push({t, type:'shot', side:'a'}));
@@ -3959,20 +3969,43 @@ function simGame(idx) {
             const chaosMod  = 1.0 + (Math.random()-0.5)*activeChaos*0.08;
             const wallMod   = isHome ? aWallMod : hWallMod;
             const dSign     = isHome ? 1 : -1;
-            // Line match: TWO-WAY/DS defenders reduce opponent's conversion when matched up
+
+            // DEFENSIVE LINE MATCHUP — applies to all games (not just user's team)
+            // User's selected-team matchup stays at 0.88; CPU-vs-CPU uses 0.94 (natural talent, no coaching)
             let lineMatchDefMod = 1.0;
-            if (lineMatchActive) {
+            const defOnIce = isHome ? aOnIce : hOnIce;
+            const hasMatchupDef = defOnIce.some(p => {
+                const t2 = PLAYER_TAG_OVERRIDES[p.name] || getPlayerWeightedStats(p.name)?.tag || '';
+                return t2 === 'TWO-WAY STAR F' || t2 === 'DEFENSIVE SPECIALIST' || t2 === 'TWO-WAY FWD' ||
+                       t2 === 'DEFENSIVE FORWARD' || t2 === 'DEFENSIVE FWD' || t2 === 'SHUTDOWN' ||
+                       t2 === 'STAY-AT-HOME' || t2 === 'INTIMIDATOR' || t2 === 'TWO-WAY STAR D' || t2 === 'PRO DEFENSIVE D';
+            });
+            if (hasMatchupDef) {
                 const defSide = isHome ? g.a : g.h;
-                if (defSide.nrm === selectedTeam) {
-                    const defOnIce = isHome ? aOnIce : hOnIce;
-                    const hasMatchupDef = defOnIce.some(p => {
-                        const t = PLAYER_TAG_OVERRIDES[p.name] || getPlayerWeightedStats(p.name)?.tag || '';
-                        return t === 'TWO-WAY STAR F' || t === 'DEFENSIVE SPECIALIST' || t === 'TWO-WAY FWD' || t === 'DEFENSIVE FORWARD' || t === 'DEFENSIVE FWD' || t === 'SHUTDOWN' || t === 'STAY-AT-HOME' || t === 'INTIMIDATOR' || t === 'TWO-WAY STAR D' || t === 'PRO DEFENSIVE D';
-                    });
-                    if (hasMatchupDef) lineMatchDefMod = 0.88;
-                }
+                lineMatchDefMod = (lineMatchActive && defSide.nrm === selectedTeam) ? 0.88 : 0.94;
             }
-            const prob      = (0.094 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0)*lineMatchDefMod;
+
+            // SCORE-STATE MODIFIER — trailing teams shoot desperately in the 3rd; leading teams conserve
+            const shooterGoals = isHome ? hG : aG;
+            const oppGoals     = isHome ? aG : hG;
+            const scoreDiff    = shooterGoals - oppGoals; // positive = team is leading
+            const scoreStateMod = (period === 3)
+                ? (scoreDiff <= -2 ? 1.12 : scoreDiff === -1 ? 1.06 : scoreDiff >= 2 ? 0.92 : 1.0)
+                : 1.0;
+
+            // SHOOTER FATIGUE — tired legs = less accurate finish
+            const fatigueAmt   = getPlayerFatigueAmount(shooter.name);
+            const fatigueMod   = fatigueAmt > 8 ? 0.93 : fatigueAmt > 5 ? 0.97 : 1.0;
+
+            // CHEMISTRY DUO ON-ICE BONUS — active chem pair on the same unit lifts conversion slightly
+            const onIceSet  = new Set(skaters.map(p => p.name));
+            const hasDuoOnIce = Object.keys(chemScores || {}).some(key => {
+                const [pa, pb] = key.split('|');
+                return onIceSet.has(pa) && onIceSet.has(pb) && (chemScores[key] || 100) >= 80;
+            });
+            const chemDuoMod = hasDuoOnIce ? 1.04 : 1.0;
+
+            const prob      = (0.094 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod;
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
@@ -4173,6 +4206,10 @@ function simGame(idx) {
                 trk(hF.name,'pim',5); trk(aF.name,'pim',5);
                 penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:g.h.code,
                     cl:'#FF4444', txt:`FIGHT: ${hF.name} vs ${aF.name} — coincidental majors (5 min each)`, isPenalty:false, isFight:true});
+                // FIGHT MOMENTUM — winner's bench gets a surge; weight by toughness rating
+                const hFW = fightWt(hF.name), aFW = fightWt(aF.name);
+                if (Math.random() < hFW / (hFW + aFW + 0.001)) hMomentum = Math.min(hMomentum + 5, 14);
+                else aMomentum = Math.min(aMomentum + 5, 14);
                 [hF,aF].forEach(fighter => {
                     if (Math.random()<0.004 && playerStats[fighter.name] && !(playerStats[fighter.name].suspended?.days>0)) {
                         const days=Math.ceil(Math.random()*3);
