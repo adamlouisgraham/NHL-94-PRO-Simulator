@@ -3971,7 +3971,7 @@ function simGame(idx) {
                     if (hasMatchupDef) lineMatchDefMod = 0.88;
                 }
             }
-            const prob      = (0.096 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0)*lineMatchDefMod; // +0.75 goals/game avg (+0.013 base conv)
+            const prob      = (0.094 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0)*lineMatchDefMod;
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
