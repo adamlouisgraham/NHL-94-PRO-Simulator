@@ -4671,6 +4671,15 @@ function simGame(idx) {
         };
         while (hG === aG && otPeriods < 7) {
             otPeriods++;
+            // v137: this loop previously always assigned a goal on its very first pass —
+            // there was no chance of a scoreless period, so otPeriods could never exceed 1
+            // in practice and multi-overtime playoff games (a defining part of real NHL
+            // playoff history — 2OT, 3OT, the rare classic 4OT+) were structurally
+            // impossible despite the loop clearly being built to allow up to 7. ~46% of
+            // real playoff OT games resolve in the first period; give each period that same
+            // chance to end scoreless and roll into the next, forcing a winner on period 7
+            // as a safety net so playoffs still never end in a tie.
+            if (otPeriods < 7 && Math.random() >= 0.46) continue;
             const hStar = otShooterOvr(hStruct);
             const aStar = otShooterOvr(aStruct);
             // Home ice + star OVR comparison determines winner probability
