@@ -3578,6 +3578,38 @@ function calculateDynamicIceTime(struct) {
 }
 
 
+// v133: coach-crisis escalation. teamMeeting/playersMeeting/coachFired existed on every
+// team object (initialized false, reset each rollover) but were never set true or read
+// anywhere — a scaffolded locker-room-crisis system that never got wired up. Call this
+// right after a team's winStreak/loseStreak update each game: a bad enough skid escalates
+// through players-only meeting -> coach-called team meeting -> firing, each logged as a
+// headline; a win (loseStreak back to 0) clears all three so a team can face a fresh
+// crisis later in the season. checkCoachCrisis reads the CURRENT loseStreak, so call it
+// after the streak counters are updated, not before.
+function checkCoachCrisis(team) {
+    if (!team) return;
+    if (team.loseStreak === 0) {
+        // Snapped the skid — clear any active intervention flags so the next slump starts clean.
+        if (team.teamMeeting || team.playersMeeting || team.coachFired) {
+            team.teamMeeting = false; team.playersMeeting = false; team.coachFired = false;
+        }
+        return;
+    }
+    const headline = (msg) => { if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: msg }); };
+    if (team.loseStreak === 10 && !team.coachFired) {
+        team.coachFired = true;
+        team.winStreak = 0; team.loseStreak = 0; // fresh start under interim leadership
+        if (team.nrm === selectedTeam) coachTrust = 50;
+        headline(`🚨 COACH FIRED: ${team.code} part ways with their head coach after a brutal 10-game slide.`);
+    } else if (team.loseStreak === 7 && !team.teamMeeting) {
+        team.teamMeeting = true;
+        headline(`⚠️ ${team.code} coach calls an emergency team meeting — the skid has reached 7 games.`);
+    } else if (team.loseStreak === 4 && !team.playersMeeting) {
+        team.playersMeeting = true;
+        headline(`${team.code} hold a players-only meeting after dropping 4 straight.`);
+    }
+}
+
 function simGame(idx) {
     clearWpCache(); // invalidate per-game OVR/tag cache at start of each game
     const dayGames = Array.isArray(calendar[currentDay]) ? calendar[currentDay] : [];
@@ -3781,6 +3813,11 @@ function simGame(idx) {
         if (g.h.nrm === selectedTeam && g.h.loseStreak >= 3) hStreakMod += 2;
         if (g.a.nrm === selectedTeam && g.a.loseStreak >= 3) aStreakMod += 2;
     }
+    // COACH INTERVENTION BOUNCE — a players-only meeting, team meeting, or coaching change
+    // is a deliberate shake-up; give the team something back for the next stretch instead
+    // of just letting the losing-streak penalty compound indefinitely.
+    if (g.h.coachFired) hStreakMod += 2.5; else if (g.h.teamMeeting) hStreakMod += 1.5; else if (g.h.playersMeeting) hStreakMod += 0.75;
+    if (g.a.coachFired) aStreakMod += 2.5; else if (g.a.teamMeeting) aStreakMod += 1.5; else if (g.a.playersMeeting) aStreakMod += 0.75;
 
     // IN-GAME FATIGUE — track cumulative shift ticks per player this game
     // After 20 ticks (10 min ice time), each additional tick costs 0.25 OVR
@@ -4789,6 +4826,7 @@ function simGame(idx) {
             if(hG > aG) { g.h.season.w++; g.h.season.pts += 2; g.a.season.l++; g.h.winStreak++; g.h.undefeated++; g.h.loseStreak = 0; g.h.winless = 0; g.a.loseStreak++; g.a.winless++; g.a.winStreak = 0; g.a.undefeated = 0; }
             else if(aG > hG) { g.a.season.w++; g.a.season.pts += 2; g.h.season.l++; g.a.winStreak++; g.a.undefeated++; g.a.loseStreak = 0; g.a.winless = 0; g.h.loseStreak++; g.h.winless++; g.h.winStreak = 0; g.h.undefeated = 0; }
             else { g.h.season.t++; g.a.season.t++; g.h.season.pts++; g.a.season.pts++; g.h.winStreak = 0; g.h.undefeated++; g.h.loseStreak = 0; g.h.winless++; g.a.winStreak = 0; g.a.undefeated++; g.a.loseStreak = 0; g.a.winless++; }
+            checkCoachCrisis(g.h); checkCoachCrisis(g.a);
             g.h.season.gp++; g.a.season.gp++;
             g.h.season.gf += hG; g.h.season.ga += aG; g.h.season.sf = (g.h.season.sf||0) + hShots; g.h.season.sa = (g.h.season.sa||0) + aShots;
             g.a.season.gf += aG; g.a.season.ga += hG; g.a.season.sf = (g.a.season.sf||0) + aShots; g.a.season.sa = (g.a.season.sa||0) + hShots;
@@ -6907,6 +6945,7 @@ function submitAdvGame() {
         if(hG > aG) { g.h.season.w++; g.h.season.pts += 2; g.a.season.l++; g.h.winStreak++; g.h.undefeated++; g.h.loseStreak=0; g.h.winless=0; g.a.loseStreak++; g.a.winless++; g.a.winStreak=0; g.a.undefeated=0; } 
         else if(aG > hG) { g.a.season.w++; g.a.season.pts += 2; g.h.season.l++; g.a.winStreak++; g.a.undefeated++; g.a.loseStreak=0; g.a.winless=0; g.h.loseStreak++; g.h.winless++; g.h.winStreak=0; g.h.undefeated=0; } 
         else { g.h.season.t++; g.a.season.t++; g.h.season.pts++; g.a.season.pts++; g.h.winStreak=0; g.h.undefeated++; g.h.loseStreak=0; g.h.winless++; g.a.winStreak=0; g.a.undefeated++; g.a.loseStreak=0; g.a.winless++; }
+        checkCoachCrisis(g.h); checkCoachCrisis(g.a);
         g.h.season.gp++; g.a.season.gp++; g.h.season.gf += hG; g.h.season.ga += aG; g.a.season.gf += aG; g.a.season.ga += hG;
     } else if(g.series) { if(hG > aG) g.series.hW++; else g.series.aW++; }
 
@@ -8571,6 +8610,14 @@ function openCoachingPanel() {
             <div style="height:100%;width:${coachTrust}%;background:${coachTrust >= 70 ? '#00FF88' : coachTrust >= 40 ? '#FFA500' : '#FF4444'};transition:width .3s;border-radius:3px;"></div>
         </div>
         <div style="font-size:6px;color:${coachTrust >= 70 ? '#00FF88' : coachTrust >= 40 ? '#FFA500' : '#FF4444'};">${coachTrust >= 70 ? 'TRUSTED — players responding well' : coachTrust >= 40 ? 'NEUTRAL — steady but unproven' : 'QUESTIONED — locker room tension'}</div>
+        ${(() => {
+            const t = league.find(x => x.nrm === selectedTeam);
+            if (!t) return '';
+            if (t.coachFired) return `<div style="margin-top:8px;font-size:6px;color:#FF4444;">🚨 COACHING CHANGE — fired after a 10-game slide, playing under interim leadership.</div>`;
+            if (t.teamMeeting) return `<div style="margin-top:8px;font-size:6px;color:#FFA500;">⚠️ EMERGENCY TEAM MEETING CALLED — coach's seat is warm (${t.loseStreak}-game skid).</div>`;
+            if (t.playersMeeting) return `<div style="margin-top:8px;font-size:6px;color:#888;">Players-only meeting held after a rough stretch (${t.loseStreak}-game skid).</div>`;
+            return '';
+        })()}
     </div>`;
 
     document.getElementById('coachingContent').innerHTML = html;
