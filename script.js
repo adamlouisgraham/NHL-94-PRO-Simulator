@@ -3551,7 +3551,8 @@ function simGame(idx) {
                         daysMissed: sev,
                         gamesOut: sev,
                         season: currentSeason,
-                        grade: sev >= 8 ? 'serious' : sev >= 3 ? 'moderate' : 'minor'
+                        grade: sev >= 8 ? 'serious' : sev >= 3 ? 'moderate' : 'minor',
+                        source: ps.injury.source || 'unknown'
                     });
                     if (sev >= 3) ps.returnFromInjury = Math.ceil(sev / 2);
                     ps.injury = { severity: 0, daysRemaining: 0 };
@@ -9626,8 +9627,8 @@ function hasSpareGoalie(tk) {
 
 function rollInGameInjuries(homeCode, awayCode) {
     if (!awardConfig.injuries) return;
-    const SKATER_CHANCE = 0.001; // v115: cut in half — v114 produced 131 players/season, target ~65
-    const GOALIE_CHANCE = 0.0005;
+    const SKATER_CHANCE = 0.002; // v114 rate (131/season) — source tracking added in v115 for breakdown analysis
+    const GOALIE_CHANCE = 0.001;
 
     [homeCode, awayCode].forEach(tk => {
         if (!rosters[tk]) return;
@@ -9651,7 +9652,7 @@ function rollInGameInjuries(homeCode, awayCode) {
                     if (p.pos !== 'D' && !hasSpareForward(tk)) days = 1;
                     else if (p.pos === 'D' && !hasSpareDefenseman(tk)) days = 1;
                 }
-                if (days > 0) ps.injury = { severity: days, daysRemaining: days };
+                if (days > 0) ps.injury = { severity: days, daysRemaining: days, source: 'in-game-skater' };
                 else ps.shakenUpToday = true; // exempt from a second independent injury roll later this game
                 const label = days === 0 ? 'shaken up — playing through' : `out ${days} game${days > 1 ? 's' : ''}`;
                 tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `[INJ] IN-GAME: ${p.name} (${tk.toUpperCase()}) — ${label}.` });
@@ -9669,7 +9670,7 @@ function rollInGameInjuries(homeCode, awayCode) {
                 const backupG = rosters[tk].find(b => b.pos === 'G' && b.name !== p.name && (playerStats[b.name]?.injury?.daysRemaining ?? 0) === 0 && !(playerStats[b.name]?.suspended?.days > 0));
                 let days = backupG ? Math.floor(Math.random() * 4) + 1 : 1;
                 if (days > 1 && !hasSpareGoalie(tk)) days = 1;
-                ps.injury = { severity: days, daysRemaining: days };
+                ps.injury = { severity: days, daysRemaining: days, source: 'in-game-goalie' };
                 if (!backupG) ps.playingHurt = true; // stays in net but at reduced effectiveness
                 const backupNote = backupG ? ` ${backupG.name} enters in relief.` : ' No healthy backup — playing through.';
                 tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `🚨 GOALIE PULLED (INJURY): ${p.name} (${tk.toUpperCase()}) — out ${days} game${days > 1 ? 's' : ''}.${backupNote}` });
@@ -9680,7 +9681,7 @@ function rollInGameInjuries(homeCode, awayCode) {
 
 function triggerGameInjuries(matchStats, homeCode, awayCode) {
     if (!awardConfig.injuries) return;
-    const BASE_CHANCE = 0.0008; // v115: cut in half — v114 produced 131 players/season, target ~65
+    const BASE_CHANCE = 0.0015; // v114 rate — source tracking added in v115 for breakdown analysis
     for (let pName in matchStats) {
         const ps = playerStats[pName];
         if (!ps) continue;
@@ -9728,7 +9729,7 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
                 }
             }
 
-            if (days > 0) ps.injury = { severity: days, daysRemaining: days };
+            if (days > 0) ps.injury = { severity: days, daysRemaining: days, source: 'post-game' };
             tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: note });
             if (days > 0 && isTeamCaptain(pName)) {
                 tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `⚠ CAPTAIN DOWN: ${pName} (${teamCode.toUpperCase()}) — ${label}. Leadership void in the locker room.` });
