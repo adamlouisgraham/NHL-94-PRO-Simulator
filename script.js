@@ -1456,7 +1456,7 @@ async function startNewGame(useCustomRoster = false) {
                             pts: parseInt(getCol(r, ["CAREER PLAYOFF PTS"], -1)) || 0,
                             pm: 0, pim: 0, ppg: 0, ppa: 0, shg: 0, gwg: 0, s: 0, toi: 0, svg: 0
                         },
-                        season: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, svg:0}, playoff: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, svg:0}
+                        season: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, svg:0, hits:0, blk:0}, playoff: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, svg:0, hits:0, blk:0}
                     };
                     playerStats[pN].preSimCareerGP = playerStats[pN].career.gp;
                 }
@@ -3541,11 +3541,11 @@ function simGame(idx) {
     
     //  Centralized Match Stats object to handle all metrics precisely
     let matchStats = {}; 
-    const trk = (pN, st, v=1) => { 
-        if(pN){ 
-            if(!matchStats[pN]) matchStats[pN] = {g:0,a:0,s:0,pm:0,pim:0,sa:0,sv:0,ga:0,toi:0}; 
-            matchStats[pN][st] += v; 
-        } 
+    const trk = (pN, st, v=1) => {
+        if(pN){
+            if(!matchStats[pN]) matchStats[pN] = {g:0,a:0,s:0,pm:0,pim:0,sa:0,sv:0,ga:0,toi:0,hits:0,blk:0};
+            matchStats[pN][st] += v;
+        }
     };
     
     // [INJ] 1. HEALING & PRE-GAME SETUP
@@ -3823,6 +3823,13 @@ function simGame(idx) {
     const coinCount   = poissonRand(3.6);   // 0.038×240×0.40 ≈ 3.65 coincidentals
     const goonCount   = poissonRand(1.9);   // 0.008×240 ≈ 1.92
     const fightCount  = Math.random() < 0.144 ? 1 : 0; // 0.0006×240 ≈ 0.144/game
+    // v130: hits/blocked shots — additive stat-only events, don't touch score/SOG/saves.
+    // Kept separate from hShotCount/aShotCount so the already-tuned ~30 SOG/team/game
+    // average isn't diluted by carving blocks out of it.
+    const hHitCount   = poissonRand(24);
+    const aHitCount   = poissonRand(24);
+    const hBlockCount = poissonRand(13);
+    const aBlockCount = poissonRand(13);
 
     // PERIOD-WEIGHTED TICK DISTRIBUTION — 3rd period gets slightly more events (teams press late)
     // P1: 31% | P2: 31% | P3 early: 30% | P3 final 4 min (ticks 224-239): 8%
@@ -3842,6 +3849,10 @@ function simGame(idx) {
     randTicks(penCount).forEach(t   => evStream.push({t, type:'pen'}));
     randTicks(coinCount).forEach(t  => evStream.push({t, type:'coin'}));
     randTicks(goonCount).forEach(t  => evStream.push({t, type:'goon'}));
+    randTicks(hHitCount).forEach(t  => evStream.push({t, type:'hit', side:'h'}));
+    randTicks(aHitCount).forEach(t  => evStream.push({t, type:'hit', side:'a'}));
+    randTicks(hBlockCount).forEach(t => evStream.push({t, type:'block', side:'h'}));
+    randTicks(aBlockCount).forEach(t => evStream.push({t, type:'block', side:'a'}));
     if (fightCount)      evStream.push({t: Math.floor(Math.random()*240), type:'fight'});
     if (!isASG && Math.random() < 0.48) evStream.push({t: Math.floor(Math.random()*240), type:'pshot'});
     evStream.sort((a,b) => a.t - b.t);
@@ -4224,6 +4235,45 @@ function simGame(idx) {
             let gr=Math.random()*gTotal, gPicked=gPool[gPool.length-1];
             for (let i=0;i<gPool.length;i++){gr-=gWt[i];if(gr<=0){gPicked=gPool[i];break;}}
             trk(gPicked.name,'pim',2);
+
+        // HIT — v130: pure stat tracking, doesn't touch score/SOG/saves. Weighted by
+        // check/aggr/rough on whoever's actually on the ice for that tick.
+        } else if (ev.type === 'hit') {
+            if (isASG) continue;
+            const hitPool = (ev.side === 'h' ? hOnIce : aOnIce).filter(p => p.pos !== 'G');
+            if (!hitPool.length) continue;
+            const hWt = hitPool.map(p => {
+                const ps = playerStats[p.name];
+                const chk = gradeToNum(ps?.attr?.check) || 50;
+                const agr = gradeToNum(ps?.attr?.aggr)  || 50;
+                const rgh = gradeToNum(ps?.attr?.rough) || 50;
+                return Math.pow(chk*0.4 + agr*0.35 + rgh*0.25, 1.5);
+            });
+            const hTotal = hWt.reduce((a2,b)=>a2+b,0);
+            if (hTotal <= 0) continue;
+            let hr = Math.random()*hTotal, hPicked = hitPool[hitPool.length-1];
+            for (let i=0;i<hitPool.length;i++){ hr-=hWt[i]; if(hr<=0){ hPicked=hitPool[i]; break; } }
+            trk(hPicked.name, 'hits', 1);
+
+        // BLOCKED SHOT — v130: pure stat tracking; additive pool separate from the tuned
+        // ~30 SOG/team/game 'shot' events, so it never dilutes shots/saves/goals. Weighted
+        // by def/check with a defenseman bonus, matching real-hockey block distribution.
+        } else if (ev.type === 'block') {
+            if (isASG) continue;
+            const blkPool = (ev.side === 'h' ? hOnIce : aOnIce).filter(p => p.pos !== 'G');
+            if (!blkPool.length) continue;
+            const bWt = blkPool.map(p => {
+                const ps  = playerStats[p.name];
+                const def = parseInt(ps?.attr?.def) || 50;
+                const chk = gradeToNum(ps?.attr?.check) || 50;
+                const isD = p.pos === 'D';
+                return Math.pow(def*0.55 + chk*0.30, 1.5) * (isD ? 1.6 : 1.0);
+            });
+            const bTotal = bWt.reduce((a2,b)=>a2+b,0);
+            if (bTotal <= 0) continue;
+            let br = Math.random()*bTotal, bPicked = blkPool[blkPool.length-1];
+            for (let i=0;i<blkPool.length;i++){ br-=bWt[i]; if(br<=0){ bPicked=blkPool[i]; break; } }
+            trk(bPicked.name, 'blk', 1);
 
         // FIGHT
         } else if (ev.type === 'fight') {
@@ -4672,7 +4722,9 @@ function simGame(idx) {
                 pStat.s = (pStat.s || 0) + m.s;
                 pStat.pim = (pStat.pim || 0) + m.pim;
                 pStat.pm = (pStat.pm || 0) + (m.pm || 0);  // Add plus/minus transfer
-                
+                pStat.hits = (pStat.hits || 0) + (m.hits || 0); // v130: hits/blocks
+                pStat.blk = (pStat.blk || 0) + (m.blk || 0);
+
                 // Keep goalie custom variables isolated safely
                 if (m.sa > 0) pStat.sa = (pStat.sa || 0) + m.sa;
                 if (m.sv > 0) pStat.sv = (pStat.sv || 0) + m.sv;
@@ -5691,14 +5743,14 @@ async function beginNewYear() {
             p.playoff = {gp:0, w:0, l:0, so:0, sv:0, sa:0, toi:0, consStarts:0};
         } else {
             // Archive Regular Season to Career Regular Season
-            p.career.gp = (p.career.gp || 0) + p.season.gp; p.career.g = (p.career.g || 0) + p.season.g; p.career.a = (p.career.a || 0) + p.season.a; p.career.pts = (p.career.pts || 0) + (p.season.g + p.season.a); p.career.pm = (p.career.pm || 0) + (p.season.pm || 0); p.career.pim = (p.career.pim || 0) + (p.season.pim || 0); p.career.ppg = (p.career.ppg || 0) + (p.season.ppg || 0); p.career.ppa = (p.career.ppa || 0) + (p.season.ppa || 0); p.career.shg = (p.career.shg || 0) + (p.season.shg || 0); p.career.gwg = (p.career.gwg || 0) + (p.season.gwg || 0); p.career.s = (p.career.s || 0) + (p.season.s || 0); p.career.toi = (p.career.toi || 0) + (p.season.toi || 0); // v123: defensive || 0 on all career fields to prevent NaN from pre-loaded players with undefined career PP/SH stats
-            
+            p.career.gp = (p.career.gp || 0) + p.season.gp; p.career.g = (p.career.g || 0) + p.season.g; p.career.a = (p.career.a || 0) + p.season.a; p.career.pts = (p.career.pts || 0) + (p.season.g + p.season.a); p.career.pm = (p.career.pm || 0) + (p.season.pm || 0); p.career.pim = (p.career.pim || 0) + (p.season.pim || 0); p.career.ppg = (p.career.ppg || 0) + (p.season.ppg || 0); p.career.ppa = (p.career.ppa || 0) + (p.season.ppa || 0); p.career.shg = (p.career.shg || 0) + (p.season.shg || 0); p.career.gwg = (p.career.gwg || 0) + (p.season.gwg || 0); p.career.s = (p.career.s || 0) + (p.season.s || 0); p.career.toi = (p.career.toi || 0) + (p.season.toi || 0); p.career.hits = (p.career.hits || 0) + (p.season.hits || 0); p.career.blk = (p.career.blk || 0) + (p.season.blk || 0); // v123: defensive || 0 on all career fields to prevent NaN from pre-loaded players with undefined career PP/SH stats
+
             // Archive Playoff to Career Playoff
-            p.careerPlayoff.gp = (p.careerPlayoff.gp || 0) + p.playoff.gp; p.careerPlayoff.g = (p.careerPlayoff.g || 0) + p.playoff.g; p.careerPlayoff.a = (p.careerPlayoff.a || 0) + p.playoff.a; p.careerPlayoff.pts = (p.careerPlayoff.pts || 0) + (p.playoff.g + p.playoff.a); p.careerPlayoff.pm = (p.careerPlayoff.pm || 0) + (p.playoff.pm || 0); p.careerPlayoff.pim = (p.careerPlayoff.pim || 0) + (p.playoff.pim || 0); p.careerPlayoff.ppg = (p.careerPlayoff.ppg || 0) + (p.playoff.ppg || 0); p.careerPlayoff.ppa = (p.careerPlayoff.ppa || 0) + (p.playoff.ppa || 0); p.careerPlayoff.shg = (p.careerPlayoff.shg || 0) + (p.playoff.shg || 0); p.careerPlayoff.gwg = (p.careerPlayoff.gwg || 0) + (p.playoff.gwg || 0); p.careerPlayoff.s = (p.careerPlayoff.s || 0) + (p.playoff.s || 0); p.careerPlayoff.toi = (p.careerPlayoff.toi || 0) + (p.playoff.toi || 0);
-            
+            p.careerPlayoff.gp = (p.careerPlayoff.gp || 0) + p.playoff.gp; p.careerPlayoff.g = (p.careerPlayoff.g || 0) + p.playoff.g; p.careerPlayoff.a = (p.careerPlayoff.a || 0) + p.playoff.a; p.careerPlayoff.pts = (p.careerPlayoff.pts || 0) + (p.playoff.g + p.playoff.a); p.careerPlayoff.pm = (p.careerPlayoff.pm || 0) + (p.playoff.pm || 0); p.careerPlayoff.pim = (p.careerPlayoff.pim || 0) + (p.playoff.pim || 0); p.careerPlayoff.ppg = (p.careerPlayoff.ppg || 0) + (p.playoff.ppg || 0); p.careerPlayoff.ppa = (p.careerPlayoff.ppa || 0) + (p.playoff.ppa || 0); p.careerPlayoff.shg = (p.careerPlayoff.shg || 0) + (p.playoff.shg || 0); p.careerPlayoff.gwg = (p.careerPlayoff.gwg || 0) + (p.playoff.gwg || 0); p.careerPlayoff.s = (p.careerPlayoff.s || 0) + (p.playoff.s || 0); p.careerPlayoff.toi = (p.careerPlayoff.toi || 0) + (p.playoff.toi || 0); p.careerPlayoff.hits = (p.careerPlayoff.hits || 0) + (p.playoff.hits || 0); p.careerPlayoff.blk = (p.careerPlayoff.blk || 0) + (p.playoff.blk || 0);
+
             // Wipe clean for the new year
-            p.season = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, consStarts:0};
-            p.playoff = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, consStarts:0};
+            p.season = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, consStarts:0, hits:0, blk:0};
+            p.playoff = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, consStarts:0, hits:0, blk:0};
         }
         p.streakType = 'stable'; p.hasScored = false; p.seasonTicks = 0;
         p.hotCounter = 0; p.coldCounter = 0;
@@ -6360,6 +6412,8 @@ function renderTeamStats() {
             <th style="color:var(--ea-yellow);" title="Power Play Goals">PPG</th>
             <th style="color:var(--ea-yellow);" title="Power Play Assists">PPA</th>
             <th style="color:#00FFFF;" title="Short Handed Goals">SHG</th>
+            <th style="color:#FFA500;" title="Hits">HIT</th>
+            <th style="color:#88CCFF;" title="Blocked Shots">BLK</th>
             <th style="color:#ccc;" title="Average Time On Ice">ATOI</th>
           </tr>`;
 
@@ -6392,6 +6446,8 @@ function renderTeamStats() {
                 <td style="color:var(--ea-yellow);">${st[k].ppg || 0}</td>
                 <td style="color:var(--ea-yellow);">${st[k].ppa || 0}</td>
                 <td style="color:#00FFFF;">${st[k].shg || 0}</td>
+                <td style="color:#FFA500;">${st[k].hits || 0}</td>
+                <td style="color:#88CCFF;">${st[k].blk || 0}</td>
                 <td style="color:#ccc; font-weight:bold;">${avgToi}</td>
             </tr>`;
         }).join('');   
@@ -8077,10 +8133,10 @@ function getConnSmytheScore(p) {
                 morale: 100, suspended: { days: 0, reason: "" }, weight: 190 + Math.floor(Math.random()*30),
                 injury: { severity: 0, daysRemaining: 0 }, attr: { off: 65 + Math.floor(Math.random()*15), def: 60 + Math.floor(Math.random()*15), gDef: 60 },
                 preSimCareerGP: 0,
-                career: {gp:0, g:0, a:0, pts:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, t:0, so:0, sv:0, sa:0},
-                careerPlayoff: {gp:0, g:0, a:0, pts:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, so:0, sv:0, sa:0},
-                season: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, t:0, so:0, sv:0, sa:0, consStarts:0},
-                playoff: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, so:0, sv:0, sa:0, consStarts:0}
+                career: {gp:0, g:0, a:0, pts:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, t:0, so:0, sv:0, sa:0, hits:0, blk:0},
+                careerPlayoff: {gp:0, g:0, a:0, pts:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, so:0, sv:0, sa:0, hits:0, blk:0},
+                season: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, t:0, so:0, sv:0, sa:0, consStarts:0, hits:0, blk:0},
+                playoff: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, so:0, sv:0, sa:0, consStarts:0, hits:0, blk:0}
             };
             rosters[t.nrm].push({name: rN, pos: rPos});
         }); 
@@ -8746,6 +8802,8 @@ function openStatLeaders() {
     h += tbl('+/-',   top(skaters, (a,b)=>b[k].pm-a[k].pm).map(p=>row(p,(p[k].pm>=0?'+':'')+p[k].pm,'#88FF88')).join(''));
     h += tbl('PIM',   top(skaters, (a,b)=>b[k].pim-a[k].pim).map(p=>row(p,p[k].pim,'#FF8800')).join(''));
     h += tbl('GWG',   top(skaters, (a,b)=>(b[k].gwg||0)-(a[k].gwg||0)).map(p=>row(p,p[k].gwg||0,'#FFD700')).join(''));
+    h += tbl('Hits',  top(skaters, (a,b)=>(b[k].hits||0)-(a[k].hits||0)).map(p=>row(p,p[k].hits||0,'#FFA500')).join(''));
+    h += tbl('Blocked Shots', top(skaters, (a,b)=>(b[k].blk||0)-(a[k].blk||0)).map(p=>row(p,p[k].blk||0,'#88CCFF')).join(''));
     h += tbl('SV%',   top(goalies,  (a,b)=>goalieSvp(b)-goalieSvp(a)).filter(p=>p[k].sa>=10).map(p=>row(p,goalieSvp(p).toFixed(3),'var(--neon-cyan)')).join(''));
     const soGoalies = [...goalies].filter(p=>(p[k].so||0)>0).sort((a,b)=>(b[k].so||0)-(a[k].so||0)).slice(0,25);
     if (soGoalies.length > 0) h += tbl('Shutouts', soGoalies.map(p=>row(p,p[k].so,'#FFD700')).join(''));
