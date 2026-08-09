@@ -9627,7 +9627,7 @@ function hasSpareGoalie(tk) {
 
 function rollInGameInjuries(homeCode, awayCode) {
     if (!awardConfig.injuries) return;
-    const SKATER_CHANCE = 0.002; // v114 rate (131/season) — source tracking added in v115 for breakdown analysis
+    const SKATER_CHANCE = 0.0022; // v118: +10% bump from v114 (112/season was close, nudge up slightly)
     const GOALIE_CHANCE = 0.001;
 
     [homeCode, awayCode].forEach(tk => {
@@ -9681,7 +9681,7 @@ function rollInGameInjuries(homeCode, awayCode) {
 
 function triggerGameInjuries(matchStats, homeCode, awayCode) {
     if (!awardConfig.injuries) return;
-    const BASE_CHANCE = 0.0015; // v114 rate — source tracking added in v115 for breakdown analysis
+    const BASE_CHANCE = 0.00165; // v118: +10% bump from v114
     for (let pName in matchStats) {
         const ps = playerStats[pName];
         if (!ps) continue;
