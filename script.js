@@ -9373,7 +9373,7 @@ function processDailyUpdates() {
                 if (ps4.injury.daysRemaining === 0) {
                     const sev = ps4.injury.severity || 0;
                     if (!ps4.injuryHistory) ps4.injuryHistory = [];
-                    ps4.injuryHistory.push({ date: currentDay, daysMissed: sev, gamesOut: sev, season: currentSeason, grade: sev >= 8 ? 'serious' : sev >= 3 ? 'moderate' : 'minor' });
+                    ps4.injuryHistory.push({ date: currentDay, daysMissed: sev, gamesOut: sev, season: currentSeason, grade: sev >= 8 ? 'serious' : sev >= 3 ? 'moderate' : 'minor', source: ps4.injury.source || 'unknown' });
                     ps4.injury = { severity: 0, daysRemaining: 0 };
                     ps4.onIR = false;
                 }
