@@ -3297,7 +3297,7 @@ function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
 }
 
 // Helper function to build the Special Teams HTML dynamically
-function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.08, Math.min(0.28, 0.157 + diff * 0.0028 * pace)); }
+function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.09, Math.min(0.30, 0.168 + diff * 0.0028 * pace)); }
 
 // --- GAME MATH & STATS ---
 function checkMilestones(pName) {
@@ -4083,7 +4083,7 @@ function simGame(idx) {
             const pkUnit = advTeam.nrm===g.h.nrm ? aOnIce : hOnIce;
 
             if (ppRoll < ppConvRate && ppUnit.length > 0) {
-                const ppShooter = selectShooter(ppUnit);
+                const ppShooter = selectShooter(ppUnit, 'PP');
                 const ppEv = processSingleGoal(advTeam.nrm, advTeam.code, ppShooter, ppUnit, timeStr, period, minute%20||20, sec);
                 if (ppEv) {
                     ppEv.isPP=true; ppEv.tm=advTeam.code; ppEv.cl=teamColors[advTeam.nrm]?.[0]||'#FFD700';
@@ -4238,7 +4238,7 @@ function simGame(idx) {
                             txt:`RETALIATION: ${ret.name} — 2 min minor (intimidation)`, isPenalty:true});
                         const ppConvR = getSpecialTeamsChance(advObj.nrm, penObj.nrm);
                         if (Math.random() < ppConvR) {
-                            const ppSh2 = selectShooter(ppPool);
+                            const ppSh2 = selectShooter(ppPool, 'PP');
                             const ppEv2 = processSingleGoal(advObj.nrm, advObj.code, ppSh2, ppPool, timeStr, period, minute%20||20, sec);
                             if (ppEv2) {
                                 ppEv2.isPP=true; ppEv2.tm=advObj.code; ppEv2.cl=teamColors[advObj.nrm]?.[0]||'#FFD700';
@@ -4839,6 +4839,19 @@ function selectShooter(unit, context = 'ES') {
             else if (tag === 'PRO SNIPER')                                   weight *= 1.28;
             else if (tag === 'SNIPER')                                       weight *= 1.20;
             else if (tag === 'TWO-WAY STAR F')                               weight *= 1.10;
+        }
+
+        // PP context: power play is a set play — elite finishers dominate the shot even more
+        // Offensive D (BOOMER/QB) also elevated — they run the point on the PP
+        if (context === 'PP') {
+            if      (tag === 'SUPERSTAR')                                    weight *= 1.35;
+            else if (tag === 'PRO SNIPER')                                   weight *= 1.40;
+            else if (tag === 'SNIPER')                                       weight *= 1.30;
+            else if (tag === 'POWER SNIPER')                                 weight *= 1.25;
+            else if (tag === 'BOOMER' || tag === 'QUARTERBACK')              weight *= 1.20;
+            else if (tag === 'PRO OFFENSIVE D' || tag === 'OFFENSIVE D')     weight *= 1.15;
+            else if (tag === 'PRO PLAYMAKER' || tag === 'PLAYMAKER')         weight *= 0.85; // feeds, doesn't shoot
+            else if (tag === 'GRINDER' || tag === 'ENFORCER F')              weight *= 0.60; // screen duty
         }
 
         // Linemate synergy: PLAYMAKER/PRO PLAYMAKER feeds linemates, shoots less himself
