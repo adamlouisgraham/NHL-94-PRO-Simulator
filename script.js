@@ -2356,7 +2356,7 @@ const dynamicDuos = [
     ['Steve Duchesne', 'Doug Crossman'],
     // TBL
     ['Denis Savard', 'Rob Zamuner', 'John MacLean'],
-    ['Brian Bradley', 'Petr Klima', 'Chris Gratton']
+    ['Brian Bradley', 'Petr Klima', 'Chris Gratton'],
     // TOR
     ['Doug Gilmour', 'Dave Andreychuk', 'Nikolai Borschevsky'],
     ['Wendel Clark', 'Mats Sundin'],
