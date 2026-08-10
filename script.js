@@ -6836,7 +6836,8 @@ function openAdvEditor() {
         let r = rosters[tk]; if (!r || r.length === 0) return [];
         try {
             let healthy = r.filter(p => playerStats[p.name] && playerStats[p.name].injury.daysRemaining === 0 && !(playerStats[p.name].suspended?.days > 0));
-            let gList = healthy.filter(p => p.pos === 'G').sort((a,b) => (playerStats[b.name].attr.gDef || 0) - (playerStats[a.name].attr.gDef || 0));
+            // v145: use attr.ovr (aging-updated) not attr.gDef (sub-attribute that diverges over seasons)
+            let gList = healthy.filter(p => p.pos === 'G').sort((a,b) => (playerStats[b.name].attr.ovr || playerStats[b.name].attr.gDef || 0) - (playerStats[a.name].attr.ovr || playerStats[a.name].attr.gDef || 0));
             let fList = healthy.filter(p => p.pos !== 'D' && p.pos !== 'G').sort((a,b) => (playerStats[b.name].attr.off || 0) - (playerStats[a.name].attr.off || 0)).slice(0, 12);
             let dList = healthy.filter(p => p.pos === 'D').sort((a,b) => (playerStats[b.name].attr.off || 0) - (playerStats[a.name].attr.off || 0)).slice(0, 6);
             let list = [...fList, ...dList];
@@ -8290,7 +8291,8 @@ function getConnSmytheScore(p) {
             const carW = (p.career.w || 0) + (p.season.w || 0);
             const isGoalie = p.pos === 'G';
             const meetsCareerBar = isGoalie ? (carGP >= 250 || carW >= 100) : (carPts >= 150 || carGP >= 350);
-            const eliteOvr = isGoalie ? (parseInt(p.attr.gDef) || 70) : ((p.attr.off+p.attr.def)/2);
+            // v145: use attr.ovr (aging-updated) not attr.gDef for goalie early-retire threshold
+            const eliteOvr = isGoalie ? (parseInt(p.attr.ovr || p.attr.gDef) || 70) : ((p.attr.off+p.attr.def)/2);
             if(meetsCareerBar && ((p.age > 36 && roll < 0.25) || (p.age >= 33 && eliteOvr >= 90 && roll < 0.05))) {
                 ind.push(p.name);
                 const cp = p.careerPlayoff || {};
@@ -8838,7 +8840,9 @@ function openAwardsVoting() {
     const norrisCands = [...skaters].filter(p => p.pos === 'D' && hartPlayoffQual.has(p.team))
         .map(p => ({ name: p.name, stat: `${p.season.g}G  ${p.season.a}A  ${p.season.pm>=0?'+':''}${p.season.pm||0}`, score: (p.season.g+p.season.a)+(p.season.pm||0) }))
         .sort((a,b) => b.score - a.score).slice(0, 3);
-    const calderCands = [...allPlayers].filter(p => (p.career.gp||0) <= 40 && p.season.gp >= (p.pos==='G'?minGoalieGP:minSkaterGP))
+    // v145: match assignAwards eligibility — use Math.max(preSimCareerGP, career.gp) so
+    // imported veterans (career.gp=0 at import) don't appear as nominees after season 2+
+    const calderCands = [...allPlayers].filter(p => { const cGP = Math.max(p.preSimCareerGP||0, p.career?.gp||0); return cGP <= 40 && p.season.gp >= (p.pos==='G'?minGoalieGP:minSkaterGP); })
         .map(p => ({ name: p.name, stat: p.pos==='G'?`${p.season.w||0}W  ${p.season.so||0}SO`:`${p.season.g}G  ${p.season.a}A`, score: p.pos==='G'?(p.season.w||0)*1.5+(p.season.so||0)*3:(p.season.g+p.season.a) }))
         .sort((a,b) => b.score - a.score).slice(0, 3);
 
