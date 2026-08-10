@@ -2216,13 +2216,17 @@ function getDynamicTeamOvr(tk) {
 
 function playedYesterday(tk) { if (currentDay === 0 || !calendar[currentDay - 1]) return false; return calendar[currentDay - 1].some(g => (g.h && g.h.nrm === tk) || (g.a && g.a.nrm === tk)); }
 
-function getPlayerFatigueAmount(pName) { 
+function getPlayerFatigueAmount(pName) {
     const p = playerStats[pName]; if (!p) return 0;
-    let pen = 0; 
+    let pen = 0;
     let endur = gradeToNum(p.attr.endur) || 70;
 
-    // ðŸ“… Back-to-Back Schedule Penalty
-    if (playedYesterday(p.teamCode || p.team)) {
+    // v149: p.teamCode is a 3-letter code ('BOS') and p.team is a full name ('Boston Bruins');
+    // playedYesterday checks g.h.nrm ('boston') — they never matched, so the B2B fatigue
+    // penalty was always 0 for every player. Resolve nrm through the league object.
+    const _teamNrm = (league.find(t => t.code === p.teamCode || t.name === p.team))?.nrm;
+    // ðŸ”… Back-to-Back Schedule Penalty
+    if (playedYesterday(_teamNrm)) {
         if (endur >= 88) pen += 1;          // 'A' tier endurance
         else if (endur >= 75) pen += 4;     // 'B' tier endurance
         else pen += 8;                      // Low endurance crashes on back-to-backs
@@ -9752,9 +9756,11 @@ function processDailyUpdates() {
 
             // [FIX] Suspension decrement runs for ALL players regardless of p.status
             // (previously inside the p.status guard, causing stuck-suspended players)
+            // v149: ps4.teamCode is a 3-letter code ('BOS'); teamsPlayedToday contains nrm
+            // keys ('boston') — has() was always false so days-- never fired and suspended
+            // players stayed suspended forever. tk is already the nrm key from the outer loop.
             if (ps4 && ps4.suspended && ps4.suspended.days > 0) {
-                const playerTk = ps4.teamCode || tk;
-                if (teamsPlayedToday.has(playerTk)) ps4.suspended.days--;
+                if (teamsPlayedToday.has(tk)) ps4.suspended.days--;
             }
 
             // [FIX] Rest-day injury healing — fully mirrors the game-start heal() logic
