@@ -2263,6 +2263,7 @@ const dynamicDuos = [
     ['Zarley Zalapski', 'James Patrick'],
     // CHI
     ['Jeremy Roenick', 'Tony Amonte', 'Dirk Graham'],
+    ['Joe Murphy', 'Christian Ruutu', 'Michel Goulet'],
     ['Brent Sutter', 'Rich Sutter', 'Paul Ysebaert'],
     ['Chris Chelios', 'Eric Weinrich'],
     ['Gary Suter', 'Steve Smith'],
@@ -2281,24 +2282,26 @@ const dynamicDuos = [
     ['Geoff Smith', 'Brian Benning'],
     // HFD
     ['Andrew Cassels', 'Pat Verbeek', 'Geoff Sanderson'],
-    ['Brendan Shanahan', 'Darren Turcotte', 'Robert Kron'],
-    ['Mark Janssens', 'Jim Storm', 'Paul Ranheim'],
+    ['Brendan Shanahan', 'Darren Turcotte', 'Jocelyn Lemieux'],
+    ['Robert Kron', 'Brian Propp', 'Paul Ranheim'],
+    ['Mark Janssens', 'Jim Sandlak', 'Kevin Smyth'],
     ['Frantisek Kucera', 'Alexander Godynyuk'],
     // LAK
-    ['Luc Robitaille', 'Pat LaFontaine'],
+    ['Luc Robitaille', 'Pat LaFontaine', 'Dixon Ward'],
+    ['Tony Granato', 'Thomas Sandstrom', 'Jason Arnott'],
     ['Rob Blake', 'Alexei Zhitnik'],
     ['Darryl Sydor', 'Marty McSorley'],
     // MIN
     ['Mike Modano', 'Russ Courtnall', 'Trent Klatt'],
-    ['Dave Gagner', 'Pelle Eklund', 'Brent Gilchrist'],
+    ['Dave Gagner', 'Pelle Eklund', 'Kevin Stevens'],
     ['Derian Hatcher', 'Doug Zmolek'],
     // MTL
-    ['Vincent Damphousse', 'Brian Bellows', 'Benoit Brunet'],
-    ['Kirk Muller', 'John LeClair'],
+    ['Vincent Damphousse', 'Brian Bellows', 'Oleg Petrov'],
+    ['Kirk Muller', 'Mark Recchi', 'Gilbert Dionne'],
     ['Guy Carbonneau', 'Mike Keane', 'Ron Wilson'],
-    ['Matt Schneider', 'J.J. Daigneault'],
+    ['Matt Schneider', 'Lyle Odelein'],
     ['Patrice Brisebois', 'Eric Desjardins'],
-    ['Lyle Odelein', 'Kevin Haller'],
+    ['J.J. Daigneault', 'Kevin Haller'],
     // NJD
     ['Stephane Richer', 'Bernie Nicholls', 'Claude Lemieux'],
     ['Bobby Holik', 'Randy McKay', 'Bill Guerin'],
@@ -2320,6 +2323,7 @@ const dynamicDuos = [
     // OTT
     ['Alexei Yashin', 'Sylvain Turgeon', 'Brian Noonan'],
     ['Alexnder Daigle', 'Evgeny Davydov'],
+    
     ['Norm Maciver', 'Kerry Huffman'],
     ['Brad Shaw', 'Steve Konroyd'],
     // PHI
@@ -2330,40 +2334,39 @@ const dynamicDuos = [
     ['Garry Galley', 'Rob Ramage'],
     // PIT
     ['Mario Lemieux', 'Rick Tocchet', 'Owen Nolan'],
-    ['Ron Francis', 'Jaromir Jagr', 'Tomas Sandstrom'],
+    ['Ron Francis', 'Jaromir Jagr'],
     ['Martin Straka', 'Markus Naslund'],
     ['Larry Murphy', 'Kjell Samuelsson'],
     ['Greg Hawgood', 'Ulf Samuelsson'],
     // QUE
     ['Joe Sakic', 'Andrei Kovalenko', 'Mike Ricci'],
-    ['Dale Hunter', 'Mike Gartner'],
+    ['Dale Hunter', 'Mike Gartner', 'Johan Garpenlov'],
     ['Ron Sutter', 'Claude Lapointe'],
     ['Bob Bassen', 'Chris Simon'],
     ['Curtis Leschyshyn', 'Alexei Gusarov'],
     // SJS
     ['Igor Larionov', 'Sergei Makarov', 'Valeri Kamensky'],
-    ['Rob Gaudreau', 'Ray Whitney', 'Vitali Prokhorov'],
-    ['Bob Errey', 'John Cullen', 'Gaetan Duchesne'],
+    ['Rob Gaudreau', 'John Cullen', 'Vitali Prokhorov'],
+    ['Bob Errey', 'Ray Whitney', 'Gaetan Duchesne'],
     ['Sandis Ozolinsh', 'Mike Rathje'],
     // STL
-    ['Brett Hull', 'Craig Janney', 'Vitali Prokhorov'],
-    ['Petr Nedved', 'Kevin Miller'],
-    ['Phil Housley', 'Alexei Kasatonov'],
+    ['Brett Hull', 'Craig Janney', 'Philippe Bozon'],
+    ['Petr Nedved', 'Keith Tkachuk', 'Pat Falloon'],
+    ['Basil McRae', 'Jim Montgomery', 'Kevin Miller'],
     ['Steve Duchesne', 'Doug Crossman'],
     // TBL
-    ['Denis Savard', 'Rob Zamuner'],
-    ['Brian Bradley', 'Petr Klima'],
-    ['Chris Joseph', 'Shawn Chambers'],
-    ['Roman Hamrlik', 'Marc Bergevin'],
+    ['Denis Savard', 'Rob Zamuner', 'John MacLean'],
+    ['Brian Bradley', 'Petr Klima', 'Chris Gratton']
     // TOR
-    ['Doug Gilmour', 'Dave Andreychuk'],
+    ['Doug Gilmour', 'Dave Andreychuk', 'Nikolai Borschevsky'],
     ['Wendel Clark', 'Mats Sundin'],
+    ['Peter Zezel', 'Mike Krushelnyski', 'Mark Osborne'],
     ['Dave Ellett', 'Todd Gill'],
     ['Jamie Macoun', 'Dmitri Mironov'],
     // VAN
     ['Pavel Bure', 'Trevor Linden', 'Greg Adams'],
     ['Cliff Ronning', 'Geoff Courtnall', 'Sergio Momesso'],
-    ['Martin Gelinas', 'Gino Odjick'],
+    ['Martin Gelinas', 'Gino Odjick','Jimmy Carson'],
     ['Jeff Brown', 'Gerald Diduck'],
     ['Jyrki Lumme', 'Jiri Slegr'],
     // WAS
@@ -2374,10 +2377,10 @@ const dynamicDuos = [
     ['Calle Johansson', 'Joe Reekie'],
     ['Sylvain Cote', 'Shawn Anderson'],
     // WPG
-    ['Teemu Selanne', 'Alexei Zhamnov'],
-    ['Kris King', 'Tie Domi'],
-    ['Igor Ulanov', 'Dave Manson'],
-    ['Teppo Numminen', 'Stephane Quintal'],
+    ['Teemu Selanne', 'Alexei Zhamnov', 'Dallas Drake'],
+    ['Nelson Emerson', 'Peter Stastny', 'Thomas Steen'],
+    ['Darrin Shannon', 'Randy Gilhen', 'Tie Domi'],
+    ['Igor Ulanov', 'Phil Housley']
 ];
 
 function getAllDuos() { return [...dynamicDuos, ...customDuos]; }
@@ -4148,7 +4151,7 @@ function simGame(idx) {
             });
             const chemDuoMod = hasDuoOnIce ? 1.04 : 1.0;
 
-            const prob      = (0.094 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod;
+            const prob      = (0.086 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v141: 0.094→0.086 to land ~6.87 GPG
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
@@ -4222,23 +4225,30 @@ function simGame(idx) {
             const pp1Roster  = pp1Names
                 .map(n=>(n&&typeof n==='object')?n:advRoster.find(p=>p.name===n))
                 .filter(p=>p&&!(playerStats[p.name]?.injury?.daysRemaining>0)&&!(playerStats[p.name]?.suspended?.days>0));
-            // v125/126/127: auto-build PP1 and PP2 when not configured — 4 forwards + 1 D (hockey-accurate PP formation)
-            const PP_TAG_PRIORITY = {'SUPERSTAR':10,'PRO SNIPER':9,'SNIPER':8,'POWER SNIPER':8,'BOOMER':7,'QUARTERBACK':7,'PRO OFFENSIVE D':6,'OFFENSIVE D':6,'PRO PLAYMAKER':5,'PLAYMAKER':5,'TWO-WAY STAR F':4,'TWO-WAY FWD':3,'TWO-WAY STAR D':3,'ENFORCER F':1,'GRINDER':1};
-            const ppTagOf = p => PP_TAG_PRIORITY[PLAYER_TAG_OVERRIDES[p.name]||getPlayerWeightedStats(p.name)?.tag||''] || 2;
+            // v141: auto-build PP units by attr.off (not archetypes). Top 5 offensive skaters with
+            // at least 1 D guaranteed. If the best available D outrates the 4th forward offensively,
+            // he naturally ends up in the top 5; otherwise the D takes the 5th slot.
+            const ppOff = p => parseInt(playerStats[p.name]?.attr?.off) || 0;
             const ppAvail = advRoster.filter(p=>p&&p.pos!=='G'&&!(playerStats[p.name]?.injury?.daysRemaining>0)&&!(playerStats[p.name]?.suspended?.days>0));
-            const buildPPUnit = (fwdSkip, dSkip) => {
-                const fwds = ppAvail.filter(p=>p.pos!=='D').sort((a,b)=>ppTagOf(b)-ppTagOf(a));
-                const dmen = ppAvail.filter(p=>p.pos==='D').sort((a,b)=>ppTagOf(b)-ppTagOf(a));
-                const unitFwds = fwds.slice(fwdSkip, fwdSkip+4);
-                const topD = dmen[dSkip] || fwds[fwdSkip+4]; // fallback to 5th F if no D
-                return topD ? [...unitFwds, topD] : unitFwds;
+            const buildPPUnit = (exclude) => {
+                const pool   = ppAvail.filter(p => !exclude.has(p.name));
+                const sorted = [...pool].sort((a,b) => ppOff(b)-ppOff(a));
+                const top5   = sorted.slice(0, 5);
+                // Guarantee at least one D in the unit
+                const hasD   = top5.some(p => p.pos==='D');
+                if (!hasD) {
+                    const topD = pool.find(p => p.pos==='D'); // highest off D not already top-5
+                    if (topD) { top5.splice(4, 1, topD); }   // replace 5th spot with top D
+                }
+                return top5;
             };
             const pp2Names   = advTeamObj2?.specialTeams?.pp2 || [];
             const pp2Roster  = pp2Names
                 .map(n=>(n&&typeof n==='object')?n:advRoster.find(p=>p.name===n))
                 .filter(p=>p&&!(playerStats[p.name]?.injury?.daysRemaining>0)&&!(playerStats[p.name]?.suspended?.days>0));
-            const autoPP1 = pp1Roster.length < 3 ? buildPPUnit(0, 0) : pp1Roster;
-            const autoPP2 = pp2Roster.length < 3 ? buildPPUnit(4, 1) : pp2Roster; // next 4 fwds + 2nd D
+            const autoPP1    = pp1Roster.length < 3 ? buildPPUnit(new Set()) : pp1Roster;
+            const pp1NameSet = new Set(autoPP1.map(p => p.name));
+            const autoPP2    = pp2Roster.length < 3 ? buildPPUnit(pp1NameSet) : pp2Roster;
             // Alternate PP1/PP2 on successive penalties (~70% PP1, ~30% PP2)
             const activeUnit = (Math.random() < 0.70 || autoPP2.length < 3) ? autoPP1 : autoPP2;
             const ppUnit = activeUnit.length>=3 ? activeUnit : (advTeam.nrm===g.h.nrm?hOnIce:aOnIce);
@@ -8001,7 +8011,7 @@ function runEndOfSeasonAwards() {
     // imported player in year 1, so real veterans can look like rookies that one season;
     // that's accepted as a one-time bootstrap quirk rather than excluding genuine
     // late-arriving rookies with an artificial age cutoff in every later season.)
-    const ROOKIE_GP_LIMIT = 31;
+    const ROOKIE_GP_LIMIT = 40; // v141: raised from 31 — prevents Calder eligibility expiring too early
     const calderScore = p => p.pos === 'G' ? (p.season.w * 1.5) + (p.season.so * 3) : (p.season.g + p.season.a);
     // v140: this used to be `p.preSimCareerGP ?? p.career.gp ?? 0` — preSimCareerGP is a
     // snapshot frozen at player creation (never updated again), but it's ALWAYS a defined
@@ -8216,7 +8226,7 @@ function getConnSmytheScore(p) {
         if (currentCupChamp) tradeLog.unshift({ day: `SEASON ${currentSeason}`, details: `STANLEY CUP CHAMPION: ${currentCupChamp} hoists the Cup!` });
     }
 
-    const getWinner = (tN) => { const wAll = allPlayers.filter(p => p.trophies && p.trophies.some(t => t.year === currentSeason && t.name === tN)); return wAll.length === 0 ? 'N/A' : wAll.map(w => w.name).join(', '); };
+    const getWinner = (tN) => { const wAll = allPlayers.filter(p => p.trophies && p.trophies.some(t => t.year === currentSeason && t.name === tN)); return wAll.length === 0 ? 'N/A' : wAll.map(w => `${w.name}${w.teamCode ? ' ('+w.teamCode+')' : ''}`).join(', '); };
 
     const awardCard = (label, desc, awardKey, accent) => {
         const winner = getWinner(awardKey);
@@ -8822,7 +8832,7 @@ function openAwardsVoting() {
     const norrisCands = [...skaters].filter(p => p.pos === 'D' && hartPlayoffQual.has(p.team))
         .map(p => ({ name: p.name, stat: `${p.season.g}G  ${p.season.a}A  ${p.season.pm>=0?'+':''}${p.season.pm||0}`, score: (p.season.g+p.season.a)+(p.season.pm||0) }))
         .sort((a,b) => b.score - a.score).slice(0, 3);
-    const calderCands = [...allPlayers].filter(p => (p.career.gp||0) <= 31 && p.season.gp >= (p.pos==='G'?minGoalieGP:minSkaterGP))
+    const calderCands = [...allPlayers].filter(p => (p.career.gp||0) <= 40 && p.season.gp >= (p.pos==='G'?minGoalieGP:minSkaterGP))
         .map(p => ({ name: p.name, stat: p.pos==='G'?`${p.season.w||0}W  ${p.season.so||0}SO`:`${p.season.g}G  ${p.season.a}A`, score: p.pos==='G'?(p.season.w||0)*1.5+(p.season.so||0)*3:(p.season.g+p.season.a) }))
         .sort((a,b) => b.score - a.score).slice(0, 3);
 
