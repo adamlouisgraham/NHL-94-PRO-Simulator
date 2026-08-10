@@ -4151,7 +4151,7 @@ function simGame(idx) {
             });
             const chemDuoMod = hasDuoOnIce ? 1.04 : 1.0;
 
-            const prob      = (0.086 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v141: 0.094→0.086 to land ~6.87 GPG
+            const prob      = (0.079 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; at 0.086 ES=5.79+PP=1.57=7.36 GPG; 0.079 targets ~6.89
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
