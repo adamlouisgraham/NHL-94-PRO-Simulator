@@ -822,19 +822,22 @@ function syncArenaScoreboardUI() {
             } else {
                 const aGproj = getProjectedGoalie(g.a.nrm);
                 const hGproj = getProjectedGoalie(g.h.nrm);
-                const goalieTag = (p) => {
+                // v149: goalieTag took lean {name,pos} roster entry — p.teamCode and p.team
+                // are both undefined on lean entries, so playedYesterday(undefined) always
+                // returned false and the [B2B] flag never showed. Pass nrm explicitly.
+                const goalieTag = (p, nrm) => {
                     if (!p) return '---';
                     const ps = playerStats[p.name];
                     const streak = ps ? (ps.macro_streak || ps.micro_streak) : null;
                     const badge = streak === 'HOT' ? ' <span style="color:#FF6600;font-size:6px;">[HOT]</span>'
                                 : streak === 'COLD' ? ' <span style="color:#55FFFF;font-size:6px;">[COLD]</span>' : '';
-                    const b2b = playedYesterday(p.teamCode || p.team) ? ' <span style="color:#FFAA44;font-size:6px;">[B2B]</span>' : '';
+                    const b2b = playedYesterday(nrm) ? ' <span style="color:#FFAA44;font-size:6px;">[B2B]</span>' : '';
                     return `<span style="color:#ccc;">${p.name}</span>${badge}${b2b}`;
                 };
                 jumbo.innerHTML = `<span style="color:var(--silver-mid);font-size:7px;">PROJECTED STARTERS</span><br>`
                     + `<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:7px;">`
-                    + `<div>${g.a.code}: ${goalieTag(aGproj)}</div>`
-                    + `<div>${g.h.code}: ${goalieTag(hGproj)}</div>`
+                    + `<div>${g.a.code}: ${goalieTag(aGproj, g.a.nrm)}</div>`
+                    + `<div>${g.h.code}: ${goalieTag(hGproj, g.h.nrm)}</div>`
                     + `</div><div style="margin-top:8px;color:var(--silver-mid);font-size:6px;">PUCK DROP PENDING...</div>`;
             }
         }
