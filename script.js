@@ -9478,7 +9478,9 @@ function pcBuildHonors(pName) {
     const asg = p.asgAppearances > 0;
     if (!miles && !trophies && !asg) return '';
     let h = `<div style="padding:6px 10px 8px;background:#080808;border-top:1px solid #1a1a1a;">`;
-    if (asg) h += `<div style="font-size:7px;color:#FFD060;margin-bottom:5px">[MVP] ${p.asgAppearances}x ALL-STAR</div>`;
+    // v148: [MVP] badge should only appear when the player actually won ASG MVP —
+    // previously shown for any all-star regardless of asgMvp field
+    if (asg) h += `<div style="font-size:7px;color:#FFD060;margin-bottom:5px">${p.asgMvp ? '[MVP] ' : ''}${p.asgAppearances}x ALL-STAR</div>`;
     if (trophies) {
         h += `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">`;
         p.trophies.forEach(t => { h += `<div style="font-size:6px;background:#1a1000;border:1px solid #664400;color:#FFD060;padding:2px 4px">[AWD] ${t.year} ${t.name}</div>`; });
