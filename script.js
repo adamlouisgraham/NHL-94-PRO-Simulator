@@ -1558,7 +1558,9 @@ async function startNewGame(useCustomRoster = false) {
                     weight: getWeightLbs(gc(34)) || 210
                 },
                 
-                potential: 'Depth',
+                // v146: goalies were hardcoded 'Depth' — young elite goalies (Brodeur, Roy) never
+                // got Franchise/Top6 growth; match the same random distribution skaters get
+                potential: Math.random() < 0.05 ? 'Franchise' : (Math.random() < 0.25 ? 'Top 6' : (Math.random() < 0.60 ? 'Depth' : 'Bust')),
                 career: {
                     gp: parseInt(getCol(r, ["GOALIE CAREER GP", "GOALIE CAREER GAMES PLAYED", "G CAREER GP", "CAREER GP", "C_GP", "CAR GP", "CGP"], -1)) || 0,
                     g: 0, a: 0, pts: 0, pm: 0, pim: 0, ppg: 0,
@@ -1765,7 +1767,10 @@ function getPlayerWeightedStats(pName) {
     // fatigue lives on playerStats as seasonTicks; morale is a top-level field — neither is on p.status
     const fatiguePenalty = typeof getPlayerFatigueAmount === 'function' ? getPlayerFatigueAmount(pName) : 0;
     const morale = p.morale !== undefined ? p.morale : 100;
-    const endurance = parseInt(p.attr?.endurance || p.attr?.END || p.attr?.end) || 70;
+    // v146: was parseInt(p.attr?.endurance||p.attr?.END||p.attr?.end) — wrong field name (stored as
+    // attr.endur) AND wrong parser (grade strings like 'A'/'B' need gradeToNum, not parseInt).
+    // Result: endurance was always 70 for every player, making fatigue resistance uniform.
+    const endurance = gradeToNum(p.attr?.endur) || 70;
     const endResistance = 1.2 - (endurance / 100);
     const penaltyPct = Math.min(fatiguePenalty / 100, 1) * 0.05 * endResistance;
     finalOvr = Math.round(baseOvr * (1 - penaltyPct));
@@ -9440,7 +9445,8 @@ function pcBuildStats(pName, tab) {
     };
     const attrWrap = rows => `<div style="padding:8px 10px;">${rows}</div>`;
     if (isG) {
-        const gOvr = p.attr.gDef || p.attr.goalieDefense || p.attr.ovr || '--';
+        // v146: show attr.ovr (the live in-game driver, updated by aging) not gDef (sub-attribute)
+        const gOvr = p.attr.ovr || p.attr.gDef || p.attr.goalieDefense || '--';
         return attrWrap(
             barRow('G.OVR', gOvr) + barRow('G.OFF', p.attr.gOff||'--') +
             barRow('SPD', gd('speed',p.attr.speed)) + barRow('AGIL', gd('agil',p.attr.agil)) +
