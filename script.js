@@ -8327,8 +8327,14 @@ function getConnSmytheScore(p) {
             if (!rosters[t.nrm]) rosters[t.nrm] = [];
             // Real position so center/goalie roster-viability checks see this player correctly
             const rPos = ['C', 'LW', 'RW'][Math.floor(Math.random() * 3)];
+            // v142: rookies were missing `potential` — processOffseasonGrowth fell through to the
+            // Bust/else branch (oChg = Math.floor(r*1.5)) for every drafted player aged ≤24,
+            // giving all of them the worst possible growth rate for their entire development window.
+            const rPot = Math.random() < 0.05 ? 'Franchise' : Math.random() < 0.25 ? 'Top 6' : Math.random() < 0.60 ? 'Depth' : 'Bust';
             playerStats[rN] = {
-                name: rN, team: t.name, teamCode: t.code, pos: rPos, age: 18, streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false,
+                name: rN, team: t.name, teamCode: t.code, pos: rPos, age: 18,
+                potential: rPot,
+                streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false,
                 morale: 100, suspended: { days: 0, reason: "" }, weight: 190 + Math.floor(Math.random()*30),
                 injury: { severity: 0, daysRemaining: 0 }, attr: { off: 65 + Math.floor(Math.random()*15), def: 60 + Math.floor(Math.random()*15), gDef: 60 },
                 preSimCareerGP: 0,
