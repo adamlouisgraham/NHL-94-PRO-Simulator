@@ -8432,6 +8432,11 @@ function executeTrade() {
     tradeLog.unshift({ day: currentDay, details: `TRADE: ${t1o.code} <-> ${t2o.code}` });
     assignTeamCaptains(); // refresh captains — traded captain must not keep modifying old team
     pruneCustomDuos();
+    // v147: match approveProposal — flush _wpCache/_structCache so the immediate UI
+    // refresh (updateUI) and the next game's pre-sim setup see the post-trade rosters,
+    // not stale pre-trade struct/OVR values. approveProposal already called clearWpCache;
+    // executeTrade was the only path that didn't.
+    clearWpCache();
     document.getElementById('tradeOverlay').style.display = 'none';
     updateUI(); renderTradeLog(); saveGame();
 }
@@ -9399,7 +9404,8 @@ function pcBuildStats(pName, tab) {
             const sa=c.sa||0,sv=c.sv||0,ga=Math.max(0,sa-sv),gp=c.gp||0;
             return tbl([['GP',f(gp)],['W',f(c.w)],['L',f(c.l)],['SO',f(c.so)],
                 ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',fGAA(ga,gp,c.toi)],
-                ['SVG',f(c.svg||0)],['TOI',fTOI(c.toi,gp)]],[4,5]);
+                // v147: career/playoff goalie saves stored as c.sv not c.svg — use sv (already computed above)
+                ['SVG',f(c.svg||sv)],['TOI',fTOI(c.toi,gp)]],[4,5]);
         }
         return tbl([['GP',f(c.gp)],['G',f(c.g)],['A',f(c.a)],['PTS',c.pts||((c.g||0)+(c.a||0))],
             ['+/-',pm(c.pm||c.plusMinus||0)],['PIM',f(c.pim)],['SOG',f(c.s)],['TOI',fTOI(c.toi,c.gp)]],[2,3]);
@@ -9413,7 +9419,8 @@ function pcBuildStats(pName, tab) {
             const sa=src.sa||0,sv=src.sv||0,ga=Math.max(0,sa-sv),gp=src.gp||0;
             return tbl([['GP',f(gp)],['W',f(src.w)],['L',f(src.l)],['SO',f(src.so)],
                 ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',fGAA(ga,gp,src.toi)],
-                ['SVG',f(src.svg||0)],['TOI',fTOI(src.toi,gp)]],[4,5]);
+                // v147: playoff/career-playoff goalie saves stored as src.sv not src.svg — use sv (already computed above)
+                ['SVG',f(src.svg||sv)],['TOI',fTOI(src.toi,gp)]],[4,5]);
         }
         return tbl([['GP',f(src.gp)],['G',f(src.g)],['A',f(src.a)],['PTS',src.pts||((src.g||0)+(src.a||0))],
             ['+/-',pm(src.pm||0)],['PIM',f(src.pim)],['SOG',f(src.s)],['TOI',fTOI(src.toi,src.gp)]],[2,3]);
