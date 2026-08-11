@@ -3842,6 +3842,12 @@ function simGame(idx) {
     // B2B penalty only applies to the goalie who actually played yesterday, not the fresh backup
     const hB2BPen = (!isPlayoffs && hG_obj && playerStats[hG_obj.name]?.lastPlayedDay === currentDay - 1) ? 0.06 : 0;
     const aB2BPen = (!isPlayoffs && aG_obj && playerStats[aG_obj.name]?.lastPlayedDay === currentDay - 1) ? 0.06 : 0;
+    // v164: well-rested goalie bonus — 3+ days since last start; mirrors B2B penalty on the upside.
+    // Only applies if the goalie HAS played before (lastPlayedDay != null); first-time starters don't get it.
+    const hLastGPlayed = playerStats[hG_obj?.name]?.lastPlayedDay ?? null;
+    const aLastGPlayed = playerStats[aG_obj?.name]?.lastPlayedDay ?? null;
+    const hRestBonus = (!isPlayoffs && hG_obj && hLastGPlayed != null && hLastGPlayed < currentDay - 2) ? 0.015 : 0;
+    const aRestBonus = (!isPlayoffs && aG_obj && aLastGPlayed != null && aLastGPlayed < currentDay - 2) ? 0.015 : 0;
     // v162: skater B2B penalty — early-90s NHL had brutal back-to-back schedules with heavy travel.
     // Fraction of dressed skaters who played yesterday drives a liveOvr penalty (max -2.0).
     // High endur players handle B2Bs better — reduces the penalty up to 40%.
@@ -3893,6 +3899,7 @@ function simGame(idx) {
         + hB2BPen                   // B2B binary (unchanged)
         + hGFatiguePen              // Continuous fatigue (new)
         - hHurtPen                  // Playing hurt (unchanged)
+        - hRestBonus                // v164: well-rested goalie (3+ days off) plays sharper
     ));
     let aWallMod = Math.max(0.82, Math.min(1.18,
         1.0
@@ -3906,11 +3913,16 @@ function simGame(idx) {
         + aB2BPen
         + aGFatiguePen
         - aHurtPen
+        - aRestBonus                // v164: well-rested goalie
     ));
     // Coaching adjustments: forecheck 1=aggressive(open game), -1=defensive(tight); pp 1=shoot, -1=cycle
     if (!isPlayoffs && !isASG && selectedTeam && (g.h.nrm === selectedTeam || g.a.nrm === selectedTeam)) {
-        const fMod = coachAdj.forecheck * 0.025; // aggressive opens scoring both ways — only affects the user's own games
-        hWallMod += fMod; aWallMod += fMod;
+        // v164: asymmetric forecheck — aggressive forecheck benefits your offense (full) more than it costs
+        // your defense (half). Defensive forecheck locks down opponent fully but only halves your own offense.
+        const fMod = coachAdj.forecheck * 0.025;
+        const userIsHome = g.h.nrm === selectedTeam;
+        if (userIsHome) { aWallMod += fMod; hWallMod += fMod * 0.5; }
+        else            { hWallMod += fMod; aWallMod += fMod * 0.5; }
         // Coach trust: high trust slightly boosts user team's goalie, low trust slightly hurts
         const trustMod = (coachTrust - 50) * 0.003; // ±0.15 at extremes
         if (g.h.nrm === selectedTeam) hWallMod -= trustMod;
@@ -4354,8 +4366,13 @@ function simGame(idx) {
             const avgOppDef     = oppDPair.length
                 ? oppDPair.reduce((s,p) => s + (playerStats[p.name]?.attr?.def||70), 0) / oppDPair.length
                 : 70;
-            // 90 avg def → ×0.96; 70 → ×1.00; 50 → ×1.04
-            const defPressureMod = Math.max(0.92, Math.min(1.08, 1.0 - (avgOppDef - 70) * 0.002));
+            // v164: check blended in (40%) — physical pressure forces bad angles alongside defensive awareness
+            const avgOppCheck   = oppDPair.length
+                ? oppDPair.reduce((s,p) => s + (gradeToNum(playerStats[p.name]?.attr?.check)||70), 0) / oppDPair.length
+                : 70;
+            const defPressureInput = avgOppDef * 0.60 + avgOppCheck * 0.40;
+            // 90 avg → ×0.96; 70 → ×1.00; 50 → ×1.04
+            const defPressureMod = Math.max(0.92, Math.min(1.08, 1.0 - (defPressureInput - 70) * 0.002));
 
             // SCORE-STATE MODIFIER — trailing teams shoot desperately in the 3rd; leading teams conserve
             const shooterGoals = isHome ? hG : aG;
@@ -4412,7 +4429,11 @@ function simGame(idx) {
             const shooterSpd   = playerStats[shooter.name]?.attr?.speed   || 70;
             // Base weights [close, medium, far] — D-men at the point; C attacks slot; W camps circles
             const dBase        = isDefPos ? [10, 25, 65] : isCPos ? [40, 45, 15] : [28, 52, 20];
-            const dCloseBonus  = Math.max(0, (shooterSpd-70)*0.20 + (shooterHnk-70)*0.25);
+            // v164: high-passing line cycles puck into slot — bias shot zone toward close
+            const onIceFwds    = skaters.filter(p => p.pos!=='D'&&p.pos!=='LD'&&p.pos!=='RD');
+            const avgLinePass  = onIceFwds.length ? onIceFwds.reduce((s,p)=>s+(gradeToNum(playerStats[p.name]?.attr?.pass)||70),0)/onIceFwds.length : 70;
+            const passCloseBonus = Math.max(0, (avgLinePass - 70) * 0.15);
+            const dCloseBonus  = Math.max(0, (shooterSpd-70)*0.20 + (shooterHnk-70)*0.25 + passCloseBonus);
             const dFarBonus    = isDefPos ? Math.max(0, (shooterPwr-70)*0.25) : 0;
             const dw0=dBase[0]+dCloseBonus, dw1=dBase[1], dw2=dBase[2]+dFarBonus;
             const distRoll     = Math.random() * (dw0+dw1+dw2);
@@ -4496,9 +4517,6 @@ function simGame(idx) {
                 if (penTeamObj) penTeamObj.season.pka=(penTeamObj.season.pka||0)+1;
             }
 
-            const ppStratMod = (!isPlayoffs&&!isASG&&advTeam.nrm===selectedTeam)
-                ? (coachAdj.pp===-1?1.10:coachAdj.pp===1?0.90:1.0) : 1.0;
-            const ppConvRate = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm)*ppStratMod;
             const ppRoll     = Math.random();
             const advTeamObj2 = advTeam.nrm===g.h.nrm ? hTeamObj : aTeamObj;
             const pp1Names   = advTeamObj2?.specialTeams?.pp1 || [];
@@ -4534,6 +4552,14 @@ function simGame(idx) {
             const activeUnit = (Math.random() < 0.70 || autoPP2.length < 3) ? autoPP1 : autoPP2;
             const ppUnit = activeUnit.length>=3 ? activeUnit : (advTeam.nrm===g.h.nrm?hOnIce:aOnIce);
             const pkUnit = advTeam.nrm===g.h.nrm ? aOnIce : hOnIce;
+
+            // v164: cycle mode gated by PP unit avg pass — elite passers execute the cycle effectively;
+            // grinders can't. pass 85 → cycleMod ≈1.09; pass 70 → ×1.00; pass 55 → ×0.98 (can't cycle)
+            const avgPPPass  = ppUnit.reduce((s,p)=>s+(gradeToNum(playerStats[p.name]?.attr?.pass)||70),0)/Math.max(1,ppUnit.length);
+            const cycleMod   = Math.max(0.98, Math.min(1.12, 1.0 + (avgPPPass - 70) * 0.006));
+            const ppStratMod = (!isPlayoffs&&!isASG&&advTeam.nrm===selectedTeam)
+                ? (coachAdj.pp===-1 ? cycleMod : coachAdj.pp===1 ? 0.90 : 1.0) : 1.0;
+            const ppConvRate = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm)*ppStratMod;
 
             if (ppRoll < ppConvRate && ppUnit.length > 0) {
                 const ppShooter = selectShooter(ppUnit, 'PP');
