@@ -1938,9 +1938,24 @@ function assignMicroStreaks(rosterArray, startingGoalie) {
     // Pure random pick — any dressed player equally likely
     const pickRandom = (pool) => pool[Math.floor(Math.random() * pool.length)];
 
-    const hot = pickRandom(eligible);
+    // v163: lastSV → immediate goalie micro_streak (overrides random pick)
+    let forcedHot = null, forcedCold = null;
+    if (startingGoalie) {
+        const gps = playerStats[startingGoalie.name];
+        const sv = gps?.lastSV;
+        if (sv != null) {
+            if (sv >= 0.960) forcedHot  = startingGoalie;
+            else if (sv <= 0.850) forcedCold = startingGoalie;
+        }
+    }
+
+    const hot  = forcedHot  || pickRandom(eligible);
     const remaining = eligible.filter(p => p.name !== hot.name);
-    const cold = pickRandom(remaining);
+    const cold = forcedCold && forcedCold.name !== hot.name
+        ? forcedCold
+        : pickRandom(remaining.filter(p => !forcedCold || p.name !== forcedCold.name).length
+            ? remaining.filter(p => !forcedCold || p.name !== forcedCold.name)
+            : remaining);
 
     eligible.forEach(p => { const ps = playerStats[p.name]; if (ps) { ps.micro_streak = null; ps._prevMicro = null; } });
     if (playerStats[hot.name])  { playerStats[hot.name].micro_streak  = 'HOT';  playerStats[hot.name]._prevMicro  = 'HOT';  }
@@ -2037,10 +2052,11 @@ function processPostGameStreaks(skaters, goalies, matchStats) {
         
         // Push this game's shots and saves
         const gms = (matchStats && matchStats[g.name]) || {};
-        ps.recentStarts.push({
-            sv: gms.sv || 0,
-            sa: gms.sa || 0
-        });
+        const gameSv = gms.sv || 0;
+        const gameSa = gms.sa || 0;
+        // v163: write lastSV so assignMicroStreaks can reward a standout individual start
+        ps.lastSV = gameSa > 0 ? gameSv / gameSa : null;
+        ps.recentStarts.push({ sv: gameSv, sa: gameSa });
         
         // Rolling window: Keep only the last 3 starts
         if (ps.recentStarts.length > 3) ps.recentStarts.shift();
@@ -4168,21 +4184,27 @@ function simGame(idx) {
         return [...s].map(n => ({name:n}));
     };
 
+    // v163: 4th-line sets — energy liners take more penalties (less skilled, more physical role)
+    const h4thLine = new Set((hStruct.f[3] || []).filter(Boolean).map(p => p.name));
+    const a4thLine = new Set((aStruct.f[3] || []).filter(Boolean).map(p => p.name));
+
     // Penalty offender picker (hoisted out of per-event scope)
-    const penWeight = (name) => {
+    const penWeight = (name, isHomeTeam) => {
         const ps = playerStats[name];
         if (!ps) return 1;
         const aggr = gradeToNum(ps.attr?.aggr) || 50;
         const rough = gradeToNum(ps.attr?.rough) || 50;
         const tagMult = (getPlayerWeightedStats(name)?.tag||'').includes('ENFORCER') ? 2.0 : 1;
-        const base = Math.pow((aggr+rough)/2, 1.3) * tagMult;
+        // v163: 4th-line players are deployed for energy/intimidation — 40% more likely to take a penalty
+        const line4Mult = (isHomeTeam ? h4thLine : a4thLine).has(name) ? 1.40 : 1.0;
+        const base = Math.pow((aggr+rough)/2, 1.3) * tagMult * line4Mult;
         // [FIX] was ps.season?.pim — during playoffs k='playoff', so season PIM was
         // used to cap playoff penalty rates. Use the active bucket instead.
         const overCap = Math.max(0, (ps[k]?.pim||0) - 150);
         return base * Math.pow(0.85, overCap/10);
     };
-    const pickOffender = (skaters) => {
-        const w = skaters.map(p => penWeight(p.name));
+    const pickOffender = (skaters, isHomeTeam) => {
+        const w = skaters.map(p => penWeight(p.name, isHomeTeam));
         const total = w.reduce((a,b)=>a+b, 0);
         if (total === 0) return skaters[Math.floor(Math.random()*skaters.length)].name;
         let r = Math.random() * total;
@@ -4442,7 +4464,7 @@ function simGame(idx) {
             let activeSk = (penTeam.nrm===g.h.nrm ? hOnIce : aOnIce).filter(p=>p.pos!=='G');
             if (!activeSk.length) continue;
 
-            const offender     = pickOffender(activeSk);
+            const offender     = pickOffender(activeSk, penTeam.nrm === g.h.nrm);
             // v157: major probability scales with offender aggr — hotheads take more majors
             const offenderAggr = gradeToNum(playerStats[offender]?.attr?.aggr) || 50;
             const isMajor      = Math.random() < Math.max(0.01, Math.min(0.10, 0.03 + (offenderAggr-50)*0.001));
