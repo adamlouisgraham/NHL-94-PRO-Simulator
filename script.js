@@ -3974,8 +3974,25 @@ function simGame(idx) {
 
     // Pre-game OVR gap drives shot distribution (static proxy for per-tick diff)
     const preGameDiff = Math.max(-12, Math.min(12, (hAvgOvr + homeLastChangeMod + parityBoost - aAvgOvr)));
-    const hShotCount  = poissonRand(29.75 * (1 + preGameDiff * 0.008)); // +1.75/team (+3.5/game)
-    const aShotCount  = poissonRand(29.75 * (1 - preGameDiff * 0.008));
+    // v152: team playing style (speed + pass avg) sets the Poisson base lambda per team.
+    // Possession teams (high spd+pass) → λ=31 (~26–36 shots); dump-and-chase (low) → λ=26 (~21–31).
+    // Scale: teamStyle [60,85] maps linearly to λ [26,31]. Average team (~70) → λ=28.
+    // Poisson σ≈√λ gives natural ±5 variance. OVR gap modifier still rides on top.
+    const calcTeamStyle = (tk) => {
+        const skaters = (rosters[tk] || []).filter(p => p.pos !== 'G');
+        if (!skaters.length) return 70;
+        return skaters.reduce((s, p) => {
+            const spd = playerStats[p.name]?.attr?.speed || 70;
+            const pas = playerStats[p.name]?.attr?.pass  || 70;
+            return s + (spd + pas) / 2;
+        }, 0) / skaters.length;
+    };
+    const hTeamStyle   = calcTeamStyle(g.h.nrm);
+    const aTeamStyle   = calcTeamStyle(g.a.nrm);
+    const hBaseLambda  = 26 + Math.max(0, Math.min(5, (hTeamStyle - 60) * 0.2));
+    const aBaseLambda  = 26 + Math.max(0, Math.min(5, (aTeamStyle - 60) * 0.2));
+    const hShotCount   = poissonRand(hBaseLambda * (1 + preGameDiff * 0.008));
+    const aShotCount   = poissonRand(aBaseLambda * (1 - preGameDiff * 0.008));
     // Penalty counts derived from per-tick rates × 240 steps
     const penCount    = poissonRand(7.5);   // v128: back to 7.5 now that PP units are properly built (v125-127 fix)
     const coinCount   = poissonRand(3.6);   // 0.038×240×0.40 ≈ 3.65 coincidentals
