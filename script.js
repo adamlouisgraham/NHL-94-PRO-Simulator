@@ -81,19 +81,45 @@ function getEliteShooterMod(tag) {
 }
 
     function getLeadershipScore(pName) {
+    // v161: rebuilt around hockey-realistic signals.
+    // Old formula used aggr+stkHnd (physical/dexterity attrs, not leadership proxies) and
+    // let raw age dominate. New formula rewards veteran presence, two-way production,
+    // and actual on-ice accomplishment.
     const p = playerStats[pName];
     if (!p) return 50;
-    
-    // We derive leadership from Experience (using Age if you have it, 
-    // otherwise Aggressiveness/Stick Handling to represent veteran savvy)
-    let age = parseInt(p.age) || 25;
-    const pa = p.attr || {};
-    let aggr = gradeToNum(pa.aggr) || 50;
-    let stk = gradeToNum(pa.stkHnd) || 50;
-    let asgAppearances = p.asgAppearances || 0;
-    // Experience bonus for older players, high skill bonus for leaders
-    let score = (Math.min(age, 35) * 1.5) + (aggr * 0.3) + (stk * 0.2) + (asgAppearances * 2);
-    return Math.min(score, 100);
+    const pa  = p.attr || {};
+    const c   = p.career || {};
+
+    // 1. Veteran presence — career GP is the strongest real-world proxy for locker-room stature.
+    //    Capped at 1000 GP (17+ seasons). At 1000 GP → 35 pts; 500 GP → 17.5 pts.
+    const careerGP   = (c.gp || 0) + (p.season?.gp || 0);
+    const gpScore    = Math.min(careerGP, 1000) * 0.035;
+
+    // 2. Two-way excellence — captains lead by example both offensively and defensively.
+    //    off + def averaged, centered at 70. A 90/90 two-way star → +10 pts; 50/50 → −10.
+    const off = pa.off || 70;
+    const def = pa.def || 70;
+    const twoWayScore = ((off + def) / 2 - 70) * 0.25;
+
+    // 3. All-Star recognition — peer-voted, reflects league-wide respect.
+    const asgScore = (p.asgAppearances || 0) * 3;
+
+    // 4. Trophy cabinet — tangible career accomplishment.
+    const awardScore = (c.awards || 0) * 4;
+
+    // 5. Age / experience modifier — still relevant but no longer the dominant term.
+    //    Peaks at age 30 (prime leadership), decays slightly past 36.
+    const age = p.age || 25;
+    const ageScore = age <= 30 ? age * 0.4 : 30 * 0.4 - (age - 30) * 0.15;
+
+    // 6. Franchise potential — the player the team was built around earns extra pull.
+    const potScore = p.potential === 'Franchise' ? 5 : p.potential === 'Top 6' ? 2 : 0;
+
+    // 7. Morale — a checked-out player doesn't command the room.
+    const moraleScore = ((p.morale || 100) - 100) * 0.05;
+
+    const score = gpScore + twoWayScore + asgScore + awardScore + ageScore + potScore + moraleScore;
+    return Math.max(0, Math.min(100, score));
 }
 
 /**
@@ -326,10 +352,19 @@ let _awardsPending = false; // true between playoff-round-4 end and awards being
 let deadlineCountermove = {}; // { teamNrm: expiryDay } — contenders flagged after a rival deadline deal
 let chemScores = {}; // { "P1|P2": 0-100 } — per-custom-duo chemistry score, decays without shared goals
 let preseasonOvrSnapshot = {}; // { teamNrm: avgOvr } captured at season start
-let teamCaptains = {}; // { teamNrm: playerName }
+let teamCaptains   = {}; // { teamNrm: playerName } — the C
+let teamAssistants = {}; // { teamNrm: [a1Name, a2Name] } — the two As
 
 function isTeamCaptain(pName) {
     return Object.values(teamCaptains).includes(pName);
+}
+function isTeamAssistant(pName) {
+    return Object.values(teamAssistants).some(arr => arr.includes(pName));
+}
+function getPlayerDesignation(pName) {
+    if (isTeamCaptain(pName))   return 'C';
+    if (isTeamAssistant(pName)) return 'A';
+    return null;
 }
 
 // Trade Value Index: OVR weighted by prime-age factor and position scarcity
@@ -343,18 +378,20 @@ function getTradeValue(pName) {
     return Math.round((ovr * 0.65 + primeMod * 2.5) * posMult);
 }
 
-// Picks the highest-leadership skater on each roster as team captain for the season
+// v161: picks C (captain) and two As (alternate captains) by leadership score.
+// Skaters only — goalies do not wear letters in the NHL.
 function assignTeamCaptains() {
-    teamCaptains = {};
+    teamCaptains   = {};
+    teamAssistants = {};
     league.forEach(t => {
         const roster = (rosters[t.nrm] || []).filter(p => p.pos !== 'G');
         if (!roster.length) return;
-        let best = null, bestScore = -1;
-        roster.forEach(p => {
-            const score = getLeadershipScore(p.name);
-            if (score > bestScore) { bestScore = score; best = p.name; }
-        });
-        if (best) teamCaptains[t.nrm] = best;
+        const ranked = roster
+            .map(p => ({ name: p.name, score: getLeadershipScore(p.name) }))
+            .sort((a, b) => b.score - a.score);
+        if (ranked[0]) teamCaptains[t.nrm]   = ranked[0].name;
+        const assists = ranked.slice(1, 3).map(p => p.name);
+        if (assists.length) teamAssistants[t.nrm] = assists;
     });
 }
 
@@ -429,16 +466,24 @@ function syncChemPersonnel(tObj, newStruct) {
 }
 
 function getCaptainChemModifier(teamNrm) {
-    const capName = teamCaptains[teamNrm];
-    if (!capName) return 0;
-    const ps = playerStats[capName];
-    if (!ps) return 0;
-    if (ps.injury && ps.injury.daysRemaining > 0) return -3;
-    const isCold = ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD' || ps.streakType === 'cold';
-    if (isCold) return -2;
-    const isHot = ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT' || ps.streakType === 'hot';
-    if (isHot) return 2;
-    return 1; // healthy, active captain provides a small baseline boost
+    // v161: C carries full weight; each A carries half weight.
+    let mod = 0;
+    const leaders = [
+        { name: teamCaptains[teamNrm],               weight: 1.0 },
+        { name: teamAssistants[teamNrm]?.[0] || null, weight: 0.5 },
+        { name: teamAssistants[teamNrm]?.[1] || null, weight: 0.5 },
+    ];
+    for (const { name, weight } of leaders) {
+        if (!name) continue;
+        const ps = playerStats[name];
+        if (!ps) continue;
+        if (ps.injury && ps.injury.daysRemaining > 0) { mod += -3 * weight; continue; }
+        const isCold = ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD' || ps.streakType === 'cold';
+        if (isCold) { mod += -2 * weight; continue; }
+        const isHot = ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT' || ps.streakType === 'hot';
+        mod += (isHot ? 2 : 1) * weight;
+    }
+    return mod;
 }
 let league = []; let rosters = {}; let playerStats = {}; let tradeLog = []; let hallOfFame = []; let leagueHistory = []; let retiredPlayers = []; let calendar = []; let realDatesMap = []; let gameMilestones = []; let monthSnapshot = {}; let pendingTrades = []; let playoffBracket = { round: 1, series: [] }; let teams = {}; let selectedTeam = null;
 let customDuos = []; // user-defined chemistry pairs, supplements the hardcoded dynamicDuos
@@ -594,7 +639,7 @@ function buildSavePayload() {
             league, rosters, playerStats, tradeLog, hallOfFame, leagueHistory, 
             retiredPlayers, calendar: lightweightCalendar, currentDay, currentSeason, 
             isPlayoffs, isASG, currentCupChamp, playoffBracket: lightweightBracket, awardConfig, 
-            monthSnapshot, pendingTrades, realDatesMap, customDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, _awardsPending, asgDoneThisSeason
+            monthSnapshot, pendingTrades, realDatesMap, customDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, teamAssistants, _awardsPending, asgDoneThisSeason
         }
     };
 }
@@ -645,7 +690,8 @@ function applyLoadedSave(data) {
     if (!Object.keys(preseasonOvrSnapshot).length && league.length) {
         league.forEach(t => { preseasonOvrSnapshot[t.nrm] = 75; });
     }
-    teamCaptains = (typeof data.teamCaptains === 'object' && data.teamCaptains) ? data.teamCaptains : {};
+    teamCaptains   = (typeof data.teamCaptains   === 'object' && data.teamCaptains)   ? data.teamCaptains   : {};
+    teamAssistants = (typeof data.teamAssistants === 'object' && data.teamAssistants) ? data.teamAssistants : {};
     if (!Object.keys(teamCaptains).length) assignTeamCaptains();
     realDatesMap = Array.isArray(data.realDatesMap) ? data.realDatesMap : [];
     _awardsPending = Boolean(data._awardsPending);
@@ -8809,17 +8855,22 @@ function openScoutingReport(day, gIdx) {
         </div>`;
     };
 
-    // Team captain
+    // v161: captain (C) + two alternates (A, A2)
     const captainCard = (tkNrm) => {
-        const capName = teamCaptains[tkNrm];
-        if (!capName) return '';
-        const score = Math.round(getLeadershipScore(capName));
-        const capPs = playerStats[capName];
-        const capInjured = capPs?.injury?.daysRemaining > 0;
-        const borderStyle = capInjured ? 'border:1px dashed #FF4444;padding:4px 6px;border-radius:3px;' : '';
-        const injTag = capInjured ? ` <span style="color:#FF4444;font-size:5px;">CAPTAIN OUT (${capPs.injury.daysRemaining}d)</span>` : '';
-        return `<div style="font-size:5px;color:#555;margin-top:8px;margin-bottom:3px;">CAPTAIN</div>
-            <div style="font-size:6px;color:${capInjured?'#884444':'#FFD700'};${borderStyle}">[C] ${capName}${injTag} <span style="color:#888;font-size:5px;">LEADERSHIP ${score}</span></div>`;
+        const leaders = [
+            { name: teamCaptains[tkNrm],               label: 'C', color: '#FFD700' },
+            { name: teamAssistants[tkNrm]?.[0] || null, label: 'A', color: '#AAAAFF' },
+            { name: teamAssistants[tkNrm]?.[1] || null, label: 'A', color: '#AAAAFF' },
+        ].filter(l => l.name);
+        if (!leaders.length) return '';
+        const rows = leaders.map(({ name, label, color }) => {
+            const ps = playerStats[name];
+            const score = Math.round(getLeadershipScore(name));
+            const injured = ps?.injury?.daysRemaining > 0;
+            const injTag = injured ? ` <span style="color:#FF4444;font-size:5px;">OUT (${ps.injury.daysRemaining}d)</span>` : '';
+            return `<div style="font-size:6px;color:${injured ? '#884444' : color};">[${label}] ${name}${injTag} <span style="color:#555;font-size:5px;">LDR ${score}</span></div>`;
+        }).join('');
+        return `<div style="font-size:5px;color:#555;margin-top:8px;margin-bottom:3px;">LEADERSHIP</div>${rows}`;
     };
 
     // Top line chemistry
@@ -8831,7 +8882,8 @@ function openScoutingReport(day, gIdx) {
         const line = fwds.map(p => {
             const ps = playerStats[p.name];
             const pts = ps ? (ps.season.g||0) + (ps.season.a||0) : 0;
-            return `<span style="color:#ccc;">${p.name}${isTeamCaptain(p.name) ? ' [C]' : ''} <span style="color:var(--neon-cyan);font-size:5px;">${pts}pts</span></span>`;
+            const desig = getPlayerDesignation(p.name);
+            return `<span style="color:#ccc;">${p.name}${desig ? ` <span style="color:${desig==='C'?'#FFD700':'#AAAAFF'};font-size:5px;">[${desig}]</span>` : ''} <span style="color:var(--neon-cyan);font-size:5px;">${pts}pts</span></span>`;
         }).join(' · ');
         const chemTag = chemBonus > 0 ? `<span style="color:#FF69B4;font-size:5px;margin-left:6px;">+${chemBonus*2} CHEM</span>` : '';
         return `<div style="font-size:6px;margin-top:4px;">${line}${chemTag}</div>`;
