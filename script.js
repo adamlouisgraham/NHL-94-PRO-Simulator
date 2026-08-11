@@ -4215,7 +4215,27 @@ function simGame(idx) {
             });
             const chemDuoMod = hasDuoOnIce ? 1.04 : 1.0;
 
-            const prob      = (0.079 + dSign*diff*0.0002)*wallMod*sniperMod*accMod*chaosMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; at 0.086 ES=5.79+PP=1.57=7.36 GPG; 0.079 targets ~6.89
+            // SHOT ZONE SELECTION & GOALIE DIRECTIONAL COVERAGE (v153)
+            // Shooter picks one of 4 zones: glove-high, glove-low, stick-high, stick-low.
+            // High shotAcc → biases toward top corners (high zones = harder to read but rewarded).
+            // High stkHnd → biases toward dekes/screens/low (low zones = closer, tighter angles).
+            // Each zone maps to one of the goalie's 4 directional attrs (all imported, all formerly unused).
+            // coverageMod: elite coverage in that zone (90) → ×0.96; avg (70) → ×1.00; weak (50) → ×1.04.
+            const shooterHnk   = playerStats[shooter.name]?.attr?.stkHnd || 70;
+            const accBias      = Math.max(0, shooterAcc - 70) * 0.4;  // high acc → corners (high zones)
+            const hnkBias      = Math.max(0, shooterHnk - 70) * 0.4;  // high stkHnd → dekes  (low zones)
+            const zoneW        = [50 + accBias, 50 + hnkBias, 50 + accBias, 50 + hnkBias];
+            let zr = Math.random() * (zoneW[0]+zoneW[1]+zoneW[2]+zoneW[3]), zi = 0;
+            while (zi < 3 && (zr -= zoneW[zi]) > 0) zi++;
+            const oppGObj      = isHome ? aG_obj : hG_obj;
+            const oppGAttr     = oppGObj ? playerStats[oppGObj.name]?.attr : null;
+            // zi=0 → gloveHigh (gloveR), zi=1 → gloveLow (gloveL), zi=2 → stickHigh (stickR), zi=3 → stickLow (stickL)
+            const zoneCoverage = oppGAttr
+                ? [oppGAttr.gloveR||70, oppGAttr.gloveL||70, oppGAttr.stickR||70, oppGAttr.stickL||70][zi]
+                : 70;
+            const coverageMod  = Math.max(0.90, Math.min(1.10, 1.0 + (70 - zoneCoverage) * 0.002));
+
+            const prob      = (0.079 + dSign*diff*0.0002)*wallMod*sniperMod*accMod*chaosMod*coverageMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; at 0.086 ES=5.79+PP=1.57=7.36 GPG; 0.079 targets ~6.89
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
