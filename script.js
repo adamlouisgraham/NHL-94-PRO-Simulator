@@ -3773,11 +3773,14 @@ function simGame(idx) {
     const hGArch = hG_obj ? getArch(hG_obj.name) : '';
     const aGArch = aG_obj ? getArch(aG_obj.name) : '';
     // v151: agility and gDef as direct wall-mod inputs (both centered at 70, high = harder to score on).
-    // These attrs were imported from CSV but only fed archetype tagging before — now they do real work.
-    const hGAgil = hG_obj ? (playerStats[hG_obj.name]?.attr?.agil || 70) : 70;
+    // v155: speed added — lateral quickness to reach pucks, distinct from agil (rotational flexibility).
+    // All three imported from CSV but previously only fed archetype tagging — now all do real work.
+    const hGAgil = hG_obj ? (playerStats[hG_obj.name]?.attr?.agil  || 70) : 70;
     const hGDef  = hG_obj ? (playerStats[hG_obj.name]?.attr?.gDef  || 70) : 70;
-    const aGAgil = aG_obj ? (playerStats[aG_obj.name]?.attr?.agil || 70) : 70;
+    const hGSpd  = hG_obj ? (playerStats[hG_obj.name]?.attr?.speed || 70) : 70;
+    const aGAgil = aG_obj ? (playerStats[aG_obj.name]?.attr?.agil  || 70) : 70;
     const aGDef  = aG_obj ? (playerStats[aG_obj.name]?.attr?.gDef  || 70) : 70;
+    const aGSpd  = aG_obj ? (playerStats[aG_obj.name]?.attr?.speed || 70) : 70;
     // v151: continuous fatigue penalty from accumulated status.fatigue (goalie starter gets +15/game,
     // bleeds off -25/rest day). Independent of the binary B2BPen above.
     const hGFatigue    = hG_name ? Math.min(100, playerStats[hG_name]?.status?.fatigue || 0) : 0;
@@ -3789,6 +3792,7 @@ function simGame(idx) {
         + (75 - hGOvr)  * 0.008    // OVR: main driver (unchanged)
         + (70 - hGAgil) * 0.0025   // Agility:     high agil → harder to score (up to ±0.073)
         + (70 - hGDef)  * 0.002    // Positioning: high gDef → harder to score (up to ±0.058)
+        + (70 - hGSpd)  * 0.0015  // Speed:       high spd → lateral reach (up to ±0.044)
         + getGoalieWallMod(hGArch)  // Archetype bonus (unchanged)
         + hB2BPen                   // B2B binary (unchanged)
         + hGFatiguePen              // Continuous fatigue (new)
@@ -3799,6 +3803,7 @@ function simGame(idx) {
         + (75 - aGOvr)  * 0.008
         + (70 - aGAgil) * 0.0025
         + (70 - aGDef)  * 0.002
+        + (70 - aGSpd)  * 0.0015
         + getGoalieWallMod(aGArch)
         + aB2BPen
         + aGFatiguePen
@@ -4004,10 +4009,19 @@ function simGame(idx) {
     // v130: hits/blocked shots — additive stat-only events, don't touch score/SOG/saves.
     // Kept separate from hShotCount/aShotCount so the already-tuned ~30 SOG/team/game
     // average isn't diluted by carving blocks out of it.
-    const hHitCount   = poissonRand(24);
-    const aHitCount   = poissonRand(24);
-    const hBlockCount = poissonRand(13);
-    const aBlockCount = poissonRand(13);
+    // v155: team avg check attr scales hit and block counts — physical teams generate more both
+    const calcTeamCheck = (tk) => {
+        const sk = (rosters[tk] || []).filter(p => p.pos !== 'G');
+        if (!sk.length) return 70;
+        return sk.reduce((s, p) => s + (playerStats[p.name]?.attr?.check || 70), 0) / sk.length;
+    };
+    const hTeamCheck  = calcTeamCheck(g.h.nrm);
+    const aTeamCheck  = calcTeamCheck(g.a.nrm);
+    // check 90 → hits ×1.10 (≈26), blocks ×1.08 (≈14); check 50 → hits ×0.90 (≈22), blocks ×0.92 (≈12)
+    const hHitCount   = poissonRand(24 * (1 + (hTeamCheck - 70) * 0.005));
+    const aHitCount   = poissonRand(24 * (1 + (aTeamCheck - 70) * 0.005));
+    const hBlockCount = poissonRand(13 * (1 + (hTeamCheck - 70) * 0.004));
+    const aBlockCount = poissonRand(13 * (1 + (aTeamCheck - 70) * 0.004));
 
     // PERIOD-WEIGHTED TICK DISTRIBUTION — 3rd period gets slightly more events (teams press late)
     // P1: 31% | P2: 31% | P3 early: 30% | P3 final 4 min (ticks 224-239): 8%
@@ -5168,12 +5182,24 @@ function selectShooter(unit, context = 'ES') {
             else if (tag === 'TWO-WAY STAR F' || tag === 'TWO-WAY FWD')     weight *= 1.15;
         }
 
-        // CLUTCH context: elite scorers elevate in tight 3rd-period situations
+        // CLUTCH context: tight 3rd period — three data-driven signals replace tag proxies.
+        // 1) Career playoff PPG: seeded from real CSV data + grows through sim seasons.
+        //    Requires 10+ playoff GP to be meaningful; <10 GP defaults to 0.50 (neutral).
+        // 2) off attr: clutch IQ — reads the play, finds the seam under pressure.
+        // 3) morale: hot-streak player is confident; cold player presses.
         if (context === 'CLUTCH') {
-            if (tag === 'SUPERSTAR')                                         weight *= 1.30;
-            else if (tag === 'PRO SNIPER')                                   weight *= 1.28;
-            else if (tag === 'SNIPER')                                       weight *= 1.20;
-            else if (tag === 'TWO-WAY STAR F')                               weight *= 1.10;
+            const cp       = ps.careerPlayoff || {};
+            const cpGP     = cp.gp || 0;
+            const cpPPG    = cpGP >= 10 ? (cp.pts || 0) / cpGP : 0.50;
+            const pOff     = pA.off || 70;
+            const pMorale  = ps.morale || 100;
+            // PPG: 1.0 PPG → +0.22; 0.5 → +0.11; 0.0 → +0.00 (capped at +0.22)
+            const ppgBoost    = Math.min(0.22, cpPPG * 0.22);
+            // Off: 90 off → +0.06; 70 → 0; 50 → −0.04
+            const offBoost    = Math.max(-0.04, Math.min(0.06, (pOff - 70) * 0.003));
+            // Morale: 130 → +0.04; 100 → 0; 70 → −0.04
+            const moraleBoost = Math.max(-0.04, Math.min(0.04, (pMorale - 100) * 0.0013));
+            weight *= Math.max(1.0, 1.0 + ppgBoost + offBoost + moraleBoost);
         }
 
         // PP context: power play is a set play — elite finishers dominate the shot even more
