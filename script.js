@@ -4301,8 +4301,11 @@ function simGame(idx) {
         const periodMult  = period===3?1.5:period===2?1.1:1.0;
         const closeMult   = absDiff===0?1.4:absDiff===1?1.15:absDiff>=3?0.6:1.0;
         const activeChaos = chaosScale * periodMult * closeMult;
-        const hLiveOvr = (getLiveLineOvr(hOnIce) + hLineMatchBonus + homeLastChangeMod + parityBoost + hPressureMod + hStreakMod + rivalBonus + hMomentum*0.375 - hSkaterB2B)*hAuraMod*homeCrowdEnergy;
-        const aLiveOvr = (getLiveLineOvr(aOnIce) + aLineMatchBonus + aPressureMod + aStreakMod + rivalBonus + aMomentum*0.375 - aSkaterB2B)*aAuraMod;
+        // v165: P3 trailing-team desperation — pressing harder offensively; down-by-1 → +0.8 liveOvr
+        const hDesperationBoost = (period === 3 && (aG - hG) >= 1) ? Math.min(2.0, (aG - hG) * 0.8) : 0;
+        const aDesperationBoost = (period === 3 && (hG - aG) >= 1) ? Math.min(2.0, (hG - aG) * 0.8) : 0;
+        const hLiveOvr = (getLiveLineOvr(hOnIce) + hLineMatchBonus + homeLastChangeMod + parityBoost + hPressureMod + hStreakMod + rivalBonus + hMomentum*0.375 - hSkaterB2B + hDesperationBoost)*hAuraMod*homeCrowdEnergy;
+        const aLiveOvr = (getLiveLineOvr(aOnIce) + aLineMatchBonus + aPressureMod + aStreakMod + rivalBonus + aMomentum*0.375 - aSkaterB2B + aDesperationBoost)*aAuraMod;
         const diff = Math.max(-18, Math.min(18, hLiveOvr - aLiveOvr + chaosOffset));
 
         // EVEN-STRENGTH SHOT
@@ -4387,7 +4390,10 @@ function simGame(idx) {
             const shooterAgil  = playerStats[shooter.name]?.attr?.agil || 70;
             // agil 90 → effective fatigue ×0.60; agil 70 → ×1.00; agil 50 → ×1.40
             const agilFatMult  = Math.max(0.60, Math.min(1.40, 1.0 + (70 - shooterAgil) * 0.02));
-            const fatigueMod   = Math.max(0.90, 1.0 - (fatigueAmt * agilFatMult) * 0.008);
+            // v165: within-game period fatigue — legs tire as the game goes on
+            // P1: 0, P2: −0.4%, P3: −0.8%; agile players already cushioned via agilFatMult
+            const periodFatPen = (period - 1) * 0.004;
+            const fatigueMod   = Math.max(0.88, 1.0 - (fatigueAmt * agilFatMult) * 0.008 - periodFatPen);
 
             // CHEMISTRY DUO ON-ICE BONUS — active chem pair on the same unit lifts conversion slightly
             const onIceSet  = new Set(skaters.map(p => p.name));
@@ -4461,7 +4467,9 @@ function simGame(idx) {
                     if (goalEv.sAssist) trk(goalEv.sAssist, 'a', 1);
                     onIce.forEach(p   => trk(p.name, 'pm',  1));
                     oppOnIce.forEach(p => trk(p.name, 'pm', -1));
-                    if (isHome) hMomentum=8; else aMomentum=8;
+                    // v165: quick-goal spike — scoring while momentum is still hot pushes it higher
+                    if (isHome) hMomentum = hMomentum >= 4 ? Math.min(14, hMomentum + 8) : 8;
+                    else        aMomentum = aMomentum >= 4 ? Math.min(14, aMomentum + 8) : 8;
                 }
             } else {
                 trk(defGNm, 'sv', 1);
@@ -4559,7 +4567,14 @@ function simGame(idx) {
             const cycleMod   = Math.max(0.98, Math.min(1.12, 1.0 + (avgPPPass - 70) * 0.006));
             const ppStratMod = (!isPlayoffs&&!isASG&&advTeam.nrm===selectedTeam)
                 ? (coachAdj.pp===-1 ? cycleMod : coachAdj.pp===1 ? 0.90 : 1.0) : 1.0;
-            const ppConvRate = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm)*ppStratMod;
+            // v165: PK unit def+check → suppress PP conversion rate
+            // Elite PK skaters force bad angles and clear the zone; 90 avg → ×0.96; 70 → ×1.00; 50 → ×1.04
+            const pkSkSh2    = pkUnit.filter(p=>p.pos!=='G');
+            const pkAvgDef   = pkSkSh2.length ? pkSkSh2.reduce((s,p)=>s+(playerStats[p.name]?.attr?.def||70),0)/pkSkSh2.length : 70;
+            const pkAvgChk   = pkSkSh2.length ? pkSkSh2.reduce((s,p)=>s+(gradeToNum(playerStats[p.name]?.attr?.check)||70),0)/pkSkSh2.length : 70;
+            const pkDefInput = pkAvgDef * 0.60 + pkAvgChk * 0.40;
+            const pkSuppressMod = Math.max(0.94, Math.min(1.06, 1.0 - (pkDefInput - 70) * 0.002));
+            const ppConvRate = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm)*ppStratMod*pkSuppressMod;
 
             if (ppRoll < ppConvRate && ppUnit.length > 0) {
                 const ppShooter = selectShooter(ppUnit, 'PP');
@@ -4939,9 +4954,17 @@ function simGame(idx) {
             const otBest = (struct) => {
                 const line = otLine(struct);
                 if (!line.length) return { ovr: 75, name: null };
-                const best = line.reduce((a,b) => (getPlayerWeightedStats(b.name).ovr||70) > (getPlayerWeightedStats(a.name).ovr||70) ? b : a);
-                const tag = getPlayerWeightedStats(best.name)?.tag;
-                return { ovr: (getPlayerWeightedStats(best.name).ovr||70) + (tag === 'PRO SNIPER' ? 5 : tag === 'SUPERSTAR' ? 5 : tag === 'SNIPER' ? 3 : tag === 'DANGLER' ? 2 : tag === 'SPEEDSTER' ? 1 : 0), name: best.name };
+                // v165: OT rewards speed+agility — open ice is a different game; speedsters/danglers shine
+                const otScore = (p) => {
+                    const ws = getPlayerWeightedStats(p.name);
+                    const pa = playerStats[p.name]?.attr || {};
+                    const spd = pa.speed || 70; const agl = pa.agil || 70;
+                    const tag = ws?.tag || '';
+                    const tagBonus = tag==='SPEEDSTER'?6:tag==='DANGLER'?4:tag==='PRO SNIPER'?3:tag==='SUPERSTAR'?3:tag==='SNIPER'?2:0;
+                    return (ws.ovr||70)*0.60 + spd*0.25 + agl*0.15 + tagBonus;
+                };
+                const best = line.reduce((a,b) => otScore(b) > otScore(a) ? b : a);
+                return { ovr: otScore(best), name: best.name };
             };
             const otAssist = (struct, starName) => {
                 const line = otLine(struct).filter(p => p.name !== starName);
