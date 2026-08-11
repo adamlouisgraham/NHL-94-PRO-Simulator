@@ -4673,7 +4673,7 @@ function simGame(idx) {
                 const psGAgl = playerStats[psGoalie.name]?.attr?.agil || 70;
                 const psGDef = playerStats[psGoalie.name]?.attr?.gDef || 70;
                 const shooterComp = (psAcc * 0.60) + (psHnk * 0.40);
-                const goalieComp  = (psGOvr * 0.50) + (psGAgl * 0.30) + (psGDef * 0.20);
+                const goalieComp  = (psGOvr * 0.30) + (psGAgl * 0.30) + (psGDef * 0.40);
                 const psPr = 0.32 + (shooterComp - goalieComp) * 0.005;
                 const psSc = Math.random()<Math.max(0.15,Math.min(0.65,psPr));
                 trk(psShooter.name,'s',1);
