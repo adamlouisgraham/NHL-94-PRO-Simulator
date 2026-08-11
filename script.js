@@ -2057,6 +2057,8 @@ function processPostGameStreaks(skaters, goalies, matchStats) {
         // v163: write lastSV so assignMicroStreaks can reward a standout individual start
         ps.lastSV = gameSa > 0 ? gameSv / gameSa : null;
         ps.recentStarts.push({ sv: gameSv, sa: gameSa });
+        // v166: track consecutive starts — iron-man workload compounds fatigue beyond single B2B
+        ps.consecutiveStarts = (ps.consecutiveStarts || 0) + 1;
         
         // Rolling window: Keep only the last 3 starts
         if (ps.recentStarts.length > 3) ps.recentStarts.shift();
@@ -2176,9 +2178,9 @@ function getTeamSystemAura(tk) {
     let avgDef = skaters.reduce((s, p) => s + (playerStats[p.name].attr.def || 70), 0) / skaters.length;
     
     let aura = 'NONE';
-    // The threshold is strictly set to 82+ Average for the entire team
-    let offMargin = avgOff - 82;
-    let defMargin = avgDef - 82;
+    // v166: threshold lowered 82→79 so more teams earn an identity (most rosters sit 78-82)
+    let offMargin = avgOff - 79;
+    let defMargin = avgDef - 79;
     
     // Force a dominant identity if they qualify for both
     if (offMargin >= 0 && defMargin >= 0) {
@@ -3438,9 +3440,11 @@ function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
                 + (ppArchBonus[tag] || 0);
         } else {
             return sum + ovr * 0.9
-                + ((a.check ||70)-70)*0.20    // check:  ±4.0
-                + ((a.stkHnd||70)-70)*0.10    // stkHnd: ±2.0
-                + ((a.agil  ||70)-70)*0.10    // agil:   ±2.0
+                + ((a.check ||70)-70)*0.20    // check:  ±4.0 — body pressure, lane blocking
+                + ((a.def   ||70)-70)*0.15    // v166: def awareness: ±3.0 — reads play, gaps
+                + ((a.stkHnd||70)-70)*0.10    // stkHnd: ±2.0 — poke checks
+                + ((a.agil  ||70)-70)*0.10    // agil:   ±2.0 — gap control
+                + ((gradeToNum(a.endur)||70)-70)*0.08  // v166: endur: ±1.6 — stays sharp late in kill
                 + (pkArchBonus[tag] || 0);
         }
     }, 0);
@@ -3848,6 +3852,9 @@ function simGame(idx) {
     const aLastGPlayed = playerStats[aG_obj?.name]?.lastPlayedDay ?? null;
     const hRestBonus = (!isPlayoffs && hG_obj && hLastGPlayed != null && hLastGPlayed < currentDay - 2) ? 0.015 : 0;
     const aRestBonus = (!isPlayoffs && aG_obj && aLastGPlayed != null && aLastGPlayed < currentDay - 2) ? 0.015 : 0;
+    // v166: consecutive-starts penalty — starter worn down beyond 3 in a row; +0.01 per start > 3, cap 0.04
+    const hConsecPen = !isPlayoffs && hG_obj ? Math.max(0, Math.min(0.04, ((playerStats[hG_obj.name]?.consecutiveStarts||0) - 3) * 0.01)) : 0;
+    const aConsecPen = !isPlayoffs && aG_obj ? Math.max(0, Math.min(0.04, ((playerStats[aG_obj.name]?.consecutiveStarts||0) - 3) * 0.01)) : 0;
     // v162: skater B2B penalty — early-90s NHL had brutal back-to-back schedules with heavy travel.
     // Fraction of dressed skaters who played yesterday drives a liveOvr penalty (max -2.0).
     // High endur players handle B2Bs better — reduces the penalty up to 40%.
@@ -3900,6 +3907,7 @@ function simGame(idx) {
         + hGFatiguePen              // Continuous fatigue (new)
         - hHurtPen                  // Playing hurt (unchanged)
         - hRestBonus                // v164: well-rested goalie (3+ days off) plays sharper
+        + hConsecPen                // v166: iron-man fatigue (4+ consecutive starts)
     ));
     let aWallMod = Math.max(0.82, Math.min(1.18,
         1.0
@@ -3914,6 +3922,7 @@ function simGame(idx) {
         + aGFatiguePen
         - aHurtPen
         - aRestBonus                // v164: well-rested goalie
+        + aConsecPen                // v166: iron-man fatigue
     ));
     // Coaching adjustments: forecheck 1=aggressive(open game), -1=defensive(tight); pp 1=shoot, -1=cycle
     if (!isPlayoffs && !isASG && selectedTeam && (g.h.nrm === selectedTeam || g.a.nrm === selectedTeam)) {
@@ -4744,8 +4753,10 @@ function simGame(idx) {
                 trk(hF.name,'pim',5); trk(aF.name,'pim',5);
                 penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:g.h.code,
                     cl:'#FF4444', txt:`FIGHT: ${hF.name} vs ${aF.name} — coincidental majors (5 min each)`, isPenalty:false, isFight:true});
-                // FIGHT MOMENTUM — winner's bench gets a surge; weight by toughness rating
-                const hFW = fightWt(hF.name), aFW = fightWt(aF.name);
+                // FIGHT MOMENTUM — winner's bench gets a surge; toughness + v166: body weight edge
+                const getWgtNum = (n) => { const ps2=playerStats[n]; return ps2?.weight || ps2?.attr?.weight || 195; };
+                const hFW = fightWt(hF.name) * (1.0 + (getWgtNum(hF.name) - 195) * 0.0015);
+                const aFW = fightWt(aF.name) * (1.0 + (getWgtNum(aF.name) - 195) * 0.0015);
                 if (Math.random() < hFW / (hFW + aFW + 0.001)) hMomentum = Math.min(hMomentum + 5, 14);
                 else aMomentum = Math.min(aMomentum + 5, 14);
                 [hF,aF].forEach(fighter => {
@@ -10105,6 +10116,7 @@ function applyPostGameFatigue(awayTeamCode, homeTeamCode, awayGoalieName, homeGo
                     p.status.fatigue = Math.min(100, p.status.fatigue + 15); // Starter gets exhausted
                 } else {
                     p.status.fatigue = Math.max(0, p.status.fatigue - 8); // Backup rests on the bench
+                    if (_ps9) _ps9.consecutiveStarts = 0; // v166: streak resets on rest day
                 }
             }
         });
