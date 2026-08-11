@@ -3362,12 +3362,24 @@ function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
     let score = players.reduce((sum, p) => {
         const stats = playerStats[p.name]; if (!stats) return sum;
         const ovr = getLiveIceOvr(p.name);
-        const grades = stats.attr.grades || {};
+        const a   = stats.attr || {};
         const tag = PLAYER_TAG_OVERRIDES[p.name] || (getPlayerWeightedStats(p.name)?.tag || '');
+        // v158: replaced grade-string step function (getGradeMod A=2,B=1,C=0…) with continuous
+        // numeric attrs — same ±5/±4/±2 range per unit but now fully continuous 0–99 scale.
+        // PP weights: pass (primary playmaking), shotPwr (one-timer), shotAcc (placement)
+        // PK weights: check (body pressure), stkHnd (poke check/deflect), agil (gap control)
         if (isPP) {
-            return sum + ovr + getGradeMod(grades.pass || 'C') * 2.5 + getGradeMod(grades.shotPwr || 'C') * 2.0 + getGradeMod(grades.shotAcc || 'C') * 1.5 + (ppArchBonus[tag] || 0);
+            return sum + ovr
+                + ((a.pass   ||70)-70)*0.25   // pass:    ±5.0 at ±20 from 70
+                + ((a.shotPwr||70)-70)*0.20   // shotPwr: ±4.0
+                + ((a.shotAcc||70)-70)*0.15   // shotAcc: ±3.0
+                + (ppArchBonus[tag] || 0);
         } else {
-            return sum + ovr * 0.9 + getGradeMod(grades.check || 'C') * 2.0 + getGradeMod(grades.stkHnd || 'C') * 1.0 + getGradeMod(grades.agil || 'C') * 1.0 + (pkArchBonus[tag] || 0);
+            return sum + ovr * 0.9
+                + ((a.check ||70)-70)*0.20    // check:  ±4.0
+                + ((a.stkHnd||70)-70)*0.10    // stkHnd: ±2.0
+                + ((a.agil  ||70)-70)*0.10    // agil:   ±2.0
+                + (pkArchBonus[tag] || 0);
         }
     }, 0);
     let goaliePkBonus = 0;
@@ -4652,9 +4664,17 @@ function simGame(idx) {
             const psOnIce  = (psHome?hOnIce:aOnIce).filter(p=>p.pos!=='G');
             const psShooter = psOnIce.length ? selectShooter(psOnIce) : null;
             if (psShooter && psGoalie) {
-                const sOvr = getPlayerWeightedStats(psShooter.name).ovr||75;
-                const gOvr = getPlayerWeightedStats(psGoalie.name).ovr||75;
-                const psPr = 0.30+(sOvr-gOvr)*0.005;
+                // v158: penalty shot is a pure 1-on-1 — specific attrs replace composite OVR.
+                // Shooter: shotAcc (placement 60%) + stkHnd (deke 40%) — centered at 70.
+                // Goalie:  ovr (50%) + agil (lateral read 30%) + gDef (positioning 20%).
+                const psAcc  = playerStats[psShooter.name]?.attr?.shotAcc || 70;
+                const psHnk  = playerStats[psShooter.name]?.attr?.stkHnd  || 70;
+                const psGOvr = playerStats[psGoalie.name]?.attr?.ovr  || 75;
+                const psGAgl = playerStats[psGoalie.name]?.attr?.agil || 70;
+                const psGDef = playerStats[psGoalie.name]?.attr?.gDef || 70;
+                const shooterComp = (psAcc * 0.60) + (psHnk * 0.40);
+                const goalieComp  = (psGOvr * 0.50) + (psGAgl * 0.30) + (psGDef * 0.20);
+                const psPr = 0.32 + (shooterComp - goalieComp) * 0.005;
                 const psSc = Math.random()<Math.max(0.15,Math.min(0.65,psPr));
                 trk(psShooter.name,'s',1);
                 if (psSc) {
@@ -4688,7 +4708,12 @@ function simGame(idx) {
                 const enScorerTeam = trailerIsHome ? g.a : g.h;
                 const enGoalie    = trailerIsHome ? hG_name : aG_name;
                 const enShooters  = trailerIsHome ? [...aStruct.f[0], ...aStruct.d[0]] : [...hStruct.f[0], ...hStruct.d[0]];
-                if (Math.random() < 0.65 && enShooters.length > 0) {
+                // v158: leading team speed scales empty-net conversion (fast teams capitalize more)
+                const enAvgSpd = enShooters.length
+                    ? enShooters.reduce((s, p) => s + (playerStats[p.name]?.attr?.speed || 70), 0) / enShooters.length
+                    : 70;
+                const enConvRate = Math.max(0.50, Math.min(0.80, 0.65 + (enAvgSpd - 70) * 0.0035));
+                if (Math.random() < enConvRate && enShooters.length > 0) {
                     const enShooter = selectShooter(enShooters);
                     const sec = Math.floor(Math.random() * 60);
                     const enEv = processSingleGoal(enScorerTeam.nrm, enScorerTeam.code, enShooter, enShooters, `P3 59:${sec<10?'0'+sec:sec}`, 3, 59, sec);
@@ -10214,14 +10239,34 @@ function rollInGameInjuries(homeCode, awayCode) {
         const skaters = rosters[tk].filter(p => p.pos !== 'G' && playerStats[p.name] && playerStats[p.name].injury?.daysRemaining === 0);
         const goalies = rosters[tk].filter(p => p.pos === 'G' && playerStats[p.name] && playerStats[p.name].injury?.daysRemaining === 0);
 
+        // v158: opposing team avg check raises risk; victim endur+agil reduce susceptibility; continuous fatigue
+        const oppCode = tk === homeCode ? awayCode : homeCode;
+        const oppSkaters = (rosters[oppCode] || []).filter(p => p.pos !== 'G');
+        const oppAvgCheck = oppSkaters.length
+            ? oppSkaters.reduce((s, p) => s + (playerStats[p.name]?.attr?.check || 70), 0) / oppSkaters.length
+            : 70;
+        const checkBonus = Math.max(0, (oppAvgCheck - 70) * 0.00008); // rough team checks more → more injuries
+
         // Skater injury
         skaters.forEach(p => {
             const ps = playerStats[p.name];
             if (!ps) return;
-            const fatigueBonus = getPlayerFatigueAmount(p.name) > 5 ? 0.003 : 0;
-            const aggrBonus = getAggr(p.name) > 70 ? 0.002 : 0;
-            if (Math.random() < SKATER_CHANCE + fatigueBonus + aggrBonus) {
-                const roll = Math.random();
+            const pA = ps.attr || {};
+            const pEndur = pA.endur || 70;
+            const pAgil  = pA.agil  || 70;
+            const fatigueAmt = getPlayerFatigueAmount(p.name);
+            // continuous fatigue replaces step function; agil cushions the penalty
+            const agilFatMult = Math.max(0.60, Math.min(1.40, 1.0 + (70 - pAgil) * 0.02));
+            const fatigueCont = fatigueAmt * agilFatMult * 0.0005;
+            const endurProt   = Math.max(-0.0015, (pEndur - 70) * -0.00005); // high endur reduces chance
+            const agilProt    = Math.max(-0.0010, (pAgil  - 70) * -0.00003); // high agil dodges hits
+            const injChance = SKATER_CHANCE + fatigueCont + endurProt + agilProt + checkBonus;
+            if (Math.random() < Math.max(0.0005, injChance)) {
+                const rawRoll = Math.random();
+                // v158: endur shifts toward less severe; high fatigue shifts toward more severe
+                const endurShift   = -(pEndur - 70) * 0.006;
+                const fatigueSev   = Math.min(0.08, fatigueAmt * 0.008);
+                const roll = Math.max(0, Math.min(1, rawRoll + endurShift + fatigueSev));
                 let days;
                 if      (roll < 0.40) days = 0;
                 else if (roll < 0.80) days = Math.floor(Math.random() * 3) + 1;  // 1–3 games
@@ -10271,15 +10316,29 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
         const stats = matchStats[pName];
         if (!stats.toi || stats.toi <= 0) continue;
 
-        const fatigueBonus = getPlayerFatigueAmount(pName) > 5 ? 0.003 : 0;
+        // v158: continuous fatigue+agil protection replaces step function; endur reduces susceptibility+severity
+        const pA2     = ps.attr || {};
+        const pEndur2 = pA2.endur || 70;
+        const pAgil2  = pA2.agil  || 70;
+        const pAge2   = ps.age || 28;
+        const fatigueAmt2  = getPlayerFatigueAmount(pName);
+        const agilFatMult2 = Math.max(0.60, Math.min(1.40, 1.0 + (70 - pAgil2) * 0.02));
+        const fatigueCont2 = fatigueAmt2 * agilFatMult2 * 0.0005;
+        const endurProt2   = Math.max(-0.0015, (pEndur2 - 70) * -0.00005);
+        const agilProt2    = Math.max(-0.0010, (pAgil2  - 70) * -0.00003);
         // Scale by penalty severity, not just a flat "took any penalty" flag — a fight or major
         // (5 PIM) is a genuinely more injury-prone event than an ordinary 2-min minor and should
         // carry noticeably more risk, not the same fixed bump.
         const physicalBonus = stats.pim >= 5 ? 0.006 : stats.pim >= 2 ? 0.002 : 0;
-        const chance = BASE_CHANCE + fatigueBonus + physicalBonus;
+        const chance = Math.max(0.0005, BASE_CHANCE + fatigueCont2 + endurProt2 + agilProt2 + physicalBonus);
 
         if (Math.random() < chance) {
-            const roll = Math.random();
+            const rawRoll = Math.random();
+            // v158: endur shifts toward less severe; age>32 shifts toward more severe (slower recovery)
+            const endurShift2 = -(pEndur2 - 70) * 0.006;
+            const ageShift2   = pAge2 > 36 ? 0.10 : pAge2 > 32 ? 0.05 : pAge2 < 24 ? -0.03 : 0;
+            const sevFatigue2 = Math.min(0.08, fatigueAmt2 * 0.008);
+            const roll = Math.max(0, Math.min(1, rawRoll + endurShift2 + ageShift2 + sevFatigue2));
             let days, label;
             if      (roll < 0.40) { days = 0;                                    label = 'out for a period'; }
             else if (roll < 0.80) { days = Math.floor(Math.random() * 3) + 1;   label = `${days}-game injury`; }  // 1–3
