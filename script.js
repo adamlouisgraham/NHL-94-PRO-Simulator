@@ -4050,6 +4050,22 @@ function simGame(idx) {
     const aHitCount   = poissonRand(24 * (1 + (aTeamCheck - 70) * 0.005));
     const hBlockCount = poissonRand(13 * (1 + (hTeamCheck - 70) * 0.004));
     const aBlockCount = poissonRand(13 * (1 + (aTeamCheck - 70) * 0.004));
+    // v160: team avg rough — dirty teams create more chaos (loose pucks, screens, scrums near crease)
+    // Used in ES prob roughChaosMod; also avg weight for opposing team injury severity
+    const calcTeamRough = (tk) => {
+        const sk = (rosters[tk] || []).filter(p => p.pos !== 'G');
+        if (!sk.length) return 60;
+        return sk.reduce((s, p) => s + (gradeToNum(playerStats[p.name]?.attr?.rough) || 60), 0) / sk.length;
+    };
+    const calcTeamWeight = (tk) => {
+        const sk = (rosters[tk] || []).filter(p => p.pos !== 'G');
+        if (!sk.length) return 195;
+        return sk.reduce((s, p) => s + (getWgt(p.name) || 195), 0) / sk.length;
+    };
+    const hTeamRough  = calcTeamRough(g.h.nrm);
+    const aTeamRough  = calcTeamRough(g.a.nrm);
+    const hTeamWeight = calcTeamWeight(g.h.nrm);
+    const aTeamWeight = calcTeamWeight(g.a.nrm);
 
     // PERIOD-WEIGHTED TICK DISTRIBUTION — 3rd period gets slightly more events (teams press late)
     // P1: 31% | P2: 31% | P3 early: 30% | P3 final 4 min (ticks 224-239): 8%
@@ -4219,9 +4235,17 @@ function simGame(idx) {
             // v151: accMod wires shooter's shotAcc attribute into conversion probability.
             // Centered at 70; elite sniper (90 acc) → ×1.06; poor finisher (50 acc) → ×0.94.
             // chaosMod noise halved (0.04) since accMod now provides structured per-shot variance.
-            const shooterAcc = playerStats[shooter.name]?.attr?.shotAcc || 70;
-            const accMod    = Math.max(0.88, Math.min(1.12, 1.0 + (shooterAcc - 70) * 0.003));
-            const chaosMod  = 1.0 + (Math.random()-0.5)*activeChaos*0.04; // was 0.08 pre-v151
+            const shooterAcc  = playerStats[shooter.name]?.attr?.shotAcc || 70;
+            const shooterAggr = gradeToNum(playerStats[shooter.name]?.attr?.aggr) || 60;
+            // v160: aggr penalises accuracy — aggressive shooters rush shots, fire off-balance.
+            // aggr 90 → accMod ×0.97; aggr 50 → accMod ×1.01 (composed finishers slightly cleaner)
+            const aggrAccPen  = Math.max(0.94, Math.min(1.02, 1.0 - (shooterAggr - 60) * 0.0015));
+            const accMod      = Math.max(0.88, Math.min(1.12, 1.0 + (shooterAcc - 70) * 0.003)) * aggrAccPen;
+            // v160: opposing team rough raises chaos — dirty physical play creates screens,
+            // deflections, and loose pucks near the crease. rough 85 → +1.5% chaos; rough 50 → −0.9%
+            const oppRough    = isHome ? aTeamRough : hTeamRough;
+            const roughChaos  = Math.max(0.97, Math.min(1.03, 1.0 + (oppRough - 60) * 0.0006));
+            const chaosMod    = (1.0 + (Math.random()-0.5)*activeChaos*0.04) * roughChaos;
             const wallMod   = isHome ? aWallMod : hWallMod;
             const dSign     = isHome ? 1 : -1;
 
@@ -10244,12 +10268,16 @@ function rollInGameInjuries(homeCode, awayCode) {
         const goalies = rosters[tk].filter(p => p.pos === 'G' && playerStats[p.name] && playerStats[p.name].injury?.daysRemaining === 0);
 
         // v158: opposing team avg check raises risk; victim endur+agil reduce susceptibility; continuous fatigue
+        // v160: opposing team avg weight shifts injury severity — heavier teams hit harder
         const oppCode = tk === homeCode ? awayCode : homeCode;
         const oppSkaters = (rosters[oppCode] || []).filter(p => p.pos !== 'G');
         const oppAvgCheck = oppSkaters.length
             ? oppSkaters.reduce((s, p) => s + (playerStats[p.name]?.attr?.check || 70), 0) / oppSkaters.length
             : 70;
-        const checkBonus = Math.max(0, (oppAvgCheck - 70) * 0.00008); // rough team checks more → more injuries
+        const oppAvgWeight = oppSkaters.length
+            ? oppSkaters.reduce((s, p) => s + (getWgt(p.name) || 195), 0) / oppSkaters.length
+            : 195;
+        const checkBonus = Math.max(0, (oppAvgCheck - 70) * 0.00008);
 
         // Skater injury
         skaters.forEach(p => {
@@ -10268,9 +10296,11 @@ function rollInGameInjuries(homeCode, awayCode) {
             if (Math.random() < Math.max(0.0005, injChance)) {
                 const rawRoll = Math.random();
                 // v158: endur shifts toward less severe; high fatigue shifts toward more severe
+                // v160: heavier opposing team hits harder — 220 lb avg → +0.025 severity shift vs 195 lb baseline
                 const endurShift   = -(pEndur - 70) * 0.006;
                 const fatigueSev   = Math.min(0.08, fatigueAmt * 0.008);
-                const roll = Math.max(0, Math.min(1, rawRoll + endurShift + fatigueSev));
+                const weightSev    = Math.max(0, (oppAvgWeight - 195) * 0.001);
+                const roll = Math.max(0, Math.min(1, rawRoll + endurShift + fatigueSev + weightSev));
                 let days;
                 if      (roll < 0.40) days = 0;
                 else if (roll < 0.80) days = Math.floor(Math.random() * 3) + 1;  // 1–3 games
@@ -10310,6 +10340,13 @@ function rollInGameInjuries(homeCode, awayCode) {
 function triggerGameInjuries(matchStats, homeCode, awayCode) {
     if (!awardConfig.injuries) return;
     const BASE_CHANCE = 0.00165; // v118: +10% bump from v114
+    // v160: pre-compute avg weight per team for injury severity — heavier opponents hit harder
+    const avgWeightForTeam = (tk) => {
+        const sk = (rosters[tk] || []).filter(p => p.pos !== 'G');
+        return sk.length ? sk.reduce((s, p) => s + (getWgt(p.name) || 195), 0) / sk.length : 195;
+    };
+    const homeAvgWeight = avgWeightForTeam(homeCode);
+    const awayAvgWeight = avgWeightForTeam(awayCode);
     for (let pName in matchStats) {
         const ps = playerStats[pName];
         if (!ps) continue;
@@ -10342,7 +10379,11 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
             const endurShift2 = -(pEndur2 - 70) * 0.006;
             const ageShift2   = pAge2 > 36 ? 0.10 : pAge2 > 32 ? 0.05 : pAge2 < 24 ? -0.03 : 0;
             const sevFatigue2 = Math.min(0.08, fatigueAmt2 * 0.008);
-            const roll = Math.max(0, Math.min(1, rawRoll + endurShift2 + ageShift2 + sevFatigue2));
+            // v160: heavier opposing team → more severe injuries (220 lb avg → +0.025 vs 195 baseline)
+            const isHomePlayer2 = !!(rosters[homeCode] || []).find(p => p.name === pName);
+            const oppWeight2    = isHomePlayer2 ? awayAvgWeight : homeAvgWeight;
+            const weightSev2    = Math.max(0, (oppWeight2 - 195) * 0.001);
+            const roll = Math.max(0, Math.min(1, rawRoll + endurShift2 + ageShift2 + sevFatigue2 + weightSev2));
             let days, label;
             if      (roll < 0.40) { days = 0;                                    label = 'out for a period'; }
             else if (roll < 0.80) { days = Math.floor(Math.random() * 3) + 1;   label = `${days}-game injury`; }  // 1–3
