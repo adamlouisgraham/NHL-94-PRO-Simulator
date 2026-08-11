@@ -5070,7 +5070,10 @@ function selectShooter(unit, context = 'ES') {
         const acc = pA.shotAcc || 70;
 
         // Base weight from attributes  -  same formula for all positions
-        let weight = (off * 0.40) + (pwr * 0.30) + (acc * 0.30);
+        // v150: rebalanced — shot accuracy is the dominant scorer trait (0.45),
+        // offense awareness secondary (0.30), shot power tertiary (0.25).
+        // Old weights: off 0.40 / pwr 0.30 / acc 0.30
+        let weight = (off * 0.30) + (pwr * 0.25) + (acc * 0.45);
 
         // Archetype multiplier
         weight *= (arch.shotRate || 1.0);
