@@ -1538,10 +1538,13 @@ async function startNewGame(useCustomRoster = false) {
             let gStickL = gradeToNum(gc(41));
             let gGloveR = gradeToNum(gc(42));
             let gGloveL = gradeToNum(gc(43));
+            // Handed (L/R): determines which physical side is glove vs stick — used by shot zone coverage
+            const gHanded = (gc(44) || 'L').toString().trim().toUpperCase() === 'R' ? 'R' : 'L';
 
             playerStats[gN] = {
                 name: gN, team: teamObj.name, teamCode: teamObj.code, pos: 'G', age: parseInt(getCol(r, ["AGE"], -1)) || (Math.floor(Math.random()*15)+18),
                 streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false,
+                catches: gHanded,  // 'L' or 'R' — drives shot zone directional coverage mapping
                 injury: { severity: 0, daysRemaining: 0 },
                 cumulativeFatigue: 0,
                 morale: 100,
@@ -4228,11 +4231,18 @@ function simGame(idx) {
             let zr = Math.random() * (zoneW[0]+zoneW[1]+zoneW[2]+zoneW[3]), zi = 0;
             while (zi < 3 && (zr -= zoneW[zi]) > 0) zi++;
             const oppGObj      = isHome ? aG_obj : hG_obj;
-            const oppGAttr     = oppGObj ? playerStats[oppGObj.name]?.attr : null;
-            // zi=0 → gloveHigh (gloveR), zi=1 → gloveLow (gloveL), zi=2 → stickHigh (stickR), zi=3 → stickLow (stickL)
-            const zoneCoverage = oppGAttr
-                ? [oppGAttr.gloveR||70, oppGAttr.gloveL||70, oppGAttr.stickR||70, oppGAttr.stickL||70][zi]
-                : 70;
+            const oppGStats    = oppGObj ? playerStats[oppGObj.name] : null;
+            const oppGAttr     = oppGStats?.attr || null;
+            // Handedness flips which physical side is glove vs stick:
+            //   catches L → glove on LEFT side (gloveL=primary, stickR=primary)
+            //   catches R → glove on RIGHT side (gloveR=primary, stickL=primary)
+            // zi=0 → glove-side high  zi=1 → glove-side low  zi=2 → stick-side high  zi=3 → stick-side low
+            const gCatches     = oppGStats?.catches || 'L';
+            const gloveSideH   = oppGAttr ? (gCatches==='L' ? oppGAttr.gloveL||70 : oppGAttr.gloveR||70) : 70;
+            const gloveSideL   = oppGAttr ? (gCatches==='L' ? oppGAttr.gloveR||70 : oppGAttr.gloveL||70) : 70;
+            const stickSideH   = oppGAttr ? (gCatches==='L' ? oppGAttr.stickR||70 : oppGAttr.stickL||70) : 70;
+            const stickSideL   = oppGAttr ? (gCatches==='L' ? oppGAttr.stickL||70 : oppGAttr.stickR||70) : 70;
+            const zoneCoverage = [gloveSideH, gloveSideL, stickSideH, stickSideL][zi];
             const coverageMod  = Math.max(0.90, Math.min(1.10, 1.0 + (70 - zoneCoverage) * 0.002));
 
             const prob      = (0.079 + dSign*diff*0.0002)*wallMod*sniperMod*accMod*chaosMod*coverageMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; at 0.086 ES=5.79+PP=1.57=7.36 GPG; 0.079 targets ~6.89
