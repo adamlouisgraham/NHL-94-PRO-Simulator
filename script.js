@@ -4120,8 +4120,21 @@ function simGame(idx) {
     const aBaseLambda  = 26 + Math.max(0, Math.min(5, (aTeamStyle - 60) * 0.2));
     const hShotCount   = poissonRand(hBaseLambda * (1 + preGameDiff * 0.008));
     const aShotCount   = poissonRand(aBaseLambda * (1 - preGameDiff * 0.008));
-    // Penalty counts derived from per-tick rates × 240 steps
-    const penCount    = poissonRand(7.5);   // v128: back to 7.5 now that PP units are properly built (v125-127 fix)
+    // v167: penCount scaled by roster avg penaltyRate (archMods) + forecheck coaching adj
+    // Goon-heavy rosters (avg 1.25) → ~9 pens; skills game (avg 0.85) → ~6 pens; flat 7.5 baseline
+    const calcTeamPenRate = (tk) => {
+        const sk = (rosters[tk] || []).filter(p => p.pos !== 'G');
+        if (!sk.length) return 1.0;
+        return sk.reduce((s, p) => {
+            const tag2 = PLAYER_TAG_OVERRIDES[p.name] || getPlayerWeightedStats(p.name)?.tag || 'GENERIC';
+            return s + (archMods[tag2]?.penaltyRate || 1.0);
+        }, 0) / sk.length;
+    };
+    const gameAvgPenRate = (calcTeamPenRate(g.h.nrm) + calcTeamPenRate(g.a.nrm)) / 2;
+    // Aggressive forecheck = more contact = more penalty calls (only user's games)
+    const forecheckPenMult = (!isPlayoffs && !isASG && selectedTeam && (g.h.nrm === selectedTeam || g.a.nrm === selectedTeam))
+        ? Math.max(0.90, Math.min(1.12, 1.0 + coachAdj.forecheck * 0.08)) : 1.0;
+    const penCount = poissonRand(7.5 * Math.max(0.75, Math.min(1.40, gameAvgPenRate)) * forecheckPenMult);
     // v157: coincidental and goon events scaled by game avg aggr — dirty games have more scrums
     const calcTeamAggr = (tk) => {
         const sk = (rosters[tk] || []).filter(p => p.pos !== 'G');
@@ -4181,6 +4194,10 @@ function simGame(idx) {
     const evStream  = [];
     randTicks(hShotCount).forEach(t => evStream.push({t, type:'shot', side:'h'}));
     randTicks(aShotCount).forEach(t => evStream.push({t, type:'shot', side:'a'}));
+    // v167: P3 desperation shot burst — trailing team fires extra volume late; gated on score state in handler
+    const randP3Ticks = (n) => Array.from({length:n}, () => Math.floor(Math.random()*80)+160).sort((a,b)=>a-b);
+    randP3Ticks(poissonRand(3)).forEach(t => evStream.push({t, type:'shot', side:'h', desperation:true}));
+    randP3Ticks(poissonRand(3)).forEach(t => evStream.push({t, type:'shot', side:'a', desperation:true}));
     randTicks(penCount).forEach(t   => evStream.push({t, type:'pen'}));
     randTicks(coinCount).forEach(t  => evStream.push({t, type:'coin'}));
     randTicks(goonCount).forEach(t  => evStream.push({t, type:'goon'}));
@@ -4215,10 +4232,13 @@ function simGame(idx) {
         if (!ps) return 1;
         const aggr = gradeToNum(ps.attr?.aggr) || 50;
         const rough = gradeToNum(ps.attr?.rough) || 50;
-        const tagMult = (getPlayerWeightedStats(name)?.tag||'').includes('ENFORCER') ? 2.0 : 1;
+        const tag3 = getPlayerWeightedStats(name)?.tag || 'GENERIC';
+        // v167: arch penaltyRate differentiates PEST(1.30)/GRINDER(1.30) from SNIPER(0.85)/PLAYMAKER(0.85)
+        const archPenMult = archMods[tag3]?.penaltyRate || 1.0;
+        const tagMult = tag3.includes('ENFORCER') ? 2.0 : 1;
         // v163: 4th-line players are deployed for energy/intimidation — 40% more likely to take a penalty
         const line4Mult = (isHomeTeam ? h4thLine : a4thLine).has(name) ? 1.40 : 1.0;
-        const base = Math.pow((aggr+rough)/2, 1.3) * tagMult * line4Mult;
+        const base = Math.pow((aggr+rough)/2, 1.3) * tagMult * line4Mult * archPenMult;
         // [FIX] was ps.season?.pim — during playoffs k='playoff', so season PIM was
         // used to cap playoff penalty rates. Use the active bucket instead.
         const overCap = Math.max(0, (ps[k]?.pim||0) - 150);
@@ -4320,6 +4340,8 @@ function simGame(idx) {
         // EVEN-STRENGTH SHOT
         if (ev.type === 'shot') {
             const isHome  = ev.side === 'h';
+            // v167: desperation shots only fire when that team is trailing in P3 — volume not conversion
+            if (ev.desperation && ((isHome ? hG : aG) >= (isHome ? aG : hG))) continue;
             const onIce   = isHome ? hOnIce : aOnIce;
             const defGNm  = isHome ? aG_name : hG_name;
             const teamObj = isHome ? g.h : g.a;
@@ -4858,17 +4880,22 @@ function simGame(idx) {
         }
     } // end event stream
 
-    // EMPTY NETTER — trailing team pulls goalie in final 2 min (steps 116-119)
-    // ~50% chance they actually pull; leading team has ~65% chance to score EN goal
+    // EMPTY NETTER — trailing team pulls goalie late in regulation
+    // v167: pull timing scales with deficit — down-1 pulls ~57-58 min, down-2 pulls ~55-56 min
     if (hG !== aG && !isASG) {
         const trailerIsHome = hG < aG;
         const goalDiff = Math.abs(hG - aG);
-        if (goalDiff === 1) {
-            const pullChance = 0.50;
-            if (Math.random() < pullChance) {
-                const trailingTeam = trailerIsHome ? g.h : g.a;
-                allGoals.push({ p:3, m:59, s:1, str:`P3 59:01`, tm: trailingTeam.code,
-                    cl:'#888', txt:`${trailingTeam.code} pulls the goalie for the extra attacker — 6-on-5 with time running out!`, isNote:true });
+        const pullChance = goalDiff === 1 ? 0.50 : goalDiff === 2 ? 0.28 : 0;
+        if (pullChance > 0 && Math.random() < pullChance) {
+            const pullMin = goalDiff === 2
+                ? (55 + Math.floor(Math.random()*2))   // down-2: 55-56 min
+                : (57 + Math.floor(Math.random()*2));  // down-1: 57-58 min
+            const pullSec = Math.floor(Math.random()*60);
+            const pullSecStr = pullSec < 10 ? '0'+pullSec : pullSec;
+            const pullTimeStr = `P3 ${pullMin}:${pullSecStr}`;
+            const trailingTeam = trailerIsHome ? g.h : g.a;
+                allGoals.push({ p:3, m:pullMin, s:pullSec, str:pullTimeStr, tm: trailingTeam.code,
+                    cl:'#888', txt:`${trailingTeam.code} pulls the goalie for the extra attacker — 6-on-5 with ${60-pullMin} minutes left!`, isNote:true });
                 const enScorerTeam = trailerIsHome ? g.a : g.h;
                 const enGoalie    = trailerIsHome ? hG_name : aG_name;
                 const enShooters  = trailerIsHome ? [...aStruct.f[0], ...aStruct.d[0]] : [...hStruct.f[0], ...hStruct.d[0]];
@@ -4925,7 +4952,6 @@ function simGame(idx) {
                         }
                     }
                 }
-            }
         }
     }
 
