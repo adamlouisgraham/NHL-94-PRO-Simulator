@@ -2156,12 +2156,20 @@ function getArchetypeBadge(pName) {
     return `<span style="margin-left: 6px; font-weight: bold; font-size: 0.85em; color: #888;">[${abbrev}]</span>`;
 }
 // --- GOALIE ARCHETYPE WALL MOD ---
+// v169: complete — WALL is elite (hardest to score), ACROBAT/SCREENER/STOPPER suppress;
+// SCRAMBLER/BACKUP slightly easier. Higher = easier to score (wallMod multiplies prob).
 function getGoalieWallMod(tag) {
     switch (tag) {
-        case 'ACROBAT':     return -0.025;
-        case 'SCREENER':    return -0.020;
-        case 'GOALTENDER':  return  0.025;
-        default:            return  0;
+        case 'WALL':         return -0.035; // elite: ovr≥85, positional mastery
+        case 'ACROBAT':      return -0.025; // athletic sprawl-saves
+        case 'SCREENER':     return -0.020; // challenging angles
+        case 'STOPPER':      return -0.015; // positional, reads plays
+        case 'PUCK HANDLER': return -0.010; // limits rebounds, directs pucks
+        case 'FORTRESS':     return -0.008; // big body covers net
+        case 'SCRAMBLER':    return  0.012; // chaotic, more loose pucks around net
+        case 'BACKUP':       return  0.015; // below average
+        case 'GOALTENDER':   return  0.025; // legacy tag, average at best
+        default:             return  0;     // HYBRID, HYBRID — neutral
     }
 }
 
@@ -3970,7 +3978,8 @@ function simGame(idx) {
     const ovrGap  = aAvgOvr - hAvgOvr; // positive = home team is underdog
     const parityBoost = isASG ? 0 : Math.min(6, Math.max(0, ovrGap * 0.45));
 
-    let homeCrowdEnergy = 1.03;
+    // v169: crowd scales with context — playoffs louder, rivalry games electric, baseline 1.03
+    let homeCrowdEnergy = isPlayoffs ? 1.065 : isHistoricRival ? 1.045 : 1.03;
 
     // RIVALRY — historical rivals play with extra intensity from game 1; organic (3+ meetings) adds more
     const hMeetings = !isPlayoffs ? ((g.h.season.meetings || {})[g.a.nrm] || 0) : 0;
@@ -4482,7 +4491,7 @@ function simGame(idx) {
             const distZone     = distRoll < dw0 ? 0 : distRoll < dw0+dw1 ? 1 : 2; // 0=close,1=med,2=far
             const distMod      = [1.20, 1.00, 0.75][distZone];
 
-            const prob      = (0.079 + dSign*diff*0.0002)*wallMod*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; at 0.086 ES=5.79+PP=1.57=7.36 GPG; 0.079 targets ~6.89
+            const prob      = (0.0878 + dSign*diff*0.0002)*wallMod*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; at 0.086 ES=5.79+PP=1.57=7.36 GPG; 0.079→~6.89; v169: 0.0878→~7.47 (+0.578)
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
@@ -7080,6 +7089,12 @@ function getLiveLineOvr(line) {
     }, 0);
     const base = Math.round(totalOvr / line.length);
 
+    // v169: individual morale → micro OVR lift (±1.5 max); hot-streak players elevate the unit
+    const moraleAdj = line.reduce((s, p) => {
+        const m = playerStats[p.name]?.morale ?? 100;
+        return s + Math.max(-1.5, Math.min(1.5, (m - 100) * 0.03));
+    }, 0) / line.length;
+
     // Chemistry bonus: +2 OVR per dynamic duo pair on this line together
     if (awardConfig.chemistry) {
         const names = new Set(line.map(p => p.name));
@@ -7092,9 +7107,9 @@ function getLiveLineOvr(line) {
                 chemBonus += score >= 75 ? 2 : score >= 50 ? 1 : 0;
             }
         }
-        return base + chemBonus;
+        return base + chemBonus + moraleAdj;
     }
-    return base;
+    return base + moraleAdj;
 }
 
 /**
