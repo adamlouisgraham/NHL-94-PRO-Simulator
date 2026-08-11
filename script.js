@@ -3791,10 +3791,12 @@ function simGame(idx) {
     const hGDef  = hG_obj ? (playerStats[hG_obj.name]?.attr?.gDef  || 70) : 70;
     const hGSpd  = hG_obj ? (playerStats[hG_obj.name]?.attr?.speed || 70) : 70;
     const hGHnd  = hG_obj ? (playerStats[hG_obj.name]?.attr?.stkHnd|| 70) : 70; // v157: puck control limits rebounds
+    const hGOff  = hG_obj ? (playerStats[hG_obj.name]?.attr?.gOff  || 70) : 70; // v159: rebound awareness
     const aGAgil = aG_obj ? (playerStats[aG_obj.name]?.attr?.agil   || 70) : 70;
     const aGDef  = aG_obj ? (playerStats[aG_obj.name]?.attr?.gDef  || 70) : 70;
     const aGSpd  = aG_obj ? (playerStats[aG_obj.name]?.attr?.speed || 70) : 70;
     const aGHnd  = aG_obj ? (playerStats[aG_obj.name]?.attr?.stkHnd|| 70) : 70;
+    const aGOff  = aG_obj ? (playerStats[aG_obj.name]?.attr?.gOff  || 70) : 70; // v159: rebound awareness
     // v151: continuous fatigue penalty from accumulated status.fatigue (goalie starter gets +15/game,
     // bleeds off -25/rest day). Independent of the binary B2BPen above.
     const hGFatigue    = hG_name ? Math.min(100, playerStats[hG_name]?.status?.fatigue || 0) : 0;
@@ -3808,6 +3810,7 @@ function simGame(idx) {
         + (70 - hGDef)  * 0.002    // Positioning: high gDef → harder to score (up to ±0.058)
         + (70 - hGSpd)  * 0.0015   // Speed:        high spd → lateral reach  (up to ±0.044)
         + (70 - hGHnd)  * 0.001    // Puck control: limits rebounds/2nd chances (up to ±0.029)
+        + (70 - hGOff)  * 0.001    // v159: rebound awareness — high gOff directs pucks to corners (up to ±0.029)
         + getGoalieWallMod(hGArch)  // Archetype bonus (unchanged)
         + hB2BPen                   // B2B binary (unchanged)
         + hGFatiguePen              // Continuous fatigue (new)
@@ -3820,6 +3823,7 @@ function simGame(idx) {
         + (70 - aGDef)  * 0.002
         + (70 - aGSpd)  * 0.0015
         + (70 - aGHnd)  * 0.001
+        + (70 - aGOff)  * 0.001    // v159: rebound awareness
         + getGoalieWallMod(aGArch)
         + aB2BPen
         + aGFatiguePen
