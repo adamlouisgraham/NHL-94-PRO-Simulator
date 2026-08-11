@@ -3826,6 +3826,22 @@ function simGame(idx) {
     // B2B penalty only applies to the goalie who actually played yesterday, not the fresh backup
     const hB2BPen = (!isPlayoffs && hG_obj && playerStats[hG_obj.name]?.lastPlayedDay === currentDay - 1) ? 0.06 : 0;
     const aB2BPen = (!isPlayoffs && aG_obj && playerStats[aG_obj.name]?.lastPlayedDay === currentDay - 1) ? 0.06 : 0;
+    // v162: skater B2B penalty — early-90s NHL had brutal back-to-back schedules with heavy travel.
+    // Fraction of dressed skaters who played yesterday drives a liveOvr penalty (max -2.0).
+    // High endur players handle B2Bs better — reduces the penalty up to 40%.
+    const calcSkaterB2B = (tk) => {
+        if (isPlayoffs || isASG) return 0;
+        const sk = (rosters[tk] || []).filter(p => p.pos !== 'G');
+        if (!sk.length) return 0;
+        const b2bCount = sk.filter(p => playerStats[p.name]?.lastPlayedDay === currentDay - 1).length;
+        const b2bFrac  = b2bCount / sk.length;
+        if (b2bFrac < 0.5) return 0; // only kicks in when majority of roster is on B2B
+        const avgEndur = sk.reduce((s, p) => s + (gradeToNum(playerStats[p.name]?.attr?.endur) || 70), 0) / sk.length;
+        const endurRelief = Math.max(0, Math.min(0.40, (avgEndur - 70) * 0.02)); // high endur cushions B2B
+        return b2bFrac * 2.0 * (1 - endurRelief);
+    };
+    const hSkaterB2B = calcSkaterB2B(g.h.nrm);
+    const aSkaterB2B = calcSkaterB2B(g.a.nrm);
     const hHurtPen = (hG_name && playerStats[hG_name]?.playingHurt) ? 0.15 : 0;
     const aHurtPen = (aG_name && playerStats[aG_name]?.playingHurt) ? 0.15 : 0;
     const hGArch = hG_obj ? getArch(hG_obj.name) : '';
@@ -4251,8 +4267,8 @@ function simGame(idx) {
         const periodMult  = period===3?1.5:period===2?1.1:1.0;
         const closeMult   = absDiff===0?1.4:absDiff===1?1.15:absDiff>=3?0.6:1.0;
         const activeChaos = chaosScale * periodMult * closeMult;
-        const hLiveOvr = (getLiveLineOvr(hOnIce) + hLineMatchBonus + homeLastChangeMod + parityBoost + hPressureMod + hStreakMod + rivalBonus + hMomentum*0.375)*hAuraMod*homeCrowdEnergy;
-        const aLiveOvr = (getLiveLineOvr(aOnIce) + aLineMatchBonus + aPressureMod + aStreakMod + rivalBonus + aMomentum*0.375)*aAuraMod;
+        const hLiveOvr = (getLiveLineOvr(hOnIce) + hLineMatchBonus + homeLastChangeMod + parityBoost + hPressureMod + hStreakMod + rivalBonus + hMomentum*0.375 - hSkaterB2B)*hAuraMod*homeCrowdEnergy;
+        const aLiveOvr = (getLiveLineOvr(aOnIce) + aLineMatchBonus + aPressureMod + aStreakMod + rivalBonus + aMomentum*0.375 - aSkaterB2B)*aAuraMod;
         const diff = Math.max(-18, Math.min(18, hLiveOvr - aLiveOvr + chaosOffset));
 
         // EVEN-STRENGTH SHOT
@@ -5214,6 +5230,13 @@ function simGame(idx) {
     // Stamp which day each goalie last played so B2B penalty can target only the tired starter
     if (hG_name && playerStats[hG_name]) playerStats[hG_name].lastPlayedDay = currentDay;
     if (aG_name && playerStats[aG_name]) playerStats[aG_name].lastPlayedDay = currentDay;
+    // v162: stamp skaters too — enables B2B fatigue penalty on liveOvr next game
+    // Early-90s NHL had heavy B2B schedules; skater B2B tiredness was a real factor.
+    [g.h.nrm, g.a.nrm].forEach(tk => {
+        (rosters[tk] || []).filter(p => p.pos !== 'G').forEach(p => {
+            if (playerStats[p.name]) playerStats[p.name].lastPlayedDay = currentDay;
+        });
+    });
     let activeGoalies = [hG_obj, aG_obj].filter(g => g !== null);
     if (typeof processPostGameStreaks === 'function') processPostGameStreaks(winningTeamRoster.concat(losingTeamRoster), activeGoalies, matchStats);
     if (!isASG && typeof applyPostGameFatigue === 'function' && origHG_name && origAG_name) applyPostGameFatigue(g.a.nrm, g.h.nrm, origAG_name, origHG_name);
