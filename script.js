@@ -3775,12 +3775,14 @@ function simGame(idx) {
     // v151: agility and gDef as direct wall-mod inputs (both centered at 70, high = harder to score on).
     // v155: speed added — lateral quickness to reach pucks, distinct from agil (rotational flexibility).
     // All three imported from CSV but previously only fed archetype tagging — now all do real work.
-    const hGAgil = hG_obj ? (playerStats[hG_obj.name]?.attr?.agil  || 70) : 70;
+    const hGAgil = hG_obj ? (playerStats[hG_obj.name]?.attr?.agil   || 70) : 70;
     const hGDef  = hG_obj ? (playerStats[hG_obj.name]?.attr?.gDef  || 70) : 70;
     const hGSpd  = hG_obj ? (playerStats[hG_obj.name]?.attr?.speed || 70) : 70;
-    const aGAgil = aG_obj ? (playerStats[aG_obj.name]?.attr?.agil  || 70) : 70;
+    const hGHnd  = hG_obj ? (playerStats[hG_obj.name]?.attr?.stkHnd|| 70) : 70; // v157: puck control limits rebounds
+    const aGAgil = aG_obj ? (playerStats[aG_obj.name]?.attr?.agil   || 70) : 70;
     const aGDef  = aG_obj ? (playerStats[aG_obj.name]?.attr?.gDef  || 70) : 70;
     const aGSpd  = aG_obj ? (playerStats[aG_obj.name]?.attr?.speed || 70) : 70;
+    const aGHnd  = aG_obj ? (playerStats[aG_obj.name]?.attr?.stkHnd|| 70) : 70;
     // v151: continuous fatigue penalty from accumulated status.fatigue (goalie starter gets +15/game,
     // bleeds off -25/rest day). Independent of the binary B2BPen above.
     const hGFatigue    = hG_name ? Math.min(100, playerStats[hG_name]?.status?.fatigue || 0) : 0;
@@ -3792,7 +3794,8 @@ function simGame(idx) {
         + (75 - hGOvr)  * 0.008    // OVR: main driver (unchanged)
         + (70 - hGAgil) * 0.0025   // Agility:     high agil → harder to score (up to ±0.073)
         + (70 - hGDef)  * 0.002    // Positioning: high gDef → harder to score (up to ±0.058)
-        + (70 - hGSpd)  * 0.0015  // Speed:       high spd → lateral reach (up to ±0.044)
+        + (70 - hGSpd)  * 0.0015   // Speed:        high spd → lateral reach  (up to ±0.044)
+        + (70 - hGHnd)  * 0.001    // Puck control: limits rebounds/2nd chances (up to ±0.029)
         + getGoalieWallMod(hGArch)  // Archetype bonus (unchanged)
         + hB2BPen                   // B2B binary (unchanged)
         + hGFatiguePen              // Continuous fatigue (new)
@@ -3804,6 +3807,7 @@ function simGame(idx) {
         + (70 - aGAgil) * 0.0025
         + (70 - aGDef)  * 0.002
         + (70 - aGSpd)  * 0.0015
+        + (70 - aGHnd)  * 0.001
         + getGoalieWallMod(aGArch)
         + aB2BPen
         + aGFatiguePen
@@ -4003,8 +4007,16 @@ function simGame(idx) {
     const aShotCount   = poissonRand(aBaseLambda * (1 - preGameDiff * 0.008));
     // Penalty counts derived from per-tick rates × 240 steps
     const penCount    = poissonRand(7.5);   // v128: back to 7.5 now that PP units are properly built (v125-127 fix)
-    const coinCount   = poissonRand(3.6);   // 0.038×240×0.40 ≈ 3.65 coincidentals
-    const goonCount   = poissonRand(1.9);   // 0.008×240 ≈ 1.92
+    // v157: coincidental and goon events scaled by game avg aggr — dirty games have more scrums
+    const calcTeamAggr = (tk) => {
+        const sk = (rosters[tk] || []).filter(p => p.pos !== 'G');
+        if (!sk.length) return 70;
+        return sk.reduce((s,p) => s + (gradeToNum(playerStats[p.name]?.attr?.aggr)||50), 0) / sk.length;
+    };
+    const gameAvgAggr = (calcTeamAggr(g.h.nrm) + calcTeamAggr(g.a.nrm)) / 2;
+    // aggr 90 → coin ×1.30, goon ×1.40; aggr 50 → coin ×0.70, goon ×0.60
+    const coinCount   = poissonRand(3.6 * Math.max(0.60, Math.min(1.40, 1.0 + (gameAvgAggr-70)*0.015)));
+    const goonCount   = poissonRand(1.9 * Math.max(0.50, Math.min(1.60, 1.0 + (gameAvgAggr-70)*0.025)));
     const fightCount  = Math.random() < 0.144 ? 1 : 0; // 0.0006×240 ≈ 0.144/game
     // v130: hits/blocked shots — additive stat-only events, don't touch score/SOG/saves.
     // Kept separate from hShotCount/aShotCount so the already-tuned ~30 SOG/team/game
@@ -4212,6 +4224,15 @@ function simGame(idx) {
                 lineMatchDefMod = (lineMatchActive && defSide.nrm === selectedTeam) ? 0.88 : 0.94;
             }
 
+            // OPPOSING D-PAIR def ATTR — shutdown defenders suppress per-shot conversion
+            // Uses actual def attribute of D-men on ice, not just tag detection above.
+            const oppDPair      = defOnIce.filter(p => p.pos==='D'||p.pos==='LD'||p.pos==='RD');
+            const avgOppDef     = oppDPair.length
+                ? oppDPair.reduce((s,p) => s + (playerStats[p.name]?.attr?.def||70), 0) / oppDPair.length
+                : 70;
+            // 90 avg def → ×0.96; 70 → ×1.00; 50 → ×1.04
+            const defPressureMod = Math.max(0.92, Math.min(1.08, 1.0 - (avgOppDef - 70) * 0.002));
+
             // SCORE-STATE MODIFIER — trailing teams shoot desperately in the 3rd; leading teams conserve
             const shooterGoals = isHome ? hG : aG;
             const oppGoals     = isHome ? aG : hG;
@@ -4220,9 +4241,12 @@ function simGame(idx) {
                 ? (scoreDiff <= -2 ? 1.12 : scoreDiff === -1 ? 1.06 : scoreDiff >= 2 ? 0.92 : 1.0)
                 : 1.0;
 
-            // SHOOTER FATIGUE — tired legs = less accurate finish
+            // SHOOTER FATIGUE — tired legs = less accurate finish; agile skaters recover faster
             const fatigueAmt   = getPlayerFatigueAmount(shooter.name);
-            const fatigueMod   = fatigueAmt > 8 ? 0.93 : fatigueAmt > 5 ? 0.97 : 1.0;
+            const shooterAgil  = playerStats[shooter.name]?.attr?.agil || 70;
+            // agil 90 → effective fatigue ×0.60; agil 70 → ×1.00; agil 50 → ×1.40
+            const agilFatMult  = Math.max(0.60, Math.min(1.40, 1.0 + (70 - shooterAgil) * 0.02));
+            const fatigueMod   = Math.max(0.90, 1.0 - (fatigueAmt * agilFatMult) * 0.008);
 
             // CHEMISTRY DUO ON-ICE BONUS — active chem pair on the same unit lifts conversion slightly
             const onIceSet  = new Set(skaters.map(p => p.name));
@@ -4232,25 +4256,19 @@ function simGame(idx) {
             });
             const chemDuoMod = hasDuoOnIce ? 1.04 : 1.0;
 
-            // SHOT ZONE SELECTION & GOALIE DIRECTIONAL COVERAGE (v153)
-            // Shooter picks one of 4 zones: glove-high, glove-low, stick-high, stick-low.
-            // High shotAcc → biases toward top corners (high zones = harder to read but rewarded).
-            // High stkHnd → biases toward dekes/screens/low (low zones = closer, tighter angles).
-            // Each zone maps to one of the goalie's 4 directional attrs (all imported, all formerly unused).
-            // coverageMod: elite coverage in that zone (90) → ×0.96; avg (70) → ×1.00; weak (50) → ×1.04.
+            // DIRECTIONAL ZONE SELECTION & GOALIE COVERAGE (v153/154)
+            // 4 zones: glove-high, glove-low, stick-high, stick-low.
+            // High shotAcc → top corners; high stkHnd → dekes/low zones.
             const shooterHnk   = playerStats[shooter.name]?.attr?.stkHnd || 70;
-            const accBias      = Math.max(0, shooterAcc - 70) * 0.4;  // high acc → corners (high zones)
-            const hnkBias      = Math.max(0, shooterHnk - 70) * 0.4;  // high stkHnd → dekes  (low zones)
+            const accBias      = Math.max(0, shooterAcc - 70) * 0.4;
+            const hnkBias      = Math.max(0, shooterHnk - 70) * 0.4;
             const zoneW        = [50 + accBias, 50 + hnkBias, 50 + accBias, 50 + hnkBias];
             let zr = Math.random() * (zoneW[0]+zoneW[1]+zoneW[2]+zoneW[3]), zi = 0;
             while (zi < 3 && (zr -= zoneW[zi]) > 0) zi++;
             const oppGObj      = isHome ? aG_obj : hG_obj;
             const oppGStats    = oppGObj ? playerStats[oppGObj.name] : null;
             const oppGAttr     = oppGStats?.attr || null;
-            // Handedness flips which physical side is glove vs stick:
-            //   catches L → glove on LEFT side (gloveL=primary, stickR=primary)
-            //   catches R → glove on RIGHT side (gloveR=primary, stickL=primary)
-            // zi=0 → glove-side high  zi=1 → glove-side low  zi=2 → stick-side high  zi=3 → stick-side low
+            // Handedness: catches L → gloveL=primary, stickR=primary; catches R → flipped
             const gCatches     = oppGStats?.catches || 'L';
             const gloveSideH   = oppGAttr ? (gCatches==='L' ? oppGAttr.gloveL||70 : oppGAttr.gloveR||70) : 70;
             const gloveSideL   = oppGAttr ? (gCatches==='L' ? oppGAttr.gloveR||70 : oppGAttr.gloveL||70) : 70;
@@ -4259,7 +4277,25 @@ function simGame(idx) {
             const zoneCoverage = [gloveSideH, gloveSideL, stickSideH, stickSideL][zi];
             const coverageMod  = Math.max(0.90, Math.min(1.10, 1.0 + (70 - zoneCoverage) * 0.002));
 
-            const prob      = (0.079 + dSign*diff*0.0002)*wallMod*sniperMod*accMod*chaosMod*coverageMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; at 0.086 ES=5.79+PP=1.57=7.36 GPG; 0.079 targets ~6.89
+            // SHOT DISTANCE ZONE (v157) — close (slot), medium (circles), far (point).
+            // D-men strongly favored far; centers attack slot; wingers camp circles.
+            // Speed + stkHnd pull any player closer; D shotPwr pulls the point shot farther.
+            // Expected distMod for avg forward: 0.28×1.20+0.52×1.00+0.20×0.75 ≈ 1.00 (neutral on average).
+            // D-men avg: 0.10×1.20+0.25×1.00+0.65×0.75 ≈ 0.86 (point shots convert less — realistic).
+            const isDefPos     = (shooter.pos==='D'||shooter.pos==='LD'||shooter.pos==='RD');
+            const isCPos       = shooter.pos === 'C';
+            const shooterPwr   = playerStats[shooter.name]?.attr?.shotPwr || 70;
+            const shooterSpd   = playerStats[shooter.name]?.attr?.speed   || 70;
+            // Base weights [close, medium, far] — D-men at the point; C attacks slot; W camps circles
+            const dBase        = isDefPos ? [10, 25, 65] : isCPos ? [40, 45, 15] : [28, 52, 20];
+            const dCloseBonus  = Math.max(0, (shooterSpd-70)*0.20 + (shooterHnk-70)*0.25);
+            const dFarBonus    = isDefPos ? Math.max(0, (shooterPwr-70)*0.25) : 0;
+            const dw0=dBase[0]+dCloseBonus, dw1=dBase[1], dw2=dBase[2]+dFarBonus;
+            const distRoll     = Math.random() * (dw0+dw1+dw2);
+            const distZone     = distRoll < dw0 ? 0 : distRoll < dw0+dw1 ? 1 : 2; // 0=close,1=med,2=far
+            const distMod      = [1.20, 1.00, 0.75][distZone];
+
+            const prob      = (0.079 + dSign*diff*0.0002)*wallMod*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; at 0.086 ES=5.79+PP=1.57=7.36 GPG; 0.079 targets ~6.89
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
@@ -4288,13 +4324,26 @@ function simGame(idx) {
 
         // NON-COINCIDENTAL PENALTY (PP / SH resolution)
         } else if (ev.type === 'pen') {
-            let penTeam  = Math.random()>0.5 ? g.h : g.a;
+            // v157: penalty team weighted by avg aggr+rough — dirty teams take more penalties
+            const teamPenBias = (tk) => {
+                const sk = (rosters[tk]||[]).filter(p=>p.pos!=='G');
+                if (!sk.length) return 50;
+                return sk.reduce((s,p) => {
+                    const ps3 = playerStats[p.name];
+                    return s + ((gradeToNum(ps3?.attr?.aggr)||50)+(gradeToNum(ps3?.attr?.rough)||50))/2;
+                }, 0) / sk.length;
+            };
+            const hPenBias = teamPenBias(g.h.nrm);
+            const aPenBias = teamPenBias(g.a.nrm);
+            let penTeam  = Math.random() < hPenBias/(hPenBias+aPenBias) ? g.h : g.a;
             let advTeam  = penTeam.nrm===g.h.nrm ? g.a : g.h;
             let activeSk = (penTeam.nrm===g.h.nrm ? hOnIce : aOnIce).filter(p=>p.pos!=='G');
             if (!activeSk.length) continue;
 
-            const offender   = pickOffender(activeSk);
-            const isMajor    = Math.random() < 0.06;
+            const offender     = pickOffender(activeSk);
+            // v157: major probability scales with offender aggr — hotheads take more majors
+            const offenderAggr = gradeToNum(playerStats[offender]?.attr?.aggr) || 50;
+            const isMajor      = Math.random() < Math.max(0.01, Math.min(0.10, 0.03 + (offenderAggr-50)*0.001));
             const pimAmt     = isMajor ? 5 : 2;
             // Active bucket, not always .season — otherwise playoff PIMs never accrue toward
             // the discipline cap while a frozen regular-season total keeps gating the player.
@@ -4409,7 +4458,12 @@ function simGame(idx) {
                 }
             }
 
-            if (ppRoll>=ppConvRate && Math.random()<0.02 && pkUnit.length>0) {
+            // v157: SHG rate driven by PK unit speed — fast killers close down breakaways
+            const pkSkSh     = pkUnit.filter(p=>p.pos!=='G');
+            const pkAvgSpd   = pkSkSh.length ? pkSkSh.reduce((s,p)=>s+(playerStats[p.name]?.attr?.speed||70),0)/pkSkSh.length : 70;
+            // spd 90 → 0.008 (tight PK); spd 70 → 0.020 (avg); spd 50 → 0.032 (slow/breakaway prone)
+            const shgRate    = Math.max(0.008, Math.min(0.035, 0.02 + (70-pkAvgSpd)*0.0006));
+            if (ppRoll>=ppConvRate && Math.random()<shgRate && pkUnit.length>0) {
                 const shShooter = selectShooter(pkUnit, 'SH');
                 const shEv = processSingleGoal(penTeam.nrm, penTeam.code, shShooter, pkUnit, timeStr, period, minute%20||20, sec);
                 if (shEv) {
@@ -5180,6 +5234,9 @@ function selectShooter(unit, context = 'ES') {
             else if (tag === 'GRINDER')                                      weight *= 1.20;
             else if (tag === 'PEST')                                         weight *= 1.15;
             else if (tag === 'TWO-WAY STAR F' || tag === 'TWO-WAY FWD')     weight *= 1.15;
+            // v157: individual speed — fast skaters are the breakaway threats on the PK
+            const pSpd = pA.speed || 70;
+            weight *= Math.max(0.85, Math.min(1.15, 1.0 + (pSpd - 70) * 0.005));
         }
 
         // CLUTCH context: tight 3rd period — four data-driven signals replace tag proxies.
