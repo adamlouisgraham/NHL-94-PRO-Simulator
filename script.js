@@ -5182,24 +5182,38 @@ function selectShooter(unit, context = 'ES') {
             else if (tag === 'TWO-WAY STAR F' || tag === 'TWO-WAY FWD')     weight *= 1.15;
         }
 
-        // CLUTCH context: tight 3rd period — three data-driven signals replace tag proxies.
-        // 1) Career playoff PPG: seeded from real CSV data + grows through sim seasons.
-        //    Requires 10+ playoff GP to be meaningful; <10 GP defaults to 0.50 (neutral).
-        // 2) off attr: clutch IQ — reads the play, finds the seam under pressure.
-        // 3) morale: hot-streak player is confident; cold player presses.
+        // CLUTCH context: tight 3rd period — four data-driven signals replace tag proxies.
+        // 1) Blended PPG score: season PPG × 0.25 + playoff PPG × 0.50.
+        //    Playoff production counts double — it's already high-leverage, high-pressure.
+        //    Players with no history default to 0 for that component; they build clutch rep over time.
+        // 2) GWG rate: career GWGs / career GP — scores the decisive goal specifically.
+        // 3) off attr: clutch IQ — composure, reads the play under pressure.
+        // 4) morale: hot-streak player is confident; cold player presses.
         if (context === 'CLUTCH') {
-            const cp       = ps.careerPlayoff || {};
-            const cpGP     = cp.gp || 0;
-            const cpPPG    = cpGP >= 10 ? (cp.pts || 0) / cpGP : 0.50;
-            const pOff     = pA.off || 70;
-            const pMorale  = ps.morale || 100;
-            // PPG: 1.0 PPG → +0.22; 0.5 → +0.11; 0.0 → +0.00 (capped at +0.22)
-            const ppgBoost    = Math.min(0.22, cpPPG * 0.22);
-            // Off: 90 off → +0.06; 70 → 0; 50 → −0.04
+            const cp   = ps.careerPlayoff || {};
+            const cs   = ps.career       || {};
+            const csGP = cs.gp || 0;
+            const cpGP = cp.gp || 0;
+            // Season PPG (min 20 GP meaningful); playoff PPG (min 5 GP)
+            const seasonPPG  = csGP >= 20 ? (cs.pts  || 0) / csGP : 0;
+            const playoffPPG = cpGP >= 5  ? (cp.pts  || 0) / cpGP : 0;
+            // Blended PPG: playoff worth double (high-leverage production)
+            const blendedPPG = (seasonPPG * 0.25) + (playoffPPG * 0.50);
+            // ppgBoost: blendedPPG 1.0 → +0.20; 0.5 → +0.10; 0 → 0 (capped at +0.20)
+            const ppgBoost   = Math.min(0.20, blendedPPG * 0.20);
+            // GWG rate: decisive-goal scorer earns extra clutch weight over career
+            const totalGWG   = (cs.gwg || 0) + (cp.gwg || 0);
+            const totalGP    = Math.max(1, csGP + cpGP);
+            const gwgRate    = totalGWG / totalGP;
+            // gwgBoost: 0.15 GWG/GP (elite) → +0.08; 0.08 → +0.04; 0 → 0
+            const gwgBoost   = Math.min(0.08, gwgRate * 0.53);
+            const pOff       = pA.off || 70;
+            const pMorale    = ps.morale || 100;
+            // Off: 90 → +0.06; 70 → 0; 50 → −0.04
             const offBoost    = Math.max(-0.04, Math.min(0.06, (pOff - 70) * 0.003));
             // Morale: 130 → +0.04; 100 → 0; 70 → −0.04
             const moraleBoost = Math.max(-0.04, Math.min(0.04, (pMorale - 100) * 0.0013));
-            weight *= Math.max(1.0, 1.0 + ppgBoost + offBoost + moraleBoost);
+            weight *= Math.max(1.0, 1.0 + ppgBoost + gwgBoost + offBoost + moraleBoost);
         }
 
         // PP context: power play is a set play — elite finishers dominate the shot even more
