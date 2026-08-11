@@ -3769,8 +3769,38 @@ function simGame(idx) {
     const aHurtPen = (aG_name && playerStats[aG_name]?.playingHurt) ? 0.15 : 0;
     const hGArch = hG_obj ? getArch(hG_obj.name) : '';
     const aGArch = aG_obj ? getArch(aG_obj.name) : '';
-    let hWallMod = Math.max(0.82, Math.min(1.18, 1.0 + (75 - hGOvr) * 0.008 + getGoalieWallMod(hGArch) + hB2BPen - hHurtPen));
-    let aWallMod = Math.max(0.82, Math.min(1.18, 1.0 + (75 - aGOvr) * 0.008 + getGoalieWallMod(aGArch) + aB2BPen - aHurtPen));
+    // v151: agility and gDef as direct wall-mod inputs (both centered at 70, high = harder to score on).
+    // These attrs were imported from CSV but only fed archetype tagging before — now they do real work.
+    const hGAgil = hG_obj ? (playerStats[hG_obj.name]?.attr?.agil || 70) : 70;
+    const hGDef  = hG_obj ? (playerStats[hG_obj.name]?.attr?.gDef  || 70) : 70;
+    const aGAgil = aG_obj ? (playerStats[aG_obj.name]?.attr?.agil || 70) : 70;
+    const aGDef  = aG_obj ? (playerStats[aG_obj.name]?.attr?.gDef  || 70) : 70;
+    // v151: continuous fatigue penalty from accumulated status.fatigue (goalie starter gets +15/game,
+    // bleeds off -25/rest day). Independent of the binary B2BPen above.
+    const hGFatigue    = hG_name ? Math.min(100, playerStats[hG_name]?.status?.fatigue || 0) : 0;
+    const aGFatigue    = aG_name ? Math.min(100, playerStats[aG_name]?.status?.fatigue || 0) : 0;
+    const hGFatiguePen = hGFatigue * 0.0005;  // 0→0  |  60→+0.030  |  100→+0.050
+    const aGFatiguePen = aGFatigue * 0.0005;
+    let hWallMod = Math.max(0.82, Math.min(1.18,
+        1.0
+        + (75 - hGOvr)  * 0.008    // OVR: main driver (unchanged)
+        + (70 - hGAgil) * 0.0025   // Agility:     high agil → harder to score (up to ±0.073)
+        + (70 - hGDef)  * 0.002    // Positioning: high gDef → harder to score (up to ±0.058)
+        + getGoalieWallMod(hGArch)  // Archetype bonus (unchanged)
+        + hB2BPen                   // B2B binary (unchanged)
+        + hGFatiguePen              // Continuous fatigue (new)
+        - hHurtPen                  // Playing hurt (unchanged)
+    ));
+    let aWallMod = Math.max(0.82, Math.min(1.18,
+        1.0
+        + (75 - aGOvr)  * 0.008
+        + (70 - aGAgil) * 0.0025
+        + (70 - aGDef)  * 0.002
+        + getGoalieWallMod(aGArch)
+        + aB2BPen
+        + aGFatiguePen
+        - aHurtPen
+    ));
     // Coaching adjustments: forecheck 1=aggressive(open game), -1=defensive(tight); pp 1=shoot, -1=cycle
     if (!isPlayoffs && !isASG && selectedTeam && (g.h.nrm === selectedTeam || g.a.nrm === selectedTeam)) {
         const fMod = coachAdj.forecheck * 0.025; // aggressive opens scoring both ways — only affects the user's own games
@@ -4124,7 +4154,12 @@ function simGame(idx) {
 
             const tag       = PLAYER_TAG_OVERRIDES[shooter.name] || getPlayerWeightedStats(shooter.name)?.tag;
             const sniperMod = getEliteShooterMod(tag);
-            const chaosMod  = 1.0 + (Math.random()-0.5)*activeChaos*0.08;
+            // v151: accMod wires shooter's shotAcc attribute into conversion probability.
+            // Centered at 70; elite sniper (90 acc) → ×1.06; poor finisher (50 acc) → ×0.94.
+            // chaosMod noise halved (0.04) since accMod now provides structured per-shot variance.
+            const shooterAcc = playerStats[shooter.name]?.attr?.shotAcc || 70;
+            const accMod    = Math.max(0.88, Math.min(1.12, 1.0 + (shooterAcc - 70) * 0.003));
+            const chaosMod  = 1.0 + (Math.random()-0.5)*activeChaos*0.04; // was 0.08 pre-v151
             const wallMod   = isHome ? aWallMod : hWallMod;
             const dSign     = isHome ? 1 : -1;
 
@@ -4163,7 +4198,7 @@ function simGame(idx) {
             });
             const chemDuoMod = hasDuoOnIce ? 1.04 : 1.0;
 
-            const prob      = (0.079 + dSign*diff*0.0002)*wallMod*sniperMod*chaosMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; at 0.086 ES=5.79+PP=1.57=7.36 GPG; 0.079 targets ~6.89
+            const prob      = (0.079 + dSign*diff*0.0002)*wallMod*sniperMod*accMod*chaosMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; at 0.086 ES=5.79+PP=1.57=7.36 GPG; 0.079 targets ~6.89
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
