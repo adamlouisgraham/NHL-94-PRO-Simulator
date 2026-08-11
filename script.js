@@ -4387,7 +4387,8 @@ function simGame(idx) {
                 const t2 = PLAYER_TAG_OVERRIDES[p.name] || getPlayerWeightedStats(p.name)?.tag || '';
                 return t2 === 'TWO-WAY STAR F' || t2 === 'DEFENSIVE SPECIALIST' || t2 === 'TWO-WAY FWD' ||
                        t2 === 'DEFENSIVE FORWARD' || t2 === 'DEFENSIVE FWD' || t2 === 'SHUTDOWN' ||
-                       t2 === 'STAY-AT-HOME' || t2 === 'INTIMIDATOR' || t2 === 'TWO-WAY STAR D' || t2 === 'PRO DEFENSIVE D';
+                       t2 === 'STAY-AT-HOME' || t2 === 'INTIMIDATOR' || t2 === 'TWO-WAY STAR D' ||
+                       t2 === 'PRO DEFENSIVE D' || t2 === 'FRANCHISE D'; // v168: elite two-way D suppresses
             });
             if (hasMatchupDef) {
                 const defSide = isHome ? g.a : g.h;
@@ -4424,7 +4425,9 @@ function simGame(idx) {
             // v165: within-game period fatigue — legs tire as the game goes on
             // P1: 0, P2: −0.4%, P3: −0.8%; agile players already cushioned via agilFatMult
             const periodFatPen = (period - 1) * 0.004;
-            const fatigueMod   = Math.max(0.88, 1.0 - (fatigueAmt * agilFatMult) * 0.008 - periodFatPen);
+            // v168: IRONMAN carries fatigue better (0.70×); TWO-WAY archetypes modest resistance (0.90×)
+            const tagFatMult   = tag === 'IRONMAN' ? 0.70 : (tag === 'TWO-WAY STAR F' || tag === 'TWO-WAY FWD') ? 0.90 : 1.0;
+            const fatigueMod   = Math.max(0.88, 1.0 - (fatigueAmt * agilFatMult * tagFatMult) * 0.008 - periodFatPen);
 
             // CHEMISTRY DUO ON-ICE BONUS — active chem pair on the same unit lifts conversion slightly
             const onIceSet  = new Set(skaters.map(p => p.name));
@@ -4470,7 +4473,9 @@ function simGame(idx) {
             const onIceFwds    = skaters.filter(p => p.pos!=='D'&&p.pos!=='LD'&&p.pos!=='RD');
             const avgLinePass  = onIceFwds.length ? onIceFwds.reduce((s,p)=>s+(gradeToNum(playerStats[p.name]?.attr?.pass)||70),0)/onIceFwds.length : 70;
             const passCloseBonus = Math.max(0, (avgLinePass - 70) * 0.15);
-            const dCloseBonus  = Math.max(0, (shooterSpd-70)*0.20 + (shooterHnk-70)*0.25 + passCloseBonus);
+            // v168: SPEEDSTER attacks the net on rushes; POWER FORWARD/POWER SNIPER park in the slot
+            const tagCloseBonus = (tag === 'SPEEDSTER') ? 8 : (tag === 'POWER FORWARD' || tag === 'POWER SNIPER') ? 6 : 0;
+            const dCloseBonus  = Math.max(0, (shooterSpd-70)*0.20 + (shooterHnk-70)*0.25 + passCloseBonus) + tagCloseBonus;
             const dFarBonus    = isDefPos ? Math.max(0, (shooterPwr-70)*0.25) : 0;
             const dw0=dBase[0]+dCloseBonus, dw1=dBase[1], dw2=dBase[2]+dFarBonus;
             const distRoll     = Math.random() * (dw0+dw1+dw2);
@@ -4767,7 +4772,8 @@ function simGame(idx) {
         } else if (ev.type === 'fight') {
             if (isASG) continue;
             const canFight    = (p) => { const ps=playerStats[p.name]; if(!ps) return false; return (gradeToNum(ps.attr?.aggr)||50)>=56 && (gradeToNum(ps.attr?.rough)||50)>=56; };
-            const fightWt     = (name) => { const ps=playerStats[name]; if(!ps) return 0; const a2=gradeToNum(ps.attr?.aggr)||50; const r2=gradeToNum(ps.attr?.rough)||50; const tm=(getPlayerWeightedStats(name)?.tag||'').includes('ENFORCER')?4:1; return Math.pow((a2+r2)/2,2)*tm; };
+            // v168: physical archetypes elevated — GRINDER/PWR FWD ×1.5, INTIMIDATOR ×2.0, PEST ×1.3
+            const fightWt     = (name) => { const ps=playerStats[name]; if(!ps) return 0; const a2=gradeToNum(ps.attr?.aggr)||50; const r2=gradeToNum(ps.attr?.rough)||50; const tg=(getPlayerWeightedStats(name)?.tag||''); const tm=tg.includes('ENFORCER')?4:tg==='INTIMIDATOR'?2.0:tg==='GRINDER'||tg==='POWER FORWARD'?1.5:tg==='PEST'?1.3:1; return Math.pow((a2+r2)/2,2)*tm; };
             const pickFighter = (pool) => { if(!pool.length) return null; const w=pool.map(p=>fightWt(p.name)); const tot=w.reduce((a2,b)=>a2+b,0); if(!tot) return pool[0]; let r2=Math.random()*tot; for(let i=0;i<pool.length;i++){r2-=w[i];if(r2<=0)return pool[i];} return pool[0]; };
             const hF = pickFighter(hOnIce.filter(p=>p.pos!=='G'&&canFight(p)));
             const aF = pickFighter(aOnIce.filter(p=>p.pos!=='G'&&canFight(p)));
@@ -5500,7 +5506,10 @@ function selectShooter(unit, context = 'ES') {
             const offBoost    = Math.max(-0.04, Math.min(0.06, (pOff - 70) * 0.003));
             // Morale: 130 → +0.04; 100 → 0; 70 → −0.04
             const moraleBoost = Math.max(-0.04, Math.min(0.04, (pMorale - 100) * 0.0013));
-            weight *= Math.max(1.0, 1.0 + ppgBoost + gwgBoost + offBoost + moraleBoost);
+            // v168: tag floor — young stars with no career history still earn clutch weight
+            const clutchTagBoost = (tag === 'SUPERSTAR' || tag === 'PRO SNIPER') ? 0.08
+                                 : (tag === 'SNIPER'    || tag === 'PRO PLAYMAKER') ? 0.04 : 0;
+            weight *= Math.max(1.0, 1.0 + ppgBoost + gwgBoost + offBoost + moraleBoost + clutchTagBoost);
         }
 
         // PP context: power play is a set play — elite finishers dominate the shot even more
