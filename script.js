@@ -3978,12 +3978,11 @@ function simGame(idx) {
     const ovrGap  = aAvgOvr - hAvgOvr; // positive = home team is underdog
     const parityBoost = isASG ? 0 : Math.min(6, Math.max(0, ovrGap * 0.45));
 
-    // v169: crowd scales with context — playoffs louder, rivalry games electric, baseline 1.03
-    let homeCrowdEnergy = isPlayoffs ? 1.065 : isHistoricRival ? 1.045 : 1.03;
-
     // RIVALRY — historical rivals play with extra intensity from game 1; organic (3+ meetings) adds more
     const hMeetings = !isPlayoffs ? ((g.h.season.meetings || {})[g.a.nrm] || 0) : 0;
     const isHistoricRival = awardConfig.rivalries && !!(rivals[g.h.nrm]?.includes(g.a.nrm) || rivals[g.a.nrm]?.includes(g.h.nrm));
+    // v169: crowd scales with context — playoffs louder, rivalry games electric, baseline 1.03
+    let homeCrowdEnergy = isPlayoffs ? 1.065 : isHistoricRival ? 1.045 : 1.03;
     const rivalBonus = !awardConfig.rivalries ? 0 : isHistoricRival ? (hMeetings >= 3 ? 3 : 1) : (hMeetings >= 3 ? 2 : 0);
 
     // CHAOS — globalChaos drives all random variance; scaled by context
