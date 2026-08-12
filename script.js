@@ -24,7 +24,7 @@ const PLAYER_TAG_OVERRIDES = {};
     "POWER SNIPER":       { shotRate: 1.22, penaltyRate: 1.15,  assistRate: 0.90 }, // Physical goal scorer — Neely/Roberts type
     "POWER FORWARD":      { shotRate: 1.20, penaltyRate: 1.20,  assistRate: 0.97 },
     "TWO-WAY STAR F":     { shotRate: 1.15, penaltyRate: 0.95,  assistRate: 1.20 },
-    "TWO-WAY FWD":        { shotRate: 0.99, penaltyRate: 0.95,  assistRate: 1.05 },
+    "TWO-WAY FWD":        { shotRate: 1.04, penaltyRate: 0.95,  assistRate: 1.05 }, // v170: two-ways still shoot (was 0.99)
     "GRINDER":            { shotRate: 1.12, penaltyRate: 1.30,  assistRate: 0.90 },
     "ENFORCER F":         { shotRate: 0.50, penaltyRate: 1.60,  assistRate: 0.50 },
     "PEST":               { shotRate: 0.92, penaltyRate: 1.30,  assistRate: 0.95 }, // Agitator — draws calls, gets under skin
@@ -4246,7 +4246,9 @@ function simGame(idx) {
         const tagMult = tag3.includes('ENFORCER') ? 2.0 : 1;
         // v163: 4th-line players are deployed for energy/intimidation — 40% more likely to take a penalty
         const line4Mult = (isHomeTeam ? h4thLine : a4thLine).has(name) ? 1.40 : 1.0;
-        const base = Math.pow((aggr+rough)/2, 1.3) * tagMult * line4Mult * archPenMult;
+        // v170: P3 trailing team plays desperate — 30% more likely to take a penalty
+        const p3TrailMult = (period === 3 && ((isHomeTeam ? hG : aG) < (isHomeTeam ? aG : hG))) ? 1.30 : 1.0;
+        const base = Math.pow((aggr+rough)/2, 1.3) * tagMult * line4Mult * archPenMult * p3TrailMult;
         // [FIX] was ps.season?.pim — during playoffs k='playoff', so season PIM was
         // used to cap playoff penalty rates. Use the active bucket instead.
         const overCap = Math.max(0, (ps[k]?.pim||0) - 150);
@@ -4618,7 +4620,11 @@ function simGame(idx) {
             const pkAvgChk   = pkSkSh2.length ? pkSkSh2.reduce((s,p)=>s+(gradeToNum(playerStats[p.name]?.attr?.check)||70),0)/pkSkSh2.length : 70;
             const pkDefInput = pkAvgDef * 0.60 + pkAvgChk * 0.40;
             const pkSuppressMod = Math.max(0.94, Math.min(1.06, 1.0 - (pkDefInput - 70) * 0.002));
-            const ppConvRate = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm)*ppStratMod*pkSuppressMod;
+            // v170: if a chemistry duo is deployed together on the PP unit, they connect better
+            const ppNames = new Set(ppUnit.map(p => p.name));
+            const ppHasDuo = awardConfig.chemistry && getAllDuos().some(duo => duo.filter(n => ppNames.has(n)).length >= 2);
+            const ppChemMod = ppHasDuo ? 1.03 : 1.0;
+            const ppConvRate = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm)*ppStratMod*pkSuppressMod*ppChemMod;
 
             if (ppRoll < ppConvRate && ppUnit.length > 0) {
                 const ppShooter = selectShooter(ppUnit, 'PP');
@@ -7093,6 +7099,11 @@ function getLiveLineOvr(line) {
         const m = playerStats[p.name]?.morale ?? 100;
         return s + Math.max(-1.5, Math.min(1.5, (m - 100) * 0.03));
     }, 0) / line.length;
+    // v170: micro_streak → line OVR nudge (HOT +0.5, COLD -0.5, averaged over line)
+    const streakAdj = line.reduce((s, p) => {
+        const st = playerStats[p.name]?.micro_streak;
+        return s + (st === 'HOT' ? 0.5 : st === 'COLD' ? -0.5 : 0);
+    }, 0) / line.length;
 
     // Chemistry bonus: +2 OVR per dynamic duo pair on this line together
     if (awardConfig.chemistry) {
@@ -7106,9 +7117,9 @@ function getLiveLineOvr(line) {
                 chemBonus += score >= 75 ? 2 : score >= 50 ? 1 : 0;
             }
         }
-        return base + chemBonus + moraleAdj;
+        return base + chemBonus + moraleAdj + streakAdj;
     }
-    return base + moraleAdj;
+    return base + moraleAdj + streakAdj;
 }
 
 /**
