@@ -4274,7 +4274,7 @@ function simGame(idx) {
         const base = Math.pow((aggr+rough)/2, 1.3) * tagMult * line4Mult * archPenMult * p3TrailMult;
         // [FIX] was ps.season?.pim — during playoffs k='playoff', so season PIM was
         // used to cap playoff penalty rates. Use the active bucket instead.
-        const overCap = Math.max(0, (ps[k]?.pim||0) - 150);
+        const overCap = Math.max(0, (ps[k]?.pim||0) - 175); // v174: raised from 150 → 175 so true goons reach realistic 300+ PIM
         return base * Math.pow(0.85, overCap/10);
     };
     const pickOffender = (skaters, isHomeTeam) => {
@@ -4515,7 +4515,7 @@ function simGame(idx) {
             const distZone     = distRoll < dw0 ? 0 : distRoll < dw0+dw1 ? 1 : 2; // 0=close,1=med,2=far
             const distMod      = [1.20, 1.00, 0.75][distZone];
 
-            const prob      = (0.0878 + dSign*diff*0.0002)*wallMod*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; at 0.086 ES=5.79+PP=1.57=7.36 GPG; 0.079→~6.89; v169: 0.0878→~7.47 (+0.578)
+            const prob      = (0.0888 + dSign*diff*0.0002)*wallMod*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; v169: 0.0878→~7.0 GPG; v174: 0.0888 recovers ~0.10 GPG lost to v173 gates
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
@@ -4571,7 +4571,7 @@ function simGame(idx) {
             const pimAmt     = isMajor ? 5 : 2;
             // Active bucket, not always .season — otherwise playoff PIMs never accrue toward
             // the discipline cap while a frozen regular-season total keeps gating the player.
-            const overCap2   = Math.max(0, (playerStats[offender]?.[k]?.pim||0) - 150);
+            const overCap2   = Math.max(0, (playerStats[offender]?.[k]?.pim||0) - 175); // v174: matches penWeight threshold
             const skipChance = 1 - Math.pow(0.85, overCap2/10);
             if (skipChance > 0 && Math.random() < skipChance) continue;
 
