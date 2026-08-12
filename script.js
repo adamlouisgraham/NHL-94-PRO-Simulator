@@ -70,6 +70,7 @@ function getEliteShooterMod(tag) {
         case 'TWO-WAY STAR F': return 1.08;
         case 'TWO-WAY FWD':   return 1.02; // v172: two-ways finish slightly above generic
         case 'GRINDER':       return 0.90; // v172: high shot volume but poor finishing — rush shots, poor acc
+        case 'PEST':          return 0.88; // v173: agitators aren't finishers — same tier as DEFENSIVE FWD
         case 'OFFENSIVE FWD': return 0.95; // v172: generic offensive forwards finish below elite
         case 'DEFENSIVE FWD': return 0.88; // v172: defensive forwards rarely finish cleanly
         // Offensive defensemen — smaller lift than forwards (point shots convert worse),
@@ -4778,7 +4779,12 @@ function simGame(idx) {
                 const chk = gradeToNum(ps?.attr?.check) || 50;
                 const agr = gradeToNum(ps?.attr?.aggr)  || 50;
                 const rgh = gradeToNum(ps?.attr?.rough) || 50;
-                return Math.pow(chk*0.4 + agr*0.35 + rgh*0.25, 1.5);
+                const htg = getPlayerWeightedStats(p.name)?.tag || '';
+                // v173: physical archetypes lead the hit board regardless of raw attribute variance
+                const hitTagMult = htg === 'INTIMIDATOR' ? 1.50 : htg === 'ENFORCER D' || htg === 'ENFORCER F' ? 1.30
+                    : htg === 'POWER FORWARD' || htg === 'POWER SNIPER' ? 1.30 : htg === 'GRINDER' ? 1.25
+                    : htg === 'SHUTDOWN' || htg === 'STAY-AT-HOME' ? 1.20 : 1.0;
+                return Math.pow(chk*0.4 + agr*0.35 + rgh*0.25, 1.5) * hitTagMult;
             });
             const hTotal = hWt.reduce((a2,b)=>a2+b,0);
             if (hTotal <= 0) continue;
@@ -5570,6 +5576,12 @@ function selectShooter(unit, context = 'ES') {
             else if (tag === 'POWER SNIPER')                                 weight *= 1.25;
             else if (tag === 'BOOMER' || tag === 'QUARTERBACK')              weight *= 1.20;
             else if (tag === 'PRO OFFENSIVE D' || tag === 'OFFENSIVE D')     weight *= 1.15;
+            // v173: missing PP threats added
+            else if (tag === 'SPEEDSTER')                                    weight *= 1.25; // open-ice PP threat (Bure type)
+            else if (tag === 'DANGLER')                                      weight *= 1.20; // creative PP scorer
+            else if (tag === 'TWO-WAY STAR F')                               weight *= 1.15; // Yzerman/Fedorov PP role
+            else if (tag === 'FRANCHISE D')                                  weight *= 1.15; // elite PP QB (Bourque type)
+            else if (tag === 'POWER FORWARD')                                weight *= 1.10; // net-front screen/deflection
             else if (tag === 'PRO PLAYMAKER' || tag === 'PLAYMAKER')         weight *= 0.85; // feeds, doesn't shoot
             else if (tag === 'GRINDER' || tag === 'ENFORCER F')              weight *= 0.60; // screen duty
         }
@@ -5607,6 +5619,23 @@ function selectShooter(unit, context = 'ES') {
         if (tag === 'TWO-WAY STAR D' || tag === 'FRANCHISE D') {
             const shotAcc = parseInt(pA.shotAcc) || 70;
             weight *= Math.max(0.80, 1.0 + (shotAcc - 75) * 0.006);
+        }
+        // v173: physical/agitator archetypes — accuracy and skill gate their shot creation
+        if (tag === 'GRINDER') {
+            const shotAcc = gradeToNum(pA.shotAcc) || 70;
+            weight *= Math.max(0.72, 1.0 + (shotAcc - 75) * 0.009); // rush shots, poor acc hits hard
+        }
+        if (tag === 'PEST') {
+            const shotAcc = gradeToNum(pA.shotAcc) || 70;
+            weight *= Math.max(0.75, 1.0 + (shotAcc - 75) * 0.008); // agitator, not a finisher
+        }
+        if (tag === 'DANGLER') {
+            const stkHnd = gradeToNum(pA.stkHnd) || 70;
+            weight *= Math.max(0.82, 1.0 + (stkHnd - 70) * 0.007); // deception-based creation
+        }
+        if (tag === 'SPEEDSTER') {
+            const spd = gradeToNum(pA.speed) || 70;
+            weight *= Math.max(0.88, 1.0 + (spd - 75) * 0.005); // elite speed = open looks
         }
 
         // Position modifier  -  wingers shoot a bit more, centers distribute, D ~20% less
@@ -5738,6 +5767,20 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         if (tag === 'POWER FORWARD' || tag === 'POWER SNIPER') {
             const shotPwr = gradeToNum(pA.shotPwr) || 70;
             weight *= Math.max(0.82, 1.0 + (shotPwr - 70) * 0.006);
+        }
+        // v173: physical/agitator assist gates — poor passers don't set up plays
+        if (tag === 'GRINDER') {
+            weight *= Math.max(0.70, 1.0 + (pass - 75) * 0.008); // grinders with poor pass don't rack assists
+        }
+        if (tag === 'PEST') {
+            weight *= Math.max(0.72, 1.0 + (pass - 75) * 0.007); // pests aren't playmakers
+        }
+        // v173: creative/speed archetypes — passing skill gates how well they set up linemates
+        if (tag === 'SPEEDSTER') {
+            weight *= Math.max(0.82, 1.0 + (pass - 70) * 0.006); // speed creates chances; playmaking needs passing
+        }
+        if (tag === 'DANGLER') {
+            weight *= Math.max(0.82, 1.0 + (pass - 70) * 0.007); // high-pass danglers set up as well as score
         }
 
         // Position modifier  -  centers are primary distributors, D penalized ~20%
