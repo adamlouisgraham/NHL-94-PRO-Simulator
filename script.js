@@ -3916,6 +3916,8 @@ function simGame(idx) {
         - hHurtPen                  // Playing hurt (unchanged)
         - hRestBonus                // v164: well-rested goalie (3+ days off) plays sharper
         + hConsecPen                // v166: iron-man fatigue (4+ consecutive starts)
+        // v171: long-season erosion — 65+ GP adds +0.001/GP to wallMod (max +0.019 at 84 GP)
+        + Math.max(0, ((playerStats[hG_name]?.[k]?.gp || 0) - 65) * 0.001)
     ));
     let aWallMod = Math.max(0.82, Math.min(1.18,
         1.0
@@ -3931,6 +3933,8 @@ function simGame(idx) {
         - aHurtPen
         - aRestBonus                // v164: well-rested goalie
         + aConsecPen                // v166: iron-man fatigue
+        // v171: long-season erosion — 65+ GP adds +0.001/GP to wallMod (max +0.019 at 84 GP)
+        + Math.max(0, ((playerStats[aG_name]?.[k]?.gp || 0) - 65) * 0.001)
     ));
     // Coaching adjustments: forecheck 1=aggressive(open game), -1=defensive(tight); pp 1=shoot, -1=cycle
     if (!isPlayoffs && !isASG && selectedTeam && (g.h.nrm === selectedTeam || g.a.nrm === selectedTeam)) {
@@ -4513,6 +4517,8 @@ function simGame(idx) {
                     if (goalEv.sAssist) trk(goalEv.sAssist, 'a', 1);
                     onIce.forEach(p   => trk(p.name, 'pm',  1));
                     oppOnIce.forEach(p => trk(p.name, 'pm', -1));
+                    // v171: track even-strength goals separately
+                    if (!isASG && playerStats[goalEv.scorer]) playerStats[goalEv.scorer][k].esg = (playerStats[goalEv.scorer][k].esg || 0) + 1;
                     // v165: quick-goal spike — scoring while momentum is still hot pushes it higher
                     if (isHome) hMomentum = hMomentum >= 4 ? Math.min(14, hMomentum + 8) : 8;
                     else        aMomentum = aMomentum >= 4 ? Math.min(14, aMomentum + 8) : 8;
@@ -4801,6 +4807,8 @@ function simGame(idx) {
                 const aFW = fightWt(aF.name) * (1.0 + (getWgtNum(aF.name) - 195) * 0.0015);
                 if (Math.random() < hFW / (hFW + aFW + 0.001)) hMomentum = Math.min(hMomentum + 5, 14);
                 else aMomentum = Math.min(aMomentum + 5, 14);
+                // v171: track fights in player stats
+                if (!isASG) [hF, aF].forEach(f => { if (playerStats[f.name]) playerStats[f.name][k].fights = (playerStats[f.name][k].fights || 0) + 1; });
                 [hF,aF].forEach(fighter => {
                     if (Math.random()<0.004 && playerStats[fighter.name] && !(playerStats[fighter.name].suspended?.days>0)) {
                         const days=Math.ceil(Math.random()*3);
