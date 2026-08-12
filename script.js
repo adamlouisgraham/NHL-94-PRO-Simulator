@@ -24,7 +24,7 @@ const PLAYER_TAG_OVERRIDES = {};
     "POWER SNIPER":       { shotRate: 1.22, penaltyRate: 1.15,  assistRate: 0.90 }, // Physical goal scorer — Neely/Roberts type
     "POWER FORWARD":      { shotRate: 1.20, penaltyRate: 1.20,  assistRate: 0.97 },
     "TWO-WAY STAR F":     { shotRate: 1.15, penaltyRate: 0.95,  assistRate: 1.20 },
-    "TWO-WAY FWD":        { shotRate: 1.04, penaltyRate: 0.95,  assistRate: 1.05 }, // v170: two-ways still shoot (was 0.99)
+    "TWO-WAY FWD":        { shotRate: 1.04, penaltyRate: 0.95,  assistRate: 1.15 }, // v170: two-ways still shoot; v172: assists 1.05→1.15 (Brind'Amour/Muller type)
     "GRINDER":            { shotRate: 1.12, penaltyRate: 1.30,  assistRate: 0.90 },
     "ENFORCER F":         { shotRate: 0.50, penaltyRate: 1.60,  assistRate: 0.50 },
     "PEST":               { shotRate: 0.92, penaltyRate: 1.30,  assistRate: 0.95 }, // Agitator — draws calls, gets under skin
@@ -68,6 +68,10 @@ function getEliteShooterMod(tag) {
         case 'POWER FORWARD': return 1.12;
         case 'SPEEDSTER': return 1.18;
         case 'TWO-WAY STAR F': return 1.08;
+        case 'TWO-WAY FWD':   return 1.02; // v172: two-ways finish slightly above generic
+        case 'GRINDER':       return 0.90; // v172: high shot volume but poor finishing — rush shots, poor acc
+        case 'OFFENSIVE FWD': return 0.95; // v172: generic offensive forwards finish below elite
+        case 'DEFENSIVE FWD': return 0.88; // v172: defensive forwards rarely finish cleanly
         // Offensive defensemen — smaller lift than forwards (point shots convert worse),
         // but enough that elite blueliners aren't stuck at the baseline conversion rate.
         case 'BOOMER': return 1.20;
@@ -3863,6 +3867,18 @@ function simGame(idx) {
     // v166: consecutive-starts penalty — starter worn down beyond 3 in a row; +0.01 per start > 3, cap 0.04
     const hConsecPen = !isPlayoffs && hG_obj ? Math.max(0, Math.min(0.04, ((playerStats[hG_obj.name]?.consecutiveStarts||0) - 3) * 0.01)) : 0;
     const aConsecPen = !isPlayoffs && aG_obj ? Math.max(0, Math.min(0.04, ((playerStats[aG_obj.name]?.consecutiveStarts||0) - 3) * 0.01)) : 0;
+    // v172: goalie micro_streak → wallMod — last start SV% drives HOT/COLD bonus
+    // HOT (last SV% ≥ .940 or shutout): -0.020 (harder to score); COLD (last SV% < .880): +0.020
+    const goalieStreakMod = (gName) => {
+        const rs = playerStats[gName]?.recentStarts;
+        if (!rs || !rs.length) return 0;
+        const last = rs[rs.length - 1];
+        if (!last || !last.sa) return 0;
+        const svp = last.sv / last.sa;
+        return svp >= 0.940 ? -0.020 : svp < 0.880 ? 0.020 : 0;
+    };
+    const hGoalieStreakMod = hG_name ? goalieStreakMod(hG_name) : 0;
+    const aGoalieStreakMod = aG_name ? goalieStreakMod(aG_name) : 0;
     // v162: skater B2B penalty — early-90s NHL had brutal back-to-back schedules with heavy travel.
     // Fraction of dressed skaters who played yesterday drives a liveOvr penalty (max -2.0).
     // High endur players handle B2Bs better — reduces the penalty up to 40%.
@@ -3918,6 +3934,7 @@ function simGame(idx) {
         + hConsecPen                // v166: iron-man fatigue (4+ consecutive starts)
         // v171: long-season erosion — 65+ GP adds +0.001/GP to wallMod (max +0.019 at 84 GP)
         + Math.max(0, ((playerStats[hG_name]?.[k]?.gp || 0) - 65) * 0.001)
+        + hGoalieStreakMod          // v172: HOT (last SV% ≥.940) → -0.020; COLD (<.880) → +0.020
     ));
     let aWallMod = Math.max(0.82, Math.min(1.18,
         1.0
@@ -3935,6 +3952,7 @@ function simGame(idx) {
         + aConsecPen                // v166: iron-man fatigue
         // v171: long-season erosion — 65+ GP adds +0.001/GP to wallMod (max +0.019 at 84 GP)
         + Math.max(0, ((playerStats[aG_name]?.[k]?.gp || 0) - 65) * 0.001)
+        + aGoalieStreakMod          // v172: HOT/COLD streak from last start
     ));
     // Coaching adjustments: forecheck 1=aggressive(open game), -1=defensive(tight); pp 1=shoot, -1=cycle
     if (!isPlayoffs && !isASG && selectedTeam && (g.h.nrm === selectedTeam || g.a.nrm === selectedTeam)) {
@@ -4795,8 +4813,14 @@ function simGame(idx) {
             // v168: physical archetypes elevated — GRINDER/PWR FWD ×1.5, INTIMIDATOR ×2.0, PEST ×1.3
             const fightWt     = (name) => { const ps=playerStats[name]; if(!ps) return 0; const a2=gradeToNum(ps.attr?.aggr)||50; const r2=gradeToNum(ps.attr?.rough)||50; const tg=(getPlayerWeightedStats(name)?.tag||''); const tm=tg.includes('ENFORCER')?4:tg==='INTIMIDATOR'?2.0:tg==='GRINDER'||tg==='POWER FORWARD'?1.5:tg==='PEST'?1.3:1; return Math.pow((a2+r2)/2,2)*tm; };
             const pickFighter = (pool) => { if(!pool.length) return null; const w=pool.map(p=>fightWt(p.name)); const tot=w.reduce((a2,b)=>a2+b,0); if(!tot) return pool[0]; let r2=Math.random()*tot; for(let i=0;i<pool.length;i++){r2-=w[i];if(r2<=0)return pool[i];} return pool[0]; };
-            const hF = pickFighter(hOnIce.filter(p=>p.pos!=='G'&&canFight(p)));
-            const aF = pickFighter(aOnIce.filter(p=>p.pos!=='G'&&canFight(p)));
+            // v172: draw fighters from full bench not just on-ice — ENFORCERs get proper representation
+            // even when sitting on the 4th line; 70% chance to use full roster pool, else on-ice only
+            const hBench = (rosters[g.h.nrm]||[]).filter(p=>p.pos!=='G'&&canFight(p));
+            const aBench = (rosters[g.a.nrm]||[]).filter(p=>p.pos!=='G'&&canFight(p));
+            const hFightPool = (Math.random()<0.70 && hBench.length) ? hBench : hOnIce.filter(p=>p.pos!=='G'&&canFight(p));
+            const aFightPool = (Math.random()<0.70 && aBench.length) ? aBench : aOnIce.filter(p=>p.pos!=='G'&&canFight(p));
+            const hF = pickFighter(hFightPool);
+            const aF = pickFighter(aFightPool);
             if (hF && aF) {
                 trk(hF.name,'pim',5); trk(aF.name,'pim',5);
                 penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:g.h.code,
@@ -5037,7 +5061,10 @@ function simGame(idx) {
                 return line[Math.floor(Math.random()*line.length)].name;
             };
             const hStar = otBest(hStruct), aStar = otBest(aStruct);
-            const hWinProb = Math.max(0.25, Math.min(0.75, 0.52 + (hStar.ovr - aStar.ovr) * 0.005));
+            // v172: goalie wallMod shifts OT odds — a WALL goalie makes it harder to win in OT
+            // wallMod > 1 = easier to score on (bad goalie) → away team benefits; < 1 = harder → home benefits
+            const otGoalieMod = Math.max(-0.08, Math.min(0.08, (aWallMod - hWallMod) * 0.25));
+            const hWinProb = Math.max(0.25, Math.min(0.75, 0.52 + (hStar.ovr - aStar.ovr) * 0.005 + otGoalieMod));
             const otSec = Math.floor(Math.random()*300);
             const otM = Math.floor(otSec/60)+1, otS = otSec%60;
             if (Math.random() < hWinProb) {
@@ -5702,6 +5729,15 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         // Two-way D: lighter passing gate
         if (tag === 'TWO-WAY STAR D') {
             weight *= Math.max(0.80, 1.0 + (pass - 75) * 0.006);
+        }
+        // v172: two-way forwards — pass gates assists so high-pass types (Yzerman, Brind'Amour) earn more
+        if (tag === 'TWO-WAY STAR F' || tag === 'TWO-WAY FWD') {
+            weight *= Math.max(0.80, 1.0 + (pass - 70) * 0.005);
+        }
+        // v172: POWER FORWARD — net-front scoring requires shot power; weak shooters battle less effectively
+        if (tag === 'POWER FORWARD' || tag === 'POWER SNIPER') {
+            const shotPwr = gradeToNum(pA.shotPwr) || 70;
+            weight *= Math.max(0.82, 1.0 + (shotPwr - 70) * 0.006);
         }
 
         // Position modifier  -  centers are primary distributors, D penalized ~20%
