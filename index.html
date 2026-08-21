@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
-    <script src="script.js?v=151"></script>
+    <script src="script.js?v=250"></script>
 </head>
 <body>
 
@@ -159,7 +159,7 @@
                 <button onclick="openArenaSettings()" class="btn-orange">ARENA DB</button>
                 <button onclick="openLeagueSettings()" class="btn-yellow">LEAGUE SETTINGS</button>
                 <button onclick="openTradeModal()" class="btn-purple" id="btnTrade">TRADES</button>
-                <button onclick="document.getElementById('masterArchiveModal').style.display='flex'" class="btn-orange">MASTER ARCHIVES</button>
+                <button onclick="document.getElementById('masterArchiveModal').style.display='flex'; renderLeagueHistory(); renderHallOfFame(); renderRetiredPlayers(); renderAllStarLeaderboard();" class="btn-orange">MASTER ARCHIVES</button>
                 <button onclick="openAllTimeRecords()" class="btn-yellow">RECORD BOOK</button>
                 <button onclick="openStatLeaders()" class="btn-yellow">STAT LEADERS</button>
                 <button onclick="openChemEditor()" style="border-color:#FF69B4;color:#FF69B4;" class="award-toggle-btn">CHEMISTRY EDITOR</button>

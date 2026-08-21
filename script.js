@@ -9,20 +9,27 @@
 // Lets individual players punch above their computed archetype without touching roster data.
 const PLAYER_TAG_OVERRIDES = {};
 
+// v246: manual conference/division overrides, applied after teams are built from the sheet.
+// Keyed by team nrm (full lowercased name, no spaces — matches league[].nrm everywhere else).
+// Buffalo Sabres moved to Campbell (Western) Conference, Central Division.
+const TEAM_CONF_DIV_OVERRIDES = {
+    'buffalosabres': { conf: 'Western', div: 'Central' },
+};
+
     // =========================================================
     //  ARCHETYPE BEHAVIOR MULTIPLIERS (Complete Master List)
     // =========================================================
     const archMods = {
     // --- FORWARDS ---
     "SUPERSTAR":          { shotRate: 1.32, penaltyRate: 0.70,  assistRate: 2.30 },
-    "PRO SNIPER":         { shotRate: 1.38, penaltyRate: 0.85,  assistRate: 1.25 }, // Elite goal scorer — Hull, Mogilny, Bure
+    "PRO SNIPER":         { shotRate: 1.30, penaltyRate: 0.85,  assistRate: 1.25 }, // v244: 1.38→1.30 — was HIGHER than SUPERSTAR's 1.32, inverting the intended SUPERSTAR>PRO SNIPER hierarchy and driving Mogilny's 96-goal outlier season
     "PRO PLAYMAKER":      { shotRate: 0.97, penaltyRate: 0.80,  assistRate: 2.50 }, // Elite playmaker — Gretzky, Oates, Lemieux
     "SNIPER":             { shotRate: 1.16, penaltyRate: 0.85,  assistRate: 0.82 }, // Solid 30-40G scorer
     "PLAYMAKER":          { shotRate: 1.00, penaltyRate: 0.85,  assistRate: 1.60 }, // Solid passer — Francis, Janney, Juneau
-    "SPEEDSTER":          { shotRate: 1.28, penaltyRate: 0.80,  assistRate: 1.30 },
-    "DANGLER":            { shotRate: 1.22, penaltyRate: 0.80,  assistRate: 1.45 },
-    "POWER SNIPER":       { shotRate: 1.22, penaltyRate: 1.15,  assistRate: 0.90 }, // Physical goal scorer — Neely/Roberts type
-    "POWER FORWARD":      { shotRate: 1.20, penaltyRate: 1.20,  assistRate: 0.97 },
+    "SPEEDSTER":          { shotRate: 1.20, penaltyRate: 0.80,  assistRate: 1.30 }, // v230: trimmed below POWER SNIPER
+    "DANGLER":            { shotRate: 1.15, penaltyRate: 0.80,  assistRate: 1.45 }, // v230: trimmed below POWER SNIPER
+    "POWER SNIPER":       { shotRate: 1.26, penaltyRate: 1.15,  assistRate: 0.90 }, // v239: 1.32→1.26 — dialed back slightly, still above pre-v230 1.22 baseline
+    "POWER FORWARD":      { shotRate: 1.28, penaltyRate: 1.20,  assistRate: 0.97 }, // v230: 1.20→1.28
     "TWO-WAY STAR F":     { shotRate: 1.15, penaltyRate: 0.95,  assistRate: 1.20 },
     "TWO-WAY FWD":        { shotRate: 1.04, penaltyRate: 0.95,  assistRate: 1.15 }, // v170: two-ways still shoot; v172: assists 1.05→1.15 (Brind'Amour/Muller type)
     "GRINDER":            { shotRate: 1.12, penaltyRate: 1.30,  assistRate: 0.90 },
@@ -63,10 +70,10 @@ function getEliteShooterMod(tag) {
         case 'SNIPER': return 1.28;
         case 'PRO PLAYMAKER': return 1.18;
         case 'PLAYMAKER': return 1.10;
-        case 'DANGLER': return 1.22;
-        case 'POWER SNIPER': return 1.35;
-        case 'POWER FORWARD': return 1.12;
-        case 'SPEEDSTER': return 1.18;
+        case 'DANGLER': return 1.16; // v230: trimmed below POWER SNIPER
+        case 'POWER SNIPER': return 1.36; // v239: 1.42→1.36 — dialed back slightly, still above pre-v230 1.35 baseline
+        case 'POWER FORWARD': return 1.20; // v230: 1.12→1.20
+        case 'SPEEDSTER': return 1.14; // v230: trimmed below POWER SNIPER
         case 'TWO-WAY STAR F': return 1.08;
         case 'TWO-WAY FWD':   return 1.02; // v172: two-ways finish slightly above generic
         case 'GRINDER':       return 0.90; // v172: high shot volume but poor finishing — rush shots, poor acc
@@ -351,6 +358,9 @@ let customLines = JSON.parse(localStorage.getItem('nhl94_customLines')) || {};
 
 
 let awardConfig = { streaks: true, chemistry: false, rivalries: true, aging: false, draft: false, retirements: false, headlines: true, milestones: true, injuries: true, legacy_schedule: true, trades: false, tradeBlock: false };
+// v215: tracks which awardConfig keys the user explicitly toggled on the start screen
+// before loading a dynasty — see toggleAwardConfig() and loadGame().
+let _preloadToggledSettings = new Set();
 let coachAdj = { forecheck: 0, pp: 0, lineMatch: false };
 let coachTrust = 50; // 0-100; updated after each user-team game
 let _awardsPending = false; // true between playoff-round-4 end and awards being revealed; blocks beginNewYear
@@ -400,6 +410,20 @@ function assignTeamCaptains() {
     });
 }
 
+// v229: real IR — any injury of 4+ games auto-places the player on IR (mirrors the real NHL's
+// minimum-stay IR rule; teams don't leave a multi-week injury off IR). Being on IR now genuinely
+// opens a roster spot for the depth check below (hasSpareForward/hasSpareDefenseman), instead of
+// IR being a purely cosmetic badge with no gameplay effect.
+function autoPlaceOnIR(pName, tk, days) {
+    if (days < 4) return;
+    const ps = playerStats[pName];
+    if (!ps || ps.onIR) return;
+    ps.onIR = true;
+    ps.irDay = currentDay;
+    ps.irTotalDays = days;
+    tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `IR MOVE: ${pName} (${(tk||'').toUpperCase()}) automatically placed on Injured Reserve — ${days} days remaining.` });
+}
+
 // Captains amplify team chemistry when healthy/hot, and hurt it more than a regular player when injured/cold
 function placeOnIR(pName, tk) {
     const ps = playerStats[pName];
@@ -417,7 +441,7 @@ function activateFromIR(pName, tk) {
     if (!ps) return;
     if (ps.injury && ps.injury.daysRemaining > 0) return alert(`${pName} is still injured (${ps.injury.daysRemaining}d). Cannot activate yet.`);
     ps.onIR = false;
-    tradeLog.unshift({ day: currentDay, details: `IR ACTIVATE: ${pName} (${tk.toUpperCase()}) activated from Injured Reserve and returns to lineup.` });
+    tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `IR ACTIVATE: ${pName} (${tk.toUpperCase()}) activated from Injured Reserve and returns to lineup.` }); // v248: was raw currentDay (0-indexed, no "DAY " prefix) — every other tradeLog entry uses `DAY ${currentDay+1}`
     clearWpCache(); updateUI(); renderTeamDirectory(tk); saveGame();
 }
 
@@ -635,7 +659,7 @@ function buildSavePayload() {
     } : playoffBracket;
 
     //  STORAGE FIX: Keep trade logs and history trimmed so they don't grow infinitely
-    if (tradeLog.length > 200) tradeLog = tradeLog.slice(0, 200);
+    if (tradeLog.length > 1500) tradeLog = tradeLog.slice(0, 1500);
     if (leagueHistory.length > 25) leagueHistory = leagueHistory.slice(0, 25);
 
     return {
@@ -752,11 +776,31 @@ function loadSlot() {
 
 function loadGame() {
     if (!localStorage.getItem(SAVE_STORAGE_KEY)) return alert('No saved dynasty found.');
+    // v215: snapshot only the settings the user explicitly clicked on the start screen —
+    // applyLoadedSave() replaces awardConfig wholesale with the saved dynasty's config,
+    // which used to silently discard these clicks. Untouched settings still load from save.
+    const _preloadSnapshot = {};
+    _preloadToggledSettings.forEach(key => { _preloadSnapshot[key] = awardConfig[key]; });
     try {
         const parsed = readSaveRaw(SAVE_STORAGE_KEY); const normalized = parsed ? normalizeSavePackage(parsed) : null;
         if (!normalized || !isSupportedSaveVersion(normalized.meta.version)) throw new Error('Unsupported schema version.');
         if (!isValidSaveData(normalized.payload)) throw new Error('Missing league data.');
-        applyLoadedSave(normalized.payload); saveGame({force: true});
+        applyLoadedSave(normalized.payload);
+        Object.assign(awardConfig, _preloadSnapshot);
+        _preloadToggledSettings.clear();
+        // Sync toggle buttons to reflect the final merged config.
+        // v215 fix: only replace the trailing ": ON"/": OFF" state token — a bare
+        // .replace('ON','OFF') previously mangled labels like "PROGRESSION" (which
+        // contains "ON" mid-word) into "PROGRESSIOFF".
+        Object.keys(awardConfig).forEach(key => {
+            const btnId = `btn${key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('')}`;
+            const btn = document.getElementById(btnId);
+            if (!btn) return;
+            const label = btn.textContent.replace(/:\s*(ON|OFF)\s*$/, '');
+            btn.textContent = `${label}: ${awardConfig[key] ? 'ON' : 'OFF'}`;
+            btn.classList.toggle('toggle-off', !awardConfig[key]);
+        });
+        saveGame({force: true});
     } catch (err) {
         localStorage.removeItem(SAVE_STORAGE_KEY); document.getElementById('btnContinue').style.display = 'none'; return alert('Unable to load. Save data corrupt.');
     }
@@ -793,7 +837,8 @@ function getProjectedGoalie(nrm) {
         // different goalie than the one the game actually starts.
         const _gk = (typeof isPlayoffs !== 'undefined' && isPlayoffs) ? 'playoff' : 'season';
         const consStarts = (playerStats[gs[0].name]?.[_gk]?.consStarts || 0);
-        if (diff <= 10 || consStarts >= 7) return gs[1];
+        // v179: lower threshold 7→5; diff<=8 so a 9+ OVR gap still keeps the starter on B2B
+        if (diff <= 8 || consStarts >= 5) return gs[1];
     }
     return gs[0];
 }
@@ -1117,11 +1162,24 @@ const PC_LOGOS = {
 };
 
 // Historical rivalries — bonus activates from game 1 (organic meetings-based rivalry still stacks at 3+)
+// v243: keys were 3-letter codes ('bos', 'chi') but every lookup site indexes by team.nrm — the
+// full lowercased team name with spaces stripped ('bostonbruins', 'chicagoblackhawks'). rivals[g.h.nrm]
+// was therefore ALWAYS undefined for every real team; the entire historic-rival bonus (crowd energy,
+// chaos scaling, rivalry headline tag) has never fired once, in any game, regardless of the toggle —
+// only the organic "3+ meetings this season" fallback was ever reachable. Keys/values remapped to
+// the actual .nrm format so the lookups resolve; pairings themselves are unchanged.
 const rivals = {
-    'chi':['det','stl','tor'], 'det':['chi','tor','nyr'], 'mtl':['tor','bos','que'],
-    'tor':['mtl','det','chi'], 'nyr':['nyi','njd','phi'], 'edm':['cgy','van','win'],
-    'bos':['mtl','nyr','har'], 'phi':['njd','nyr','pit'], 'pit':['phi','wsh','njd'],
-    'cgy':['edm','van','win'], 'njd':['nyr','phi','pit'],
+    'chicagoblackhawks':['detroitredwings','st.louisblues','torontomapleleafs'],
+    'detroitredwings':['chicagoblackhawks','torontomapleleafs','newyorkrangers'],
+    'montrealcanadiens':['torontomapleleafs','bostonbruins','quebecnordiques'],
+    'torontomapleleafs':['montrealcanadiens','detroitredwings','chicagoblackhawks'],
+    'newyorkrangers':['newyorkislanders','newjerseydevils','philadelphiaflyers'],
+    'edmontonoilers':['calgaryflames','vancouvercanucks','winnipegjets'],
+    'bostonbruins':['montrealcanadiens','newyorkrangers','hartfordwhalers'],
+    'philadelphiaflyers':['newjerseydevils','newyorkrangers','pittsburghpenguins'],
+    'pittsburghpenguins':['philadelphiaflyers','washingtoncapitals','newjerseydevils'],
+    'calgaryflames':['edmontonoilers','vancouvercanucks','winnipegjets'],
+    'newjerseydevils':['newyorkrangers','philadelphiaflyers','pittsburghpenguins'],
 };
 
 const DEFAULT_TEAM_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7TQG09fJijxS0CFdwQF3ht_Q1ggw99rfmHzRC2RF4Ht5ZlmyJP2qTMOtOvxuiijczcO_UXm_zwIig/pub?gid=732700653&single=true&output=csv";
@@ -1438,7 +1496,8 @@ async function startNewGame(useCustomRoster = false) {
                 specialTeams: { pp1:[], pp2:[], pk1:[], pk2:[], exa:[] }
             };
         }).filter(x => x.name !== 'Unknown');
-        
+        league.forEach(t => { const ov = TEAM_CONF_DIV_OVERRIDES[t.nrm]; if (ov) { t.conf = ov.conf; t.div = ov.div; } });
+
         rosters = {}; playerStats = {};
         const pHeaders = pData[0].map(h => String(h).trim().toUpperCase());
         //  THE ULTIMATE COLUMN FINDER (Blocks "G DEF" from hijacking "DEF")
@@ -1459,11 +1518,18 @@ async function startNewGame(useCustomRoster = false) {
     return row[idx] ? String(row[idx]).trim() : '';
             };
        
-        pData.slice(1).forEach(r => {
+        pData.slice(1).forEach((r, _rIdx) => {
             const rawCode = getCol(r, ["TEAM CODE", "TEAM", "CODE"], 1).toUpperCase().trim();
-            if (!rawCode) return; 
-            const teamObj = league.find(l => l.code === rawCode || l.name.toUpperCase() === rawCode); 
-            if(!teamObj) return;
+            if (!rawCode) return;
+            const teamObj = league.find(l => l.code === rawCode || l.name.toUpperCase() === rawCode);
+            // v218: an unmatched team code (typo, e.g. "WSH" instead of "WAS") used to silently
+            // drop the entire row — no warning, player just vanished. Log it so a sheet typo is
+            // visible instead of a silent missing-player mystery.
+            if(!teamObj) {
+                const _rowName = `${getCol(r, ["FIRST NAME", "FIRST"], 8)} ${getCol(r, ["LAST NAME", "LAST"], 0)}`.trim();
+                console.warn(`[IMPORT] Unmatched team code "${rawCode}" on row ${_rIdx + 2}${_rowName ? ` (${_rowName})` : ''} — player skipped. Check for a typo against the league's team codes.`);
+                return;
+            }
             const tk = teamObj.nrm; if(!rosters[tk]) rosters[tk] = [];
             
             const lastName = getCol(r, ["LAST NAME", "LAST"], 0); const firstName = getCol(r, ["FIRST NAME", "FIRST"], 8);
@@ -1479,10 +1545,21 @@ async function startNewGame(useCustomRoster = false) {
             }
 
             if (pN && pN !== '') {
-                if(!playerStats[pN]) {
-                    rosters[tk].push({ name: pN, pos: pos });
-                    playerStats[pN] = {
-                        name: pN, team: teamObj.name, teamCode: teamObj.code, pos: pos, age: parseInt(getCol(r, ["AGE"], -1)) || (Math.floor(Math.random()*15)+18),
+                // v217: real NHL rosters have genuine name collisions (multiple "Steve Smith"s,
+                // etc. in the '93-94 league). playerStats is keyed by name string, so a second
+                // player sharing an exact name used to be silently dropped — never added to any
+                // roster, no warning. Disambiguate by appending the team code so both survive.
+                let uniquePN = pN;
+                if (playerStats[uniquePN] && playerStats[uniquePN].team !== teamObj.name) {
+                    uniquePN = `${pN} (${teamObj.code})`;
+                    let suffix = 2;
+                    while (playerStats[uniquePN]) { uniquePN = `${pN} (${teamObj.code}) ${suffix}`; suffix++; }
+                    console.warn(`[IMPORT] Duplicate player name "${pN}" — second instance (${teamObj.name}) renamed to "${uniquePN}" to avoid overwriting the first.`);
+                }
+                if(!playerStats[uniquePN]) {
+                    rosters[tk].push({ name: uniquePN, pos: pos });
+                    playerStats[uniquePN] = {
+                        name: uniquePN, team: teamObj.name, teamCode: teamObj.code, pos: pos, age: parseInt(getCol(r, ["AGE"], -1)) || (Math.floor(Math.random()*15)+18),
                         weight: parseWeightCell(getCol(r, ["WEIGHT", "WGT"], 21)).lbs,
                         streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false, 
                         injury: { severity: 0, daysRemaining: 0 },
@@ -1558,7 +1635,7 @@ async function startNewGame(useCustomRoster = false) {
                         },
                         season: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, svg:0, hits:0, blk:0}, playoff: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, svg:0, hits:0, blk:0}
                     };
-                    playerStats[pN].preSimCareerGP = playerStats[pN].career.gp;
+                    playerStats[uniquePN].preSimCareerGP = playerStats[uniquePN].career.gp;
                 }
             }
             // --- GOALIE CREATION ---
@@ -1571,8 +1648,17 @@ async function startNewGame(useCustomRoster = false) {
 
     // 3. Ensure the row is valid before building the player profile
     if (gLastName && gLastName.toUpperCase() !== 'TRUE' && gLastName.toUpperCase() !== 'G' && gLastName.toUpperCase() !== 'FALSE') {
-        if(!playerStats[gN]) {
-            rosters[tk].push({ name: gN, pos: 'G' });
+        // v217: same duplicate-name disambiguation as the skater import above — a goalie
+        // sharing an exact name with an existing player used to be silently dropped.
+        let uniqueGN = gN;
+        if (playerStats[uniqueGN] && playerStats[uniqueGN].team !== teamObj.name) {
+            uniqueGN = `${gN} (${teamObj.code})`;
+            let gSuffix = 2;
+            while (playerStats[uniqueGN]) { uniqueGN = `${gN} (${teamObj.code}) ${gSuffix}`; gSuffix++; }
+            console.warn(`[IMPORT] Duplicate goalie name "${gN}" — second instance (${teamObj.name}) renamed to "${uniqueGN}" to avoid overwriting the first.`);
+        }
+        if(!playerStats[uniqueGN]) {
+            rosters[tk].push({ name: uniqueGN, pos: 'G' });
             
             // 4. PULL ALL RAW GRADES AND CONVERT THEM TO NUMBERS
             // Goalie-specific columns are read by direct index to avoid partial keyword matches
@@ -1592,8 +1678,8 @@ async function startNewGame(useCustomRoster = false) {
             // Handed (L/R): determines which physical side is glove vs stick — used by shot zone coverage
             const gHanded = (gc(44) || 'L').toString().trim().toUpperCase() === 'R' ? 'R' : 'L';
 
-            playerStats[gN] = {
-                name: gN, team: teamObj.name, teamCode: teamObj.code, pos: 'G', age: parseInt(getCol(r, ["AGE"], -1)) || (Math.floor(Math.random()*15)+18),
+            playerStats[uniqueGN] = {
+                name: uniqueGN, team: teamObj.name, teamCode: teamObj.code, pos: 'G', age: parseInt(getCol(r, ["AGE"], -1)) || (Math.floor(Math.random()*15)+18),
                 streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false,
                 catches: gHanded,  // 'L' or 'R' — drives shot zone directional coverage mapping
                 injury: { severity: 0, daysRemaining: 0 },
@@ -1618,17 +1704,23 @@ async function startNewGame(useCustomRoster = false) {
                 // v146: goalies were hardcoded 'Depth' — young elite goalies (Brodeur, Roy) never
                 // got Franchise/Top6 growth; match the same random distribution skaters get
                 potential: Math.random() < 0.05 ? 'Franchise' : (Math.random() < 0.25 ? 'Top 6' : (Math.random() < 0.60 ? 'Depth' : 'Bust')),
-                career: {
-                    gp: parseInt(getCol(r, ["GOALIE CAREER GP", "GOALIE CAREER GAMES PLAYED", "G CAREER GP", "CAREER GP", "C_GP", "CAR GP", "CGP"], -1)) || 0,
-                    g: 0, a: 0, pts: 0, pm: 0, pim: 0, ppg: 0,
-                    w: parseInt(getCol(r, ["CAREER W", "C_W", "CAR W"], -1)) || 0,
-                    l: parseInt(getCol(r, ["CAREER L", "C_L", "CAR L"], -1)) || 0,
-                    t: parseInt(getCol(r, ["CAREER T", "C_T", "CAR T"], -1)) || 0,
-                    so: parseInt(getCol(r, ["CAREER SO", "C_SO", "CAR SO"], -1)) || 0,
-                    sv: parseInt(getCol(r, ["CAREER SV", "C_SV", "CAR SV"], -1)) || 0,
-                    sa: parseInt(getCol(r, ["CAREER SA", "C_SA", "CAR SA"], -1)) || 0,
-                    toi: 0
-                },
+                career: ((_cW, _cL, _cT) => {
+                    const _cGP_explicit = parseInt(getCol(r, ["GOALIE CAREER GP", "GOALIE CAREER GAMES PLAYED", "G CAREER GP", "CAREER GP", "C_GP", "CAR GP", "CGP"], -1)) || 0;
+                    return {
+                        // v197: derive GP from W+L+T when no explicit column exists
+                        gp: _cGP_explicit || (_cW + _cL + _cT),
+                        g: 0, a: 0, pts: 0, pm: 0, pim: 0, ppg: 0,
+                        w: _cW, l: _cL, t: _cT,
+                        so: parseInt(getCol(r, ["CAREER SO", "C_SO", "CAR SO"], -1)) || 0,
+                        sv: parseInt(getCol(r, ["CAREER SV", "C_SV", "CAR SV"], -1)) || 0,
+                        sa: parseInt(getCol(r, ["CAREER SA", "C_SA", "CAR SA"], -1)) || 0,
+                        toi: 0
+                    };
+                })(
+                    parseInt(getCol(r, ["CAREER W", "C_W", "CAR W"], -1)) || 0,
+                    parseInt(getCol(r, ["CAREER L", "C_L", "CAR L"], -1)) || 0,
+                    parseInt(getCol(r, ["CAREER T", "C_T", "CAR T"], -1)) || 0
+                ),
                 careerPlayoff: {
                     gp: parseInt(getCol(r, ["CAREER PLAYOFF GP"], -1)) || 0,
                     w: parseInt(getCol(r, ["CAREER PLAYOFF W"], -1)) || 0,
@@ -1642,7 +1734,7 @@ async function startNewGame(useCustomRoster = false) {
                 season: {gp:0, g:0, a:0, pm:0, so:0, sv:0, sa:0, w:0, l:0, t:0, pim:0, ppg:0,lastGAA: 0, lastSV: 0, consStarts: 0, toi:0, svg:0},
                 playoff: {gp:0, g:0, a:0, pm:0, so:0, sv:0, sa:0, w:0, l:0, pim:0, ppg:0,lastGAA: 0, lastSV: 0, consStarts: 0, toi:0, svg:0}
             };
-            playerStats[gN].preSimCareerGP = playerStats[gN].career.gp;
+            playerStats[uniqueGN].preSimCareerGP = playerStats[uniqueGN].career.gp;
         }
     }
         });
@@ -2235,7 +2327,12 @@ function getLiveIceOvr(pName) {
     }
 
     // 5. Apply Line Chemistry
-    if (tObj && tObj.chem && tObj.chem.lastUnit) {
+    // v243: this personnel-stability system (chem.f/d + fYears/dYears telepathic bonus) had no
+    // awardConfig.chemistry check at all, unlike the other two chemistry effects (PP duo bonus at
+    // getSpecialTeamsChance, line-OVR duo bonus in getLineOvr) which both correctly gate on it.
+    // With CHEMISTRY defaulting OFF, this was silently running in every single game regardless —
+    // the toggle didn't actually toggle the larger of the two chemistry mechanics.
+    if (awardConfig.chemistry && tObj && tObj.chem && tObj.chem.lastUnit) {
         let chemVal = 0, isTelepathic = false;
         const lineIdx = tObj.chem.lastUnit.f.findIndex(l => l.some(x => x.name === pName));
         if (lineIdx !== -1) { 
@@ -2327,6 +2424,20 @@ function getPlayerFatigueAmount(pName) {
         pen += Math.min(8, Math.floor((seasonTicks - endurThreshold) / 80));
     }
 
+    // v178: late-season skater fatigue — dynamic by endurance; kicks in at 72+ GP.
+    // Low-endur players (50) hit the 15-pen cap at 84 GP; high-endur (80+) feel nothing.
+    // endur threshold: 80 is the zero line; below → scales up to max 15; above → zero.
+    // IRONMAN resists heavily (×0.15); TWO-WAY archetypes modest resistance (×0.65).
+    const lsGP = p.season?.gp || 0;
+    if (lsGP > 72 && p.pos !== 'G') {
+        const endurNum = endur; // already numeric from gradeToNum above
+        const rawLSFatigue = Math.max(0, lsGP - 72) * Math.max(0, (80 - endurNum) * 0.10);
+        const lsTag = (typeof PLAYER_TAG_OVERRIDES !== 'undefined' && PLAYER_TAG_OVERRIDES[pName]) || '';
+        const lsTagMult = lsTag === 'IRONMAN' ? 0.15
+                        : (lsTag === 'TWO-WAY STAR F' || lsTag === 'TWO-WAY FWD') ? 0.65 : 1.0;
+        pen += Math.min(15, rawLSFatigue) * lsTagMult;
+    }
+
     return pen;
 }
 
@@ -2336,9 +2447,7 @@ function getPlayerFatigueAmount(pName) {
 // Forces the auto-coach to draft these players onto the same line if both are healthy
 const dynamicDuos = [
     // ANA
-    ['Anatoli Semenov', 'Stephan Lebeau'],
-    ['Bobby Dollas', 'Sean Hill'],
-    ['Bill Houlder', 'Randy Ladouceur'],
+
     // BOS
     ['Adam Oates', 'Cam Neely', 'Glen Murray'],
     ['Bryan Smolinski', 'Dmitri Kvartalnov'],
@@ -2350,89 +2459,73 @@ const dynamicDuos = [
     ['Doug Bodger', 'Richard Smehlik'],
     ['Petr Svoboda', 'Philippe Boucher'],
     // CGY
-    ['Gary Roberts', 'Joe Nieuwendyk', 'German Titov'],
-    ['Theoren Fleury', 'Robert Reichel'],
+    ['Gary Roberts', 'Joe Nieuwendyk', 'Johan Garpenlov'],
     ['Zarley Zalapski', 'James Patrick'],
     // CHI
     ['Jeremy Roenick', 'Tony Amonte', 'Dirk Graham'],
-    ['Joe Murphy', 'Christian Ruutu', 'Michel Goulet'],
+    ['Joe Murphy', 'Andrew Cassels', 'Michel Goulet'],
     ['Brent Sutter', 'Rich Sutter', 'Paul Ysebaert'],
-    ['Chris Chelios', 'Eric Weinrich'],
-    ['Gary Suter', 'Steve Smith'],
+    ['Gary Suter', 'Eric Weinrich'],
     // DET
     ['Sergei Fedorov', 'Vachslav Kozlov', 'Keith Primeau'],
     ['Ray Sheppard', 'Steve Yzerman', 'Dino Ciccarelli'],
-    ['Kris Draper', 'Bob Probert', 'Darren McCarty'],
+    ['Kris Draper', 'Kirk Maltby', 'Darren McCarty'],
     ['Nicklas Lidstrom', 'Vladimir Konstantinov'],
     // EDM
     ['Wayne Gretzky', 'Jari Kurri', 'Glenn Anderson'],
     // FLA
-    ['Andrei Lomakin', 'Jesse Belanger', 'Scott Mellanby'],
-    ['Stu Barnes', 'Bob Kudelski', 'Rob Niedermayer'],
-    ['Tom Fitzgerald', 'Dave Lowry'],
-    ['Gord Murphy', 'Peter Andersson'],
-    ['Geoff Smith', 'Brian Benning'],
+    ['Jason Arnott', 'Andrei Lomakin'],
+    ['Brian Skrudland','Tom Fitzgerald', 'Dave Lowry'],
     // HFD
-    ['Andrew Cassels', 'Pat Verbeek', 'Geoff Sanderson'],
+    ['Ron Francis', 'Pat Verbeek', 'Geoff Sanderson'],
     ['Brendan Shanahan', 'Darren Turcotte', 'Jocelyn Lemieux'],
     ['Robert Kron', 'Brian Propp', 'Paul Ranheim'],
     ['Mark Janssens', 'Jim Sandlak', 'Kevin Smyth'],
-    ['Frantisek Kucera', 'Alexander Godynyuk'],
     // LAK
-    ['Luc Robitaille', 'Pat LaFontaine', 'Dixon Ward'],
-    ['Tony Granato', 'Thomas Sandstrom', 'Jason Arnott'],
+    ['Luc Robitaille', 'Pierre Turgeon', 'Sylvain Turgeon'],
+    ['Tony Granato', 'Thomas Sandstrom'],
     ['Rob Blake', 'Alexei Zhitnik'],
     ['Darryl Sydor', 'Marty McSorley'],
     // MIN
-    ['Mike Modano', 'Russ Courtnall', 'Trent Klatt'],
-    ['Dave Gagner', 'Pelle Eklund', 'Kevin Stevens'],
+    ['Mike Modano', 'Russ Courtnall', 'Kevin Stevens'],
+    ['Pelle Eklund', 'Brian Bellows', 'Trent Klatt'],
     ['Derian Hatcher', 'Doug Zmolek'],
     // MTL
-    ['Vincent Damphousse', 'Brian Bellows', 'Oleg Petrov'],
-    ['Kirk Muller', 'Mark Recchi', 'Gilbert Dionne'],
+    ['Vincent Damphousse', 'Stephan Lebeau', 'Gilbert Dionne'],
+    ['Bernie Nicholls', 'Stephane Richer', 'Oleg Petrov'],
     ['Guy Carbonneau', 'Mike Keane', 'Ron Wilson'],
-    ['Matt Schneider', 'Lyle Odelein'],
-    ['Patrice Brisebois', 'Eric Desjardins'],
     ['J.J. Daigneault', 'Kevin Haller'],
     // NJD
-    ['Stephane Richer', 'Bernie Nicholls', 'Claude Lemieux'],
-    ['Bobby Holik', 'Randy McKay', 'Bill Guerin'],
+    ['Bobby Holik', 'Michael Nylander', 'Bill Guerin'],
     ['Scott Stevens', 'Bruce Driver'],
-    ['Scott Niedermayer', 'Vachslav Fetisov'],
     // NYI
-    ['Benoit Hogue', 'Derek King', 'Pierre Turgeon'],
-    ['Ray Ferraro', 'Steve Thomas', 'Marty McInnis'],
+    ['Pat LaFontaine', 'Derek King'],
+    ['Ray Ferraro', 'Benoit Hogue', 'Marty McInnis'],
     ['Patrick Flatley', 'Dave Volek'],
     ['Vladimir Malakhov', 'Uwe Krupp'],
     ['Darius Kasparaitis', 'Scott Lachance'],
     // NYR
     ['Mark Messier', 'Adam Graves'],
     ['Steve Larmer', 'Alexei Kovalev', 'Sergei Nemchinov'],
-    ['Craig MacTavish', 'Ed Olczyk'],
-    ['Stephane Matteau', 'Joey Kocur'],
+    ['Craig MacTavish', 'Ed Olczyk', 'Stephane Matteau'],
     ['Brian Leetch', 'Alex Karpotsev'],
-    ['Sergei Zubov', 'Jeff Beukeboom'],
     // OTT
-    ['Alexei Yashin', 'Sylvain Turgeon', 'Brian Noonan'],
-    ['Alexnder Daigle', 'Evgeny Davydov'],
-    
+    ['Alexei Yashin', 'Steve Thomas', 'Zdeno Ciger'],
+    ['Michal Pivonka', 'Alexnder Daigle', 'Paul Ranheim'],
+    ['Shaun VanAllen', 'Mike Donnelly', 'Wayne Presley'],
     ['Norm Maciver', 'Kerry Huffman'],
     ['Brad Shaw', 'Steve Konroyd'],
     // PHI
-    ['Eric Lindros', 'John LeClair', 'Brent Fedyk'],
-    ['Rod BrindAmour', 'Mikael Renberg', 'Josef Beranek'],
+    ['Eric Lindros', 'John LeClair', 'Robert Lang'],
+    ['Rod BrindAmour', 'Pat Falloon', 'Josef Beranek'],
     ['Dave Tippett', 'Dave Brown'],
-    ['Dimitri Yushkevich', 'Yves Racine'],
     ['Garry Galley', 'Rob Ramage'],
     // PIT
     ['Mario Lemieux', 'Rick Tocchet', 'Owen Nolan'],
-    ['Ron Francis', 'Jaromir Jagr'],
-    ['Martin Straka', 'Markus Naslund'],
-    ['Larry Murphy', 'Kjell Samuelsson'],
-    ['Greg Hawgood', 'Ulf Samuelsson'],
+    ['Martin Straka', 'Markus Naslund', 'Jaromir Jagr'],
     // QUE
-    ['Joe Sakic', 'Andrei Kovalenko', 'Mike Ricci'],
-    ['Dale Hunter', 'Mike Gartner', 'Johan Garpenlov'],
+    ['Joe Sakic', 'Theoren Fleury'],
+    ['Dale Hunter', 'Mike Gartner', 'Mike Ricci'],
     ['Ron Sutter', 'Claude Lapointe'],
     ['Bob Bassen', 'Chris Simon'],
     ['Curtis Leschyshyn', 'Alexei Gusarov'],
@@ -2443,28 +2536,29 @@ const dynamicDuos = [
     ['Sandis Ozolinsh', 'Mike Rathje'],
     // STL
     ['Brett Hull', 'Craig Janney', 'Philippe Bozon'],
-    ['Petr Nedved', 'Keith Tkachuk', 'Pat Falloon'],
-    ['Basil McRae', 'Jim Montgomery', 'Kevin Miller'],
+    ['Cliff Ronning', 'Keith Tkachuk', ' Mikael Renberg'],
+    ['Phil Bourque', 'Jim Montgomery', 'Brian Noonan'],
+    ['Igor Chiberev', 'Igor Korolev', 'Vitali Karamnov'],
+    ['Chris Pronger', 'Teppo Numminen'],
     ['Steve Duchesne', 'Doug Crossman'],
     // TBL
-    ['Denis Savard', 'Rob Zamuner', 'John MacLean'],
-    ['Brian Bradley', 'Petr Klima', 'Chris Gratton'],
+    ['Petr Klima', 'Chris Gratton', 'Denis Savard'],
     // TOR
-    ['Doug Gilmour', 'Dave Andreychuk', 'Nikolai Borschevsky'],
+    ['Doug Gilmour', 'Dave Andreychuk', 'Brent Gilchrist'],
     ['Wendel Clark', 'Mats Sundin'],
     ['Peter Zezel', 'Mike Krushelnyski', 'Mark Osborne'],
     ['Dave Ellett', 'Todd Gill'],
     ['Jamie Macoun', 'Dmitri Mironov'],
     // VAN
     ['Pavel Bure', 'Trevor Linden', 'Greg Adams'],
-    ['Cliff Ronning', 'Geoff Courtnall', 'Sergio Momesso'],
+    ['Cliff Ronning', 'Geoff Courtnall', 'Scott Mellanby'],
     ['Martin Gelinas', 'Gino Odjick','Jimmy Carson'],
     ['Jeff Brown', 'Gerald Diduck'],
     ['Jyrki Lumme', 'Jiri Slegr'],
     // WAS
     ['Joe Juneau', 'Peter Bondra'],
     ['Mike Ridley', 'Dmitri Khristich'],
-    ['Craig Berube', 'Todd Krygier'],
+    ['Kevin Miller', 'Dave Poulin', 'Kelly Miller'],
     ['Kevin Hatcher', 'John Slaney'],
     ['Calle Johansson', 'Joe Reekie'],
     ['Sylvain Cote', 'Shawn Anderson'],
@@ -2907,6 +3001,22 @@ const getRosterStructure = (tk) => {
     });
 
     // ==========================================
+    //  5a. LINE 3/4 DEFENSIVE SWAP
+    // ==========================================
+    // After lines 1 & 2 are set, the remaining two lines are compared by average DEF.
+    // The more defensive line becomes Line 3 (checking line), the other Line 4.
+    {
+        const avgDef = (line) => line.length ? line.reduce((s,p) => s + (getDef(p)||0), 0) / line.length : 0;
+        const def3 = avgDef(fLines[2]);
+        const def4 = avgDef(fLines[3]);
+        if (def4 > def3) {
+            const tmp = fLines[2];
+            fLines[2] = fLines[3];
+            fLines[3] = tmp;
+        }
+    }
+
+    // ==========================================
     //  5b. POST-DRAFT SYNERGY REBALANCER
     // ==========================================
     const hasAnySynergy = (p, line) => {
@@ -3332,6 +3442,24 @@ const getRosterStructure = (tk) => {
             }
         }
     }
+    // v175: Manual line-swap overrides — swaps two linemates between forward lines after the
+    // normal build so the change survives cache rebuilds. Format: { team: [[nameA, nameB], ...] }
+    const lineSwapOverrides = {
+        'newyorkislanders': [['Benoit Hogue', 'Steve Thomas']]
+    };
+    (lineSwapOverrides[tk] || []).forEach(([nameA, nameB]) => {
+        let aLine = -1, aIdx = -1, bLine = -1, bIdx = -1;
+        cleanF.forEach((line, li) => line.forEach((p, pi) => {
+            if (p.name === nameA) { aLine = li; aIdx = pi; }
+            if (p.name === nameB) { bLine = li; bIdx = pi; }
+        }));
+        if (aLine !== -1 && bLine !== -1 && aLine !== bLine) {
+            const tmp = cleanF[aLine][aIdx];
+            cleanF[aLine][aIdx] = cleanF[bLine][bIdx];
+            cleanF[bLine][bIdx] = tmp;
+        }
+    });
+
     const struct = { f: cleanF, d: cleanD, g: gPool };
     _structCache[tk] = struct;
     return struct;
@@ -3471,7 +3599,16 @@ function getSpecialTeamsRating(tk, mode = 'PP', unitNum = 1, isEN = false) {
 }
 
 // Helper function to build the Special Teams HTML dynamically
-function getSpecialTeamsChance(attackingTk, defendingTk) { const diff = getSpecialTeamsRating(attackingTk, 'PP') - getSpecialTeamsRating(defendingTk, 'PK'); const pace = Math.max(0.90, Math.min(1.12, getSpecialTeamsRating(attackingTk, 'PP') / 85)); return Math.max(0.08, Math.min(0.28, 0.157 + diff * 0.0028 * pace)); }
+function getSpecialTeamsChance(attackingTk, defendingTk) {
+    const ppRating = getSpecialTeamsRating(attackingTk, 'PP');
+    const pkRating = getSpecialTeamsRating(defendingTk, 'PK');
+    const diff = ppRating - pkRating;
+    // v181: base recalibrated — actual league avg PP=78.2 PK=55.5 gives diff≈+22.7 not 0.
+    // Old center 0.157 produced ppConvBase≈0.229 (24% PP%). New center 0.098 lands
+    // league-avg at 0.171 → ~17% weighted PP%; elite matchup (diff=40) caps at 0.24.
+    const pace = Math.max(0.90, Math.min(1.12, ppRating / 85));
+    return Math.max(0.06, Math.min(0.25, 0.106 + diff * 0.0035 * pace));
+}
 
 // --- GAME MATH & STATS ---
 function checkMilestones(pName) {
@@ -3770,18 +3907,26 @@ function simGame(idx) {
                     ps.injuryHistory.push({
                         date: currentDay,
                         daysMissed: sev,
+                        initialDays: ps.injury.initialDays || sev,
                         gamesOut: sev,
                         season: currentSeason,
                         grade: sev >= 8 ? 'serious' : sev >= 3 ? 'moderate' : 'minor',
                         source: ps.injury.source || 'unknown'
                     });
+                    // v186: re-injury cooldown — can't be hurt again for 8 games after healing
+                    ps.injCooldown = 8;
                     if (sev >= 3) ps.returnFromInjury = Math.ceil(sev / 2);
                     ps.injury = { severity: 0, daysRemaining: 0 };
                     ps.onIR = false; // [FIX] Clear IR status when injury heals on a game day (rest-day path already did this)
+                    // v227: the starter's back — any emergency-call-up flag on this team's other
+                    // goalies (set while covering with no 3rd-string depth) no longer applies.
+                    if (p.pos === 'G' && rosters[tk]) {
+                        rosters[tk].forEach(g2 => { if (g2.pos === 'G' && playerStats[g2.name]) playerStats[g2.name].emergencyGoalie = false; });
+                    }
                 }
-            } else if (ps.returnFromInjury > 0) {
-                // Decays once the player is actually back on the ice, independent of the injury guard above
-                ps.returnFromInjury--;
+            } else {
+                if (ps.returnFromInjury > 0) ps.returnFromInjury--;
+                if (ps.injCooldown > 0) ps.injCooldown--;
             }
         });
     };
@@ -3835,7 +3980,7 @@ function simGame(idx) {
         }
     };
 
-    const hG_obj = selG(g.h.nrm), aG_obj = selG(g.a.nrm);
+    let hG_obj = selG(g.h.nrm), aG_obj = selG(g.a.nrm); // v180: let so goalie yank can swap mid-game
     let hG_name = hG_obj ? hG_obj.name : null;
     let aG_name = aG_obj ? aG_obj.name : null;
     // Record original starters before any blowout-pull reassignment
@@ -3955,6 +4100,10 @@ function simGame(idx) {
         + Math.max(0, ((playerStats[aG_name]?.[k]?.gp || 0) - 65) * 0.001)
         + aGoalieStreakMod          // v172: HOT/COLD streak from last start
     ));
+    // v227: emergency call-up penalty — a backup pressed into starting duty with no 3rd-string
+    // depth behind him plays at lowered effectiveness (harder to trust in the crease cold).
+    if (hG_name && playerStats[hG_name]?.emergencyGoalie) hWallMod = Math.min(1.18, hWallMod + 0.05);
+    if (aG_name && playerStats[aG_name]?.emergencyGoalie) aWallMod = Math.min(1.18, aWallMod + 0.05);
     // Coaching adjustments: forecheck 1=aggressive(open game), -1=defensive(tight); pp 1=shoot, -1=cycle
     if (!isPlayoffs && !isASG && selectedTeam && (g.h.nrm === selectedTeam || g.a.nrm === selectedTeam)) {
         // v164: asymmetric forecheck — aggressive forecheck benefits your offense (full) more than it costs
@@ -4005,19 +4154,22 @@ function simGame(idx) {
     const hMeetings = !isPlayoffs ? ((g.h.season.meetings || {})[g.a.nrm] || 0) : 0;
     const isHistoricRival = awardConfig.rivalries && !!(rivals[g.h.nrm]?.includes(g.a.nrm) || rivals[g.a.nrm]?.includes(g.h.nrm));
     // v169: crowd scales with context — playoffs louder, rivalry games electric, baseline 1.03
-    let homeCrowdEnergy = isPlayoffs ? 1.065 : isHistoricRival ? 1.045 : 1.03;
+    let homeCrowdEnergy = isPlayoffs ? 1.065 : isHistoricRival ? 1.045 : 1.035; // v177: 1.030→1.035 nudges home win% toward ~54-55%
     const rivalBonus = !awardConfig.rivalries ? 0 : isHistoricRival ? (hMeetings >= 3 ? 3 : 1) : (hMeetings >= 3 ? 2 : 0);
 
     // CHAOS — globalChaos drives all random variance; scaled by context
     // Rivalry games and playoffs get extra chaos; wall mod randomness uses same scale
     const chaosScale = gameStatus.globalChaos * (isHistoricRival ? 1.4 : 1.0) * (isPlayoffs ? 1.2 : 1.0);
     const nightMag = 14 * chaosScale;    // pre-game night factor magnitude
-    const wallJitter = 0.18 * chaosScale; // goalie wall mod random jitter
+    // v176: goalie jitter scaled by tier — elite goalies are consistent, backups volatile
+    const goalieJitter = (ovr) => (ovr >= 85 ? 0.09 : ovr >= 75 ? 0.13 : 0.18) * chaosScale;
+    const hWallJitter = goalieJitter(hGOvr);
+    const aWallJitter = goalieJitter(aGOvr);
     const hNight = Math.random() < 0.22 ? (Math.random() - 0.5) * nightMag : 0;
     const aNight = Math.random() < 0.22 ? (Math.random() - 0.5) * nightMag : 0;
     const chaosOffset = hNight - aNight;
-    hWallMod = Math.max(0.65, Math.min(1.35, hWallMod + (Math.random() - 0.5) * wallJitter));
-    aWallMod = Math.max(0.65, Math.min(1.35, aWallMod + (Math.random() - 0.5) * wallJitter));
+    hWallMod = Math.max(0.65, Math.min(1.35, hWallMod + (Math.random() - 0.5) * hWallJitter));
+    aWallMod = Math.max(0.65, Math.min(1.35, aWallMod + (Math.random() - 0.5) * aWallJitter));
 
     // PLAYOFF PRESSURE — elimination game modifier
     // Facing elimination: veterans (+OVR) dig deep; less experienced players feel it (-OVR)
@@ -4058,7 +4210,12 @@ function simGame(idx) {
 
     // MOMENTUM — decays each step; goal gives scoring team a 4-minute surge
     let hMomentum = 0, aMomentum = 0;
-
+    // v180: in-game goalie fatigue — track shots faced per goalie; high-SA games erode wallMod
+    let hSACount = 0, aSACount = 0; // shots on home/away goalie respectively
+    // v182: new game events
+    let hEN = false, aEN = false, enChecked = false; // empty net tracking
+    const gameGoals = {};            // {playerName: count} for hat trick detection
+    let hMaxDeficit = 0, aMaxDeficit = 0; // comeback tracking
     //  4. THE TIME-TICK ENGINE SETUP
     let hG = 0, aG = 0;
     let hShots = 0, aShots = 0;
@@ -4066,6 +4223,10 @@ function simGame(idx) {
     let penaltyEvents = [];
     let hStruct = getRosterStructure(g.h.nrm);
     let aStruct = getRosterStructure(g.a.nrm);
+    // v180: shift fatigue per line — lines over-deployed lose OVR; expected shifts = 240/numLines
+    const hLineShifts = [0,0,0,0], aLineShifts = [0,0,0,0];
+    const hExpShift = 240 / Math.max(1, hStruct.f.length);
+    const aExpShift = 240 / Math.max(1, aStruct.f.length);
 
     // Snapshot current unit so per-line chemistry can track which line scored
     const hTeamObj = league.find(t => t.nrm === g.h.nrm);
@@ -4073,32 +4234,95 @@ function simGame(idx) {
     syncChemPersonnel(hTeamObj, hStruct);
     syncChemPersonnel(aTeamObj, aStruct);
 
-    function buildLineSchedule(minsArray) {
-        // Weighted random draw: each step picks a line proportional to its minute share.
-        // Guarantees L1 plays more than L2, L2 more than L3, etc. — never shuffled flat.
-        const weights = minsArray.map(m => Math.max(0, m));
-        const total = weights.reduce((s, w) => s + w, 0) || 1;
-        const sched = [];
-        for (let i = 0; i < 240; i++) {
-            let roll = Math.random() * total;
-            let cum = 0;
-            let chosen = 0;
-            for (let j = 0; j < weights.length; j++) {
-                cum += weights[j];
-                if (roll < cum) { chosen = j; break; }
-            }
-            sched.push(chosen);
+    // v209: EXPLICIT LINE MATCHING — shifts are now decided in 3-tick blocks (was per-tick).
+    // Away team always selects its line/pair FIRST each shift; home reacts second and can
+    // counter a best-offensive-line deployment with its best-defensive (checking) line.
+    // On an icing call, the non-offending team gets the offensive-zone draw and may throw out
+    // its best offensive line; the offending (icing) team can counter with its best defensive line.
+    const SHIFT_LEN = 3; // ticks per shift (was 1 — flickered every tick before)
+
+    const weightedPick = (weights) => {
+        const total = weights.reduce((s, w) => s + Math.max(0, w), 0) || 1;
+        let roll = Math.random() * total, cum = 0;
+        for (let j = 0; j < weights.length; j++) {
+            cum += Math.max(0, weights[j]);
+            if (roll < cum) return j;
         }
-        return sched;
-    }
+        return 0;
+    };
+
+    // Best offensive / defensive forward line index, by average OFF / DEF rating
+    const lineRatingIdx = (struct, useDef) => {
+        if (!struct || !struct.f) return { best: 0, worst: 0 };
+        const avgs = struct.f.map(line => {
+            if (!line.length) return -1;
+            const sum = line.reduce((s,p) => s + (parseInt(playerStats[p.name]?.attr?.[useDef?'def':'off'])||0), 0);
+            return sum / line.length;
+        });
+        let best = 0, worst = 0;
+        avgs.forEach((v,i) => { if (v > avgs[best]) best = i; if (v >= 0 && (avgs[worst] < 0 || v < avgs[worst])) worst = i; });
+        return { best, worst };
+    };
 
     const homeIceData = calculateDynamicIceTime(getRosterStructure(g.h.nrm));
     const awayIceData = calculateDynamicIceTime(getRosterStructure(g.a.nrm));
+    const homeStructForRating = getRosterStructure(g.h.nrm);
+    const awayStructForRating = getRosterStructure(g.a.nrm);
+    const homeBestOff = lineRatingIdx(homeStructForRating, false).best;
+    const homeBestDef = lineRatingIdx(homeStructForRating, true).best;
+    const awayBestOff = lineRatingIdx(awayStructForRating, false).best;
+    const awayBestDef = lineRatingIdx(awayStructForRating, true).best;
 
-    const homeFSchedule = buildLineSchedule(homeIceData.forwardLineAverages);
-    const awayFSchedule = buildLineSchedule(awayIceData.forwardLineAverages);
-    const homeDSchedule = buildLineSchedule(homeIceData.defensePairAverages);
-    const awayDSchedule = buildLineSchedule(awayIceData.defensePairAverages);
+    // Icing ticks — precomputed here so the shift scheduler can react to them.
+    // v209 fix: poissonRand isn't declared until later in this function (TDZ error on const) —
+    // approximate the same ~2-3/game rate with simple random rolls instead.
+    let preIceCnt = 2;
+    if (Math.random() < 0.5) preIceCnt++;
+    if (Math.random() < 0.15) preIceCnt++;
+    const preIceTicks = new Set();
+    for (let _i = 0; _i < preIceCnt; _i++) preIceTicks.add(Math.floor(Math.random()*240));
+
+    function buildShiftSchedulePair(homeMins, awayMins) {
+        const homeSched = [], awaySched = [];
+        for (let t = 0; t < 240; t += SHIFT_LEN) {
+            // Detect icing anywhere in this shift block — random coin flip on which side committed it
+            const icingThisShift = [...preIceTicks].some(it => it >= t && it < t + SHIFT_LEN);
+            const homeIced = icingThisShift ? Math.random() < 0.5 : false;
+
+            // AWAY SELECTS FIRST
+            let awayLine;
+            if (icingThisShift && !homeIced) {
+                // Away drew the icing → away is defending zone entry after the whistle; use best D-context if available
+                awayLine = awayBestOff; // away still gets O-zone draw pressure chance
+            } else {
+                awayLine = weightedPick(awayMins);
+            }
+
+            // HOME REACTS SECOND
+            let homeLine;
+            if (icingThisShift && homeIced) {
+                homeLine = homeBestDef; // home committed icing → tired D-zone shift, sends checking line
+            } else if (awayLine === awayBestOff && Math.random() < 0.55) {
+                // Away threw out its best offensive line — home counters with its checking line
+                homeLine = homeBestDef;
+            } else {
+                homeLine = weightedPick(homeMins);
+            }
+
+            for (let k2 = 0; k2 < SHIFT_LEN && (t+k2) < 240; k2++) {
+                homeSched.push(homeLine);
+                awaySched.push(awayLine);
+            }
+        }
+        return { homeSched, awaySched };
+    }
+
+    const fShiftResult = buildShiftSchedulePair(homeIceData.forwardLineAverages, awayIceData.forwardLineAverages);
+    const dShiftResult = buildShiftSchedulePair(homeIceData.defensePairAverages, awayIceData.defensePairAverages);
+    const homeFSchedule = fShiftResult.homeSched;
+    const awayFSchedule = fShiftResult.awaySched;
+    const homeDSchedule = dShiftResult.homeSched;
+    const awayDSchedule = dShiftResult.awaySched;
 
     function getPairingForLine(fLine, matrix) {
         let p1Weight = matrix[0][fLine]; 
@@ -4147,8 +4371,28 @@ function simGame(idx) {
     };
     const hTeamStyle   = calcTeamStyle(g.h.nrm);
     const aTeamStyle   = calcTeamStyle(g.a.nrm);
-    const hBaseLambda  = 26 + Math.max(0, Math.min(5, (hTeamStyle - 60) * 0.2));
-    const aBaseLambda  = 26 + Math.max(0, Math.min(5, (aTeamStyle - 60) * 0.2));
+
+    // v178: faceoff possession system — proxy faceoff strength from center attributes.
+    // pass×0.40 + def×0.30 + off×0.30 captures playmaking, defensive awareness, and hockey sense.
+    // Yzerman/Nieuwendyk (high all three) score high; pure goal scorers (low pass/def) score low.
+    // Differential adjusts shot lambda: ±0.08 per FOW point → elite C gives team ~1-2 extra shots/game.
+    const calcTeamFow = (tk) => {
+        const centers = (rosters[tk] || []).filter(p => getPlayerPosition(p) === 'C' && playerStats[p.name] &&
+            (!playerStats[p.name].injury || playerStats[p.name].injury.daysRemaining === 0));
+        if (!centers.length) return 70;
+        return centers.reduce((s, p) => {
+            const pA = playerStats[p.name]?.attr || {};
+            return s + ((pA.pass||70)*0.40 + (pA.def||70)*0.30 + (pA.off||70)*0.30);
+        }, 0) / centers.length;
+    };
+    const hTeamFow    = calcTeamFow(g.h.nrm);
+    const aTeamFow    = calcTeamFow(g.a.nrm);
+    const fowDiff     = Math.max(-15, Math.min(15, hTeamFow - aTeamFow)); // cap at ±15 pts
+    const hFowLambda  = fowDiff * 0.08;  // +1.2 shots at max diff (elite vs poor C)
+    const aFowLambda  = -fowDiff * 0.08;
+
+    const hBaseLambda  = 26 + Math.max(0, Math.min(5, (hTeamStyle - 60) * 0.2)) + hFowLambda;
+    const aBaseLambda  = 26 + Math.max(0, Math.min(5, (aTeamStyle - 60) * 0.2)) + aFowLambda;
     const hShotCount   = poissonRand(hBaseLambda * (1 + preGameDiff * 0.008));
     const aShotCount   = poissonRand(aBaseLambda * (1 - preGameDiff * 0.008));
     // v167: penCount scaled by roster avg penaltyRate (archMods) + forecheck coaching adj
@@ -4165,7 +4409,9 @@ function simGame(idx) {
     // Aggressive forecheck = more contact = more penalty calls (only user's games)
     const forecheckPenMult = (!isPlayoffs && !isASG && selectedTeam && (g.h.nrm === selectedTeam || g.a.nrm === selectedTeam))
         ? Math.max(0.90, Math.min(1.12, 1.0 + coachAdj.forecheck * 0.08)) : 1.0;
-    const penCount = poissonRand(7.5 * Math.max(0.75, Math.min(1.40, gameAvgPenRate)) * forecheckPenMult);
+    // v180: referee personality — each game has a tone; tight refs call more, loose refs swallow whistles
+    const refTone = Math.random() < 0.25 ? 1.20 : Math.random() < 0.67 ? 1.00 : 0.80;
+    const penCount = poissonRand(7.5 * Math.max(0.75, Math.min(1.40, gameAvgPenRate)) * forecheckPenMult * refTone);
     // v157: coincidental and goon events scaled by game avg aggr — dirty games have more scrums
     const calcTeamAggr = (tk) => {
         const sk = (rosters[tk] || []).filter(p => p.pos !== 'G');
@@ -4176,7 +4422,7 @@ function simGame(idx) {
     // aggr 90 → coin ×1.30, goon ×1.40; aggr 50 → coin ×0.70, goon ×0.60
     const coinCount   = poissonRand(3.6 * Math.max(0.60, Math.min(1.40, 1.0 + (gameAvgAggr-70)*0.015)));
     const goonCount   = poissonRand(1.9 * Math.max(0.50, Math.min(1.60, 1.0 + (gameAvgAggr-70)*0.025)));
-    const fightCount  = Math.random() < 0.144 ? 1 : 0; // 0.0006×240 ≈ 0.144/game
+    const fightCount  = Math.random() < 0.45 ? 1 : 0; // v208: 45% of games have a fight (era-accurate ~50-70%)
     // v130: hits/blocked shots — additive stat-only events, don't touch score/SOG/saves.
     // Kept separate from hShotCount/aShotCount so the already-tuned ~30 SOG/team/game
     // average isn't diluted by carving blocks out of it.
@@ -4238,6 +4484,51 @@ function simGame(idx) {
     randTicks(aBlockCount).forEach(t => evStream.push({t, type:'block', side:'a'}));
     if (fightCount)      evStream.push({t: Math.floor(Math.random()*240), type:'fight'});
     if (!isASG && Math.random() < 0.48) evStream.push({t: Math.floor(Math.random()*240), type:'pshot'});
+    // v182: Odd-man rushes — 0-1 per team per game, speed-weighted
+    // v231: PLAYMAKER/QUARTERBACK on the roster sets up transition plays more often (+5% trigger);
+    // strong checking forwards/D force turnovers that start their own rushes (own avg Check > 70 → bonus).
+    if (!isASG) {
+        const avgSpd = (tk) => { const sk=(rosters[tk]||[]).filter(p=>p.pos!=='G'); return sk.length ? sk.reduce((s,p)=>s+(parseInt(playerStats[p.name]?.attr?.speed)||70),0)/sk.length : 70; };
+        const avgChkTeam = (tk) => { const sk=(rosters[tk]||[]).filter(p=>p.pos!=='G'); return sk.length ? sk.reduce((s,p)=>s+(gradeToNum(playerStats[p.name]?.attr?.check)||50),0)/sk.length : 50; };
+        // v232: PUCK RUSHER D joins the rush from the point — same transition trigger as a playmaker/QB
+        const hasPlaymakerOrQB = (tk) => (rosters[tk]||[]).some(p=>['PLAYMAKER','PRO PLAYMAKER','QUARTERBACK','PUCK RUSHER'].includes(getPlayerWeightedStats(p.name)?.tag||''));
+        // v236: any puck-moving D helps jump-start transition, not just the elite QB-types —
+        // OFFENSIVE D/PRO OFFENSIVE D get a smaller trigger bump of their own.
+        const hasOffensiveD = (tk) => (rosters[tk]||[]).some(p=>['OFFENSIVE D','PRO OFFENSIVE D'].includes(getPlayerWeightedStats(p.name)?.tag||''));
+        const hSpd = avgSpd(g.h.nrm), aSpd = avgSpd(g.a.nrm);
+        const hAvgChk = avgChkTeam(g.h.nrm), aAvgChk = avgChkTeam(g.a.nrm);
+        const hTurnoverBonus = Math.max(0, (hAvgChk - 70) * 0.0025);
+        const aTurnoverBonus = Math.max(0, (aAvgChk - 70) * 0.0025);
+        // v231: a checking opponent doesn't just create their own rushes — their forecheck/backcheck
+        // also breaks up YOUR transition game, so their Check rating suppresses your own trigger too.
+        const hOppSuppress = Math.max(0, (aAvgChk - 70) * 0.0015);
+        const aOppSuppress = Math.max(0, (hAvgChk - 70) * 0.0015);
+        const hPlaymakerBonus = hasPlaymakerOrQB(g.h.nrm) ? 0.05 : (hasOffensiveD(g.h.nrm) ? 0.025 : 0);
+        const aPlaymakerBonus = hasPlaymakerOrQB(g.a.nrm) ? 0.05 : (hasOffensiveD(g.a.nrm) ? 0.025 : 0);
+        // v234: physical D-pair combo — an ENFORCER D paired with a SHUTDOWN/STAY-AT-HOME/PRO
+        // DEFENSIVE D partner closes the "no fly zone" at the blue line, further suppressing the
+        // opponent's ability to spring odd-man rushes against that team.
+        const hasPhysicalDPair = (tk) => {
+            const dmen = (rosters[tk]||[]).filter(p => p.pos==='D' || p.pos==='LD' || p.pos==='RD');
+            const hasEnforcerD = dmen.some(p => (getPlayerWeightedStats(p.name)?.tag||'') === 'ENFORCER D');
+            const hasShutdownPartner = dmen.some(p => ['SHUTDOWN','STAY-AT-HOME','PRO DEFENSIVE D'].includes(getPlayerWeightedStats(p.name)?.tag||''));
+            return hasEnforcerD && hasShutdownPartner;
+        };
+        const hPhysDSuppress = hasPhysicalDPair(g.h.nrm) ? 0.04 : 0;
+        const aPhysDSuppress = hasPhysicalDPair(g.a.nrm) ? 0.04 : 0;
+        if (Math.random() < Math.max(0.30, Math.min(0.80, 0.55+(hSpd-70)*0.01+hTurnoverBonus+hPlaymakerBonus-hOppSuppress-aPhysDSuppress))) evStream.push({t:Math.floor(Math.random()*240), type:'rush', side:'h'});
+        if (Math.random() < Math.max(0.30, Math.min(0.80, 0.55+(aSpd-70)*0.01+aTurnoverBonus+aPlaymakerBonus-aOppSuppress-hPhysDSuppress))) evStream.push({t:Math.floor(Math.random()*240), type:'rush', side:'a'});
+    }
+    // v182: Icing events — 2-3 per game, cosmetic + tiny momentum push when under pressure
+    if (!isASG) {
+        const iceCnt = 2 + (Math.random()<0.4?1:0);
+        for (let _i=0;_i<iceCnt;_i++) evStream.push({t:Math.floor(Math.random()*240), type:'icing'});
+    }
+    // v184: wear-and-tear removed — injuries come only from hits, fights, and post-game system
+    // v205: Line brawl — ~1.1125% of games; fires in P2/P3 (ticks 80-239)
+    if (!isASG && Math.random() < 0.011125) {
+        evStream.push({t: 80 + Math.floor(Math.random()*160), type:'brawl'});
+    }
     evStream.sort((a,b) => a.t - b.t);
 
     // Option A: 90-second rolling shift pool for expanded assist attribution
@@ -4271,7 +4562,10 @@ function simGame(idx) {
         const line4Mult = (isHomeTeam ? h4thLine : a4thLine).has(name) ? 1.40 : 1.0;
         // v170: P3 trailing team plays desperate — 30% more likely to take a penalty
         const p3TrailMult = (period === 3 && ((isHomeTeam ? hG : aG) < (isHomeTeam ? aG : hG))) ? 1.30 : 1.0;
-        const base = Math.pow((aggr+rough)/2, 1.3) * tagMult * line4Mult * archPenMult * p3TrailMult;
+        // v176: safe-play gate — team leading by 2+ in P3 plays conservatively (dump-and-chase, no risks)
+        const teamLead = (isHomeTeam ? hG : aG) - (isHomeTeam ? aG : hG);
+        const p3LeadMult = (period === 3 && teamLead >= 2) ? 0.80 : 1.0;
+        const base = Math.pow((aggr+rough)/2, 1.3) * tagMult * line4Mult * archPenMult * p3TrailMult * p3LeadMult;
         // [FIX] was ps.season?.pim — during playoffs k='playoff', so season PIM was
         // used to cap playoff penalty rates. Use the active bucket instead.
         const overCap = Math.max(0, (ps[k]?.pim||0) - 175); // v174: raised from 150 → 175 so true goons reach realistic 300+ PIM
@@ -4333,10 +4627,55 @@ function simGame(idx) {
 
     let period = 1; // hoisted so PATRICK ROY PROTOCOL can read it after the loop
     let prevEvTick = 0;
+    // v179: period-end momentum carry — track who scored last in each period
+    let lastGoalSide = null; // 'h' or 'a', reset at each period boundary
+    // v180: goalie yank — eligible at deficit ≥4, pulled when next goal makes it ≥5
+    let hYankedEligible = false, aYankedEligible = false;
+    let hYanked = false, aYanked = false;
+    // v180: doYankCheck receives loop-scoped vars as params since it's defined outside the for-loop
+    const doYankCheck = (p_, min_, s_, ts_) => {
+        const hDef = aG - hG, aDef = hG - aG;
+        if (!hYanked && hDef >= 4) hYankedEligible = true;
+        if (!aYanked && aDef >= 4) aYankedEligible = true;
+        if (!hYanked && hYankedEligible && hDef >= 5) {
+            const hGS = (rosters[g.h.nrm]||[]).filter(p=>p.pos==='G'&&!(playerStats[p.name]?.injury?.daysRemaining>0))
+                .sort((a,b)=>getPlayerWeightedStats(b.name).ovr-getPlayerWeightedStats(a.name).ovr);
+            if (hGS.length > 1) {
+                const bk = hGS[1];
+                const bkOvr = getPlayerWeightedStats(bk.name).ovr || 70;
+                hG_name = bk.name; hG_obj = bk;
+                hWallMod = Math.max(0.65, Math.min(1.35, 1.0 + (75-bkOvr)*0.013 + (Math.random()-0.5)*0.12));
+                hYanked = true;
+                allGoals.push({p:p_,m:min_%20||20,s:s_,str:ts_,tm:g.h.code,cl:'#888',
+                    txt:`GOALIE CHANGE: ${hGS[0].name} pulled — ${bk.name} enters (down ${hDef})`,isNote:true});
+            }
+        }
+        if (!aYanked && aYankedEligible && aDef >= 5) {
+            const aGS = (rosters[g.a.nrm]||[]).filter(p=>p.pos==='G'&&!(playerStats[p.name]?.injury?.daysRemaining>0))
+                .sort((a,b)=>getPlayerWeightedStats(b.name).ovr-getPlayerWeightedStats(a.name).ovr);
+            if (aGS.length > 1) {
+                const bk = aGS[1];
+                const bkOvr = getPlayerWeightedStats(bk.name).ovr || 70;
+                aG_name = bk.name; aG_obj = bk;
+                aWallMod = Math.max(0.65, Math.min(1.35, 1.0 + (75-bkOvr)*0.013 + (Math.random()-0.5)*0.12));
+                aYanked = true;
+                allGoals.push({p:p_,m:min_%20||20,s:s_,str:ts_,tm:g.a.code,cl:'#888',
+                    txt:`GOALIE CHANGE: ${aGS[0].name} pulled — ${bk.name} enters (down ${aDef})`,isNote:true});
+            }
+        }
+    };
 
     for (const ev of evStream) {
         const t = ev.t;
-        period = t < 80 ? 1 : t < 160 ? 2 : 3;
+        const newPeriod = t < 80 ? 1 : t < 160 ? 2 : 3;
+        // Period boundary crossing — carry over momentum for last-goal team
+        if (newPeriod > period && lastGoalSide !== null) {
+            const carryBoost = 4; // ~8-ticks worth of momentum at current decay rate
+            if (lastGoalSide === 'h') hMomentum = Math.min(hMomentum + carryBoost, 10);
+            else                      aMomentum = Math.min(aMomentum + carryBoost, 10);
+            lastGoalSide = null; // reset for new period
+        }
+        period = newPeriod;
         const minute  = Math.floor(t / 4) + 1;
         const sec     = (t % 4) * 15;
         const timeStr = `P${period} ${minute%20||20}:${sec<10?'0'+sec:sec}`;
@@ -4347,6 +4686,9 @@ function simGame(idx) {
         const aDPair  = awayDSchedule[t] || 0;
         const hOnIce  = [...pickLine(hStruct.f, hFLine, 3), ...pickLine(hStruct.d, hDPair, 2)];
         const aOnIce  = [...pickLine(aStruct.f, aFLine, 3), ...pickLine(aStruct.d, aDPair, 2)];
+        // v182: comeback tracking — update max deficit each tick
+        hMaxDeficit = Math.max(hMaxDeficit, aG - hG);
+        aMaxDeficit = Math.max(aMaxDeficit, hG - aG);
 
         // Update rolling shift pools (Option A)
         pushShift(hShiftLog, hOnIce, t);
@@ -4366,8 +4708,13 @@ function simGame(idx) {
         // v165: P3 trailing-team desperation — pressing harder offensively; down-by-1 → +0.8 liveOvr
         const hDesperationBoost = (period === 3 && (aG - hG) >= 1) ? Math.min(2.0, (aG - hG) * 0.8) : 0;
         const aDesperationBoost = (period === 3 && (hG - aG) >= 1) ? Math.min(2.0, (hG - aG) * 0.8) : 0;
-        const hLiveOvr = (getLiveLineOvr(hOnIce) + hLineMatchBonus + homeLastChangeMod + parityBoost + hPressureMod + hStreakMod + rivalBonus + hMomentum*0.375 - hSkaterB2B + hDesperationBoost)*hAuraMod*homeCrowdEnergy;
-        const aLiveOvr = (getLiveLineOvr(aOnIce) + aLineMatchBonus + aPressureMod + aStreakMod + rivalBonus + aMomentum*0.375 - aSkaterB2B + aDesperationBoost)*aAuraMod;
+        // v180: shift fatigue — increment deployed line, penalize over-usage
+        hLineShifts[hFLine] = (hLineShifts[hFLine]||0) + 1;
+        aLineShifts[aFLine] = (aLineShifts[aFLine]||0) + 1;
+        const hShiftFatigPen = Math.max(0, hLineShifts[hFLine] - hExpShift) * 0.035;
+        const aShiftFatigPen = Math.max(0, aLineShifts[aFLine] - aExpShift) * 0.035;
+        const hLiveOvr = (getLiveLineOvr(hOnIce) + hLineMatchBonus + homeLastChangeMod + parityBoost + hPressureMod + hStreakMod + rivalBonus + hMomentum*0.375 - hSkaterB2B + hDesperationBoost - hShiftFatigPen)*hAuraMod*homeCrowdEnergy;
+        const aLiveOvr = (getLiveLineOvr(aOnIce) + aLineMatchBonus + aPressureMod + aStreakMod + rivalBonus + aMomentum*0.375 - aSkaterB2B + aDesperationBoost - aShiftFatigPen)*aAuraMod;
         const diff = Math.max(-18, Math.min(18, hLiveOvr - aLiveOvr + chaosOffset));
 
         // EVEN-STRENGTH SHOT
@@ -4391,7 +4738,7 @@ function simGame(idx) {
 
             trk(shooter.name, 's', 1);
             trk(defGNm, 'sa', 1);
-            if (isHome) hShots++; else aShots++;
+            if (isHome) { hShots++; aSACount++; } else { aShots++; hSACount++; }
 
             const tag       = PLAYER_TAG_OVERRIDES[shooter.name] || getPlayerWeightedStats(shooter.name)?.tag;
             const sniperMod = getEliteShooterMod(tag);
@@ -4409,8 +4756,21 @@ function simGame(idx) {
             const oppRough    = isHome ? aTeamRough : hTeamRough;
             const roughChaos  = Math.max(0.97, Math.min(1.03, 1.0 + (oppRough - 60) * 0.0006));
             const chaosMod    = (1.0 + (Math.random()-0.5)*activeChaos*0.04) * roughChaos;
-            const wallMod   = isHome ? aWallMod : hWallMod;
+            let wallMod   = isHome ? aWallMod : hWallMod;
+            // v208: SHUTOUT PRESERVATION — all goalies bear down when protecting a clean sheet
+            // In P3 with 0 GA and 30+ saves: -0.030 wallMod (harder to score)
+            // In P3 with 0 GA and any saves: -0.015 wallMod
+            // Home shooters attack away goalie → away goalie's GA = home score (hG)
+            const oppGoalieGA = isHome ? hG : aG;
+            const oppGoalieSaves = isHome ? aSACount : hSACount;
+            if (period === 3 && oppGoalieGA === 0) {
+                wallMod -= (oppGoalieSaves >= 30 ? 0.030 : 0.015);
+            }
             const dSign     = isHome ? 1 : -1;
+            // v180: in-game goalie fatigue — WALL archetype degrades slower; BACKUP faster
+            const defArch   = isHome ? aGArch : hGArch;
+            const saFatMult = defArch === 'WALL' ? 0.50 : defArch === 'BACKUP' ? 1.60 : 1.0;
+            const saFatigue = 1.0 + Math.max(0, (isHome ? aSACount : hSACount) - 35) * 0.003 * saFatMult;
 
             // DEFENSIVE LINE MATCHUP — applies to all games (not just user's team)
             // User's selected-team matchup stays at 0.88; CPU-vs-CPU uses 0.94 (natural talent, no coaching)
@@ -4427,6 +4787,24 @@ function simGame(idx) {
                 const defSide = isHome ? g.a : g.h;
                 lineMatchDefMod = (lineMatchActive && defSide.nrm === selectedTeam) ? 0.88 : 0.94;
             }
+            // v234: real shutdown PAIRING — a single suppressive defenseman gets the flat mod
+            // above, but two shutdown-tagged D-men on the ice together is a genuine matched pair
+            // (Chelios/Suter type shutdown tandem) and suppresses harder than either alone.
+            const shutdownDTags = ['SHUTDOWN','STAY-AT-HOME','PRO DEFENSIVE D','TWO-WAY STAR D','FRANCHISE D','INTIMIDATOR'];
+            const shutdownDCount = defOnIce.filter(p => {
+                if (p.pos !== 'D' && p.pos !== 'LD' && p.pos !== 'RD') return false;
+                const t3 = PLAYER_TAG_OVERRIDES[p.name] || getPlayerWeightedStats(p.name)?.tag || '';
+                return shutdownDTags.includes(t3);
+            }).length;
+            // v237: TWO-WAY D (generic, balanced) counts as a fractional 0.5 toward the pairing —
+            // dynamic by their def rating, since a 78-def two-way D genuinely helps anchor a pair
+            // even without a specialist tag, just less than a true SHUTDOWN/STAY-AT-HOME does.
+            const twoWayDBonus = defOnIce.filter(p => {
+                if (p.pos !== 'D' && p.pos !== 'LD' && p.pos !== 'RD') return false;
+                return (PLAYER_TAG_OVERRIDES[p.name] || getPlayerWeightedStats(p.name)?.tag || '') === 'TWO-WAY D';
+            }).reduce((s, p) => s + Math.max(0, ((playerStats[p.name]?.attr?.def || 65) - 60) * 0.01), 0);
+            const shutdownScore = shutdownDCount + twoWayDBonus;
+            if (shutdownScore >= 2) lineMatchDefMod *= 0.97;
 
             // OPPOSING D-PAIR def ATTR — shutdown defenders suppress per-shot conversion
             // Uses actual def attribute of D-men on ice, not just tag detection above.
@@ -4441,6 +4819,17 @@ function simGame(idx) {
             const defPressureInput = avgOppDef * 0.60 + avgOppCheck * 0.40;
             // 90 avg → ×0.96; 70 → ×1.00; 50 → ×1.04
             const defPressureMod = Math.max(0.92, Math.min(1.08, 1.0 - (defPressureInput - 70) * 0.002));
+
+            // v178: defensive-tagged forwards on ice add secondary suppression layer.
+            // D-pair (defPressureMod) is primary; defensive fwds layer on top when present.
+            // TWO-WAY STAR F / TWO-WAY FWD / DEFENSIVE FWD / GRINDER → ×0.97 (−3% conversion).
+            // Their actual def attr scales the bonus — elite two-way guys suppress more.
+            const _defFwdTagSet = new Set(['TWO-WAY STAR F','TWO-WAY FWD','DEFENSIVE FWD','GRINDER','DEFENSIVE FORWARD']);
+            const oppFwdsOnIce  = defOnIce.filter(p => p.pos!=='G'&&p.pos!=='D'&&p.pos!=='LD'&&p.pos!=='RD');
+            const defFwdsOnIce  = oppFwdsOnIce.filter(p => _defFwdTagSet.has(PLAYER_TAG_OVERRIDES[p.name]||getPlayerWeightedStats(p.name)?.tag||''));
+            const defFwdMod     = defFwdsOnIce.length > 0
+                ? Math.max(0.96, 1.0 - defFwdsOnIce.reduce((s,p)=>s+Math.max(0,(playerStats[p.name]?.attr?.def||65)-65)*0.001,0))
+                : 1.0; // def 85 fwd → 0.001*(85-65)=0.020 suppression; def 70 → 0.005; neutral at 65
 
             // SCORE-STATE MODIFIER — trailing teams shoot desperately in the 3rd; leading teams conserve
             const shooterGoals = isHome ? hG : aG;
@@ -4515,7 +4904,7 @@ function simGame(idx) {
             const distZone     = distRoll < dw0 ? 0 : distRoll < dw0+dw1 ? 1 : 2; // 0=close,1=med,2=far
             const distMod      = [1.20, 1.00, 0.75][distZone];
 
-            const prob      = (0.0888 + dSign*diff*0.0002)*wallMod*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; v169: 0.0878→~7.0 GPG; v174: 0.0888 recovers ~0.10 GPG lost to v173 gates
+            const prob      = (0.0906 + dSign*diff*0.0002)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; v174: 0.0888; v181: 0.0930; v182: 0.0918→0.0906 target 7.0 GPG
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
@@ -4541,6 +4930,17 @@ function simGame(idx) {
                     // v165: quick-goal spike — scoring while momentum is still hot pushes it higher
                     if (isHome) hMomentum = hMomentum >= 4 ? Math.min(14, hMomentum + 8) : 8;
                     else        aMomentum = aMomentum >= 4 ? Math.min(14, aMomentum + 8) : 8;
+                    // v179: track last-goal side for period-end momentum carry
+                    lastGoalSide = isHome ? 'h' : 'a';
+                    doYankCheck(period, minute, sec, timeStr); // v180
+                    // v182: hat trick detection
+                    if (goalEv.scorer) {
+                        gameGoals[goalEv.scorer] = (gameGoals[goalEv.scorer]||0)+1;
+                        if (gameGoals[goalEv.scorer] === 3) allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:teamObj.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${goalEv.scorer}!`,isNote:true});
+                        else if (gameGoals[goalEv.scorer] > 3) allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:teamObj.code,cl:'#FFD700',txt:`🎩 ${gameGoals[goalEv.scorer]}-GOAL GAME — ${goalEv.scorer}!`,isNote:true});
+                    }
+                    // v182: buzzer beater label
+                    if ([78,79,158,159,238,239].includes(t)) goalEv.txt = '🚨 BUZZER BEATER! ' + (goalEv.txt||'');
                 }
             } else {
                 trk(defGNm, 'sv', 1);
@@ -4557,8 +4957,19 @@ function simGame(idx) {
                     return s + ((gradeToNum(ps3?.attr?.aggr)||50)+(gradeToNum(ps3?.attr?.rough)||50))/2;
                 }, 0) / sk.length;
             };
-            const hPenBias = teamPenBias(g.h.nrm);
-            const aPenBias = teamPenBias(g.a.nrm);
+            let hPenBias = teamPenBias(g.h.nrm);
+            let aPenBias = teamPenBias(g.a.nrm);
+            // v238: protected agitator combo — a team rostering both a PEST and an ENFORCER
+            // baits opponents into retaliatory penalties more effectively (the pest agitates
+            // freely, knowing the other team can't just go fight him without consequence).
+            const hasPestAndEnforcer = (tk) => {
+                const roster = rosters[tk]||[];
+                const hasPest = roster.some(p=>getPlayerWeightedStats(p.name)?.tag==='PEST');
+                const hasEnf  = roster.some(p=>['ENFORCER F','ENFORCER D'].includes(getPlayerWeightedStats(p.name)?.tag||''));
+                return hasPest && hasEnf;
+            };
+            if (hasPestAndEnforcer(g.a.nrm)) hPenBias *= 1.08;
+            if (hasPestAndEnforcer(g.h.nrm)) aPenBias *= 1.08;
             let penTeam  = Math.random() < hPenBias/(hPenBias+aPenBias) ? g.h : g.a;
             let advTeam  = penTeam.nrm===g.h.nrm ? g.a : g.h;
             let activeSk = (penTeam.nrm===g.h.nrm ? hOnIce : aOnIce).filter(p=>p.pos!=='G');
@@ -4568,7 +4979,9 @@ function simGame(idx) {
             // v157: major probability scales with offender aggr — hotheads take more majors
             const offenderAggr = gradeToNum(playerStats[offender]?.attr?.aggr) || 50;
             const isMajor      = Math.random() < Math.max(0.01, Math.min(0.10, 0.03 + (offenderAggr-50)*0.001));
-            const pimAmt     = isMajor ? 5 : 2;
+            // v180: double minor — high sticks/etc; 5% of non-major calls; gets 2 PP sequences
+            const isDoubleMajor = !isMajor && Math.random() < 0.05;
+            const pimAmt     = isMajor ? 5 : isDoubleMajor ? 4 : 2;
             // Active bucket, not always .season — otherwise playoff PIMs never accrue toward
             // the discipline cap while a frozen regular-season total keeps gating the player.
             const overCap2   = Math.max(0, (playerStats[offender]?.[k]?.pim||0) - 175); // v174: matches penWeight threshold
@@ -4578,7 +4991,7 @@ function simGame(idx) {
             trk(offender, 'pim', pimAmt);
             penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:penTeam.code,
                 cl:teamColors[penTeam.nrm]?.[0]||'#fff',
-                txt:`PENALTY: ${offender} (${isMajor?'5 min major':'2 min minor'})`, isPenalty:true});
+                txt:`PENALTY: ${offender} (${isMajor?'5 min major':isDoubleMajor?'4 min double minor':'2 min minor'})`, isPenalty:true});
 
             if (isMajor && Math.random()<0.01 && playerStats[offender] && !(playerStats[offender].suspended?.days>0)) {
                 const days = Math.ceil(Math.random()*3);
@@ -4644,14 +5057,58 @@ function simGame(idx) {
             const pkAvgDef   = pkSkSh2.length ? pkSkSh2.reduce((s,p)=>s+(playerStats[p.name]?.attr?.def||70),0)/pkSkSh2.length : 70;
             const pkAvgChk   = pkSkSh2.length ? pkSkSh2.reduce((s,p)=>s+(gradeToNum(playerStats[p.name]?.attr?.check)||70),0)/pkSkSh2.length : 70;
             const pkDefInput = pkAvgDef * 0.60 + pkAvgChk * 0.40;
-            const pkSuppressMod = Math.max(0.94, Math.min(1.06, 1.0 - (pkDefInput - 70) * 0.002));
+            let pkSuppressMod = Math.max(0.94, Math.min(1.06, 1.0 - (pkDefInput - 70) * 0.002));
+            // v235: elite PK duo — a DEFENSIVE SPECIALIST/TWO-WAY STAR F forward paired with a
+            // FRANCHISE D/TWO-WAY STAR D/PRO DEFENSIVE D on the same kill is a genuine shutdown
+            // tandem (the Selke-caliber F + shutdown D combo), suppressing the PP further.
+            const pkHasEliteF = pkSkSh2.some(p => ['DEFENSIVE SPECIALIST','TWO-WAY STAR F'].includes(getPlayerWeightedStats(p.name)?.tag||''));
+            const pkHasEliteD = pkSkSh2.some(p => ['FRANCHISE D','TWO-WAY STAR D','PRO DEFENSIVE D'].includes(getPlayerWeightedStats(p.name)?.tag||''));
+            if (pkHasEliteF && pkHasEliteD) pkSuppressMod *= 0.97;
             // v170: if a chemistry duo is deployed together on the PP unit, they connect better
             const ppNames = new Set(ppUnit.map(p => p.name));
             const ppHasDuo = awardConfig.chemistry && getAllDuos().some(duo => duo.filter(n => ppNames.has(n)).length >= 2);
             const ppChemMod = ppHasDuo ? 1.03 : 1.0;
-            const ppConvRate = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm)*ppStratMod*pkSuppressMod*ppChemMod;
+            // v180: double-minor and majors get 2 PP sequences at reduced per-attempt rates
+            // Calibrated so weighted avg PP% stays ~16-17% (historical 93-94 range)
+            // Minor: 1 seq at full | Double minor: seq1 ×0.60, seq2 ×0.50 → ~17% total | Major: ×0.70+×0.60 → ~19%
+            const ppConvBase = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm)*ppStratMod*pkSuppressMod*ppChemMod;
+            const ppConvRate = isDoubleMajor ? ppConvBase * 0.60 : isMajor ? ppConvBase * 0.70 : ppConvBase;
+            let ppSeqScored = false;
 
-            if (ppRoll < ppConvRate && ppUnit.length > 0) {
+            // v182: Delayed penalty — 28% of minors: non-offending team keeps puck, one bonus ES shot;
+            // if they score, the PP is nullified (NHL rule)
+            let ppCancelled = false;
+            if (!isMajor && !isDoubleMajor && Math.random() < 0.28 && ppUnit.length > 0) {
+                penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:penTeam.code,
+                    cl:'#88AAFF',txt:`DELAYED PENALTY: ${offender} — ${advTeam.code} keeps possession`,isNote:true});
+                const delWallMod = advTeam.nrm===g.h.nrm ? aWallMod : hWallMod;
+                const delRate    = Math.max(0.015, Math.min(0.20, 0.0906 * delWallMod * 1.10));
+                if (Math.random() < delRate) {
+                    const delSh = selectShooter(ppUnit, 'ES');
+                    const delGNm = advTeam.nrm===g.h.nrm ? aG_name : hG_name;
+                    const delEv = processSingleGoal(advTeam.nrm, advTeam.code, delSh, ppUnit, timeStr, period, minute%20||20, sec);
+                    if (delEv) {
+                        if(advTeam.nrm===g.h.nrm){hG++;hShots++;}else{aG++;aShots++;}
+                        delEv.tm=advTeam.code; delEv.cl=teamColors[advTeam.nrm]?.[0]||'#fff';
+                        delEv.txt=buildGoalText(delEv.scorer,delEv.pAssist,delEv.sAssist,null,false,false,false,advTeam.nrm===g.h.nrm?hG:aG,advTeam.nrm===g.h.nrm?aG:hG,period);
+                        allGoals.push(delEv);
+                        trk(delEv.scorer,'g',1); trk(delGNm,'sa',1); trk(delGNm,'ga',1);
+                        if(delEv.pAssist)trk(delEv.pAssist,'a',1);
+                        if(delEv.sAssist)trk(delEv.sAssist,'a',1);
+                        if(!isASG&&playerStats[delEv.scorer])playerStats[delEv.scorer][k].esg=(playerStats[delEv.scorer][k].esg||0)+1;
+                        if(advTeam.nrm===g.h.nrm)hMomentum=8;else aMomentum=8;
+                        lastGoalSide=advTeam.nrm===g.h.nrm?'h':'a';
+                        doYankCheck(period,minute,sec,timeStr);
+                        penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:advTeam.code,
+                            cl:'#88AAFF',txt:`GOAL DURING DELAYED PENALTY — ${offender}'s minor nullified!`,isNote:true});
+                        ppCancelled = true;
+                        gameGoals[delEv.scorer]=(gameGoals[delEv.scorer]||0)+1;
+                        if(gameGoals[delEv.scorer]===3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:advTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${delEv.scorer}!`,isNote:true});
+                    }
+                }
+            }
+
+            if (!ppCancelled && ppRoll < ppConvRate && ppUnit.length > 0) {
                 const ppShooter = selectShooter(ppUnit, 'PP');
                 const ppEv = processSingleGoal(advTeam.nrm, advTeam.code, ppShooter, ppUnit, timeStr, period, minute%20||20, sec);
                 if (ppEv) {
@@ -4678,6 +5135,12 @@ function simGame(idx) {
                         }
                     }
                     if (advTeam.nrm===g.h.nrm) hMomentum=8; else aMomentum=8;
+                    ppSeqScored = true;
+                    doYankCheck(period, minute, sec, timeStr);
+                    // v182: hat trick tracking for PP goals
+                    gameGoals[ppEv.scorer]=(gameGoals[ppEv.scorer]||0)+1;
+                    if(gameGoals[ppEv.scorer]===3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:advTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${ppEv.scorer}!`,isNote:true});
+                    else if(gameGoals[ppEv.scorer]>3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:advTeam.code,cl:'#FFD700',txt:`🎩 ${gameGoals[ppEv.scorer]}-GOAL GAME — ${ppEv.scorer}!`,isNote:true});
                 }
             }
 
@@ -4702,7 +5165,14 @@ function simGame(idx) {
             const pkSkSh     = pkUnit.filter(p=>p.pos!=='G');
             const pkAvgSpd   = pkSkSh.length ? pkSkSh.reduce((s,p)=>s+(playerStats[p.name]?.attr?.speed||70),0)/pkSkSh.length : 70;
             // spd 90 → 0.008 (tight PK); spd 70 → 0.020 (avg); spd 50 → 0.032 (slow/breakaway prone)
-            const shgRate    = Math.max(0.008, Math.min(0.035, 0.02 + (70-pkAvgSpd)*0.0006));
+            let shgRate    = Math.max(0.008, Math.min(0.035, 0.02 + (70-pkAvgSpd)*0.0006));
+            // v238: elite PK duo direct SHG bonus — a DEFENSIVE SPECIALIST/TWO-WAY STAR F forward
+            // paired with a TWO-WAY STAR D on the same kill doesn't just suppress the PP (already
+            // handled via pkSuppressMod), the read-and-jump instincts of that pairing also convert
+            // into actual shorthanded breaks more often.
+            const shgHasEliteF = pkSkSh.some(p => ['DEFENSIVE SPECIALIST','TWO-WAY STAR F'].includes(getPlayerWeightedStats(p.name)?.tag||''));
+            const shgHasEliteD = pkSkSh.some(p => (getPlayerWeightedStats(p.name)?.tag||'') === 'TWO-WAY STAR D');
+            if (shgHasEliteF && shgHasEliteD) shgRate *= 1.20;
             if (ppRoll>=ppConvRate && Math.random()<shgRate && pkUnit.length>0) {
                 const shShooter = selectShooter(pkUnit, 'SH');
                 const shEv = processSingleGoal(penTeam.nrm, penTeam.code, shShooter, pkUnit, timeStr, period, minute%20||20, sec);
@@ -4728,6 +5198,55 @@ function simGame(idx) {
                     const n = Math.min(shOn.length, shOpp.length);
                     for (let i=0;i<n;i++){ trk(shOn[i].name,'pm',1); trk(shOpp[i].name,'pm',-1); }
                     if (penTeam.nrm===g.h.nrm) hMomentum=8; else aMomentum=8;
+                    // v182: hat trick tracking for SHG
+                    gameGoals[shEv.scorer]=(gameGoals[shEv.scorer]||0)+1;
+                    if(gameGoals[shEv.scorer]===3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:penTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${shEv.scorer}!`,isNote:true});
+                    else if(gameGoals[shEv.scorer]>3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:penTeam.code,cl:'#FFD700',txt:`🎩 ${gameGoals[shEv.scorer]}-GOAL GAME — ${shEv.scorer}!`,isNote:true});
+                }
+            }
+
+            // v180: second PP sequence for double-minors and majors (fights excluded — no PP)
+            if ((isDoubleMajor || isMajor) && ppUnit.length > 0) {
+                const ppRoll2     = Math.random();
+                // Second sequence rate: slightly lower (PK tires but PP also less crisp)
+                const ppConvRate2 = ppConvBase * (isDoubleMajor ? 0.50 : 0.60);
+                if (ppRoll2 < ppConvRate2) {
+                    const ppSh2 = selectShooter(ppUnit, 'PP');
+                    const ppEv2 = processSingleGoal(advTeam.nrm, advTeam.code, ppSh2, ppUnit, timeStr, period, minute%20||20, sec);
+                    if (ppEv2) {
+                        ppEv2.isPP=true; ppEv2.tm=advTeam.code; ppEv2.cl=teamColors[advTeam.nrm]?.[0]||'#FFD700';
+                        ppEv2.txt=buildGoalText(ppEv2.scorer,ppEv2.pAssist,ppEv2.sAssist,null,true,false,false,0,0,0);
+                        allGoals.push(ppEv2);
+                        if(advTeam.nrm===g.h.nrm){hG++;hShots++;}else{aG++;aShots++;}
+                        const pkG2=penTeam.nrm===g.h.nrm?hG_name:aG_name;
+                        trk(pkG2,'sa',1); trk(pkG2,'ga',1);
+                        trk(ppEv2.scorer,'g',1); trk(ppEv2.scorer,'s',1);
+                        if(ppEv2.pAssist) trk(ppEv2.pAssist,'a',1);
+                        if(ppEv2.sAssist) trk(ppEv2.sAssist,'a',1);
+                        if(!isASG){ const kk4=isPlayoffs?'playoff':'season';
+                            if(playerStats[ppEv2.scorer]) playerStats[ppEv2.scorer][kk4].ppg=(playerStats[ppEv2.scorer][kk4].ppg||0)+1;
+                            if(ppEv2.pAssist&&playerStats[ppEv2.pAssist]) playerStats[ppEv2.pAssist][kk4].ppa=(playerStats[ppEv2.pAssist][kk4].ppa||0)+1;
+                            if(ppEv2.sAssist&&playerStats[ppEv2.sAssist]) playerStats[ppEv2.sAssist][kk4].ppa=(playerStats[ppEv2.sAssist][kk4].ppa||0)+1;
+                            if(!isPlayoffs){
+                                const _ao=league.find(t2=>t2.nrm===advTeam.nrm);
+                                const _po=league.find(t2=>t2.nrm===penTeam.nrm);
+                                if(_ao) _ao.season.ppg=(_ao.season.ppg||0)+1;
+                                if(_po) _po.season.pkg=(_po.season.pkg||0)+1;
+                            }
+                        }
+                        if(advTeam.nrm===g.h.nrm) hMomentum=8; else aMomentum=8;
+                        doYankCheck(period, minute, sec, timeStr);
+                        // v182: hat trick tracking for second PP sequence
+                        gameGoals[ppEv2.scorer]=(gameGoals[ppEv2.scorer]||0)+1;
+                        if(gameGoals[ppEv2.scorer]===3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:advTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${ppEv2.scorer}!`,isNote:true});
+                        else if(gameGoals[ppEv2.scorer]>3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:advTeam.code,cl:'#FFD700',txt:`🎩 ${gameGoals[ppEv2.scorer]}-GOAL GAME — ${ppEv2.scorer}!`,isNote:true});
+                    }
+                } else {
+                    // Second sequence failed — credit PK with 1 saved shot
+                    const pkG2miss=penTeam.nrm===g.h.nrm?hG_name:aG_name;
+                    const sh2=selectShooter(ppUnit);
+                    if(sh2&&pkG2miss){trk(sh2.name,'s',1);trk(pkG2miss,'sa',1);trk(pkG2miss,'sv',1);
+                        if(advTeam.nrm===g.h.nrm) hShots++; else aShots++;}
                 }
             }
 
@@ -4791,6 +5310,55 @@ function simGame(idx) {
             let hr = Math.random()*hTotal, hPicked = hitPool[hitPool.length-1];
             for (let i=0;i<hitPool.length;i++){ hr-=hWt[i]; if(hr<=0){ hPicked=hitPool[i]; break; } }
             trk(hPicked.name, 'hits', 1);
+            // v190: injury during hit — 5% trigger, then scaled by matchup
+            if (!isASG && Math.random() < 0.0798) { // v228: 0.076→0.0798 (+5%, all-source except fight/brawl)
+                const victimPool = (ev.side === 'h' ? aOnIce : hOnIce).filter(p => p.pos !== 'G');
+                if (victimPool.length) {
+                    const victim = victimPool[Math.floor(Math.random()*victimPool.length)];
+                    const vPs = playerStats[victim.name];
+                    if (vPs && !(vPs.injury?.daysRemaining > 0) && !(vPs.suspended?.days > 0) && !(vPs.injCooldown > 0)) {
+                        const hitterChk = gradeToNum(playerStats[hPicked.name]?.attr?.check)||50;
+                        const victimTgh = gradeToNum(vPs.attr?.rough)||50;
+                        // v228: range 0.0457-0.213 → 0.048-0.224 (+5%)
+                        let injChance = Math.max(0.048, Math.min(0.224, 0.0959 + (hitterChk - victimTgh)*0.0032));
+                        // v232: enforcer protection — a team rostering an ENFORCER polices the ice,
+                        // making opponents think twice about targeting the skill players. Cuts injury
+                        // risk for the team's own elite scorers when an ENFORCER is on the roster.
+                        const victimTag = getPlayerWeightedStats(victim.name)?.tag || '';
+                        const victimTeam = (ev.side==='h'?g.a:g.h).nrm;
+                        const isEliteScorer = ['SUPERSTAR','PRO SNIPER','SNIPER','POWER SNIPER'].includes(victimTag);
+                        const teamHasEnforcer = isEliteScorer && (rosters[victimTeam]||[]).some(p=>['ENFORCER F','ENFORCER D'].includes(getPlayerWeightedStats(p.name)?.tag||''));
+                        if (teamHasEnforcer) injChance *= 0.85;
+                        if (Math.random() < injChance) {
+                            const _r=Math.random(); const injDays = _r<0.60?1+Math.floor(Math.random()*2):_r<0.90?3+Math.floor(Math.random()*3):6+Math.floor(Math.random()*4); // hit: 60%:1-2g, 30%:3-5g, 10%:6-9g
+                            if (!vPs.injury) vPs.injury = {daysRemaining:0,type:''};
+                            vPs.injury.daysRemaining = injDays; vPs.injury.severity = injDays; vPs.injury.source = 'hit';
+                            vPs.injury.type = injDays>=10?'Hit — week-to-week':injDays>=5?'Hit — short-term':'Hit — day-to-day';
+                            autoPlaceOnIR(victim.name, (ev.side==='h'?g.a:g.h).nrm, injDays);
+                            penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,
+                                tm:(ev.side==='h'?g.a:g.h).code, cl:'#FF6666',
+                                txt:`🏥 INJURY: ${victim.name} shaken up after hit by ${hPicked.name} — day-to-day (${injDays}d)`,isNote:true});
+                            if (awardConfig.headlines) tradeLog.unshift({day:`DAY ${currentDay+1}`, details:`🏥 INJURY: ${victim.name} (${(ev.side==='h'?g.a:g.h).code}) — hit by ${hPicked.name}, out ${injDays}d`});
+                            // v197: severe hit injury (6-9 games) → chance of suspension on hitter
+                            if (injDays >= 6) {
+                                const hPs = playerStats[hPicked.name];
+                                if (hPs && !(hPs.suspended?.days > 0) && Math.random() < 0.175) {
+                                    const susDays = Math.floor(Math.random() * 3) + 2; // 2–4 games
+                                    if (!hPs.suspended) hPs.suspended = { days: 0, reason: '' };
+                                    hPs.suspended.days += susDays;
+                                    hPs.suspended.reason = 'Dangerous hit';
+                                    if (!hPs.suspensionHistory) hPs.suspensionHistory = [];
+                                    hPs.suspensionHistory.push({ day: currentDay, games: susDays, reason: 'Dangerous hit', season: currentSeason });
+                                    penaltyEvents.push({ p: period, m: minute % 20 || 20, s: sec, str: timeStr,
+                                        tm: (ev.side === 'h' ? g.h : g.a).code, cl: '#FF8800',
+                                        txt: `SUSPENSION: ${hPicked.name} — ${susDays} game(s) (dangerous hit)`, isNote: true });
+                                    if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `🚫 SUSPENSION: ${hPicked.name} suspended ${susDays} game(s) — dangerous hit on ${victim.name}.` });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
         // BLOCKED SHOT — v130: pure stat tracking; additive pool separate from the tuned
         // ~30 SOG/team/game 'shot' events, so it never dilutes shots/saves/goals. Weighted
@@ -4817,7 +5385,8 @@ function simGame(idx) {
             if (isASG) continue;
             const canFight    = (p) => { const ps=playerStats[p.name]; if(!ps) return false; return (gradeToNum(ps.attr?.aggr)||50)>=56 && (gradeToNum(ps.attr?.rough)||50)>=56; };
             // v168: physical archetypes elevated — GRINDER/PWR FWD ×1.5, INTIMIDATOR ×2.0, PEST ×1.3
-            const fightWt     = (name) => { const ps=playerStats[name]; if(!ps) return 0; const a2=gradeToNum(ps.attr?.aggr)||50; const r2=gradeToNum(ps.attr?.rough)||50; const tg=(getPlayerWeightedStats(name)?.tag||''); const tm=tg.includes('ENFORCER')?4:tg==='INTIMIDATOR'?2.0:tg==='GRINDER'||tg==='POWER FORWARD'?1.5:tg==='PEST'?1.3:1; return Math.pow((a2+r2)/2,2)*tm; };
+            // v208: ENFORCER 4→8, INTIMIDATOR 2.0→3.0 — pure enforcers should dominate fight card
+            const fightWt     = (name) => { const ps=playerStats[name]; if(!ps) return 0; const a2=gradeToNum(ps.attr?.aggr)||50; const r2=gradeToNum(ps.attr?.rough)||50; const tg=(getPlayerWeightedStats(name)?.tag||''); const tm=tg.includes('ENFORCER')?8:tg==='INTIMIDATOR'?3.0:tg==='GRINDER'||tg==='POWER FORWARD'?1.5:tg==='PEST'?1.3:1; return Math.pow((a2+r2)/2,2)*tm; };
             const pickFighter = (pool) => { if(!pool.length) return null; const w=pool.map(p=>fightWt(p.name)); const tot=w.reduce((a2,b)=>a2+b,0); if(!tot) return pool[0]; let r2=Math.random()*tot; for(let i=0;i<pool.length;i++){r2-=w[i];if(r2<=0)return pool[i];} return pool[0]; };
             // v172: draw fighters from full bench not just on-ice — ENFORCERs get proper representation
             // even when sitting on the 4th line; 70% chance to use full roster pool, else on-ice only
@@ -4845,10 +5414,33 @@ function simGame(idx) {
                         if (!playerStats[fighter.name].suspended) playerStats[fighter.name].suspended={days:0,reason:''};
                         playerStats[fighter.name].suspended.days+=days;
                         playerStats[fighter.name].suspended.reason='Match penalty';
+                        // v200: log to suspensionHistory
+                        if (!playerStats[fighter.name].suspensionHistory) playerStats[fighter.name].suspensionHistory = [];
+                        playerStats[fighter.name].suspensionHistory.push({ day: currentDay, games: days, reason: 'Match penalty', season: currentSeason });
                         penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:g.h.code,
                             cl:'#FF8800', txt:`SUSPENSION: ${fighter.name} — ${days} game(s) (match penalty)`, isNote:true});
                     }
                 });
+
+                // v222: injury during fight — 8% chance per fighter (raised from 5% to match brawl rate)
+                if (!isASG) {
+                    [hF, aF].forEach(fighter => {
+                        if (Math.random() < 0.08) {
+                            const fPs = playerStats[fighter.name];
+                            if (fPs && !(fPs.injury?.daysRemaining > 0) && !(fPs.injCooldown > 0)) {
+                                const _r2=Math.random(); const injDays = _r2<0.40?1+Math.floor(Math.random()*3):_r2<0.80?3+Math.floor(Math.random()*4):6+Math.floor(Math.random()*5); // fight: 40%:1-3g, 40%:3-6g, 20%:6-10g
+                                if (!fPs.injury) fPs.injury = {daysRemaining:0,type:''};
+                                fPs.injury.daysRemaining = injDays; fPs.injury.severity = injDays; fPs.injury.source = 'fight';
+                                fPs.injury.type = injDays>=10?'Fight — week-to-week':injDays>=5?'Fight — short-term':'Fight — day-to-day';
+                                autoPlaceOnIR(fighter.name, (fighter === hF ? g.h : g.a).nrm, injDays);
+                                penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,
+                                    tm:g.h.code, cl:'#FF6666',
+                                    txt:`🏥 INJURY: ${fighter.name} hurt in fight — day-to-day (${injDays}d)`,isNote:true});
+                                if (awardConfig.headlines) tradeLog.unshift({day:`DAY ${currentDay+1}`, details:`🏥 INJURY: ${fighter.name} — injured in fight, out ${injDays}d`});
+                            }
+                        }
+                    });
+                }
 
                 // ENFORCER intimidation: ~35% chance opponent retaliates with a minor penalty
                 const hFTag = getPlayerWeightedStats(hF.name)?.tag || '';
@@ -4865,6 +5457,13 @@ function simGame(idx) {
                         penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:penObj.code,
                             cl:teamColors[penObj.nrm]?.[0]||'#fff',
                             txt:`RETALIATION: ${ret.name} — 2 min minor (intimidation)`, isPenalty:true});
+                        // v181: count retaliation as a real PPO so ppg/ppo ratio stays accurate
+                        if (!isASG && !isPlayoffs) {
+                            const _retAdv = league.find(t2=>t2.nrm===advObj.nrm);
+                            const _retPen = league.find(t2=>t2.nrm===penObj.nrm);
+                            if (_retAdv) _retAdv.season.ppo = (_retAdv.season.ppo||0)+1;
+                            if (_retPen) _retPen.season.pka = (_retPen.season.pka||0)+1;
+                        }
                         const ppConvR = getSpecialTeamsChance(advObj.nrm, penObj.nrm);
                         if (Math.random() < ppConvR) {
                             const ppSh2 = selectShooter(ppPool, 'PP');
@@ -4935,8 +5534,214 @@ function simGame(idx) {
                     scorer:psSc?psShooter.name:null, code:psTeam.code});
                 if (awardConfig.headlines) tradeLog.unshift({day:`DAY ${currentDay+1}`, details:`PENALTY SHOT: ${psTxt}`});
             }
+        // v182: ODD-MAN RUSH / BREAKAWAY
+        } else if (ev.type === 'rush') {
+            if (isASG) continue;
+            const rushHome = ev.side === 'h';
+            const attTeam  = rushHome ? g.h : g.a;
+            const defTeam  = rushHome ? g.a : g.h;
+            const attOnIce = (rushHome ? hOnIce : aOnIce).filter(p=>p.pos!=='G');
+            if (!attOnIce.length) continue;
+            // Pick shooter weighted by speed + stkHnd (breakaway skills)
+            // v233: tiered breakaway-threat boost — SPEEDSTER is the purest open-ice threat and
+            // gets the biggest lift, DANGLER and SUPERSTAR step down from there, and a generic
+            // player who's merely fast (speed>80, no matching archetype) gets the smallest bump.
+            // A PLAYMAKER/QUARTERBACK/PUCK RUSHER on the same rush feeds all of them an even
+            // better look (the outlet pass that springs the rush), scaled the same way.
+            const _attHasPlaymakerOrQB = attOnIce.some(p=>['PLAYMAKER','PRO PLAYMAKER','QUARTERBACK','PUCK RUSHER'].includes(getPlayerWeightedStats(p.name)?.tag||''));
+            const _breakawayTier = (pTag, spd) => {
+                if (pTag === 'SPEEDSTER') return { boost: 1.45, feed: 1.18 };
+                if (pTag === 'DANGLER')   return { boost: 1.35, feed: 1.15 };
+                if (pTag === 'SUPERSTAR') return { boost: 1.28, feed: 1.12 };
+                if (spd > 80)             return { boost: 1.15, feed: 1.06 }; // generic speedy skater, no archetype match
+                return null;
+            };
+            const _rw = attOnIce.map(p=>{
+                const spd=parseInt(playerStats[p.name]?.attr?.speed)||70; const hnd=gradeToNum(playerStats[p.name]?.attr?.stkHnd)||70;
+                let w = Math.pow(spd*0.6+hnd*0.4,2);
+                const pTag = getPlayerWeightedStats(p.name)?.tag||'';
+                const tier = _breakawayTier(pTag, spd);
+                if (tier) { w *= tier.boost; if (_attHasPlaymakerOrQB) w *= tier.feed; }
+                return w;
+            });
+            const _rt = _rw.reduce((a,b)=>a+b,0);
+            let _rr=Math.random()*_rt, rushSh=attOnIce[0];
+            for(let i=0;i<attOnIce.length;i++){_rr-=_rw[i];if(_rr<=0){rushSh=attOnIce[i];break;}}
+            const defGNm2  = rushHome ? aG_name : hG_name;
+            const defGObj2 = rushHome ? aG_obj  : hG_obj;
+            const defGAttr2= defGObj2 ? playerStats[defGObj2.name]?.attr : null;
+            const rShAcc   = parseInt(playerStats[rushSh.name]?.attr?.shotAcc)||70;
+            const rShHnd   = gradeToNum(playerStats[rushSh.name]?.attr?.stkHnd)||70;
+            const rGOvr    = defGAttr2?.ovr||75; const rGAgl=defGAttr2?.agil||70; const rGDef=defGAttr2?.gDef||70;
+            const rushConv = Math.max(0.12, Math.min(0.35, 0.22+(rShAcc*0.6+rShHnd*0.4)-(rGOvr*0.5+rGAgl*0.3+rGDef*0.2))*0.003+0.22);
+            trk(rushSh.name,'s',1); trk(defGNm2,'sa',1);
+            if (rushHome) { hShots++; aSACount++; } else { aShots++; hSACount++; }
+            if (Math.random() < rushConv) {
+                if (rushHome) { hG++; trk(defGNm2,'ga',1); } else { aG++; trk(defGNm2,'ga',1); }
+                const rushPool = attOnIce.filter(p=>p.name!==rushSh.name);
+                const rushEv   = processSingleGoal(attTeam.nrm, attTeam.code, rushSh, rushPool, timeStr, period, minute%20||20, sec);
+                if (rushEv) {
+                    rushEv.tm=attTeam.code; rushEv.cl=teamColors[attTeam.nrm]?.[0]||'#fff';
+                    rushEv.txt=`⚡ BREAKAWAY — ${buildGoalText(rushEv.scorer,rushEv.pAssist,rushEv.sAssist,null,false,false,false,rushHome?hG:aG,rushHome?aG:hG,period)}`;
+                    allGoals.push(rushEv);
+                    trk(rushEv.scorer,'g',1);
+                    if(rushEv.pAssist)trk(rushEv.pAssist,'a',1);
+                    if(rushEv.sAssist)trk(rushEv.sAssist,'a',1);
+                    if(!isASG&&playerStats[rushEv.scorer])playerStats[rushEv.scorer][k].esg=(playerStats[rushEv.scorer][k].esg||0)+1;
+                    attOnIce.forEach(p=>trk(p.name,'pm',1));
+                    (rushHome?aOnIce:hOnIce).forEach(p=>trk(p.name,'pm',-1));
+                    if(rushHome)hMomentum=hMomentum>=4?Math.min(14,hMomentum+8):8;
+                    else        aMomentum=aMomentum>=4?Math.min(14,aMomentum+8):8;
+                    lastGoalSide=rushHome?'h':'a';
+                    doYankCheck(period,minute,sec,timeStr);
+                    gameGoals[rushEv.scorer]=(gameGoals[rushEv.scorer]||0)+1;
+                    if(gameGoals[rushEv.scorer]===3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:attTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${rushEv.scorer}!`,isNote:true});
+                    else if(gameGoals[rushEv.scorer]>3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:attTeam.code,cl:'#FFD700',txt:`🎩 ${gameGoals[rushEv.scorer]}-GOAL GAME — ${rushEv.scorer}!`,isNote:true});
+                }
+            } else {
+                trk(defGNm2,'sv',1);
+                // v183: 15% chance breakaway gets hooked → escalates to penalty shot
+                const defSkaters = (rushHome ? aOnIce : hOnIce).filter(p=>p.pos!=='G');
+                const defAvgChk  = defSkaters.length ? defSkaters.reduce((s,p)=>s+(gradeToNum(playerStats[p.name]?.attr?.check)||50),0)/defSkaters.length : 50;
+                if (Math.random() < Math.max(0.08, Math.min(0.22, 0.15 + (defAvgChk-50)*0.001))) {
+                    penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:attTeam.code,
+                        cl:'#FFDD44',txt:`🎯 PENALTY SHOT AWARDED: ${rushSh.name} hauled down on breakaway!`,isNote:true});
+                    const psGNm  = rushHome ? aG_name : hG_name;
+                    const psGObj = rushHome ? aG_obj  : hG_obj;
+                    const psGAt  = psGObj ? playerStats[psGObj.name]?.attr : null;
+                    const psAcc2 = parseInt(playerStats[rushSh.name]?.attr?.shotAcc)||70;
+                    const psHnd2 = gradeToNum(playerStats[rushSh.name]?.attr?.stkHnd)||70;
+                    const psGO2  = psGAt?.ovr||75; const psGA2=psGAt?.agil||70; const psGD2=psGAt?.gDef||70;
+                    const psPr2  = 0.32 + ((psAcc2*0.6+psHnd2*0.4) - (psGO2*0.3+psGA2*0.3+psGD2*0.4)) * 0.005;
+                    const psSc2  = Math.random() < Math.max(0.15, Math.min(0.65, psPr2));
+                    trk(rushSh.name,'s',1); trk(psGNm,'sa',1);
+                    if (rushHome) hShots++; else aShots++;
+                    if (psSc2) {
+                        if (rushHome){hG++;trk(rushSh.name,'g',1);trk(psGNm,'ga',1);}
+                        else{aG++;trk(rushSh.name,'g',1);trk(psGNm,'ga',1);}
+                        const psEv = processSingleGoal(attTeam.nrm, attTeam.code, rushSh, attOnIce.filter(p=>p.name!==rushSh.name), timeStr, period, minute%20||20, sec);
+                        if (psEv) {
+                            psEv.tm=attTeam.code; psEv.cl=teamColors[attTeam.nrm]?.[0]||'#fff';
+                            psEv.txt=`🎯 PENALTY SHOT GOAL — ${psEv.scorer} beats ${psGObj?.name||psGNm}!`;
+                            allGoals.push(psEv);
+                            trk(psEv.scorer,'g',1);
+                            if(rushHome)hMomentum=Math.min(14,hMomentum+8);else aMomentum=Math.min(14,aMomentum+8);
+                            lastGoalSide=rushHome?'h':'a';
+                            doYankCheck(period,minute,sec,timeStr);
+                            gameGoals[psEv.scorer]=(gameGoals[psEv.scorer]||0)+1;
+                            if(gameGoals[psEv.scorer]===3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:attTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${psEv.scorer}!`,isNote:true});
+                            else if(gameGoals[psEv.scorer]>3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:attTeam.code,cl:'#FFD700',txt:`🎩 ${gameGoals[psEv.scorer]}-GOAL GAME — ${psEv.scorer}!`,isNote:true});
+                        }
+                        if (awardConfig.headlines) tradeLog.unshift({day:`DAY ${currentDay+1}`, details:`🎯 PENALTY SHOT GOAL: ${rushSh.name} (${attTeam.code})`});
+                    } else {
+                        trk(psGNm,'sv',1);
+                        penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:attTeam.code,
+                            cl:'#888',txt:`🎯 PENALTY SHOT STOPPED — ${psGObj?.name||psGNm} turns away ${rushSh.name}!`,isNote:true});
+                    }
+                }
+            }
+
+        // v183: LINE BRAWL — multi-player fight, big PIM, momentum spike, rare suspension/injury
+        } else if (ev.type === 'brawl') {
+            if (isASG) continue;
+            const canFightB = (p) => { const ps=playerStats[p.name]; if(!ps||p.pos==='G') return false; return (gradeToNum(ps.attr?.aggr)||50)>=50 && (gradeToNum(ps.attr?.rough)||50)>=50; };
+            const brawlWt   = (name) => { const ps=playerStats[name]; if(!ps) return 1; const a2=gradeToNum(ps.attr?.aggr)||50; const r2=gradeToNum(ps.attr?.rough)||50; const tg=getPlayerWeightedStats(name)?.tag||''; const tm=tg.includes('ENFORCER')?3:tg==='INTIMIDATOR'?2.5:tg==='GRINDER'||tg==='POWER FORWARD'?1.8:tg==='PEST'?1.5:1; return ((a2+r2)/2)*tm; };
+            const pickBrawlers = (pool, count) => {
+                const w=pool.map(p=>brawlWt(p.name)); const tot=w.reduce((s,x)=>s+x,0);
+                const picks=[]; const used=new Set();
+                for(let i=0;i<count&&picks.length<pool.length;i++){
+                    let r2=Math.random()*tot; let idx=pool.length-1;
+                    for(let j=0;j<pool.length;j++){r2-=w[j];if(r2<=0&&!used.has(j)){idx=j;break;}}
+                    if(!used.has(idx)){used.add(idx);picks.push(pool[idx]);}
+                }
+                return picks;
+            };
+            const hBrawlPool = (rosters[g.h.nrm]||[]).filter(canFightB);
+            const aBrawlPool = (rosters[g.a.nrm]||[]).filter(canFightB);
+            if (!hBrawlPool.length || !aBrawlPool.length) continue;
+            const brawlCnt = 2 + (Math.random()<0.4?1:0); // 2-3 fighters per side
+            const hBrawlers = pickBrawlers(hBrawlPool, brawlCnt);
+            const aBrawlers = pickBrawlers(aBrawlPool, brawlCnt);
+            if (!hBrawlers.length || !aBrawlers.length) continue;
+            const allBrawlers = [...hBrawlers, ...aBrawlers];
+            // v200: brawl = game misconduct (ejected) → 15 PIM (5 fighting major + 10 game misconduct)
+            allBrawlers.forEach(p => { trk(p.name,'pim',15); if(!isASG) playerStats[p.name][k].fights=(playerStats[p.name][k].fights||0)+1; });
+            const hNames = hBrawlers.map(p=>p.name).join(', ');
+            const aNames = aBrawlers.map(p=>p.name).join(', ');
+            penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:g.h.code,
+                cl:'#FF2222',txt:`🥊 LINE BRAWL: ${g.h.code} (${hNames}) vs ${g.a.code} (${aNames}) — ${allBrawlers.length} players ejected!`,isNote:true,isFight:true});
+            // Big momentum swing to one side
+            const hBrawlStr = hBrawlers.reduce((s,p)=>s+brawlWt(p.name),0);
+            const aBrawlStr = aBrawlers.reduce((s,p)=>s+brawlWt(p.name),0);
+            if (Math.random() < hBrawlStr/(hBrawlStr+aBrawlStr)) hMomentum=Math.min(14,hMomentum+10);
+            else aMomentum=Math.min(14,aMomentum+10);
+            // v197: Suspension check — one player per team (most likely instigator)
+            [[hBrawlers, g.h.code], [aBrawlers, g.a.code]].forEach(([brawlers, tmCode]) => {
+                if (!brawlers.length) return;
+                // Pick most physical player (highest rough) as the one who gets reviewed
+                const instigator = brawlers.reduce((best, p) => {
+                    const rough = gradeToNum(playerStats[p.name]?.attr?.rough)||50;
+                    const bestRough = gradeToNum(playerStats[best.name]?.attr?.rough)||50;
+                    return rough > bestRough ? p : best;
+                }, brawlers[0]);
+                const fighter = instigator;
+                if (Math.random() < 0.199885 && playerStats[fighter.name] && !(playerStats[fighter.name].suspended?.days > 0)) {
+                    const days = 1 + Math.ceil(Math.random() * 3);
+                    if (!playerStats[fighter.name].suspended) playerStats[fighter.name].suspended = { days: 0, reason: '' };
+                    playerStats[fighter.name].suspended.days += days;
+                    playerStats[fighter.name].suspended.reason = 'Line brawl';
+                    if (!playerStats[fighter.name].suspensionHistory) playerStats[fighter.name].suspensionHistory = [];
+                    playerStats[fighter.name].suspensionHistory.push({ day: currentDay, games: days, reason: 'Line brawl', season: currentSeason });
+                    penaltyEvents.push({ p: period, m: minute % 20 || 20, s: sec, str: timeStr, tm: tmCode,
+                        cl: '#FF8800', txt: `SUSPENSION: ${fighter.name} — ${days} game(s) (line brawl instigator)`, isNote: true });
+                    if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `🚫 SUSPENSION: ${fighter.name} (${tmCode.toUpperCase()}) suspended ${days} game(s) — line brawl instigator.` });
+                }
+            });
+            // v222: Injury check — 8% per brawler (matches fight rate)
+            if (!isASG) {
+                allBrawlers.forEach(fighter => {
+                    if (Math.random()<0.08) {
+                        const fPs=playerStats[fighter.name];
+                        if(fPs&&!(fPs.injury?.daysRemaining>0)&&!(fPs.injCooldown>0)){
+                            const _rb=Math.random(); const injDays=_rb<0.40?1+Math.floor(Math.random()*3):_rb<0.80?3+Math.floor(Math.random()*4):6+Math.floor(Math.random()*5); // brawl: 40%:1-3g, 40%:3-6g, 20%:6-10g
+                            if(!fPs.injury) fPs.injury={daysRemaining:0,type:''};
+                            fPs.injury.daysRemaining=injDays; fPs.injury.severity=injDays; fPs.injury.source='brawl';
+                            fPs.injury.type=injDays>=10?'Line brawl — week-to-week':injDays>=5?'Line brawl — short-term':'Line brawl — day-to-day';
+                            autoPlaceOnIR(fighter.name, (hBrawlers.includes(fighter) ? g.h : g.a).nrm, injDays);
+                            penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:g.h.code,
+                                cl:'#FF6666',txt:`🏥 INJURY: ${fighter.name} hurt in line brawl — day-to-day (${injDays}d)`,isNote:true});
+                            if(awardConfig.headlines) tradeLog.unshift({day:`DAY ${currentDay+1}`,details:`🏥 INJURY: ${fighter.name} — hurt in line brawl, out ${injDays}d`});
+                        }
+                    }
+                });
+            }
+            if (awardConfig.headlines) tradeLog.unshift({day:`DAY ${currentDay+1}`,details:`🥊 LINE BRAWL: ${g.h.code} vs ${g.a.code} — ${allBrawlers.length} players ejected`});
+
+        // v183: WEAR-AND-TEAR — nagging injury (bruise/strain) to a random skater
+        // v182: ICING — defensive zone face-off; tiny momentum push to attacker
+        } else if (ev.type === 'icing') {
+            if (isASG) continue;
+            const hPress = hMomentum >= 5, aPress = aMomentum >= 5;
+            if (!hPress && !aPress) continue;
+            const icingTeam = (hPress && aPress) ? (Math.random()<0.5?g.h:g.a) : (hPress?g.a:g.h);
+            if (icingTeam.nrm===g.h.nrm) aMomentum=Math.min(aMomentum+1,14);
+            else                          hMomentum=Math.min(hMomentum+1,14);
+            penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:icingTeam.code,
+                cl:'#666',txt:`ICING: ${icingTeam.code} — defensive-zone face-off`,isNote:true});
+
         }
     } // end event stream
+
+    // v182: post-game hat trick log — sweep gameGoals once so every code path is covered
+    if (!isASG && awardConfig.headlines) {
+        Object.entries(gameGoals).forEach(([scorer, cnt]) => {
+            if (cnt >= 3) {
+                const tm = playerStats[scorer]?.teamCode || '';
+                const label = cnt === 3 ? `🎩 HAT TRICK` : `🎩 ${cnt}-GOAL GAME`;
+                tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `${label}: ${scorer} (${tm}) scores ${cnt} goals` });
+            }
+        });
+    }
 
     // EMPTY NETTER — trailing team pulls goalie late in regulation
     // v167: pull timing scales with deficit — down-1 pulls ~57-58 min, down-2 pulls ~55-56 min
@@ -4987,6 +5792,9 @@ function simGame(idx) {
                         _enLeadSkaters.forEach(p  => trk(p.name, 'pm',  1));
                         _enTrailSkaters.forEach(p => trk(p.name, 'pm', -1));
                         // NHL rules: empty-net goals do NOT count against the pulled goalie
+                        // v182: hat trick check for EN goals
+                        gameGoals[enEv.scorer]=(gameGoals[enEv.scorer]||0)+1;
+                        if(gameGoals[enEv.scorer]===3) allGoals.push({p:3,m:59,s:0,str:'P3 59:00',tm:enScorerTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${enEv.scorer}!`,isNote:true});
                     }
                 } else {
                     // Trailing team gets a shot on empty net (rare tying goal)
@@ -5264,9 +6072,22 @@ function simGame(idx) {
             if (svPct >= 0.900) goalieStars.push({ name: gName, score: svPct * 6 + (svPct >= 0.940 ? 3 : svPct >= 0.920 ? 1.5 : 0) });
         }
     });
-    const allStarCandidates = [...starScores, ...goalieStars].sort((a,b) => b.score - a.score);
+    // v183: 1st star = best performer in game (deterministic top score); 2nd/3rd get slight weighted randomness
+    // Sort desc so index 0 is always the true game MVP
+    const allStarCandidates = [...starScores, ...goalieStars].filter(c=>c.score>0).sort((a,b) => b.score - a.score);
     const seen = new Set(); const threeStars = [];
-    for (const c of allStarCandidates) { if (!seen.has(c.name) && c.score > 0) { seen.add(c.name); threeStars.push(c.name); } if (threeStars.length === 3) break; }
+    // 1st star: always the top scorer (no randomness — they earned it)
+    if (allStarCandidates.length > 0) { seen.add(allStarCandidates[0].name); threeStars.push(allStarCandidates[0].name); }
+    // 2nd/3rd: weighted random from remaining (score^1.5 so best still likely but not certain)
+    const remaining2 = allStarCandidates.filter(c=>!seen.has(c.name));
+    for (let slot=1; slot<3 && remaining2.length>0; slot++) {
+        const wts = remaining2.map(c=>Math.pow(c.score,1.5));
+        const tot = wts.reduce((a,b)=>a+b,0);
+        let r2 = Math.random()*tot; let pick = remaining2[0];
+        for (let i=0;i<remaining2.length;i++){r2-=wts[i];if(r2<=0){pick=remaining2[i];break;}}
+        seen.add(pick.name); threeStars.push(pick.name);
+        remaining2.splice(remaining2.indexOf(pick),1);
+    }
     if (!isASG && awardConfig.headlines && threeStars.length > 0) {
         const starLine = threeStars.map((n,i) => `${['1st','2nd','3rd'][i]}: ${n}`).join(' | ');
         tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `THREE STARS — ${g.a.code} ${aG}-${hG} ${g.h.code}: ${starLine}` });
@@ -5344,6 +6165,14 @@ function simGame(idx) {
             else { g.h.season.t++; g.a.season.t++; g.h.season.pts++; g.a.season.pts++; g.h.winStreak = 0; g.h.undefeated++; g.h.loseStreak = 0; g.h.winless++; g.a.winStreak = 0; g.a.undefeated++; g.a.loseStreak = 0; g.a.winless++; }
             checkCoachCrisis(g.h); checkCoachCrisis(g.a);
             checkStreakHeadline(g.h); checkStreakHeadline(g.a);
+            // v182: Comeback narrative — flag big deficit overcomes in tradeLog
+            if (!isASG) {
+                const comeDiff = hG > aG ? hMaxDeficit : aG > hG ? aMaxDeficit : 0;
+                const cWinner = hG > aG ? g.h : aG > hG ? g.a : null;
+                if (cWinner && comeDiff >= 3) {
+                    tradeLog.unshift({day:`DAY ${currentDay+1}`, details:`🔥 COMEBACK WIN: ${cWinner.code} overcame a ${comeDiff}-goal deficit to win ${hG}-${aG}!`});
+                }
+            }
             g.h.season.gp++; g.a.season.gp++;
             g.h.season.gf += hG; g.h.season.ga += aG; g.h.season.sf = (g.h.season.sf||0) + hShots; g.h.season.sa = (g.h.season.sa||0) + aShots;
             g.a.season.gf += aG; g.a.season.ga += hG; g.a.season.sf = (g.a.season.sf||0) + aShots; g.a.season.sa = (g.a.season.sa||0) + hShots;
@@ -5520,11 +6349,18 @@ function selectShooter(unit, context = 'ES') {
         weight *= (arch.shotRate || 1.0);
 
         // SH context: speed/grit archetypes preferred on shorthanded goals
+        // v176: enhanced — TWO-WAY bumped, DANGLER/SNIPER added; ENFORCER/GRINDER softly suppressed
         if (context === 'SH') {
-            if (tag === 'SPEEDSTER')                                         weight *= 1.40;
-            else if (tag === 'GRINDER')                                      weight *= 1.20;
-            else if (tag === 'PEST')                                         weight *= 1.15;
-            else if (tag === 'TWO-WAY STAR F' || tag === 'TWO-WAY FWD')     weight *= 1.15;
+            if      (tag === 'SPEEDSTER')                                weight *= 1.40; // open-ice breakaway king
+            else if (tag === 'TWO-WAY STAR F')                           weight *= 1.30; // Yzerman/Fedorov SHG type
+            else if (tag === 'TWO-WAY STAR D')                           weight *= 1.22; // v235: elite two-way D can jump into a SHG rush from the point
+            else if (tag === 'TWO-WAY FWD')                              weight *= 1.20; // two-way grinder breakaway
+            else if (tag === 'DANGLER')                                  weight *= 1.15; // creative in open ice
+            else if (tag === 'SNIPER')                                   weight *= 1.10; // finisher on odd-man rush
+            else if (tag === 'PRO DEFENSIVE D')                          weight *= 1.08; // v235: reliable PK defenseman occasionally springs
+            else if (tag === 'GRINDER')                                  weight *= 1.05; // hustle goal
+            else if (tag === 'PEST')                                     weight *= 1.00; // neutral
+            else if (tag === 'ENFORCER F' || tag === 'ENFORCER D')       weight *= 0.70; // no place in open ice SHG
             // v157: individual speed — fast skaters are the breakaway threats on the PK
             const pSpd = pA.speed || 70;
             weight *= Math.max(0.85, Math.min(1.15, 1.0 + (pSpd - 70) * 0.005));
@@ -5571,19 +6407,35 @@ function selectShooter(unit, context = 'ES') {
         // Offensive D (BOOMER/QB) also elevated — they run the point on the PP
         if (context === 'PP') {
             if      (tag === 'SUPERSTAR')                                    weight *= 1.35;
-            else if (tag === 'PRO SNIPER')                                   weight *= 1.40;
+            else if (tag === 'PRO SNIPER')                                   weight *= 1.32; // v244: 1.40→1.32 — was above SUPERSTAR's 1.35, inverting the intended hierarchy
+            else if (tag === 'POWER SNIPER')                                 weight *= 1.31; // v244: 1.28→1.31 — the v239 dial-back overcorrected and dropped this below SNIPER's 1.30; restored above it
             else if (tag === 'SNIPER')                                       weight *= 1.30;
-            else if (tag === 'POWER SNIPER')                                 weight *= 1.25;
-            else if (tag === 'BOOMER' || tag === 'QUARTERBACK')              weight *= 1.20;
-            else if (tag === 'PRO OFFENSIVE D' || tag === 'OFFENSIVE D')     weight *= 1.15;
+            else if (tag === 'BOOMER')                                       weight *= 1.42; // v225: highest-weighted D archetype on the PP, target ~10 PP goals for elite point men
+            else if (tag === 'FRANCHISE D')                                  weight *= 1.30; // v225: elite PP QB (Bourque type) — above QUARTERBACK
+            else if (tag === 'PRO OFFENSIVE D')                              weight *= 1.26; // v225: split from OFFENSIVE D, stays above it
+            else if (tag === 'QUARTERBACK')                                  weight *= 1.20; // v225: dropped below FRANCHISE D
             // v173: missing PP threats added
-            else if (tag === 'SPEEDSTER')                                    weight *= 1.25; // open-ice PP threat (Bure type)
-            else if (tag === 'DANGLER')                                      weight *= 1.20; // creative PP scorer
+            else if (tag === 'POWER FORWARD')                                weight *= 1.20; // v230: net-front screen/deflection, elevated
+            else if (tag === 'SPEEDSTER')                                    weight *= 1.16; // v230: trimmed below POWER SNIPER/POWER FORWARD
+            else if (tag === 'DANGLER')                                      weight *= 1.12; // v230: trimmed below POWER SNIPER/POWER FORWARD
             else if (tag === 'TWO-WAY STAR F')                               weight *= 1.15; // Yzerman/Fedorov PP role
-            else if (tag === 'FRANCHISE D')                                  weight *= 1.15; // elite PP QB (Bourque type)
-            else if (tag === 'POWER FORWARD')                                weight *= 1.10; // net-front screen/deflection
+            else if (tag === 'OFFENSIVE D')                                  weight *= 1.15; // v225: split from PRO OFFENSIVE D, stays below it
             else if (tag === 'PRO PLAYMAKER' || tag === 'PLAYMAKER')         weight *= 0.85; // feeds, doesn't shoot
             else if (tag === 'GRINDER' || tag === 'ENFORCER F')              weight *= 0.60; // screen duty
+            // v237: OFFENSIVE FORWARD/OFFENSIVE FWD have no named PP identity — instead of a fixed
+            // multiplier, scale dynamically off their raw offense rating (75 off → modest bump,
+            // 90 off → a real one), so pure skill still shows up on the man advantage.
+            else if (tag === 'OFFENSIVE FORWARD' || tag === 'OFFENSIVE FWD') weight *= Math.max(0.95, Math.min(1.20, 1.0 + ((pA.off||70) - 70) * 0.006));
+        }
+        // v230: PP synergy — an elite finisher running with a real point-QB feeding him gets
+        // more/better looks than the same player on a unit without one.
+        if (context === 'PP' && (tag === 'POWER SNIPER' || tag === 'SNIPER' || tag === 'PRO SNIPER' || tag === 'SUPERSTAR')) {
+            const hasEliteQB = unitTags.some(t => t === 'BOOMER' || t === 'FRANCHISE D' || t === 'QUARTERBACK');
+            if (hasEliteQB) weight *= 1.08;
+            // v232: net-front screen combo — a GRINDER/PEST/POWER FORWARD parked in the goalie's
+            // face on the same unit opens up better looks for the shooter (real screen effect).
+            const hasScreener = unitTags.some(t => t === 'GRINDER' || t === 'PEST' || t === 'POWER FORWARD');
+            if (hasScreener) weight *= 1.06;
         }
 
         // Linemate synergy: PLAYMAKER/PRO PLAYMAKER feeds linemates, shoots less himself
@@ -5637,36 +6489,107 @@ function selectShooter(unit, context = 'ES') {
             const spd = gradeToNum(pA.speed) || 70;
             weight *= Math.max(0.88, 1.0 + (spd - 75) * 0.005); // elite speed = open looks
         }
+        // v183: acc/pwr/pass gates on ALL remaining fwd + D archetypes
+        if (tag === 'TWO-WAY STAR F') {
+            const shotAcc = parseInt(pA.shotAcc)||70; const pass2 = pA.pass||70;
+            weight *= Math.max(0.78, 1.0 + (shotAcc-75)*0.008);  // balanced scorer
+            weight *= Math.max(0.82, 1.0 + (pass2-70)*0.004);    // light passing gate
+        }
+        if (tag === 'TWO-WAY FWD') {
+            const shotAcc = parseInt(pA.shotAcc)||70; const pass2 = pA.pass||70;
+            weight *= Math.max(0.75, 1.0 + (shotAcc-75)*0.007);
+            weight *= Math.max(0.80, 1.0 + (pass2-70)*0.003);
+        }
+        if (tag === 'OFFENSIVE FORWARD' || tag === 'OFFENSIVE FWD') {
+            const shotAcc = parseInt(pA.shotAcc)||70; const shotPwr = gradeToNum(pA.shotPwr)||70;
+            weight *= Math.max(0.75, 1.0 + (shotAcc-70)*0.009);
+            weight *= Math.max(0.82, 1.0 + (shotPwr-70)*0.005);
+        }
+        if (tag === 'POWER FORWARD') {
+            const shotPwr = gradeToNum(pA.shotPwr)||70; const shotAcc = parseInt(pA.shotAcc)||70;
+            weight *= Math.max(0.75, 1.0 + (shotPwr-70)*0.010); // power fwd lives off shot power
+            weight *= Math.max(0.80, 1.0 + (shotAcc-70)*0.005);
+        }
+        if (tag === 'DEFENSIVE FWD') {
+            const shotAcc = parseInt(pA.shotAcc)||70;
+            weight *= Math.max(0.72, 1.0 + (shotAcc-75)*0.007); // limited offensive role
+        }
+        if (tag === 'IRONMAN') {
+            const shotAcc = parseInt(pA.shotAcc)||70; const shotPwr = gradeToNum(pA.shotPwr)||70;
+            weight *= Math.max(0.78, 1.0 + (shotAcc-70)*0.006);
+            weight *= Math.max(0.82, 1.0 + (shotPwr-70)*0.004);
+        }
+        if (tag === 'STAY-AT-HOME') {
+            const shotAcc = parseInt(pA.shotAcc)||70;
+            weight *= Math.max(0.60, 1.0 + (shotAcc-75)*0.012); // poor acc = very rare goal
+        }
+        if (tag === 'TWO-WAY D') {
+            const shotAcc = parseInt(pA.shotAcc)||70; const shotPwr = gradeToNum(pA.shotPwr)||70;
+            weight *= Math.max(0.75, 1.0 + (shotAcc-75)*0.008);
+            weight *= Math.max(0.80, 1.0 + (shotPwr-70)*0.004);
+        }
+        if (tag === 'PRO DEFENSIVE D') {
+            const shotAcc = parseInt(pA.shotAcc)||70;
+            weight *= Math.max(0.65, 1.0 + (shotAcc-75)*0.010); // defensive D rarely scores
+        }
+        if (tag === 'SHUTDOWN') {
+            const shotAcc = parseInt(pA.shotAcc)||70;
+            weight *= Math.max(0.60, 1.0 + (shotAcc-75)*0.012); // shutdown D: goals are rare
+        }
+        if (tag === 'DEFENSIVE SPECIALIST') {
+            const shotAcc = parseInt(pA.shotAcc)||70; const pass2 = pA.pass||70;
+            weight *= Math.max(0.70, 1.0 + (shotAcc-75)*0.009);
+            weight *= Math.max(0.78, 1.0 + (pass2-70)*0.004);
+        }
+        if (tag === 'ENFORCER F') {
+            const shotPwr = gradeToNum(pA.shotPwr)||70; const shotAcc = parseInt(pA.shotAcc)||70;
+            weight *= Math.max(0.55, 1.0 + (shotPwr-70)*0.008); // enforcers: raw power, poor acc
+            weight *= Math.max(0.50, 1.0 + (shotAcc-75)*0.014);
+        }
+        if (tag === 'ENFORCER D') {
+            const shotPwr = gradeToNum(pA.shotPwr)||70; const shotAcc = parseInt(pA.shotAcc)||70;
+            weight *= Math.max(0.50, 1.0 + (shotPwr-70)*0.007);
+            weight *= Math.max(0.45, 1.0 + (shotAcc-75)*0.015);
+        }
 
-        // Position modifier  -  wingers shoot a bit more, centers distribute, D ~20% less
+        // Position modifier  -  wingers shoot a bit more, centers distribute, D ~20% less at
+        // even strength. v222: on the PP the general D penalty was silently cancelling out
+        // most of the PP archetype bonus above (BOOMER/QB ×1.20 → net ×0.96 after ×0.80) —
+        // a real point-man walks the line and shoots constantly on the man advantage, so the
+        // penalty is trimmed to ~5% there instead of the full 20%, letting elite offensive D
+        // actually convert their PP shot share into the double-digit PP-goal seasons the role
+        // produces historically (Bourque/MacInnis/Coffey territory).
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
-        weight *= isD ? 0.80 : (pos === 'LW' || pos === 'RW') ? 1.12 : (pos === 'C') ? 0.95 : 1.0;
+        const dPenalty = (context === 'PP') ? 0.95 : 0.80;
+        weight *= isD ? dPenalty : (pos === 'LW' || pos === 'RW') ? 1.12 : (pos === 'C') ? 0.95 : 1.0;
 
         // Hot/cold modifier
         if (ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT')  weight *= 1.20;
         if (ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD') weight *= 0.80;
 
-        // 2B: Diminishing returns on goals — soft brake above 0.60 G/GP
+        // 2B: Diminishing returns on goals — soft brake above 0.55 G/GP (was 0.60)
         // [FIX] was ps.season?.g/gp — during playoffs this read frozen RS stats,
         // penalising RS goal-scorers even with 0 playoff goals. Use _ssK (computed above).
         const seasonG = ps[_ssK]?.g || 0;
         const seasonGPG = Math.max(ps[_ssK]?.gp || 1, 1);
         const gPG = seasonG / seasonGPG;
-        if (gPG > 0.60) weight *= Math.max(0.65, Math.sqrt(0.60 / gPG));
+        // v213: threshold 0.60→0.55, floor 0.65→0.60 — compresses top-end goal totals harder
+        if (gPG > 0.55) weight *= Math.max(0.60, Math.sqrt(0.55 / gPG));
 
         // 2C: Team goal-share dominance penalty — brakes a player scoring >30% of team GF
-        if (teamGFTotal > 20 && seasonG / teamGFTotal > 0.30) {
-            weight *= Math.max(0.70, 1.0 - (seasonG / teamGFTotal - 0.30) * 1.0);
+        // v213: threshold 30%→26%, penalty rate 1.0→1.3, floor 0.70→0.62 — tighter brake
+        if (teamGFTotal > 20 && seasonG / teamGFTotal > 0.26) {
+            weight *= Math.max(0.62, 1.0 - (seasonG / teamGFTotal - 0.26) * 1.3);
         }
 
         return Math.max(1, weight);
     });
 
-    // Weight normalization cap — no single player can hold more than 42% of total
-    // shot weight. Excess is redistributed proportionally to the rest of the unit.
+    // Weight normalization cap — no single player can hold more than 38% of total
+    // shot weight (was 42%). Excess is redistributed proportionally to the rest of the unit.
     // Prevents one dominant scorer from claiming an unrealistic share of team goals.
-    const SHOOTER_CAP = 0.42;
+    const SHOOTER_CAP = 0.38;
     let total = weights.reduce((a, b) => a + b, 0);
     if (total > 0) {
         for (let iter = 0; iter < 3; iter++) { // iterate to converge
@@ -5781,6 +6704,40 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         }
         if (tag === 'DANGLER') {
             weight *= Math.max(0.82, 1.0 + (pass - 70) * 0.007); // high-pass danglers set up as well as score
+        }
+        // v183: passing gates on all remaining archetypes
+        if (tag === 'TWO-WAY STAR F') {
+            weight *= Math.max(0.80, 1.0 + (pass - 70) * 0.006);  // already above; guard covers duplicate tag match
+        }
+        if (tag === 'OFFENSIVE FORWARD' || tag === 'OFFENSIVE FWD') {
+            weight *= Math.max(0.78, 1.0 + (pass - 70) * 0.007);  // offensive forwards with good pass = playmakers
+        }
+        if (tag === 'DEFENSIVE FWD') {
+            weight *= Math.max(0.75, 1.0 + (pass - 75) * 0.007);  // defensive role; poor pass = rare assist
+        }
+        if (tag === 'IRONMAN') {
+            weight *= Math.max(0.78, 1.0 + (pass - 70) * 0.005);  // utility skater
+        }
+        if (tag === 'DEFENSIVE SPECIALIST') {
+            weight *= Math.max(0.72, 1.0 + (pass - 75) * 0.008);  // limited offensive role
+        }
+        if (tag === 'STAY-AT-HOME') {
+            weight *= Math.max(0.60, 1.0 + (pass - 75) * 0.010);  // stay-at-home D: assists rare
+        }
+        if (tag === 'TWO-WAY D') {
+            weight *= Math.max(0.78, 1.0 + (pass - 70) * 0.006);  // balanced D; decent passer gets assists
+        }
+        if (tag === 'PRO DEFENSIVE D') {
+            weight *= Math.max(0.68, 1.0 + (pass - 75) * 0.009);  // primarily defensive
+        }
+        if (tag === 'SHUTDOWN') {
+            weight *= Math.max(0.62, 1.0 + (pass - 75) * 0.010);  // shutdown D rarely generates offense
+        }
+        if (tag === 'ENFORCER F') {
+            weight *= Math.max(0.55, 1.0 + (pass - 75) * 0.012);  // enforcers: rare assists, only if good passer
+        }
+        if (tag === 'ENFORCER D') {
+            weight *= Math.max(0.50, 1.0 + (pass - 75) * 0.013);  // enforcer D very rarely assists
         }
 
         // Position modifier  -  centers are primary distributors, D penalized ~20%
@@ -5966,16 +6923,64 @@ function buildCalendar() {
     let targetGames = awardConfig.legacy_schedule ? 84 : 82;
     league.forEach(t => { t.season.gp = 0; t.gamesTarget = targetGames; });
 
+    // v245: division/conference game counts (6/4 legacy) were fixed constants that assumed
+    // roughly-equal division sizes. This league's real split is 7/7/6/6 (Atlantic/Northeast
+    // vs Central/Pacific, 14 Eastern teams vs 12 Western) — a 7-team division's round robin
+    // summed to 88 games before the old cap check even applied (truncated unevenly by array
+    // order), while a 6-team division only summed to 82, 2 games short of the 84-game legacy
+    // target, every team, every season.
+    //
+    // A first fix (solve cross-conference count per pair via a flat round-based fill) turned
+    // out to be mathematically infeasible as written: with fixed division(6)/conference(4)
+    // counts, the 14 Eastern teams only need 20 cross-conference games each (280 total credits)
+    // while the 12 Western teams need 30 each (360 total credits) — but every cross-conference
+    // game credits exactly one team on each side, so those two totals must be equal and can't
+    // both be satisfied. A flat fill round-robins through pairs in a fixed order and starves
+    // whichever teams happen to run out of not-yet-capped partners first (Pacific teams ended
+    // up worse off than before the fix, some stuck at 68 games).
+    //
+    // Real fix: scale the division-rival count by actual division size (5 games/opponent for
+    // a 7-team division, 6 for a 6-team division — both total 30 division-games either way,
+    // matching the original design's implied per-team volume) to shrink the East/West gap
+    // up front, then fill cross-conference games with a priority queue that always advances
+    // whichever eligible pair currently has the LOWEST-gp team, so any unavoidable shortfall
+    // (this specific division split can't hit exactly 84 for literally everyone) is spread
+    // evenly across the league instead of dumped onto whichever teams process last.
+    const pairs = [];
     for (let i = 0; i < league.length; i++) {
         for (let j = i + 1; j < league.length; j++) {
             const t1 = league[i]; const t2 = league[j];
-            let gamesNeeded = 2; 
-            if (t1.conf === t2.conf) gamesNeeded = (t1.div === t2.div) ? (awardConfig.legacy_schedule ? 6 : 4) : (awardConfig.legacy_schedule ? 4 : 3);
-            for (let k = 0; k < gamesNeeded; k++) {
-                if (t1.season.gp < targetGames && t2.season.gp < targetGames) { let isHome = Math.random() > 0.5; gamesList.push({ h: isHome ? t1 : t2, a: isHome ? t2 : t1, result: null }); t1.season.gp++; t2.season.gp++; }
+            if (t1.conf === t2.conf) {
+                let gamesNeeded;
+                if (t1.div === t2.div) {
+                    const divSize = league.filter(t => t.div === t1.div).length;
+                    gamesNeeded = awardConfig.legacy_schedule ? Math.round(30 / Math.max(1, divSize - 1)) : Math.round(20 / Math.max(1, divSize - 1));
+                } else {
+                    gamesNeeded = awardConfig.legacy_schedule ? 4 : 3;
+                }
+                pairs.push({ t1, t2, gamesNeeded });
+                t1.season.gp += gamesNeeded; t2.season.gp += gamesNeeded;
+            } else {
+                pairs.push({ t1, t2, gamesNeeded: 0 }); // cross-conference — filled in below
             }
         }
     }
+    const crossPairs = pairs.filter(p => p.t1.conf !== p.t2.conf);
+    let addedThisPass = true;
+    while (addedThisPass) {
+        addedThisPass = false;
+        let best = null, bestNeed = -1;
+        for (const p of crossPairs) {
+            if (p.t1.season.gp >= targetGames || p.t2.season.gp >= targetGames) continue;
+            const need = targetGames - Math.min(p.t1.season.gp, p.t2.season.gp); // how far the neediest side of this pair still is from target
+            if (need > bestNeed) { bestNeed = need; best = p; }
+        }
+        if (best) { best.gamesNeeded++; best.t1.season.gp++; best.t2.season.gp++; addedThisPass = true; }
+    }
+    pairs.forEach(({ t1, t2, gamesNeeded }) => {
+        for (let k = 0; k < gamesNeeded; k++) { let isHome = Math.random() > 0.5; gamesList.push({ h: isHome ? t1 : t2, a: isHome ? t2 : t1, result: null }); }
+    });
+    league.forEach(t => { t.season.gp = 0; }); // reset — was only used to solve the pairing counts above
     gamesList.sort(() => Math.random() - 0.5);
     while (gamesList.length > 0) {
         let dayGames = []; let teamsPlayingToday = new Set();
@@ -6459,6 +7464,24 @@ async function beginNewYear() {
         p.recentGames = []; p.recentStarts = [];
         p.macro_streak = null; p.micro_streak = null;
         p.playingHurt = false; p.consPointless = 0;
+        // v195: record any active injury to history before clearing (injuries that cross season boundary)
+        if (p.injury?.daysRemaining > 0) {
+            const gamesActuallyMissed = (p.injury.initialDays || p.injury.severity || 0) - p.injury.daysRemaining;
+            if (gamesActuallyMissed > 0) {
+                if (!p.injuryHistory) p.injuryHistory = [];
+                p.injuryHistory.push({
+                    date: currentDay, daysMissed: gamesActuallyMissed,
+                    initialDays: p.injury.initialDays || p.injury.severity || 0,
+                    gamesOut: gamesActuallyMissed, season: currentSeason - 1,
+                    grade: p.injury.severity >= 8 ? 'serious' : p.injury.severity >= 3 ? 'moderate' : 'minor',
+                    source: p.injury.source || 'unknown', crossedSeason: true
+                });
+            }
+        }
+        // v182: clear injuries at new season — players enter training camp healthy
+        p.injury = { severity: 0, daysRemaining: 0 };
+        p.injCooldown = 0;
+        if (p.onIR) { p.onIR = false; p.irDay = 0; }
     });
     
     takeMonthSnapshot(); 
@@ -7535,6 +8558,7 @@ function submitAdvGame() {
             let sa = gEntry ? gEntry.sa : (ga + Math.floor(Math.random()*15)+20); 
             if (sa < ga) sa = ga;
             s.sa += sa; s.sv += (sa - ga); if(ga === 0) s.so++;
+            s.svPct = s.sa > 0 ? (s.sv / s.sa) : 0; // v179: store running svPct directly
             if(status === 'win') s.w++; else if(status === 'loss') s.l++; else s.t++;
             checkMilestones(gName);
         }
@@ -8164,16 +9188,19 @@ function saveSpecialTeams(tk, manualKey, maxSpots) {
 
 function toggleAwardConfig(setting) {
     awardConfig[setting] = !awardConfig[setting];
+    // v215: remember which settings the user explicitly clicked on the start screen
+    // BEFORE loading a dynasty — loadGame() used to silently overwrite awardConfig
+    // wholesale with the saved dynasty's config, discarding these clicks. Any setting
+    // in this set wins over the save; anything untouched still loads from the save as before.
+    if (typeof _preloadToggledSettings !== 'undefined') _preloadToggledSettings.add(setting);
     const btnId = `btn${setting.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('')}`;
     const btn = document.getElementById(btnId);
     if (!btn) return;
-    if (awardConfig[setting]) {
-        btn.textContent = btn.textContent.replace('OFF', 'ON');
-        btn.classList.remove('toggle-off');
-    } else {
-        btn.textContent = btn.textContent.replace('ON', 'OFF');
-        btn.classList.add('toggle-off');
-    }
+    // v215 fix: replace only the trailing ": ON"/": OFF" token — a bare .replace('ON','OFF')
+    // mangles labels containing "ON" mid-word, e.g. "PROGRESSION" → "PROGRESSIOFF".
+    const label = btn.textContent.replace(/:\s*(ON|OFF)\s*$/, '');
+    btn.textContent = `${label}: ${awardConfig[setting] ? 'ON' : 'OFF'}`;
+    btn.classList.toggle('toggle-off', !awardConfig[setting]);
 }
 
 function toggleSheetSamplePanel() {
@@ -8558,7 +9585,13 @@ function runEndOfSeasonAwards() {
     // that's accepted as a one-time bootstrap quirk rather than excluding genuine
     // late-arriving rookies with an artificial age cutoff in every later season.)
     const ROOKIE_GP_LIMIT = 40; // v141: raised from 31 — prevents Calder eligibility expiring too early
-    const calderScore = p => p.pos === 'G' ? (p.season.w * 1.5) + (p.season.so * 3) : (p.season.g + p.season.a);
+    // v240: rookie goalies were scored on wins + shutouts alone — pure volume, with a great SV%
+    // on a bad team carrying zero weight against a mediocre SV% backstopped by a stacked roster.
+    // Same "quantity over quality" bug already fixed on Norris/Selke; mirrors Hart's goalie term
+    // (svp > 0.900 bonus) since Calder pools skaters/goalies against each other the same way Hart does.
+    const calderScore = p => p.pos === 'G'
+        ? (p.season.w * 1.5) + (p.season.so * 3) + (p.season.sa > 0 && (p.season.sv / p.season.sa) > 0.900 ? ((p.season.sv / p.season.sa) - 0.900) * 1000 : 0)
+        : (p.season.g + p.season.a);
     // v140: this used to be `p.preSimCareerGP ?? p.career.gp ?? 0` — preSimCareerGP is a
     // snapshot frozen at player creation (never updated again), but it's ALWAYS a defined
     // number (0 for a true rookie), so ?? never actually fell through to the live,
@@ -8622,12 +9655,15 @@ function runEndOfSeasonAwards() {
     // hits — a forward stepping in front of a shot is a purer defensive signal than a
     // hit, which can just as easily come from a middling checker) so the award reflects
     // what a player DID defensively this season, not just their attribute + archetype.
+    // v214: +/- rebalanced from 0.4→1.0 and blk/hits trimmed (0.3→0.15, 0.08→0.04) — a
+    // shutdown forward who's actually bleeding goals against (deeply negative +/-) could
+    // previously out-hit/out-block his way to the trophy anyway. Results now outweigh activity.
     const selkeSorted = skaters
         .filter(p => p.pos !== 'D' && p.season.gp >= 40 && (p.season.g + p.season.a) <= 60)
         .sort((a, b) => {
             const tagA = getPlayerWeightedStats(a.name).tag, tagB = getPlayerWeightedStats(b.name).tag;
-            let scoreA = (getDef(a.name) * 0.6) + ((a.season.pm || 0) * 0.4) + selkeDefTagBonus(tagA) + ((a.season.blk||0) * 0.3) + ((a.season.hits||0) * 0.08);
-            let scoreB = (getDef(b.name) * 0.6) + ((b.season.pm || 0) * 0.4) + selkeDefTagBonus(tagB) + ((b.season.blk||0) * 0.3) + ((b.season.hits||0) * 0.08);
+            let scoreA = (getDef(a.name) * 0.6) + ((a.season.pm || 0) * 1.0) + selkeDefTagBonus(tagA) + ((a.season.blk||0) * 0.15) + ((a.season.hits||0) * 0.04);
+            let scoreB = (getDef(b.name) * 0.6) + ((b.season.pm || 0) * 1.0) + selkeDefTagBonus(tagB) + ((b.season.blk||0) * 0.15) + ((b.season.hits||0) * 0.04);
             if (scoreA === scoreB) {
                 const aTwoWay = tagA.startsWith('TWO-WAY') ? 1 : 0;
                 const bTwoWay = tagB.startsWith('TWO-WAY') ? 1 : 0;
@@ -8673,7 +9709,10 @@ function runEndOfSeasonAwards() {
     // v132: fold in blocked shots (the clearest defensive signal a D-man generates) and a
     // smaller hits credit, so a true shutdown D has a real path against a pure offensive
     // one, matching the award's actual name.
-    const norrisScore = p => (p.season.g * 2 + p.season.a) + ((p.season.pm || 0) * 1.5) + ((p.season.blk||0) * 0.18) + ((p.season.hits||0) * 0.05);
+    // v212: offense clearly dominant (points win the trophy); +/-, hits, and blocks are now
+    // tiebreakers that only matter when offensive output is close — not enough alone to flip
+    // a real points/goals gap (previously +43 vs +5 could outweigh a 20-point offensive lead).
+    const norrisScore = p => (p.season.g * 3 + p.season.a * 1.5) + ((p.season.pm || 0) * 0.4) + ((p.season.hits||0) * 0.03) + ((p.season.blk||0) * 0.02);
     const defense = skaters.filter(p => p.pos === 'D' && playoffQualifiers.has(p.team));
     const norrisSorted = defense.sort((a, b) => norrisScore(b) - norrisScore(a));
     if (norrisSorted.length > 0) {
@@ -8683,13 +9722,19 @@ function runEndOfSeasonAwards() {
     }
     
     // 10. VEZINA — SV% and GAA weighted heavily, wins as minor modifier
+    // v240: gaaBonus was mathematically vestigial — a 0.01 SV% swing (worth 20pts via svBonus)
+    // corresponds to roughly a 0.3 GAA swing, which the old *8 coefficient only credited ~2.4pts
+    // for (SV% carrying ~8x the weight of the same underlying performance signal). Raised *8→*20
+    // so GAA is a real secondary factor (elite goalies now see ~20-27pts from it, not ~8-11),
+    // while SV% still leads since it isolates goaltender skill from team defense better than GAA.
     const vezinaScore = g => {
         const svp = g.season.sa > 0 ? g.season.sv / g.season.sa : 0;
         const gaa = g.season.gp > 0 ? calcGAA(Math.max(0, g.season.sa - g.season.sv), g.season.gp, g.season.toi) : 99;
         const svBonus = svp > 0.880 ? (svp - 0.880) * 2000 : 0; // heavily weighted
-        const gaaBonus = gaa < 4.0 ? (4.0 - gaa) * 8 : 0;       // heavily weighted
+        const gaaBonus = gaa < 4.0 ? (4.0 - gaa) * 20 : 0;      // v240: 8→20 — now a real factor, not a rounding error
+        const soBonus = (g.season.so || 0) * 3;                 // v240: shutouts had zero weight — Hart/Calder's goalie terms both credit so*3, Vezina had none
         const wMod = (g.season.w || 0) * 0.4;                    // wins: minor modifier
-        return svBonus + gaaBonus + wMod;
+        return svBonus + gaaBonus + soBonus + wMod;
     };
     const vezinaSorted = goalies.sort((a, b) => vezinaScore(b) - vezinaScore(a));
     if (vezinaSorted.length > 0) {
@@ -8969,7 +10014,7 @@ function executeTrade() {
     
     if(t1o) t1o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null}; if(t2o) t2o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
     
-    tradeLog.unshift({ day: currentDay, details: `TRADE: ${t1o.code} <-> ${t2o.code}` });
+    tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `TRADE: ${t1o.code} <-> ${t2o.code}` }); // v248: day-format fix, see IR ACTIVATE above
     assignTeamCaptains(); // refresh captains — traded captain must not keep modifying old team
     pruneCustomDuos();
     // v147: match approveProposal — flush _wpCache/_structCache so the immediate UI
@@ -9030,7 +10075,7 @@ function approveProposal(id) {
         assignTeamCaptains();
         clearWpCache();
         pruneCustomDuos();
-        tradeLog.unshift({ day: currentDay, details: ` BLOCKBUSTER: ${t.p1} traded to ${t.t2Name} for ${t.p2}!` });
+        tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: ` BLOCKBUSTER: ${t.p1} traded to ${t.t2Name} for ${t.p2}!` }); // v248: day-format fix, see IR ACTIVATE above
     }
     pendingTrades = pendingTrades.filter(x => x.id !== id); openProposalsModal(); updateUI(); refreshTradeBadge(); saveGame();
 }
@@ -9063,6 +10108,31 @@ function renderRetiredPlayers() {
     let el = document.getElementById('retiredTable'); if (!el) return;
     let h = `<tr><th>YEAR</th><th>PLAYER</th><th>POS</th><th>LAST TEAM</th><th>GP</th><th>G/W</th><th>A/SO</th><th>PTS</th></tr>`;
     retiredPlayers.forEach(p => { h += `<tr><td>${p.year}</td><td>${p.name}</td><td>${p.pos}</td><td>${p.team}</td><td>${(p.career && p.career.gp) || p.gp}</td><td>${p.pos==='G'?((p.career && p.career.w) || p.w):((p.career && p.career.g) || p.g)}</td><td>${p.pos==='G'?((p.career && p.career.so) || p.so):((p.career && p.career.a) || p.a)}</td><td class="pts-hl">${p.pos==='G'?'-':((p.career && p.career.pts) || p.pts)}</td></tr>`; });
+    el.innerHTML = h;
+}
+
+function renderAllStarLeaderboard() {
+    const el = document.getElementById('allStarLeaderboard'); if (!el) return;
+    // Build list from active players + retired players combined
+    const entries = [];
+    Object.values(playerStats).forEach(p => {
+        const apps = p.asgAppearances || 0; if (apps === 0) return;
+        entries.push({ name: p.name, pos: p.pos || '?', team: p.teamCode || p.team || '?', apps, mvp: p.asgMvp ? 1 : 0, active: true });
+    });
+    retiredPlayers.forEach(p => {
+        const apps = p.asgApp || 0; if (apps === 0) return;
+        if (entries.find(e => e.name === p.name)) return; // already counted above
+        entries.push({ name: p.name, pos: p.pos || '?', team: p.team || '?', apps, mvp: 0, active: false });
+    });
+    entries.sort((a, b) => b.apps - a.apps || b.mvp - a.mvp);
+    if (!entries.length) { el.innerHTML = '<div style="color:#444;font-size:7px;padding:8px;text-align:center;">No all-star selections yet</div>'; return; }
+    let h = `<table style="width:100%"><tr><th>#</th><th>PLAYER</th><th>POS</th><th>TEAM</th><th>ASG APP</th><th>MVP</th></tr>`;
+    entries.forEach((e, i) => {
+        const mvpTag = e.mvp ? `<span style="color:var(--ea-yellow)">[MVP]</span>` : '';
+        const activeTag = e.active ? '' : `<span style="color:#555"> (RET)</span>`;
+        h += `<tr><td style="color:#555">${i+1}</td><td style="color:var(--neon-cyan)">${e.name}${activeTag}</td><td>${e.pos}</td><td>${e.team}</td><td style="color:var(--ea-yellow);font-weight:bold">${e.apps}</td><td>${mvpTag}</td></tr>`;
+    });
+    h += `</table>`;
     el.innerHTML = h;
 }
 
@@ -9320,8 +10390,31 @@ function showGMReportCard() {
         projectionNote = `Pre-season favourite: ${preLeader?.code} (OVR ${preseasonOvrSnapshot[preLeader?.nrm]}). Actual leader: ${actLeader?.code} (${actLeader?.season.pts}pts). ${hits}/6 projected teams in top 6.`;
     }
 
-    // Injury management
-    const totalInjDays = Object.values(playerStats).reduce((s, p) => s + (p.injuryHistory || []).reduce((a, h) => a + (h.daysMissed || 0), 0), 0);
+    // v242: TEAM PERFORMANCE — topTeam/avgPts were computed above and never used anywhere in
+    // this function. Every other dimension here is league-wide (preseason parity, chemistry
+    // adoption across all 26 teams, feature toggles), so the "GM Report Card" never actually
+    // graded whether the GM's own team won anything — a tanking team and a Cup winner got the
+    // identical grade. Wires the dead variables into a real dimension instead.
+    const userTeamObj = selectedTeam ? league.find(t => t.nrm === selectedTeam) : null;
+    let teamScore = 65, teamNote = 'No team selected this session — league-wide leader shown instead';
+    if (userTeamObj) {
+        const rank = sorted.findIndex(t => t.nrm === userTeamObj.nrm) + 1;
+        const isCupChamp = currentCupChamp && userTeamObj.name === currentCupChamp;
+        teamScore = isCupChamp ? 100 : Math.max(0, Math.min(100, 60 + (userTeamObj.season.pts - avgPts) * 0.8));
+        teamNote = `${userTeamObj.code}: ${userTeamObj.season.pts}pts (league avg ${avgPts.toFixed(1)}), ranked #${rank} of ${league.length}` + (isCupChamp ? ' — STANLEY CUP CHAMPIONS' : rank <= 16 ? ' — playoff position' : ' — outside the playoff picture');
+    } else {
+        teamNote = `League leader: ${topTeam.code} (${topTeam.season.pts}pts, league avg ${avgPts.toFixed(1)})`;
+    }
+
+    // Injury management — v242: this summed EVERY player in the league (2000+ injury days in
+    // a full season) against a coefficient sized for one team's roster, so it bottomed out at
+    // 0/100 almost every single time regardless of any GM decision. Scoped to the user's own
+    // roster when a team is selected (a real, responsive number); falls back to a per-team
+    // league average (not the raw league sum) when no team is selected.
+    const injDaysFor = (names) => names.reduce((s, n) => s + ((playerStats[n]?.injuryHistory || []).reduce((a, h) => a + (h.daysMissed || 0), 0)), 0);
+    const totalInjDays = userTeamObj
+        ? injDaysFor((rosters[userTeamObj.nrm] || []).map(p => p.name))
+        : Math.round(injDaysFor(Object.keys(playerStats)) / Math.max(1, league.length));
     const injScore = Math.max(0, 100 - totalInjDays * 0.5);
 
     // Chemistry usage
@@ -9332,8 +10425,9 @@ function showGMReportCard() {
     const chemScore = Math.round((chemTeams / Math.max(1, league.length)) * 100) + Math.min(20, customDuos.length * 5);
 
     const dims = [
+        { label: 'TEAM PERFORMANCE', score: Math.round(teamScore), note: teamNote },
         { label: 'PRESEASON PROJECTION ACCURACY', score: projectionScore, note: projectionNote },
-        { label: 'INJURY MANAGEMENT', score: Math.round(injScore), note: `${totalInjDays} total injury days across the league` },
+        { label: 'INJURY MANAGEMENT', score: Math.round(injScore), note: userTeamObj ? `${totalInjDays} injury days on your roster` : `${totalInjDays} avg injury days per team (league-wide)` },
         { label: 'CHEMISTRY DEPLOYMENT', score: Math.min(100, chemScore), note: `${chemTeams}/${league.length} teams with active line duos` },
         { label: 'FEATURE ENGAGEMENT', score: Math.min(100, Object.values(awardConfig).filter(Boolean).length * 8), note: `${Object.values(awardConfig).filter(Boolean).length} features active` },
     ];
@@ -10310,7 +11404,7 @@ function processDailyUpdates() {
                 if (ps4.injury.daysRemaining === 0) {
                     const sev = ps4.injury.severity || 0;
                     if (!ps4.injuryHistory) ps4.injuryHistory = [];
-                    ps4.injuryHistory.push({ date: currentDay, daysMissed: sev, gamesOut: sev, season: currentSeason, grade: sev >= 8 ? 'serious' : sev >= 3 ? 'moderate' : 'minor', source: ps4.injury.source || 'unknown' });
+                    ps4.injuryHistory.push({ date: currentDay, daysMissed: sev, initialDays: ps4.injury.initialDays || sev, gamesOut: sev, season: currentSeason, grade: sev >= 8 ? 'serious' : sev >= 3 ? 'moderate' : 'minor', source: ps4.injury.source || 'unknown' });
                     ps4.injury = { severity: 0, daysRemaining: 0 };
                     ps4.onIR = false;
                 }
@@ -10342,9 +11436,9 @@ function processDailyUpdates() {
             if (meetings === 2) { // about to be their 3rd meeting
                 const hPts = g.h.season?.pts || 0, aPts = g.a.season?.pts || 0;
                 const leader = hPts >= aPts ? g.h.code : g.a.code;
-                tradeLog.unshift({ day: currentDay, details: `RIVALRY: ${g.h.code} vs ${g.a.code} — THIRD MEETING this season. ${leader} leads the season series. Bad blood guaranteed.` });
+                tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `RIVALRY: ${g.h.code} vs ${g.a.code} — THIRD MEETING this season. ${leader} leads the season series. Bad blood guaranteed.` }); // v248: day-format fix, see IR ACTIVATE above
             } else if (meetings === 3) {
-                tradeLog.unshift({ day: currentDay, details: `RIVALRY: ${g.h.code} vs ${g.a.code} — Fourth meeting. This rivalry is personal now.` });
+                tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `RIVALRY: ${g.h.code} vs ${g.a.code} — Fourth meeting. This rivalry is personal now.` }); // v248: day-format fix
             }
         });
     }
@@ -10378,9 +11472,13 @@ function processDailyUpdates() {
                             return (age2 * 2 + getPlayerWeightedStats(p2.name).ovr) - (age1 * 2 + getPlayerWeightedStats(p1.name).ovr);
                         })[0];
                         // Buyer gives up its youngest, lowest-OVR prospect in return
+                        // v241: subtracting ovr made a HIGH ovr push the sort key DOWN (sorts first, ascending) —
+                        // so this was picking the buyer's youngest+HIGHEST-ovr player (their best prospect) as
+                        // the throwaway, the opposite of the stated intent. Sign fixed: age and ovr both need
+                        // to be LOW to sort first, so they must both add into the same ascending key.
                         const prospect = [...buyerSkaters].sort((p1, p2) => {
                             const age1 = playerStats[p1.name]?.age || 25, age2 = playerStats[p2.name]?.age || 25;
-                            return (age1 * 2 - getPlayerWeightedStats(p1.name).ovr) - (age2 * 2 - getPlayerWeightedStats(p2.name).ovr);
+                            return (age1 * 2 + getPlayerWeightedStats(p1.name).ovr) - (age2 * 2 + getPlayerWeightedStats(p2.name).ovr);
                         })[0];
                         if (veteran && prospect && veteran.name !== prospect.name) {
                             playerA = (sellerKey === teamA) ? veteran : prospect;
@@ -10392,9 +11490,27 @@ function processDailyUpdates() {
             }
 
             if (!playerA || !playerB) {
-                playerA = rosters[teamA][Math.floor(Math.random() * rosters[teamA].length)];
-                playerB = rosters[teamB][Math.floor(Math.random() * rosters[teamB].length)];
-                dealTag = `BLOCKBUSTER: ${teamA.toUpperCase()} trades ${playerA.name} to ${teamB.toUpperCase()} for ${playerB.name}`;
+                // v215: fairness pass — instead of one blind random pick per side, draw a
+                // handful of random candidates from each roster and keep the pairing whose
+                // trade values are closest, so the AI stops swapping stars for scrubs.
+                const pickCandidates = (tk, n) => {
+                    const pool = rosters[tk];
+                    const picks = [];
+                    for (let i = 0; i < n && pool.length; i++) picks.push(pool[Math.floor(Math.random() * pool.length)]);
+                    return picks;
+                };
+                const candA = pickCandidates(teamA, 4);
+                const candB = pickCandidates(teamB, 4);
+                let bestPair = null, bestDiff = Infinity;
+                candA.forEach(pA => candB.forEach(pB => {
+                    if (pA.name === pB.name) return;
+                    const diff = Math.abs(getTradeValue(pA.name) - getTradeValue(pB.name));
+                    if (diff < bestDiff) { bestDiff = diff; bestPair = [pA, pB]; }
+                }));
+                if (bestPair) {
+                    [playerA, playerB] = bestPair;
+                    dealTag = `BLOCKBUSTER: ${teamA.toUpperCase()} trades ${playerA.name} (TV:${getTradeValue(playerA.name)}) to ${teamB.toUpperCase()} for ${playerB.name} (TV:${getTradeValue(playerB.name)})`;
+                }
             }
 
             if (!tradeKeepsRostersViable(teamA, playerA, teamB, playerB)) {
@@ -10461,9 +11577,19 @@ function processDailyUpdates() {
                 const skA = rosters[teamA].filter(p => p.pos !== 'G');
                 const skB = rosters[teamB].filter(p => p.pos !== 'G');
                 if (skA.length && skB.length) {
-                    const pA = skA[Math.floor(Math.random() * skA.length)];
-                    const pB = skB[Math.floor(Math.random() * skB.length)];
-                    if (pA.name !== pB.name && tradeKeepsRostersViable(teamA, pA, teamB, pB)) {
+                    // v241: this was one blind random pick per side, with no fairness check at all —
+                    // the exact bug the v215 pass fixed on the main BLOCKBUSTER path, just never
+                    // applied here. Reuse the same "closest trade value among candidates" approach.
+                    const pickCm = (pool, n) => { const picks = []; for (let i = 0; i < n && pool.length; i++) picks.push(pool[Math.floor(Math.random() * pool.length)]); return picks; };
+                    const candCmA = pickCm(skA, 4), candCmB = pickCm(skB, 4);
+                    let bestCmPair = null, bestCmDiff = Infinity;
+                    candCmA.forEach(cpA => candCmB.forEach(cpB => {
+                        if (cpA.name === cpB.name) return;
+                        const diff = Math.abs(getTradeValue(cpA.name) - getTradeValue(cpB.name));
+                        if (diff < bestCmDiff) { bestCmDiff = diff; bestCmPair = [cpA, cpB]; }
+                    }));
+                    const [pA, pB] = bestCmPair || [];
+                    if (pA && pB && pA.name !== pB.name && tradeKeepsRostersViable(teamA, pA, teamB, pB)) {
                         pA.team = teamB; pB.team = teamA;
                         const _cmA = league.find(t => t.nrm === teamA);
                         const _cmB = league.find(t => t.nrm === teamB);
@@ -10500,12 +11626,12 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
             // Failsafe to ensure they have the status backpack
             if (!player || !player.status) continue;
 
-            // Flat 2% chance per game at this threshold — very rare
-            let baseChance = 0.02;
+            // v200: 5% chance per game at 15+ PIM threshold (brawl = 15 PIM so DOPS now activates)
+            let baseChance = 0.05;
 
             // "Repeat Offender" Tax: Enforcers get scrutinized more harshly by the league
             let isEnforcer = getPlayerWeightedStats(pName).tag.includes('ENFORCER');
-            if (isEnforcer) baseChance += 0.01;
+            if (isEnforcer) baseChance += 0.02;
             
             // Roll the dice! Does the league suspend them?
             if (Math.random() < baseChance) {
@@ -10521,14 +11647,17 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
                 if (!player.suspended) player.suspended = { days: 0, reason: '' };
                 player.suspended.days += gamesOut; // accumulate — serving suspension doesn't protect from new bans
                 player.suspended.reason = 'DOPS';
-                
+                // v196: record to suspensionHistory
+                if (!player.suspensionHistory) player.suspensionHistory = [];
+                player.suspensionHistory.push({ day: currentDay, games: gamesOut, reason: 'DOPS', season: currentSeason });
+
                 // Figure out which team they play for so we can write the headline
                 let teamCode = rosters[homeCode].find(p => p.name === pName) ? homeCode : awayCode;
                 
                 // Broadcast it to the global news feed!
-                tradeLog.unshift({ 
-                    day: currentDay, 
-                    details: `!! DOPS SUSPENSION: ${pName} (${teamCode.toUpperCase()}) has been suspended for ${gamesOut} games following a dangerous play.` 
+                tradeLog.unshift({
+                    day: `DAY ${currentDay+1}`, // v248: day-format fix, see IR ACTIVATE above
+                    details: `!! DOPS SUSPENSION: ${pName} (${teamCode.toUpperCase()}) has been suspended for ${gamesOut} games following a dangerous play.`
                 });
             }
         }
@@ -10545,17 +11674,25 @@ function reviewGameForSuspensions(matchStats, homeCode, awayCode) {
 // what's dressed each game — a multi-game injury there forces the roster builder to run every
 // remaining line short for the injury's full duration with no possible replacement (no call-up
 // system exists). Cap forward injuries to 1 game for these threadbare rosters instead.
+// v229: a player already on IR is understood to have opened a call-up slot behind him — each
+// IR'd forward lowers the bar for "does this team have bench depth" by one (floor 9), so a team
+// that properly IR's its long-term injuries isn't stuck capping every subsequent injury to 1 game.
 function hasSpareForward(tk) {
     const roster = rosters[tk] || [];
-    const forwardCount = roster.filter(p => p.pos !== 'D' && p.pos !== 'G').length;
-    return forwardCount > 12;
+    const forwards = roster.filter(p => p.pos !== 'D' && p.pos !== 'G');
+    const irCount = forwards.filter(p => playerStats[p.name]?.onIR).length;
+    const threshold = Math.max(9, 12 - irCount);
+    return forwards.length > threshold;
 }
 
-// Same reasoning as hasSpareForward: 6 D fills exactly 3 pairs, 2 G fills starter+backup —
-// either at exactly that minimum means zero reserve, so a multi-game injury there is capped.
+// Same reasoning as hasSpareForward: 6 D fills exactly 3 pairs — either at exactly that minimum
+// means zero reserve, so a multi-game injury there is capped, unless IR has opened a call-up slot.
 function hasSpareDefenseman(tk) {
     const roster = rosters[tk] || [];
-    return roster.filter(p => p.pos === 'D').length > 6;
+    const dmen = roster.filter(p => p.pos === 'D');
+    const irCount = dmen.filter(p => playerStats[p.name]?.onIR).length;
+    const threshold = Math.max(4, 6 - irCount);
+    return dmen.length > threshold;
 }
 function hasSpareGoalie(tk) {
     const roster = rosters[tk] || [];
@@ -10564,8 +11701,8 @@ function hasSpareGoalie(tk) {
 
 function rollInGameInjuries(homeCode, awayCode) {
     if (!awardConfig.injuries) return;
-    const SKATER_CHANCE = 0.0022; // v118: +10% bump from v114 (112/season was close, nudge up slightly)
-    const GOALIE_CHANCE = 0.001;
+    const SKATER_CHANCE = 0.00236; // v228: increased from 0.00225 (+5%, all-source except fight/brawl)
+    const GOALIE_CHANCE = 0.0016; // v228: increased from 0.00152 (+5%)
 
     [homeCode, awayCode].forEach(tk => {
         if (!rosters[tk]) return;
@@ -10583,6 +11720,13 @@ function rollInGameInjuries(homeCode, awayCode) {
             ? oppSkaters.reduce((s, p) => s + (getWgt(p.name) || 195), 0) / oppSkaters.length
             : 195;
         const checkBonus = Math.max(0, (oppAvgCheck - 70) * 0.00008);
+        // v237: IRONMAN dynamic combo — a true iron-man defenseman eats the toughest matchup
+        // minutes, letting the rest of the team play lighter shifts. Scales continuously with
+        // his own endurance (no fixed bonus — a 90-endur IRONMAN covers more than a 76-endur one).
+        const ironmanD = (rosters[tk] || []).filter(p2 => getPlayerWeightedStats(p2.name)?.tag === 'IRONMAN');
+        const ironmanRelief = ironmanD.length
+            ? Math.min(0.30, ironmanD.reduce((mx, p2) => Math.max(mx, (gradeToNum(playerStats[p2.name]?.attr?.endur) || 75) - 75), 0) * 0.012)
+            : 0;
 
         // Skater injury
         skaters.forEach(p => {
@@ -10594,7 +11738,7 @@ function rollInGameInjuries(homeCode, awayCode) {
             const fatigueAmt = getPlayerFatigueAmount(p.name);
             // continuous fatigue replaces step function; agil cushions the penalty
             const agilFatMult = Math.max(0.60, Math.min(1.40, 1.0 + (70 - pAgil) * 0.02));
-            const fatigueCont = fatigueAmt * agilFatMult * 0.0005;
+            const fatigueCont = fatigueAmt * agilFatMult * 0.0005 * (1 - ironmanRelief);
             const endurProt   = Math.max(-0.0015, (pEndur - 70) * -0.00005); // high endur reduces chance
             const agilProt    = Math.max(-0.0010, (pAgil  - 70) * -0.00003); // high agil dodges hits
             const injChance = SKATER_CHANCE + fatigueCont + endurProt + agilProt + checkBonus;
@@ -10606,16 +11750,26 @@ function rollInGameInjuries(homeCode, awayCode) {
                 const fatigueSev   = Math.min(0.08, fatigueAmt * 0.008);
                 const weightSev    = Math.max(0, (oppAvgWeight - 195) * 0.001);
                 const roll = Math.max(0, Math.min(1, rawRoll + endurShift + fatigueSev + weightSev));
+                // v188: skip already-injured or cooling-down players; toughness (rough) reduces severity
+                if (ps.injury?.daysRemaining > 0 || ps.injCooldown > 0) return;
+                const rough = gradeToNum(pA.rough) || 50;
+                const roughProt = -(rough - 50) * 0.004; // high rough shifts roll toward less severe
                 let days;
-                if      (roll < 0.40) days = 0;
-                else if (roll < 0.80) days = Math.floor(Math.random() * 3) + 1;  // 1–3 games
-                else if (roll < 0.95) days = Math.floor(Math.random() * 6) + 4;  // 4–9 games
-                else                  days = Math.floor(Math.random() * 6) + 10; // 10–15 games
+                const adjRoll = Math.max(0, Math.min(1, roll + roughProt));
+                // v227: 4-tier severity — 47%: 0-1g | 35%: 2-4g | 15%: 5-8g | 3%: 9-12g,
+                // with a 12g roll (top of tier 4) extending into a rare 12-15g re-roll.
+                if      (adjRoll < 0.47) days = Math.floor(Math.random() * 2);           // 0–1 games
+                else if (adjRoll < 0.82) days = Math.floor(Math.random() * 3) + 2;       // 2–4 games
+                else if (adjRoll < 0.97) days = Math.floor(Math.random() * 4) + 5;       // 5–8 games
+                else {
+                    days = Math.floor(Math.random() * 4) + 9;                            // 9–12 games
+                    if (days === 12) days = Math.floor(Math.random() * 4) + 12;          // extends to 12–15 games
+                }
                 if (days > 1) {
                     if (p.pos !== 'D' && !hasSpareForward(tk)) days = 1;
                     else if (p.pos === 'D' && !hasSpareDefenseman(tk)) days = 1;
                 }
-                if (days > 0) ps.injury = { severity: days, daysRemaining: days, source: 'in-game-skater' };
+                if (days > 0) { ps.injury = { severity: days, daysRemaining: days, source: 'in-game-skater' }; autoPlaceOnIR(p.name, tk, days); }
                 else ps.shakenUpToday = true; // exempt from a second independent injury roll later this game
                 const label = days === 0 ? 'shaken up — playing through' : `out ${days} game${days > 1 ? 's' : ''}`;
                 tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `[INJ] IN-GAME: ${p.name} (${tk.toUpperCase()}) — ${label}.` });
@@ -10631,12 +11785,32 @@ function rollInGameInjuries(homeCode, awayCode) {
             if (Math.random() < GOALIE_CHANCE) {
                 goalieInjuredThisTeam = true;
                 const backupG = rosters[tk].find(b => b.pos === 'G' && b.name !== p.name && (playerStats[b.name]?.injury?.daysRemaining ?? 0) === 0 && !(playerStats[b.name]?.suspended?.days > 0));
-                let days = backupG ? Math.floor(Math.random() * 4) + 1 : 1;
-                if (days > 1 && !hasSpareGoalie(tk)) days = 1;
-                ps.injury = { severity: days, daysRemaining: days, source: 'in-game-goalie' };
+                // v227: with no 3rd goalie in the system, a long multi-game injury to the starter
+                // would leave the team with a single emergency arm the whole time — instead cap the
+                // duration short (0-3g) and mark the backup as an emergency call-up (lowered
+                // ratings while filling in). A team carrying 3+ healthy goalies has real bench
+                // depth and still gets the full 5-9g range.
+                const hasThirdGoalie = (rosters[tk] || []).filter(g => g.pos === 'G'
+                    && g.name !== p.name
+                    && (playerStats[g.name]?.injury?.daysRemaining ?? 0) === 0
+                    && !(playerStats[g.name]?.suspended?.days > 0)).length >= 2;
+                let days;
+                if (hasThirdGoalie) {
+                    const gr = Math.random();
+                    if (gr < 0.50) days = Math.floor(Math.random() * 3) + 5;   // 50%: 5–7 games
+                    else days = Math.floor(Math.random() * 2) + 8;              // 50%: 8–9 games
+                } else {
+                    const gr2 = Math.random();
+                    days = gr2 < 0.30 ? 0 : Math.floor(Math.random() * 3) + 1;  // 30%: shaken up (0g) | 70%: 1-3 games
+                }
+                ps.injury = { severity: days, daysRemaining: days, initialDays: days, source: 'in-game-goalie' };
+                autoPlaceOnIR(p.name, tk, days);
                 if (!backupG) ps.playingHurt = true; // stays in net but at reduced effectiveness
-                const backupNote = backupG ? ` ${backupG.name} enters in relief.` : ' No healthy backup — playing through.';
-                tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `🚨 GOALIE PULLED (INJURY): ${p.name} (${tk.toUpperCase()}) — out ${days} game${days > 1 ? 's' : ''}.${backupNote}` });
+                else if (!hasThirdGoalie) playerStats[backupG.name].emergencyGoalie = true; // v227: lowered ratings while covering with no 3rd-string depth
+                const backupNote = days === 0 ? ' Shaken up — removed from this game only, healthy next game.'
+                    : backupG ? ` ${backupG.name} enters in relief${!hasThirdGoalie ? ' as emergency starter' : ''}.` : ' No healthy backup — playing through.';
+                const label = days === 0 ? 'shaken up' : `out ${days} game${days > 1 ? 's' : ''}`;
+                tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `🚨 GOALIE PULLED (INJURY): ${p.name} (${tk.toUpperCase()}) — ${label}.${backupNote}` });
             }
         });
     });
@@ -10644,7 +11818,7 @@ function rollInGameInjuries(homeCode, awayCode) {
 
 function triggerGameInjuries(matchStats, homeCode, awayCode) {
     if (!awardConfig.injuries) return;
-    const BASE_CHANCE = 0.00165; // v118: +10% bump from v114
+    const BASE_CHANCE = 0.00176; // v228: increased from 0.00168 (+5%, all-source except fight/brawl)
     // v160: pre-compute avg weight per team for injury severity — heavier opponents hit harder
     const avgWeightForTeam = (tk) => {
         const sk = (rosters[tk] || []).filter(p => p.pos !== 'G');
@@ -10658,6 +11832,7 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
         // [FIX] Don't require a prior injury object — players who've never been injured
         // had ps.injury === undefined and were silently immune to post-game injuries.
         if (ps.injury && ps.injury.daysRemaining > 0) continue;
+        if (ps.injCooldown > 0) continue; // v188: re-injury cooldown
         if (ps.shakenUpToday) { ps.shakenUpToday = false; continue; } // already dinged by rollInGameInjuries this game
         const stats = matchStats[pName];
         if (!stats.toi || stats.toi <= 0) continue;
@@ -10688,36 +11863,35 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
             const isHomePlayer2 = !!(rosters[homeCode] || []).find(p => p.name === pName);
             const oppWeight2    = isHomePlayer2 ? awayAvgWeight : homeAvgWeight;
             const weightSev2    = Math.max(0, (oppWeight2 - 195) * 0.001);
-            const roll = Math.max(0, Math.min(1, rawRoll + endurShift2 + ageShift2 + sevFatigue2 + weightSev2));
+            // v188: toughness (rough) shifts roll toward less severe
+            const rough2 = gradeToNum(pA2.rough) || 50;
+            const roughProt2 = -(rough2 - 50) * 0.004;
+            const roll = Math.max(0, Math.min(1, rawRoll + endurShift2 + ageShift2 + sevFatigue2 + weightSev2 + roughProt2));
             let days, label;
-            if      (roll < 0.40) { days = 0;                                    label = 'out for a period'; }
-            else if (roll < 0.80) { days = Math.floor(Math.random() * 3) + 1;   label = `${days}-game injury`; }  // 1–3
-            else if (roll < 0.95) { days = Math.floor(Math.random() * 6) + 4;   label = `${days}-game injury`; }  // 4–9
-            else                  { days = Math.floor(Math.random() * 6) + 10;  label = `${days}-game injury`; }  // 10–15
-
-            days = Math.min(days, 15);
+            // v227: 4-tier severity, matching the in-game skater roll — 47%: 0-1g | 35%: 2-4g |
+            // 15%: 5-8g | 3%: 9-12g, with a 12g roll extending into a rare 12-15g re-roll.
+            if      (roll < 0.47) { days = Math.floor(Math.random() * 2);           label = days === 0 ? 'out for a period' : `${days}-game injury`; }
+            else if (roll < 0.82) { days = Math.floor(Math.random() * 3) + 2;       label = `${days}-game injury`; }  // 2–4
+            else if (roll < 0.97) { days = Math.floor(Math.random() * 4) + 5;       label = `${days}-game injury`; }  // 5–8
+            else {
+                days = Math.floor(Math.random() * 4) + 9;                           // 9–12
+                if (days === 12) days = Math.floor(Math.random() * 4) + 12;         // extends to 12–15
+                label = `${days}-game injury`;
+            }
 
             const teamCode = (rosters[homeCode] || []).find(p => p.name === pName) ? homeCode : awayCode;
             if (days > 1) {
                 if (ps.pos !== 'D' && ps.pos !== 'G' && !hasSpareForward(teamCode)) { days = 1; label = '1-game injury'; }
                 else if (ps.pos === 'D' && !hasSpareDefenseman(teamCode)) { days = 1; label = '1-game injury'; }
-                else if (ps.pos === 'G' && !hasSpareGoalie(teamCode)) { days = 1; label = '1-game injury'; }
+                // v192: goalie post-game duration no longer capped by roster depth
             }
             const note = days === 0
                 ? `[INJ] INJURY NOTE: ${pName} (${teamCode.toUpperCase()}) was shaken up  -  out for a period.`
                 : `[INJ] INJURY: ${pName} (${teamCode.toUpperCase()})  -  ${label}, out ${days} game${days > 1 ? 's' : ''}.`;
 
-            // Only confirm long injuries (12-15 games), and only when a human is watching a manual sim —
-            // Turbo/auto-sim must never block on a synchronous dialog mid-loop.
-            if (days >= 12 && !isTurboMode) {
-                const accept = confirm(`INJURY  -  ${pName} (${teamCode.toUpperCase()})\n${label.toUpperCase()}\n\nApply this injury? (OK = yes, Cancel = skip)`);
-                if (!accept) {
-                    tradeLog.unshift({ day: currentDay, details: ` INJURY AVOIDED: ${pName} (${teamCode.toUpperCase()}) played through a ${label}.` });
-                    continue;
-                }
-            }
+            // v188: max is now 9 games — confirm dialog no longer needed
 
-            if (days > 0) ps.injury = { severity: days, daysRemaining: days, source: 'post-game' };
+            if (days > 0) { ps.injury = { severity: days, daysRemaining: days, source: 'post-game' }; autoPlaceOnIR(pName, teamCode, days); }
             tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: note });
             if (days > 0 && isTeamCaptain(pName)) {
                 tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `⚠ CAPTAIN DOWN: ${pName} (${teamCode.toUpperCase()}) — ${label}. Leadership void in the locker room.` });
@@ -10770,11 +11944,11 @@ function checkTradeDeadlineAnnouncements() {
     
     // Broadcast news to the global trade log so you know it's coming!
     if (currentDay === deadlineDay - 5) {
-        tradeLog.unshift({ day: currentDay, details: ` NEWS: The Trade Deadline is 5 days away. General Managers are working the phones.` });
+        tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: ` NEWS: The Trade Deadline is 5 days away. General Managers are working the phones.` }); // v248: day-format fix, see IR ACTIVATE above
     } else if (currentDay === deadlineDay) {
-        tradeLog.unshift({ day: currentDay, details: `!! NEWS: IT IS TRADE DEADLINE DAY! The window closes at midnight.` });
+        tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `!! NEWS: IT IS TRADE DEADLINE DAY! The window closes at midnight.` }); // v248: day-format fix
     } else if (currentDay === deadlineDay + 1) {
-        tradeLog.unshift({ day: currentDay, details: ` NEWS: The Trade Deadline has officially passed. Rosters are locked for the playoffs.` });
+        tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: ` NEWS: The Trade Deadline has officially passed. Rosters are locked for the playoffs.` }); // v248: day-format fix
         // Lock the trades toggle
         if (awardConfig.trades) {
             awardConfig.trades = false;
