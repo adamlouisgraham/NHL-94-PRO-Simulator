@@ -11,9 +11,9 @@ const PLAYER_TAG_OVERRIDES = {};
 
 // v246: manual conference/division overrides, applied after teams are built from the sheet.
 // Keyed by team nrm (full lowercased name, no spaces — matches league[].nrm everywhere else).
-// Buffalo Sabres moved to Campbell (Western) Conference, Central Division.
+// (Buffalo override removed — reads conference/division from sheet now)
 const TEAM_CONF_DIV_OVERRIDES = {
-    'buffalosabres': { conf: 'Western', div: 'Central' },
+    'ottawasenators': { conf: 'Western', div: 'Central' },
 };
 
     // =========================================================
@@ -659,14 +659,20 @@ function buildSavePayload() {
     } : playoffBracket;
 
     //  STORAGE FIX: Keep trade logs and history trimmed so they don't grow infinitely
-    if (tradeLog.length > 1500) tradeLog = tradeLog.slice(0, 1500);
-    if (leagueHistory.length > 25) leagueHistory = leagueHistory.slice(0, 25);
+    // v251 FIX: this used to reassign the LIVE global tradeLog/leagueHistory (`tradeLog =
+    // tradeLog.slice(...)`), which runs on every autosave - i.e. every simulated day. Since
+    // new entries are unshifted to the front, that repeated global trim silently deleted any
+    // trade/history older than the newest ~1500 log lines from the actual running session
+    // (not just the save file), making completed AI trades vanish from tradeLog well before
+    // a season ended. Build local copies for the save payload only; leave live state alone.
+    const savedTradeLog = tradeLog.length > 1500 ? tradeLog.slice(0, 1500) : tradeLog;
+    const savedLeagueHistory = leagueHistory.length > 25 ? leagueHistory.slice(0, 25) : leagueHistory;
 
     return {
         meta: { version: CURRENT_SAVE_SCHEMA_VERSION, savedAt: new Date().toISOString(), label: 'EASN Dynasty Save' },
-        data: { 
-            league, rosters, playerStats, tradeLog, hallOfFame, leagueHistory, 
-            retiredPlayers, calendar: lightweightCalendar, currentDay, currentSeason, 
+        data: {
+            league, rosters, playerStats, tradeLog: savedTradeLog, hallOfFame, leagueHistory: savedLeagueHistory,
+            retiredPlayers, calendar: lightweightCalendar, currentDay, currentSeason,
             isPlayoffs, isASG, currentCupChamp, playoffBracket: lightweightBracket, awardConfig, 
             monthSnapshot, pendingTrades, realDatesMap, customDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, teamAssistants, _awardsPending, asgDoneThisSeason
         }
@@ -1182,9 +1188,15 @@ const rivals = {
     'newjerseydevils':['newyorkrangers','philadelphiaflyers','pittsburghpenguins'],
 };
 
-const DEFAULT_TEAM_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7TQG09fJijxS0CFdwQF3ht_Q1ggw99rfmHzRC2RF4Ht5ZlmyJP2qTMOtOvxuiijczcO_UXm_zwIig/pub?gid=732700653&single=true&output=csv";
-const DEFAULT_PLAYER_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7TQG09fJijxS0CFdwQF3ht_Q1ggw99rfmHzRC2RF4Ht5ZlmyJP2qTMOtOvxuiijczcO_UXm_zwIig/pub?gid=1253001256&single=true&output=csv";
-const DEFAULT_SCHEDULE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7TQG09fJijxS0CFdwQF3ht_Q1ggw99rfmHzRC2RF4Ht5ZlmyJP2qTMOtOvxuiijczcO_UXm_zwIig/pub?gid=184342160&single=true&output=csv";
+// NOTE: switched from the "Publish to web" /pub?...&output=csv endpoint to the direct
+// /export?format=csv endpoint. The /pub endpoint is cached hard by Google's servers
+// (independent of our own ?t=timestamp cache-busting) and can take minutes to hours to
+// reflect edits made in the sheet. /export is not cached and reflects live edits immediately,
+// as long as the sheet is shared as "Anyone with the link can view".
+const SHEET_ID = "134btIkc63XIG9XOlS8JLWJ77aeU1WDBfxCh7YOA4Xy8";
+const DEFAULT_TEAM_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=732700653`;
+const DEFAULT_PLAYER_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=1253001256`;
+const DEFAULT_SCHEDULE_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=184342160`;
 const DEFAULT_EVENT_LOG_URL = "";
 const SHEET_URL_STORAGE_KEY = "nhl94CustomSheetUrls";
 let teamUrl = DEFAULT_TEAM_URL; let playerUrl = DEFAULT_PLAYER_URL; let scheduleUrl = DEFAULT_SCHEDULE_URL; let eventLogUrl = DEFAULT_EVENT_LOG_URL;
@@ -1249,9 +1261,31 @@ function normalizeSheetUrl(rawUrl) {
 }
 
 async function testSheetConnection() { return true; } // Bypassed for speed
+function saveSheetUrlPreferences(teamValue, playerValue, scheduleValue, eventLogValue) {
+    const prefs = {
+        teamSheetUrl: teamValue || '',
+        playerSheetUrl: playerValue || '',
+        scheduleSheetUrl: scheduleValue || '',
+        eventLogSheetUrl: eventLogValue || ''
+    };
+    try {
+        localStorage.setItem(SHEET_URL_STORAGE_KEY, JSON.stringify(prefs));
+    } catch (err) {
+        console.warn('Failed to save sheet preferences:', err);
+    }
+}
 function applyCustomSheetUrls(test = true) {
-    teamUrl = normalizeSheetUrl($('teamSheetUrl')?.value) || DEFAULT_TEAM_URL; playerUrl = normalizeSheetUrl($('playerSheetUrl')?.value) || DEFAULT_PLAYER_URL;
-    scheduleUrl = normalizeSheetUrl($('scheduleSheetUrl')?.value) || DEFAULT_SCHEDULE_URL; eventLogUrl = normalizeSheetUrl($('eventLogSheetUrl')?.value) || DEFAULT_EVENT_LOG_URL;
+    const teamVal = $('teamSheetUrl')?.value || '';
+    const playerVal = $('playerSheetUrl')?.value || '';
+    const scheduleVal = $('scheduleSheetUrl')?.value || '';
+    const eventLogVal = $('eventLogSheetUrl')?.value || '';
+    
+    teamUrl = normalizeSheetUrl(teamVal) || DEFAULT_TEAM_URL;
+    playerUrl = normalizeSheetUrl(playerVal) || DEFAULT_PLAYER_URL;
+    scheduleUrl = normalizeSheetUrl(scheduleVal) || DEFAULT_SCHEDULE_URL;
+    eventLogUrl = normalizeSheetUrl(eventLogVal) || DEFAULT_EVENT_LOG_URL;
+    
+    saveSheetUrlPreferences(teamVal, playerVal, scheduleVal, eventLogVal);
 }
 function resetSheetUrlsToDefault() { teamUrl = DEFAULT_TEAM_URL; playerUrl = DEFAULT_PLAYER_URL; scheduleUrl = DEFAULT_SCHEDULE_URL; eventLogUrl = DEFAULT_EVENT_LOG_URL; localStorage.removeItem(SHEET_URL_STORAGE_KEY); resetSheetSourcesToDefault(); }
 
@@ -1462,6 +1496,20 @@ async function startNewGame(useCustomRoster = false) {
         if (btn) { btn.innerText = origText; btn.disabled = false; }
         return;
     }
+    // v251 FIX: startNewGame() builds a brand-new league/rosters/playerStats from scratch,
+    // but never reset the surrounding session/franchise flags. In a tab that had already
+    // reached playoffs (or mid-simmed a season) once, re-clicking LOAD GOOGLE SHEET left
+    // isPlayoffs/currentDay/etc. stale, so simRestOfSeason()'s "if (isPlayoffs) return;"
+    // guard silently no-op'd every "fresh" run afterward. Reset everything here since this
+    // function is only ever reachable from the start screen - there's no in-progress game
+    // to preserve.
+    currentDay = 0; currentSeason = 1; isPlayoffs = false; isASG = false; asgDoneThisSeason = false;
+    isSimulating = false; isSimSeason = false; isTurboMode = false; currentCupChamp = "";
+    playoffBracket = { round: 1, series: [] }; tradeLog = []; hallOfFame = []; leagueHistory = [];
+    retiredPlayers = []; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
+    monthSnapshot = {}; activeIdx = null; statMode = 'season'; activeSubInfo = null;
+        // Clear cached CSV data if not using custom roster — force fresh fetch from Google Sheets
+    if (!useCustomRoster) { customTeamData = null; customPlayerData = null; }
     try {
         let tData = customTeamData;
         if (!tData) { try { tData = await parseCSV(await fetchCSV(teamUrl)); } catch(e) { tData = [['TEAM NAME','TEAM CODE','CONFERENCE','DIVISION']]; } }
@@ -2477,9 +2525,9 @@ const dynamicDuos = [
     ['Jason Arnott', 'Andrei Lomakin'],
     ['Brian Skrudland','Tom Fitzgerald', 'Dave Lowry'],
     // HFD
-    ['Ron Francis', 'Pat Verbeek', 'Geoff Sanderson'],
-    ['Brendan Shanahan', 'Darren Turcotte', 'Jocelyn Lemieux'],
-    ['Robert Kron', 'Brian Propp', 'Paul Ranheim'],
+    ['Ron Francis', 'Cam Neely', 'Jocelyn Lemieux'],
+    ['Darren Turcotte', 'Pat Verbeek', 'Geoff Sanderson'],
+    ['Robert Kron', 'Brian Propp',],
     ['Mark Janssens', 'Jim Sandlak', 'Kevin Smyth'],
     // LAK
     ['Luc Robitaille', 'Pierre Turgeon', 'Sylvain Turgeon'],
@@ -2491,8 +2539,8 @@ const dynamicDuos = [
     ['Pelle Eklund', 'Brian Bellows', 'Trent Klatt'],
     ['Derian Hatcher', 'Doug Zmolek'],
     // MTL
-    ['Vincent Damphousse', 'Stephan Lebeau', 'Gilbert Dionne'],
-    ['Bernie Nicholls', 'Stephane Richer', 'Oleg Petrov'],
+    ['Vincent Damphousse', 'Stephan Lebeau'],
+    ['Bernie Nicholls', 'Stephane Richer'],
     ['Guy Carbonneau', 'Mike Keane', 'Ron Wilson'],
     ['J.J. Daigneault', 'Kevin Haller'],
     // NJD
@@ -2502,8 +2550,6 @@ const dynamicDuos = [
     ['Pat LaFontaine', 'Derek King'],
     ['Ray Ferraro', 'Benoit Hogue', 'Marty McInnis'],
     ['Patrick Flatley', 'Dave Volek'],
-    ['Vladimir Malakhov', 'Uwe Krupp'],
-    ['Darius Kasparaitis', 'Scott Lachance'],
     // NYR
     ['Mark Messier', 'Adam Graves'],
     ['Steve Larmer', 'Alexei Kovalev', 'Sergei Nemchinov'],
@@ -2517,7 +2563,7 @@ const dynamicDuos = [
     ['Brad Shaw', 'Steve Konroyd'],
     // PHI
     ['Eric Lindros', 'John LeClair', 'Robert Lang'],
-    ['Rod BrindAmour', 'Pat Falloon', 'Josef Beranek'],
+    ['Pat Falloon', 'Josef Beranek'],
     ['Dave Tippett', 'Dave Brown'],
     ['Garry Galley', 'Rob Ramage'],
     // PIT
@@ -2535,9 +2581,9 @@ const dynamicDuos = [
     ['Bob Errey', 'Ray Whitney', 'Gaetan Duchesne'],
     ['Sandis Ozolinsh', 'Mike Rathje'],
     // STL
-    ['Brett Hull', 'Craig Janney', 'Philippe Bozon'],
+    ['Brett Hull', 'Craig Janney'],
     ['Cliff Ronning', 'Keith Tkachuk', ' Mikael Renberg'],
-    ['Phil Bourque', 'Jim Montgomery', 'Brian Noonan'],
+    ['Jim Montgomery', 'Brian Noonan'],
     ['Igor Chiberev', 'Igor Korolev', 'Vitali Karamnov'],
     ['Chris Pronger', 'Teppo Numminen'],
     ['Steve Duchesne', 'Doug Crossman'],
@@ -2556,12 +2602,9 @@ const dynamicDuos = [
     ['Jeff Brown', 'Gerald Diduck'],
     ['Jyrki Lumme', 'Jiri Slegr'],
     // WAS
-    ['Joe Juneau', 'Peter Bondra'],
+    ['Peter Bondra'],
     ['Mike Ridley', 'Dmitri Khristich'],
     ['Kevin Miller', 'Dave Poulin', 'Kelly Miller'],
-    ['Kevin Hatcher', 'John Slaney'],
-    ['Calle Johansson', 'Joe Reekie'],
-    ['Sylvain Cote', 'Shawn Anderson'],
     // WPG
     ['Teemu Selanne', 'Alexei Zhamnov', 'Dallas Drake'],
     ['Nelson Emerson', 'Peter Stastny', 'Thomas Steen'],
