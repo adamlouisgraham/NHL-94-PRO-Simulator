@@ -1,0 +1,9 @@
+# Gens emulator local state — machine-specific, do not commit
+Gens.cfg
+language.dat
+*.srm
+*.gs?
+
+# Backup/scratch ROM copies — git history is the version record
+*_BACKUP_*.bin
+*_BACKUP_*.BIN
