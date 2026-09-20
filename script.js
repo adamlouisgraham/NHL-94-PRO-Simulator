@@ -2533,10 +2533,10 @@ const dynamicDuos = [
     ['Steve Dubinsky', 'Brian Propp', 'Scott Mellanby'],
     ['Mark Janssens', 'Jim Sandlak', 'Kevin Smyth'],
     // LAK
-    ['Luc Robitaille', 'Pierre Turgeon', 'Sylvain Turgeon'],
-    ['Tony Granato', 'Thomas Sandstrom'],
-    ['Rob Blake', 'Alexei Zhitnik'],
-    ['Darryl Sydor', 'Marty McSorley'],
+    ['Pierre Turgeon', 'Luc Robitaille', 'Sylvain Turgeon'],
+    ['Denis Savard', 'Tony Granato', 'Craig Simpson'],
+    ['Shawn McEachern', 'Kyosti Karjalainen', 'John Druce'],
+    ['Andre Faust', 'Dixon Ward', 'Warren Rychel'],
     // MIN
     ['Mike Modano', 'Russ Courtnall', 'Kevin Stevens'],
     ['Pelle Eklund', 'Brian Bellows', 'Trent Klatt'],
