@@ -2523,8 +2523,10 @@ const dynamicDuos = [
     // EDM
     ['Wayne Gretzky', 'Jari Kurri', 'Glenn Anderson'],
     // FLA
-    ['Jason Arnott', 'Andrei Lomakin'],
-    ['Brian Skrudland','Tom Fitzgerald', 'Dave Lowry'],
+    ['Stu Barnes', 'John MacLean', 'Andrei Kovalenko'],
+    ['Jason Arnott', 'Steve Thomas', 'German Titov'],
+    ['Brian Skrudland', 'Tom Fitzgerald', 'Dave Lowry'],
+    ['Brian Skrudland', 'Mike Hough', 'Mike Foligno'],
     // HFD
     ['Ron Francis', 'Cam Neely', 'Jocelyn Lemieux'],
     ['Darren Turcotte', 'Pat Verbeek', 'Geoff Sanderson'],
