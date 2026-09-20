@@ -2547,9 +2547,10 @@ const dynamicDuos = [
     ['Guy Carbonneau', 'Mike Keane', 'Ron Wilson'],
     ['Laurie Boschman', 'Benoit Brunet', 'Chris Nilan'],
     // NJD
-    ['Randy McKay', 'Brian Bradley', 'Bill Guerin'],
-    ['Claude Lemieux', 'Dave Gagner', 'Michael Nylander'],
-    ['Bob Carpenter', 'Bobby Holik', 'Tom Chorske'],
+    ['Brian Bradley', 'Dave Gagner', 'Claude Lemieux'],
+    ['Bill Guerin', 'Michael Nylander', 'Corey Millen'],
+    ['Bobby Holik', 'Danton Cole', 'Randy McKay'],
+    ['Bob Carpenter', 'Mike Peluso', 'Tom Chorske'],
     ['Derian Hatcher', 'Bruce Driver'],
     ['Ulf Samuelsson', 'Ken Daneyko'],
     // NYI
