@@ -2564,9 +2564,10 @@ const dynamicDuos = [
     ['Craig MacTavish', 'Ed Olczyk', 'Stephane Matteau'],
     ['Mike Hudson', 'Andy Brickley', 'Nick Kypreos'],
     // OTT
-    ['Alexei Yashin', 'Owen Nolan', 'Oleg Petrov'],
-    ['Michal Pivonka', 'Alexnder Daigle', 'Paul Ranheim'],
-    ['Shaun VanAllen', 'Mike Donnelly', 'Wayne Presley'],
+    ['Alexei Yashin', 'Alexnder Daigle', 'Michal Pivonka'],
+    ['Paul Ranheim', 'Owen Nolan', 'Sergio Momesso'],
+    ['Shaun VanAllen', 'Wayne Presley', 'Oleg Petrov'],
+    ['Jamie Baker', 'David Archibald', 'Matthew Barnaby'],
     ['Norm Maciver', 'Kerry Huffman'],
     ['Brad Shaw', 'Steve Konroyd'],
     // PHI
