@@ -2554,9 +2554,10 @@ const dynamicDuos = [
     ['Derian Hatcher', 'Bruce Driver'],
     ['Ulf Samuelsson', 'Ken Daneyko'],
     // NYI
-    ['Pat LaFontaine', 'Derek King', 'Brad Dalgarno'],
-    ['Ray Ferraro', 'Benoit Hogue', 'Evgeny Davydov'],
-    ['Patrick Flatley', 'Marty McInnis', 'Keith Acton'],
+    ['Pat LaFontaine', 'Derek King', 'Evgeny Davydov'],
+    ['Ray Ferraro', 'Benoit Hogue', 'Marty McInnis'],
+    ['Keith Acton', 'Patrick Flatley', 'Dave Volek'],
+    ['Kevin Todd', 'Steven Rice', 'David Maley'],
     // NYR
     ['Mark Messier', 'Adam Graves'],
     ['Steve Larmer', 'Alexei Kovalev', 'Sergei Nemchinov'],
