@@ -2542,10 +2542,10 @@ const dynamicDuos = [
     ['Pelle Eklund', 'Brian Bellows', 'Trent Klatt'],
     ['Derian Hatcher', 'Doug Zmolek'],
     // MTL
-    ['Vincent Damphousse', 'Russ Courtnall', ''],
-    ['Bernie Nicholls', 'Stephane Richer'],
+    ['Bernie Nicholls', 'Stephane Richer', 'Russ Courtnall'],
+    ['Vincent Damphousse', 'Stephan Lebeau', 'Gilbert Dionne'],
     ['Guy Carbonneau', 'Mike Keane', 'Ron Wilson'],
-    ['J.J. Daigneault', 'Kevin Haller'],
+    ['Laurie Boschman', 'Benoit Brunet', 'Chris Nilan'],
     // NJD
     ['Randy McKay', 'Brian Bradley', 'Bill Guerin'],
     ['Claude Lemieux', 'Dave Gagner', 'Michael Nylander'],
