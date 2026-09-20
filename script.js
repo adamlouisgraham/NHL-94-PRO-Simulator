@@ -2584,10 +2584,10 @@ const dynamicDuos = [
     ['Darius Kasparaitis', 'Mike Ramsey'],
     ['Kjell Samuelsson', 'Scott Niedrmayer'],
     // QUE
-    ['Joe Sakic', 'Theoren Fleury'],
+    ['Joe Sakic', 'Theoren Fleury', 'Andrei Lomakin'],
     ['Dale Hunter', 'Mike Gartner', 'Mike Ricci'],
-    ['Ron Sutter', 'Claude Lapointe'],
-    ['Bob Bassen', 'Chris Simon'],
+    ['Ron Sutter', 'Claude Lapointe', 'Scott Young'],
+    ['Bob Bassen', 'Chris Simon', 'Todd Elik'],
     ['Curtis Leschyshyn', 'Alexei Gusarov'],
     // SJS
     ['Igor Larionov', 'Sergei Makarov', 'Valeri Kamensky'],
