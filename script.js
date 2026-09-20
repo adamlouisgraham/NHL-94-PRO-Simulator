@@ -2629,9 +2629,10 @@ const dynamicDuos = [
     ['Dave Poulin', 'Kevin Miller', 'Kelly Miller'],
     ['Ken Priestlay', 'Steve Konowalchuk', 'Craig Berube'],
     // WPG
-    ['Teemu Selanne', 'Alexei Zhamnov', 'Dallas Drake'],
-    ['Nelson Emerson', 'Peter Stastny', 'Thomas Steen'],
-    ['Darrin Shannon', 'Randy Gilhen', 'Tie Domi'],
+    ['Alexei Zhamnov', 'Teemu Selanne', 'Dallas Drake'],
+    ['Peter Stastny', 'Nelson Emerson', 'Thomas Steen'],
+    ['Randy Gilhen', 'Darrin Shannon', 'Tie Domi'],
+    ['Luciano Borsato', 'Mike Eagles', 'Doug Evans'],
     ['Igor Ulanov', 'Phil Housley']
 ];
 
