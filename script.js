@@ -2617,9 +2617,10 @@ const dynamicDuos = [
     ['Dave Ellett', 'Todd Gill'],
     ['Jamie Macoun', 'Dmitri Mironov'],
     // VAN
-    ['Pavel Bure', 'Trevor Linden', 'Greg Adams'],
-    ['Petr Nedved', 'Geoff Courtnall', 'Scott Mellanby'],
-    ['Martin Gelinas', 'Gino Odjick','Jimmy Carson'],
+    ['Trevor Linden', 'Pavel Bure', 'Greg Adams'],
+    ['Robert Kron', 'Geoff Courtnall', 'Martin Gelinas'],
+    ['Petr Nedved', 'Jimmy Carson', 'Gino Odjick'],
+    ['Murray Craven', 'Jose Charboneau', 'Dave Snuggerud'],
     ['Jeff Brown', 'Gerald Diduck'],
     ['Jyrki Lumme', 'Jiri Slegr'],
     // WAS
