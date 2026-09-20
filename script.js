@@ -2579,6 +2579,8 @@ const dynamicDuos = [
     // PIT
     ['Mario Lemieux', 'Rick Tocchet', 'Owen Nolan'],
     ['Martin Straka', 'Markus Naslund', 'Jaromir Jagr'],
+    ['Bryan Trottier', 'Garry Valk', 'Phil Bourque'],
+    ['Jiri Hrdina', 'Mike Donnelly', 'Jim McKenzie'],
     ['Darius Kasparaitis', 'Mike Ramsey'],
     ['Kjell Samuelsson', 'Scott Niedrmayer'],
     // QUE
