@@ -2559,10 +2559,10 @@ const dynamicDuos = [
     ['Keith Acton', 'Patrick Flatley', 'Dave Volek'],
     ['Kevin Todd', 'Steven Rice', 'David Maley'],
     // NYR
-    ['Mark Messier', 'Adam Graves'],
-    ['Steve Larmer', 'Alexei Kovalev', 'Sergei Nemchinov'],
+    ['Sergei Nemchinov', 'Steve Larmer', 'Alexei Kovalev'],
+    ['Mark Messier', 'Adam Graves', 'Brent Fedyk'],
     ['Craig MacTavish', 'Ed Olczyk', 'Stephane Matteau'],
-    ['Brian Leetch', 'Alex Karpotsev'],
+    ['Mike Hudson', 'Andy Brickley', 'Nick Kypreos'],
     // OTT
     ['Alexei Yashin', 'Owen Nolan', 'Oleg Petrov'],
     ['Michal Pivonka', 'Alexnder Daigle', 'Paul Ranheim'],
