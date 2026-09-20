@@ -2529,8 +2529,8 @@ const dynamicDuos = [
     ['Brian Skrudland', 'Mike Hough', 'Mike Foligno'],
     // HFD
     ['Ron Francis', 'Cam Neely', 'Jocelyn Lemieux'],
-    ['Darren Turcotte', 'Pat Verbeek', 'Geoff Sanderson'],
-    ['Robert Kron', 'Brian Propp',],
+    ['Darren Turcotte', 'Pat Verbeek', 'Tomas Sandstrom'],
+    ['Steve Dubinsky', 'Brian Propp', 'Scott Mellanby'],
     ['Mark Janssens', 'Jim Sandlak', 'Kevin Smyth'],
     // LAK
     ['Luc Robitaille', 'Pierre Turgeon', 'Sylvain Turgeon'],
