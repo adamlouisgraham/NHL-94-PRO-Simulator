@@ -2571,9 +2571,10 @@ const dynamicDuos = [
     ['Norm Maciver', 'Kerry Huffman'],
     ['Brad Shaw', 'Steve Konroyd'],
     // PHI
-    ['Eric Lindros', 'John LeClair', 'Robert Lang'],
-    ['Pat Falloon', 'Josef Beranek'],
-    ['Dave Tippett', 'Dave Brown'],
+    ['Eric Lindros', 'Robert Lang', 'John Leclair'],
+    ['Robert Reichel', 'Josef Beranek', 'Pat Falloon'],
+    ['Shjon Podein', 'Randy Wood', 'Kevin Dineen'],
+    ['Mike Stapleton', 'Iain Fraser', 'Dave Brown'],
     ['Garry Galley', 'Rob Ramage'],
     // PIT
     ['Mario Lemieux', 'Rick Tocchet', 'Owen Nolan'],
