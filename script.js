@@ -2624,9 +2624,10 @@ const dynamicDuos = [
     ['Jeff Brown', 'Gerald Diduck'],
     ['Jyrki Lumme', 'Jiri Slegr'],
     // WAS
-    ['Peter Bondra'],
-    ['Mike Ridley', 'Dmitri Khristich'],
-    ['Kevin Miller', 'Dave Poulin', 'Kelly Miller'],
+    ['Adam Oates', 'Peter Bondra', 'Randy Burridge'],
+    ['Mike Ridley', 'Dimitri Khristich', 'Keith Jones'],
+    ['Dave Poulin', 'Kevin Miller', 'Kelly Miller'],
+    ['Ken Priestlay', 'Steve Konowalchuk', 'Craig Berube'],
     // WPG
     ['Teemu Selanne', 'Alexei Zhamnov', 'Dallas Drake'],
     ['Nelson Emerson', 'Peter Stastny', 'Thomas Steen'],
