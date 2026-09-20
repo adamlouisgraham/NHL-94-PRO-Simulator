@@ -2603,8 +2603,10 @@ const dynamicDuos = [
     ['Chris Pronger', 'Teppo Numminen'],
     ['Steve Duchesne', 'Doug Crossman'],
     // TBL
-    ['Kirk Muller', 'Chris Gratton', 'Petr Klima'],
-    ['Alexnder Semak', 'Brent Gilchrist', 'John Tucker'],
+    ['Kirk Muller', 'Petr Klima', 'Chris Gratton'],
+    ['Jesse Belanger', 'Patrick Poulin', 'Bob Kudelski'],
+    ['Alexander Semak', 'John Tucker', 'Jim Cummins'],
+    ['Marc Bureau', 'Brent Gilchrist', 'Mikael Andersson'],
     ['Roman Hamrlik', 'Alexei Kasatonov'],
     ['Craig Muni', 'Zarley Zalapski'],
     // TOR
