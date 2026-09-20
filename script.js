@@ -2613,6 +2613,7 @@ const dynamicDuos = [
     ['Doug Gilmour', 'Dave Andreychuk', 'Brent Gilchrist'],
     ['Wendel Clark', 'Mats Sundin'],
     ['Peter Zezel', 'Mike Krushelnyski', 'Mark Osborne'],
+    ['Mike Eastwood', 'Gary Leeman', 'Ken Baumgartner'],
     ['Dave Ellett', 'Todd Gill'],
     ['Jamie Macoun', 'Dmitri Mironov'],
     // VAN
