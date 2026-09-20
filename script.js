@@ -2596,10 +2596,10 @@ const dynamicDuos = [
     ['Brian Lawton', 'Wes Walz', 'Jeff Odgers'],
     ['Sandis Ozolinsh', 'Mike Rathje'],
     // STL
-    ['Brett Hull', 'Craig Janney', 'Terry Yake'],
-    ['Cliff Ronning', 'Keith Tkachuk', ' Mikael Renberg'],
-    ['Jim Montgomery', 'Brian Noonan'],
-    ['Igor Chiberev', 'Igor Korolev', 'Vitali Karamnov'],
+    ['Craig Janney', 'Brett Hull', 'Mikael Renberg'],
+    ['Cliff Ronning', 'Keith Tkachuk', 'Terry Yake'],
+    ['Igor Korolev', 'Vitali Karamnov', 'Igor Chibirev'],
+    ['Jim Montgomery', 'Brian Noonan', 'Basil McRae'],
     ['Chris Pronger', 'Teppo Numminen'],
     ['Steve Duchesne', 'Doug Crossman'],
     // TBL
