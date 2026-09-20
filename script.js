@@ -2591,8 +2591,9 @@ const dynamicDuos = [
     ['Curtis Leschyshyn', 'Alexei Gusarov'],
     // SJS
     ['Igor Larionov', 'Sergei Makarov', 'Valeri Kamensky'],
-    ['Rob Gaudreau', 'John Cullen', 'Vitali Prokhorov'],
-    ['Bob Errey', 'Ray Whitney', 'Gaetan Duchesne'],
+    ['John Cullen', 'Rob Gaudreau', 'Vitali Prokhorov'],
+    ['Kelly Kisio', 'Bob Errey', 'Ray Whitney'],
+    ['Brian Lawton', 'Wes Walz', 'Jeff Odgers'],
     ['Sandis Ozolinsh', 'Mike Rathje'],
     // STL
     ['Brett Hull', 'Craig Janney', 'Terry Yake'],
