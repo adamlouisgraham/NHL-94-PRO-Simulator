@@ -2538,8 +2538,10 @@ const dynamicDuos = [
     ['Shawn McEachern', 'Kyosti Karjalainen', 'John Druce'],
     ['Andre Faust', 'Dixon Ward', 'Warren Rychel'],
     // MIN
-    ['Mike Modano', 'Russ Courtnall', 'Kevin Stevens'],
+    ['Mike Modano', 'Kevin Stevens', 'Paul DiPietro'],
     ['Pelle Eklund', 'Brian Bellows', 'Trent Klatt'],
+    ['Neal Broten', 'Paul Broten', 'Mike McPhee'],
+    ['Shane Churla', 'Mike Craig', 'Alan May'],
     ['Derian Hatcher', 'Doug Zmolek'],
     // MTL
     ['Bernie Nicholls', 'Stephane Richer', 'Russ Courtnall'],
