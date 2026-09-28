@@ -2495,20 +2495,22 @@ function getPlayerFatigueAmount(pName) {
 // Forces the auto-coach to draft these players onto the same line if both are healthy
 const dynamicDuos = [
     // ANA
+    ['Rod BrindAmour', 'Mark Recchi', 'Jason Dawe'],
+    ['Joe Sacco', 'Ulf Dahlen', 'Ted Donato'],
+    ['Kevin Hatcher', 'Bill Houlder'],
+    ['Steve Konroyd', 'Sean Hill'],
 
     // BOS
-    ['Adam Oates', 'Cam Neely', 'Glen Murray'],
+    ['Joe Juneau', 'Brendan Shanahan', 'Glen Murray'],
     ['Bryan Smolinski', 'Dmitri Kvartalnov'],
     ['Glen Wesley', 'Don Sweeney'],
     // BUF
     ['Derek Plante', 'Donald Audette'],
     ['Alexander Mogilny', 'Dale Hawerchuk', 'Yuri Khmylev'],
     ['Brad May', 'Rob Ray', 'Dave Hannan'],
-    ['Doug Bodger', 'Richard Smehlik'],
     ['Petr Svoboda', 'Philippe Boucher'],
     // CGY
     ['Gary Roberts', 'Joe Nieuwendyk', 'Johan Garpenlov'],
-    ['Zarley Zalapski', 'James Patrick'],
     // CHI
     ['Jeremy Roenick', 'Tony Amonte', 'Dirk Graham'],
     ['Joe Murphy', 'Andrew Cassels', 'Michel Goulet'],
@@ -2522,6 +2524,8 @@ const dynamicDuos = [
     ['Nicklas Lidstrom', 'Vladimir Konstantinov'],
     // EDM
     ['Wayne Gretzky', 'Jari Kurri', 'Glenn Anderson'],
+    ['Christan Ruuttu', 'Geoff Sanderson', 'Shayne Corson'],
+    ['Paul Coffey', 'Charlie Huddy'],
     // FLA
     ['Stu Barnes', 'John MacLean', 'Andrei Kovalenko'],
     ['Jason Arnott', 'Steve Thomas', 'German Titov'],
@@ -2542,7 +2546,6 @@ const dynamicDuos = [
     ['Pelle Eklund', 'Brian Bellows', 'Trent Klatt'],
     ['Neal Broten', 'Paul Broten', 'Mike McPhee'],
     ['Shane Churla', 'Mike Craig', 'Alan May'],
-    ['Derian Hatcher', 'Doug Zmolek'],
     // MTL
     ['Bernie Nicholls', 'Stephane Richer', 'Russ Courtnall'],
     ['Vincent Damphousse', 'Stephan Lebeau', 'Gilbert Dionne'],
@@ -2570,20 +2573,17 @@ const dynamicDuos = [
     ['Paul Ranheim', 'Owen Nolan', 'Sergio Momesso'],
     ['Shaun VanAllen', 'Wayne Presley', 'Oleg Petrov'],
     ['Jamie Baker', 'David Archibald', 'Matthew Barnaby'],
-    ['Norm Maciver', 'Kerry Huffman'],
-    ['Brad Shaw', 'Steve Konroyd'],
     // PHI
     ['Eric Lindros', 'Robert Lang', 'John Leclair'],
     ['Robert Reichel', 'Josef Beranek', 'Pat Falloon'],
     ['Shjon Podein', 'Randy Wood', 'Kevin Dineen'],
     ['Mike Stapleton', 'Iain Fraser', 'Dave Brown'],
-    ['Garry Galley', 'Rob Ramage'],
     // PIT
-    ['Mario Lemieux', 'Rick Tocchet', 'Owen Nolan'],
+    ['Mario Lemieux', 'Rick Tocchet', 'Zdeno Ciger'],
     ['Martin Straka', 'Markus Naslund', 'Jaromir Jagr'],
     ['Bryan Trottier', 'Garry Valk', 'Phil Bourque'],
     ['Jiri Hrdina', 'Mike Donnelly', 'Jim McKenzie'],
-    ['Darius Kasparaitis', 'Mike Ramsey'],
+    ['Darius Kasparitis', 'Mike Ramsey'],
     ['Kjell Samuelsson', 'Scott Niedrmayer'],
     // QUE
     ['Joe Sakic', 'Theoren Fleury', 'Andrei Lomakin'],
@@ -2607,17 +2607,17 @@ const dynamicDuos = [
     // TBL
     ['Kirk Muller', 'Petr Klima', 'Chris Gratton'],
     ['Jesse Belanger', 'Patrick Poulin', 'Bob Kudelski'],
-    ['Alexander Semak', 'John Tucker', 'Jim Cummins'],
+    ['John Tucker', 'Jim Cummins'],
     ['Marc Bureau', 'Brent Gilchrist', 'Mikael Andersson'],
     ['Roman Hamrlik', 'Alexei Kasatonov'],
     ['Craig Muni', 'Zarley Zalapski'],
     // TOR
-    ['Doug Gilmour', 'Dave Andreychuk', 'Brent Gilchrist'],
+    ['Doug Gilmour', 'Dave Andreychuk', 'Rob Zamuner'],
     ['Wendel Clark', 'Mats Sundin'],
-    ['Peter Zezel', 'Mike Krushelnyski', 'Mark Osborne'],
-    ['Mike Eastwood', 'Gary Leeman', 'Ken Baumgartner'],
-    ['Dave Ellett', 'Todd Gill'],
-    ['Jamie Macoun', 'Dmitri Mironov'],
+    ['Peter Zezel', 'Mark Osborne', 'Gaetan Duchesne'],
+    ['Mike Eastwood', 'Gary Leeman', 'Ken Baumgartnr'],
+    ['Al Iafrate', 'Todd Gill'],
+    ['Vachslav Fetisov', 'Dmitri Mironov'],
     // VAN
     ['Trevor Linden', 'Pavel Bure', 'Greg Adams'],
     ['Robert Kron', 'Geoff Courtnall', 'Martin Gelinas'],
