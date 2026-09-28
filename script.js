@@ -2607,7 +2607,7 @@ const dynamicDuos = [
     // TBL
     ['Kirk Muller', 'Petr Klima', 'Chris Gratton'],
     ['Jesse Belanger', 'Patrick Poulin', 'Bob Kudelski'],
-    ['John Tucker', 'Jim Cummins'],
+    ['Alexnder Semak', 'John Tucker', 'Jim Cummins'],
     ['Marc Bureau', 'Brent Gilchrist', 'Mikael Andersson'],
     ['Roman Hamrlik', 'Alexei Kasatonov'],
     ['Craig Muni', 'Zarley Zalapski'],
