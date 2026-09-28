@@ -4048,22 +4048,27 @@ function simGame(idx) {
 
     //  2. GOALIE SELECTION
     const selG = (tk) => {
-        const gs = rosters[tk] ? rosters[tk].filter(p => p.pos === 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0 && (!playerStats[p.name].suspended || playerStats[p.name].suspended.days === 0)).sort((a, b) => getPlayerWeightedStats(b.name).ovr - getPlayerWeightedStats(a.name).ovr) : [];
+        // v278: rank by BASE rating (attr.ovr); the streak-adjusted rating only breaks near-ties. Ranking on
+        // the live rating let a hot backup leapfrog a far better starter (TBL: Shtalenkov 56 got 44 starts,
+        // Puppa 72 got 40).
+        const baseG = n => parseInt(playerStats[n]?.attr?.ovr) || getPlayerWeightedStats(n).ovr;
+        const gs = rosters[tk] ? rosters[tk].filter(p => p.pos === 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0 && (!playerStats[p.name].suspended || playerStats[p.name].suspended.days === 0))
+            .sort((a, b) => { const d = baseG(b.name) - baseG(a.name); return Math.abs(d) > 3 ? d : getPlayerWeightedStats(b.name).ovr - getPlayerWeightedStats(a.name).ovr; }) : [];
         if (!gs.length) { const allG = (rosters[tk] || []).filter(p => p.pos === 'G'); return allG.length ? allG[0] : null; }
         if (gs.length === 1 || isPlayoffs || isASG) return gs[0];
 
         const starter = gs[0]; const backup = gs[1]; const sStats = playerStats[starter.name][k];
-        let diff = getPlayerWeightedStats(starter.name).ovr - getPlayerWeightedStats(backup.name).ovr;
-        let restChance = 0.12;
-        if (diff <= 10) restChance = 0.45; else if (diff <= 15) restChance = 0.30;
+        let diff = baseG(starter.name) - baseG(backup.name);
+        // v278: 1993-94 starters played ~60-70 GP; the old 45%/30% rest chances capped starters near 55
+        let restChance = diff > 15 ? 0.05 : diff > 10 ? 0.10 : diff > 5 ? 0.20 : 0.40;
         // B2B rest only applies if THIS goalie (the current OVR-ranked starter) is the one who
         // actually played yesterday — playedYesterday(tk) is team-wide and would otherwise bench
         // the true starter (who didn't play) just because the backup had a game the day before,
         // snowballing into the backup getting most of the season's starts.
-        if (playerStats[starter.name]?.lastPlayedDay === currentDay - 1) restChance += 0.60;
+        if (playerStats[starter.name]?.lastPlayedDay === currentDay - 1) restChance += 0.45; // v278: was 0.60
 
         const bStats = playerStats[backup.name]?.[k];
-        if (sStats.consStarts >= 7 || Math.random() < restChance) {
+        if (sStats.consStarts >= 12 || Math.random() < restChance) { // v278: forced rest after 12 straight (was 7)
             sStats.consStarts = 0;
             if (bStats) bStats.consStarts = (bStats.consStarts || 0) + 1;
             return backup;
