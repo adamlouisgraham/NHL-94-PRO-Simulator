@@ -2614,7 +2614,7 @@ const dynamicDuos = [
     // TOR
     ['Doug Gilmour', 'Dave Andreychuk', 'Rob Zamuner'],
     ['Wendel Clark', 'Mats Sundin'],
-    ['Peter Zezel', 'Mark Osborne', 'Gaetan Duchesne'],
+    ['Peter Zezel', 'Mike Krushelnyski', 'Mark Osborne'],
     ['Mike Eastwood', 'Gary Leeman', 'Ken Baumgartnr'],
     ['Al Iafrate', 'Todd Gill'],
     ['Vachslav Fetisov', 'Dmitri Mironov'],
