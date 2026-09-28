@@ -969,7 +969,7 @@ function syncArenaScoreboardUI() {
 function getPlayoffStatus() {
     const ser = (playoffBracket && playoffBracket.series) || [];
     const rnd = playoffBracket && playoffBracket.round || 1;
-    const names = ['DIVISION SEMIS', 'DIVISION FINALS', 'CONF FINALS', 'STANLEY CUP FINAL'];
+    const names = ['CONF QUARTERFINALS', 'CONF SEMIFINALS', 'CONF FINALS', 'STANLEY CUP FINAL'];
     const done = ser.filter(x => x.hW >= 4 || x.aW >= 4).length;
     const live = ser.filter(x => x.hW < 4 && x.aW < 4);
     const gameNo = live.length ? Math.max(...live.map(x => x.hW + x.aW)) + 1 : null;
@@ -7285,34 +7285,33 @@ function initPlayoffs() {
         // Final tiebreaker: goal differential
         return (b.season.gf - b.season.ga) - (a.season.gf - a.season.ga);
     };
-    // Real 93-94 format: top 4 per division, 1v4 and 2v3 within each division
-    const divTop4 = (div) => league.filter(t => t.div === div).sort(sortTeams).slice(0, 4);
-    const atl = divTop4('Atlantic');
-    const ne  = divTop4('Northeast');
-    const cen = divTop4('Central');
-    const pac = divTop4('Pacific');
-
-    // Stamp division seed so home ice in later rounds uses seed, not raw pts
-    [atl, ne, cen, pac].forEach(div => div.forEach((t, i) => { t._playoffSeed = i + 1; }));
+    // v280: real 1993-94 format (first year of conference playoffs): top 8 per conference, the two
+    // division winners seeded 1-2, everyone else 3-8 by points; 1v8, 2v7, 3v6, 4v5. The old code was the
+    // 1981-93 divisional format (top 4 per division) mislabelled as 93-94.
+    league.forEach(t => { delete t._playoffSeed; });
+    const confSeeds = (confName) => {
+        const teamsC = league.filter(t => t.conf === confName);
+        const divs = [...new Set(teamsC.map(t => t.div))];
+        const winners = divs.map(d => teamsC.filter(t => t.div === d).sort(sortTeams)[0]).filter(Boolean).sort(sortTeams);
+        const rest = teamsC.filter(t => !winners.includes(t)).sort(sortTeams).slice(0, 8 - winners.length);
+        const seeds = [...winners, ...rest];
+        seeds.forEach((t, i) => { t._playoffSeed = i + 1; });
+        return seeds;
+    };
+    const eastSeeds = confSeeds('Eastern');
+    const westSeeds = confSeeds('Western');
     const mkS = (t1, t2, conf, div, slot) => {
         const home = (t1._playoffSeed || 99) <= (t2._playoffSeed || 99) ? t1 : t2;
         const away = (t1._playoffSeed || 99) <= (t2._playoffSeed || 99) ? t2 : t1;
         return { h: home, a: away, hW: 0, aW: 0, conf, div, slot, games: [] };
     };
+    const quarterfinals = (seeds, conf) => [[0, 7], [1, 6], [2, 5], [3, 4]]
+        .filter(([x, y]) => seeds[x] && seeds[y])
+        .map(([x, y]) => mkS(seeds[x], seeds[y], conf, conf, `${x + 1}v${y + 1}`));
 
     playoffBracket = { round: 1,
-        east: [
-            mkS(atl[0], atl[3], 'WALES',    'Atlantic',  'A'),
-            mkS(atl[1], atl[2], 'WALES',    'Atlantic',  'B'),
-            mkS(ne[0],  ne[3],  'WALES',    'Northeast', 'A'),
-            mkS(ne[1],  ne[2],  'WALES',    'Northeast', 'B'),
-        ],
-        west: [
-            mkS(cen[0], cen[3], 'CAMPBELL', 'Central',   'A'),
-            mkS(cen[1], cen[2], 'CAMPBELL', 'Central',   'B'),
-            mkS(pac[0], pac[3], 'CAMPBELL', 'Pacific',   'A'),
-            mkS(pac[1], pac[2], 'CAMPBELL', 'Pacific',   'B'),
-        ],
+        east: quarterfinals(eastSeeds, 'WALES'),
+        west: quarterfinals(westSeeds, 'CAMPBELL'),
         nextEast: [], nextWest: [], finals: null
     };
     buildPlayoffRound(); initPlayoffsUI(); updateUI(); saveGame(); showSeasonRecap();
@@ -7335,7 +7334,7 @@ let _pendingRoundAdvance = null;
 
 function showSeriesRecap(onAdvance) {
     const round = playoffBracket.round;
-    const roundLabel = round === 1 ? 'DIVISION SEMIS' : round === 2 ? 'DIVISION FINALS' : round === 3 ? 'CONF FINALS' : 'STANLEY CUP FINALS';
+    const roundLabel = ['CONF QUARTERFINALS', 'CONF SEMIFINALS', 'CONF FINALS', 'STANLEY CUP FINAL'][round - 1] || `ROUND ${round}`;
     let h = `<div style="text-align:center; margin-bottom:16px;">
         <div style="color:#888; font-size:6px; letter-spacing:.18em;">${roundLabel}</div>
         <div style="color:var(--ea-yellow); font-size:11px; margin-top:4px;">ROUND COMPLETE</div>
@@ -7415,7 +7414,7 @@ function _doRoundAdvance(turbo = false) {
     if (!playoffBracket.history) playoffBracket.history = [];
     playoffBracket.history.push({
         round: playoffBracket.round,
-        label: playoffBracket.round === 1 ? 'DIVISION SEMIS' : playoffBracket.round === 2 ? 'DIVISION FINALS' : playoffBracket.round === 3 ? 'CONF FINALS' : 'STANLEY CUP FINALS',
+        label: ['CONF QUARTERFINALS', 'CONF SEMIFINALS', 'CONF FINALS', 'STANLEY CUP FINAL'][playoffBracket.round - 1] || `ROUND ${playoffBracket.round}`,
         series: playoffBracket.series.map(s => ({ hCode: s.h.code, hName: s.h.name, aCode: s.a.code, aName: s.a.name, hW: s.hW, aW: s.aW, conf: s.conf }))
     });
     if(playoffBracket.round === 4) {
@@ -7452,29 +7451,26 @@ function _doRoundAdvance(turbo = false) {
         return { h: home, a: away, hW: 0, aW: 0, conf, div, games: [] };
     };
 
-    if (playoffBracket.round === 2) {
-        // Division Finals: A-slot winner vs B-slot winner within same division
-        ['Atlantic', 'Northeast', 'Central', 'Pacific'].forEach(div => {
-            const a = prevSeries.find(s => s.div === div && s.slot === 'A');
-            const b = prevSeries.find(s => s.div === div && s.slot === 'B');
-            if (a && b) {
-                const conf = div === 'Atlantic' || div === 'Northeast' ? 'WALES' : 'CAMPBELL';
-                playoffBracket.series.push(mkNext(getWinner(a), getWinner(b), conf, div));
+    if (playoffBracket.round === 2 || playoffBracket.round === 3) {
+        // v280: re-seed within each conference every round - best remaining seed plays the worst
+        ['WALES', 'CAMPBELL'].forEach(conf => {
+            const ws = prevSeries.filter(x => x.conf === conf).map(getWinner).sort((a, b) => (a._playoffSeed || 99) - (b._playoffSeed || 99));
+            if (ws.length === 4) {
+                playoffBracket.series.push(mkNext(ws[0], ws[3], conf, conf));
+                playoffBracket.series.push(mkNext(ws[1], ws[2], conf, conf));
+            } else if (ws.length === 2) {
+                playoffBracket.series.push(mkNext(ws[0], ws[1], conf, `${conf} FINAL`));
             }
         });
-    } else if (playoffBracket.round === 3) {
-        // Conference Finals: Atlantic champ vs Northeast champ, Central champ vs Pacific champ
-        const atlS = prevSeries.find(s => s.div === 'Atlantic');
-        const neS  = prevSeries.find(s => s.div === 'Northeast');
-        const cenS = prevSeries.find(s => s.div === 'Central');
-        const pacS = prevSeries.find(s => s.div === 'Pacific');
-        if (atlS && neS)  playoffBracket.series.push(mkNext(getWinner(atlS), getWinner(neS),  'WALES',    'WALES FINAL'));
-        if (cenS && pacS) playoffBracket.series.push(mkNext(getWinner(cenS), getWinner(pacS), 'CAMPBELL', 'CAMPBELL FINAL'));
     } else {
-        // Stanley Cup Finals: Wales champ vs Campbell champ
-        const eS = prevSeries.find(s => s.conf === 'WALES');
-        const wS = prevSeries.find(s => s.conf === 'CAMPBELL');
-        if (eS && wS) playoffBracket.series.push(mkNext(getWinner(eS), getWinner(wS), 'FINALS', 'FINALS'));
+        // Stanley Cup Final: East champ vs West champ, home ice to the better regular season
+        const eS = prevSeries.find(x => x.conf === 'WALES');
+        const wS = prevSeries.find(x => x.conf === 'CAMPBELL');
+        if (eS && wS) {
+            const e = getWinner(eS), w = getWinner(wS);
+            const eHome = (e.season?.pts || 0) >= (w.season?.pts || 0);
+            playoffBracket.series.push({ h: eHome ? e : w, a: eHome ? w : e, hW: 0, aW: 0, conf: 'FINALS', div: 'FINALS', games: [] });
+        }
     }
     const btnNR = document.getElementById('btnNextRound'); if(btnNR) btnNR.remove();
     genPlayoffSlate(turbo);
@@ -11158,7 +11154,7 @@ function initPlayoffsUI() {
 }
 
 function showBracket() {
-    const roundLabels = ['', 'DIVISION SEMIS', 'DIVISION FINALS', 'CONF FINALS', 'STANLEY CUP FINALS'];
+    const roundLabels = ['', 'CONF QUARTERFINALS', 'CONF SEMIFINALS', 'CONF FINALS', 'STANLEY CUP FINAL'];
 
     // Build full round list: history + current round
     const allRounds = [...(playoffBracket.history || [])];
@@ -12523,4 +12519,112 @@ function loadDefaultGoogleSheets(event) {
     if (typeof resetSheetUrlsToDefault === 'function') {
         resetSheetUrlsToDefault();
     }
+}
+
+// v280: one-click league audit. Checks the invariants that broke during development (stats that must
+// add up, roster shape, standings math, award eligibility, playoff seeding, save size) and summarises
+// injuries and trades. Read-only: it never changes the league.
+function runLeagueAudit() {
+    const out = [];
+    const add = (status, area, msg) => out.push({ status, area, msg });
+    const teams = league || [];
+    const allP = Object.values(playerStats || {});
+
+    // ---------- rosters ----------
+    const where = {};
+    let minR = 99, maxR = 0;
+    const shape = [];
+    teams.forEach(t => {
+        const ro = rosters[t.nrm] || [];
+        minR = Math.min(minR, ro.length); maxR = Math.max(maxR, ro.length);
+        const nG = ro.filter(p => p.pos === 'G').length, nD = ro.filter(p => p.pos === 'D').length, nF = ro.length - nG - nD;
+        if (nG < 2 || nD < 6 || nF < 12) shape.push(`${t.code} (${nF}F/${nD}D/${nG}G)`);
+        ro.forEach(p => { (where[p.name] = where[p.name] || []).push(t.code); });
+    });
+    add(minR >= 20 && maxR <= 32 ? 'PASS' : 'WARN', 'Rosters', `${teams.length} teams, roster sizes ${minR}-${maxR}`);
+    add(shape.length ? 'FAIL' : 'PASS', 'Rosters', shape.length ? `Short at a position (need 12F/6D/2G): ${shape.join(', ')}` : 'Every team has at least 12 F, 6 D, 2 G');
+    const dup = Object.entries(where).filter(([, t]) => t.length > 1);
+    add(dup.length ? 'FAIL' : 'PASS', 'Rosters', dup.length ? `On two teams: ${dup.slice(0, 5).map(([n, t]) => n + ' ' + t.join('/')).join(', ')}` : 'No player is on two teams');
+    const noStats = Object.keys(where).filter(n => !playerStats[n]);
+    add(noStats.length ? 'FAIL' : 'PASS', 'Rosters', noStats.length ? `On a roster but no stats: ${noStats.slice(0, 5).join(', ')}` : 'Every rostered player has a stats record');
+    const orphan = allP.filter(p => !where[p.name]);
+    add(orphan.length ? 'WARN' : 'PASS', 'Rosters', orphan.length ? `${orphan.length} stats records on no roster (e.g. ${orphan.slice(0, 3).map(p => p.name).join(', ')})` : 'No orphaned stats records');
+    const wrongTeam = allP.filter(p => where[p.name] && where[p.name][0] !== p.teamCode);
+    add(wrongTeam.length ? 'WARN' : 'PASS', 'Rosters', wrongTeam.length ? `${wrongTeam.length} players whose team code differs from their roster (e.g. ${wrongTeam.slice(0, 3).map(p => `${p.name} ${p.teamCode}->${where[p.name][0]}`).join(', ')})` : 'Player team codes match their rosters');
+
+    // ---------- standings & stat accounting ----------
+    const badStand = teams.filter(t => { const s = t.season; return s.w + s.l + (s.t || 0) !== s.gp || s.pts !== 2 * s.w + (s.t || 0); });
+    add(badStand.length ? 'FAIL' : 'PASS', 'Standings', badStand.length ? `W+L+T or points wrong: ${badStand.map(t => t.code).join(', ')}` : 'W+L+T = GP and PTS = 2W+T for every team');
+    const gf = teams.reduce((a, t) => a + (t.season.gf || 0), 0), ga = teams.reduce((a, t) => a + (t.season.ga || 0), 0);
+    add(gf === ga ? 'PASS' : 'FAIL', 'Standings', `League goals for ${gf} vs against ${ga}`);
+    const k = 'season';
+    const gByTeam = {};
+    allP.forEach(p => { if (where[p.name]) gByTeam[where[p.name][0]] = (gByTeam[where[p.name][0]] || 0) + (p[k]?.g || 0); });
+    const gOff = teams.filter(t => !isPlayoffs && (gByTeam[t.code] || 0) !== (t.season.gf || 0));
+    const tradesOn = awardConfig.trades || awardConfig.tradeBlock;
+    add(gOff.length ? (tradesOn ? 'WARN' : 'FAIL') : 'PASS', 'Stats', gOff.length
+        ? `Player goals vs team GF differ: ${gOff.slice(0, 5).map(t => `${t.code} ${gByTeam[t.code] || 0}/${t.season.gf}`).join(', ')}${tradesOn ? ' (expected when players were traded mid-season)' : ''}`
+        : 'Player season goals add up to team goals-for');
+    const gBad = allP.filter(p => p.pos === 'G' && ['season', 'playoff'].some(b => p[b] && (p[b].sa || 0) && (p[b].sv || 0) + (p[b].ga || 0) !== (p[b].sa || 0)));
+    add(gBad.length ? 'FAIL' : 'PASS', 'Stats', gBad.length ? `Goalie saves + goals-against != shots-against: ${gBad.slice(0, 5).map(p => p.name).join(', ')}` : 'Every goalie: saves + goals against = shots against');
+    const neg = allP.filter(p => ['g', 'a', 's', 'gp'].some(f => (p.season?.[f] || 0) < 0) || (p.season?.g || 0) > (p.season?.s || 0) && p.pos !== 'G');
+    add(neg.length ? 'FAIL' : 'PASS', 'Stats', neg.length ? `Impossible lines (negative, or more goals than shots): ${neg.slice(0, 5).map(p => p.name).join(', ')}` : 'No negative stats or more goals than shots');
+
+    // ---------- awards (only meaningful once this season's awards exist) ----------
+    const won = allP.filter(p => (p.trophies || []).some(tr => tr.year === currentSeason));
+    if (won.length) {
+        const winnerOf = key => allP.find(p => (p.trophies || []).some(tr => tr.year === currentSeason && tr.name === key));
+        const sk = allP.filter(p => p.pos !== 'G' && p.season?.gp > 0);
+        const pts = p => (p.season.g || 0) + (p.season.a || 0);
+        const ross = winnerOf('Art Ross'), rr = winnerOf('Rocket Richard'), cal = winnerOf('Calder');
+        const topPts = Math.max(...sk.map(pts)), topG = Math.max(...sk.map(p => p.season.g || 0));
+        add(!ross || pts(ross) === topPts ? 'PASS' : 'FAIL', 'Awards', ross ? `Art Ross: ${ross.name} ${pts(ross)} pts (league high ${topPts})` : 'Art Ross not awarded');
+        add(!rr || (rr.season.g || 0) === topG ? 'PASS' : 'FAIL', 'Awards', rr ? `Rocket Richard: ${rr.name} ${rr.season.g} G (league high ${topG})` : 'Rocket Richard not awarded');
+        if (cal) {
+            const priorGP = Math.max(cal.preSimCareerGP || 0, cal.career?.gp || 0);
+            add(priorGP <= 40 ? 'PASS' : 'FAIL', 'Awards', `Calder: ${cal.name}, ${priorGP} career GP before this season (limit 40)`);
+        }
+    } else add('INFO', 'Awards', 'No awards yet this season - run the audit after the playoffs for award checks');
+
+    // ---------- playoff seeding ----------
+    const r1 = isPlayoffs && playoffBracket && playoffBracket.round === 1 ? (playoffBracket.series || []) : [];
+    if (r1.length) {
+        const bad = r1.filter(x => x.h._playoffSeed && x.a._playoffSeed && x.h._playoffSeed > x.a._playoffSeed);
+        add(bad.length ? 'FAIL' : 'PASS', 'Playoffs', bad.length ? `Lower seed has home ice: ${bad.map(x => x.h.code + '/' + x.a.code).join(', ')}` : `Round 1: ${r1.length} series, higher seed has home ice in all`);
+    }
+    if (r1.length) {
+        const byConf = c => r1.filter(x => x.conf === c).map(x => (x.h._playoffSeed || 0) + (x.a._playoffSeed || 0));
+        const okPairs = ['WALES', 'CAMPBELL'].every(c => byConf(c).length === 4 && byConf(c).every(v => v === 9));
+        add(okPairs ? 'PASS' : 'FAIL', 'Playoffs', okPairs ? '1993-94 format: top 8 per conference, 1v8 2v7 3v6 4v5' : 'Round-1 pairings are not 1v8/2v7/3v6/4v5 in each conference');
+    }
+
+    // ---------- injuries ----------
+    const injNow = allP.filter(p => p.injury?.daysRemaining > 0);
+    const injSeason = allP.reduce((a, p) => a + (p.injuryHistory || []).filter(h => h.season === currentSeason).length, 0);
+    const daysLost = allP.reduce((a, p) => a + (p.injuryHistory || []).filter(h => h.season === currentSeason).reduce((b, h) => b + (h.gamesOut || h.daysMissed || 0), 0), 0);
+    add('INFO', 'Injuries', `${injNow.length} players injured now; ${injSeason} injuries this season, ${daysLost} games lost (${(daysLost / Math.max(1, teams.length)).toFixed(0)} per team)`);
+
+    // ---------- trades ----------
+    const trades = (tradeLog || []).filter(x => /\bTRADE\b|TRADED|acquire/i.test(x.details || '') && !/DEADLINE|BLOCK/i.test(x.details || ''));
+    add('INFO', 'Trades', tradesOn ? `${trades.length} trade headlines in the current news log` : 'Trades are switched off');
+
+    // ---------- save size ----------
+    let bytes = 0;
+    try { Object.keys(localStorage).forEach(key => { bytes += (localStorage.getItem(key) || '').length * 2; }); } catch (e) { }
+    const mb = bytes / 1048576;
+    add(mb < 3.5 ? 'PASS' : mb < 4.5 ? 'WARN' : 'FAIL', 'Save', `Browser storage used: ${mb.toFixed(2)} MB of about 5 MB`);
+
+    return out;
+}
+
+function showLeagueAudit() {
+    const res = runLeagueAudit();
+    const col = { PASS: '#00FF88', WARN: '#FFA500', FAIL: '#FF4444', INFO: '#888' };
+    const n = s => res.filter(r => r.status === s).length;
+    let h = `<div style="font-size:10px;color:#fff;margin-bottom:10px;">LEAGUE AUDIT — SEASON ${currentSeason}${isPlayoffs ? ' (PLAYOFFS)' : ''}</div>
+        <div style="font-size:7px;margin-bottom:12px;"><span style="color:${col.PASS}">${n('PASS')} PASS</span> · <span style="color:${col.WARN}">${n('WARN')} WARN</span> · <span style="color:${col.FAIL}">${n('FAIL')} FAIL</span></div>`;
+    res.forEach(r => { h += `<div style="font-size:7px;margin:5px 0;"><span style="color:${col[r.status]};display:inline-block;width:40px;">${r.status}</span><span style="color:#aaa;display:inline-block;width:70px;">${r.area}</span><span style="color:#ddd;">${r.msg}</span></div>`; });
+    h += `<button onclick="document.getElementById('awardOverlay').style.display='none'" style="width:100%;margin-top:15px;">CLOSE</button>`;
+    document.getElementById('awardWinnerContent').innerHTML = h;
+    document.getElementById('awardOverlay').style.display = 'flex';
 }
