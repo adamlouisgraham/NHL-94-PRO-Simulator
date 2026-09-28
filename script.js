@@ -7744,6 +7744,9 @@ function simNextGame() {
 function advanceCalendar() {
     if (currentDay >= calendar.length) return false;
     currentDay++;
+    // v279: the news log grows ~35 entries/day (6,000+ a season). Saves already keep only the newest
+    // 1,500; trim in memory too so long sessions don't keep re-rendering and holding thousands.
+    if (tradeLog.length > 2000) tradeLog.length = 1500;
 
     if (currentDay === Math.floor(calendar.length / 2) && !isPlayoffs && !isASG && !asgDoneThisSeason && awardConfig.streaks) { asgDoneThisSeason = true; initAllStarGame(); return false; }
     if (isASG && calendar[currentDay] && !calendar[currentDay].some(g => g.isASG_game)) {
@@ -7936,6 +7939,10 @@ async function simPlayoffs(turboOpt) {
     const turbo = (turboOpt === undefined) ? true : !!turboOpt;
     isSimulating = true;
     simBeat();
+    // v279: turbo must also set isTurboMode, like simRestOfSeason. Without it advanceCalendar() ran a full
+    // updateUI() + compressed saveGame() after every playoff day (~2.5 s each), freezing the page ~60 s.
+    const _wasTurboMode = isTurboMode;
+    if (turbo) isTurboMode = true;
     try {
         // The playoff calendar only ever holds ONE day of games (genPlayoffSlate builds
         // a single slate for whichever series are still alive). So a round is played by
@@ -7999,6 +8006,7 @@ async function simPlayoffs(turboOpt) {
         // ran to completion. Absence of this after a stall means the loop never returned.
         try { localStorage.setItem('nhl94_playoffExit', JSON.stringify({ guard, champ: currentCupChamp || null, at: Date.now() })); } catch (e) {}
     } finally {
+        isTurboMode = _wasTurboMode;
         isSimulating = false;
         updateUI();
         saveGame();
