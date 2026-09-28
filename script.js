@@ -388,9 +388,12 @@ function getTradeValue(pName) {
     if (!ps) return 50;
     const ovr = getPlayerWeightedStats(pName).ovr;
     const age = ps.age || 25;
-    const primeMod = Math.max(0, 14 - Math.abs(age - 28));
-    const posMult = ps.pos === 'G' ? 1.15 : ps.pos === 'C' ? 1.10 : ps.pos === 'D' ? 1.05 : 1.0;
-    return Math.round((ovr * 0.65 + primeMod * 2.5) * posMult);
+    // v283: value is driven by rating; age only nudges it (prime +4 ... veteran/raw -8). The old
+    // formula weighted age like ~35 rating points, so a 28-year-old checker (Bob Sweeney, TV 79)
+    // was traded straight up for a 60-goal scorer (Bondra, TV 82).
+    const ageAdj = Math.max(-8, Math.min(4, 4 - Math.abs(age - 27) * 0.8));
+    const posMult = ps.pos === 'G' ? 1.05 : 1.0;
+    return Math.round((ovr + ageAdj) * posMult);
 }
 
 // v161: picks C (captain) and two As (alternate captains) by leadership score.
@@ -517,6 +520,10 @@ function getCaptainChemModifier(teamNrm) {
 let league = []; let rosters = {}; let playerStats = {}; let tradeLog = []; let hallOfFame = []; let leagueHistory = []; let retiredPlayers = []; let calendar = []; let realDatesMap = []; let gameMilestones = []; let monthSnapshot = {}; let pendingTrades = []; let playoffBracket = { round: 1, series: [] }; let teams = {}; let selectedTeam = null;
 let customDuos = []; // user-defined chemistry pairs, supplements the hardcoded dynamicDuos
 // Checks that swapping outA(from teamA)<->outB(from teamB) leaves both post-trade rosters with a goalie and a center
+
+// v283: AI trades are like-for-like: forward for forward, D for D, goalie for goalie
+function tradePosGroup(n) { const pos = playerStats[n]?.pos; return pos === 'G' ? 'G' : pos === 'D' ? 'D' : 'F'; }
+const TRADE_MAX_VALUE_GAP = 6;
 function tradeKeepsRostersViable(teamAKey, outA, teamBKey, outB) {
     const postA = rosters[teamAKey].map(p=>p.name).filter(n=>n!==outA.name).concat([outB.name]);
     const postB = rosters[teamBKey].map(p=>p.name).filter(n=>n!==outB.name).concat([outA.name]);
@@ -5435,10 +5442,10 @@ function simGame(idx) {
                         const teamHasEnforcer = isEliteScorer && (rosters[victimTeam]||[]).some(p=>['ENFORCER F','ENFORCER D'].includes(getPlayerWeightedStats(p.name)?.tag||''));
                         if (teamHasEnforcer) injChance *= 0.85;
                         if (Math.random() < injChance) {
-                            const _r=Math.random(); const injDays = _r<0.60?1+Math.floor(Math.random()*2):_r<0.90?3+Math.floor(Math.random()*3):6+Math.floor(Math.random()*4); // hit: 60%:1-2g, 30%:3-5g, 10%:6-9g
+                            const _r=Math.random(); const injDays = withLongTermChance(_r<0.60?1+Math.floor(Math.random()*2):_r<0.90?3+Math.floor(Math.random()*3):6+Math.floor(Math.random()*4)); // hit: 60%:1-2g, 30%:3-5g, 10%:6-9g
                             if (!vPs.injury) vPs.injury = {daysRemaining:0,type:''};
                             vPs.injury.daysRemaining = injDays; vPs.injury.severity = injDays; vPs.injury.source = 'hit';
-                            vPs.injury.type = injDays>=10?'Hit — week-to-week':injDays>=5?'Hit — short-term':'Hit — day-to-day';
+                            vPs.injury.type = injDays>=15?'Hit — long-term':injDays>=10?'Hit — week-to-week':injDays>=5?'Hit — short-term':'Hit — day-to-day';
                             autoPlaceOnIR(victim.name, (ev.side==='h'?g.a:g.h).nrm, injDays);
                             penaltyEvents.push({p:period,m:minute,s:sec,str:timeStr,
                                 tm:(ev.side==='h'?g.a:g.h).code, cl:'#FF6666',
@@ -5533,10 +5540,10 @@ function simGame(idx) {
                         if (Math.random() < 0.08) {
                             const fPs = playerStats[fighter.name];
                             if (fPs && !(fPs.injury?.daysRemaining > 0) && !(fPs.injCooldown > 0)) {
-                                const _r2=Math.random(); const injDays = _r2<0.40?1+Math.floor(Math.random()*3):_r2<0.80?3+Math.floor(Math.random()*4):6+Math.floor(Math.random()*5); // fight: 40%:1-3g, 40%:3-6g, 20%:6-10g
+                                const _r2=Math.random(); const injDays = withLongTermChance(_r2<0.40?1+Math.floor(Math.random()*3):_r2<0.80?3+Math.floor(Math.random()*4):6+Math.floor(Math.random()*5)); // fight: 40%:1-3g, 40%:3-6g, 20%:6-10g
                                 if (!fPs.injury) fPs.injury = {daysRemaining:0,type:''};
                                 fPs.injury.daysRemaining = injDays; fPs.injury.severity = injDays; fPs.injury.source = 'fight';
-                                fPs.injury.type = injDays>=10?'Fight — week-to-week':injDays>=5?'Fight — short-term':'Fight — day-to-day';
+                                fPs.injury.type = injDays>=15?'Fight — long-term':injDays>=10?'Fight — week-to-week':injDays>=5?'Fight — short-term':'Fight — day-to-day';
                                 autoPlaceOnIR(fighter.name, (fighter === hF ? g.h : g.a).nrm, injDays);
                                 penaltyEvents.push({p:period,m:minute,s:sec,str:timeStr,
                                     tm:g.h.code, cl:'#FF6666',
@@ -11784,7 +11791,7 @@ function processDailyUpdates() {
     let daysUntilDeadline = Math.floor(calendar.length * 0.75) - currentDay;
     let isDeadlineWindow = tradeMult > 1.0 && daysUntilDeadline >= 0;
 
-    if (awardConfig.trades && Math.random() < (0.05 * tradeMult)) {
+    if (awardConfig.trades && Math.random() < (0.08 * tradeMult)) { // v283: 0.05 -> 0.08 (~15 AI trades a season)
         // Only real league teams — never the temporary WALES/CAMPBELL ASG rosters
         let activeTeams = Object.keys(rosters).filter(k => league.some(t => t.nrm === k));
         let teamA = activeTeams[Math.floor(Math.random() * activeTeams.length)];
@@ -11813,7 +11820,7 @@ function processDailyUpdates() {
                         // so this was picking the buyer's youngest+HIGHEST-ovr player (their best prospect) as
                         // the throwaway, the opposite of the stated intent. Sign fixed: age and ovr both need
                         // to be LOW to sort first, so they must both add into the same ascending key.
-                        const prospect = [...buyerSkaters].sort((p1, p2) => {
+                        const prospect = [...buyerSkaters].filter(p => veteran && tradePosGroup(p.name) === tradePosGroup(veteran.name)).sort((p1, p2) => { // v283: same position group
                             const age1 = playerStats[p1.name]?.age || 25, age2 = playerStats[p2.name]?.age || 25;
                             return (age1 * 2 + getPlayerWeightedStats(p1.name).ovr) - (age2 * 2 + getPlayerWeightedStats(p2.name).ovr);
                         })[0];
@@ -11836,13 +11843,13 @@ function processDailyUpdates() {
                     for (let i = 0; i < n && pool.length; i++) picks.push(pool[Math.floor(Math.random() * pool.length)]);
                     return picks;
                 };
-                const candA = pickCandidates(teamA, 4);
-                const candB = pickCandidates(teamB, 4);
+                const candA = pickCandidates(teamA, 6);
+                const candB = pickCandidates(teamB, 6);
                 let bestPair = null, bestDiff = Infinity;
                 candA.forEach(pA => candB.forEach(pB => {
-                    if (pA.name === pB.name) return;
+                    if (pA.name === pB.name || tradePosGroup(pA.name) !== tradePosGroup(pB.name)) return;
                     const diff = Math.abs(getTradeValue(pA.name) - getTradeValue(pB.name));
-                    if (diff < bestDiff) { bestDiff = diff; bestPair = [pA, pB]; }
+                    if (diff < bestDiff && diff <= TRADE_MAX_VALUE_GAP) { bestDiff = diff; bestPair = [pA, pB]; }
                 }));
                 if (bestPair) {
                     [playerA, playerB] = bestPair;
@@ -11850,7 +11857,7 @@ function processDailyUpdates() {
                 }
             }
 
-            if (!tradeKeepsRostersViable(teamA, playerA, teamB, playerB)) {
+            if (!playerA || !playerB || !tradeKeepsRostersViable(teamA, playerA, teamB, playerB)) {
                 // Would leave a team without a goalie or center — skip this tick's trade
             } else {
 
@@ -11921,9 +11928,9 @@ function processDailyUpdates() {
                     const candCmA = pickCm(skA, 4), candCmB = pickCm(skB, 4);
                     let bestCmPair = null, bestCmDiff = Infinity;
                     candCmA.forEach(cpA => candCmB.forEach(cpB => {
-                        if (cpA.name === cpB.name) return;
+                        if (cpA.name === cpB.name || tradePosGroup(cpA.name) !== tradePosGroup(cpB.name)) return;
                         const diff = Math.abs(getTradeValue(cpA.name) - getTradeValue(cpB.name));
-                        if (diff < bestCmDiff) { bestCmDiff = diff; bestCmPair = [cpA, cpB]; }
+                        if (diff < bestCmDiff && diff <= TRADE_MAX_VALUE_GAP) { bestCmDiff = diff; bestCmPair = [cpA, cpB]; }
                     }));
                     const [pA, pB] = bestCmPair || [];
                     if (pA && pB && pA.name !== pB.name && tradeKeepsRostersViable(teamA, pA, teamB, pB)) {
@@ -12036,6 +12043,13 @@ function hasSpareGoalie(tk) {
     return roster.filter(p => p.pos === 'G').length > 2;
 }
 
+// v283: season-altering injuries. Every injury table topped out around 9-15 games, so nobody ever
+// missed a month (broken bones, knee and shoulder surgery, concussions). About 10% of injuries that
+// are already 5+ games become a 15-45 game long-term injury: roughly a dozen a season league-wide.
+function withLongTermChance(days) {
+    return (days >= 5 && Math.random() < 0.10) ? 15 + Math.floor(Math.random() * 31) : days;
+}
+
 function rollInGameInjuries(homeCode, awayCode) {
     if (!awardConfig.injuries) return;
     const SKATER_CHANCE = 0.00236; // v228: increased from 0.00225 (+5%, all-source except fight/brawl)
@@ -12106,6 +12120,7 @@ function rollInGameInjuries(homeCode, awayCode) {
                     if (p.pos !== 'D' && !hasSpareForward(tk)) days = 1;
                     else if (p.pos === 'D' && !hasSpareDefenseman(tk)) days = 1;
                 }
+                days = withLongTermChance(days);
                 if (days > 0) { ps.injury = { severity: days, daysRemaining: days, source: 'in-game-skater' }; autoPlaceOnIR(p.name, tk, days); }
                 else ps.shakenUpToday = true; // exempt from a second independent injury roll later this game
                 const label = days === 0 ? 'shaken up — playing through' : `out ${days} game${days > 1 ? 's' : ''}`;
@@ -12140,6 +12155,7 @@ function rollInGameInjuries(homeCode, awayCode) {
                     const gr2 = Math.random();
                     days = gr2 < 0.30 ? 0 : Math.floor(Math.random() * 3) + 1;  // 30%: shaken up (0g) | 70%: 1-3 games
                 }
+                if (hasThirdGoalie) days = withLongTermChance(days);
                 ps.injury = { severity: days, daysRemaining: days, initialDays: days, source: 'in-game-goalie' };
                 autoPlaceOnIR(p.name, tk, days);
                 if (!backupG) ps.playingHurt = true; // stays in net but at reduced effectiveness
@@ -12228,7 +12244,7 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
 
             // v188: max is now 9 games — confirm dialog no longer needed
 
-            if (days > 0) { ps.injury = { severity: days, daysRemaining: days, source: 'post-game' }; autoPlaceOnIR(pName, teamCode, days); }
+            if (days > 0) { days = withLongTermChance(days); ps.injury = { severity: days, daysRemaining: days, source: 'post-game' }; autoPlaceOnIR(pName, teamCode, days); }
             tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: note });
             if (days > 0 && isTeamCaptain(pName)) {
                 tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `⚠ CAPTAIN DOWN: ${pName} (${teamCode.toUpperCase()}) — ${label}. Leadership void in the locker room.` });
@@ -12288,12 +12304,8 @@ function checkTradeDeadlineAnnouncements() {
         tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `!! NEWS: IT IS TRADE DEADLINE DAY! The window closes at midnight.` }); // v248: day-format fix
     } else if (currentDay === deadlineDay + 1) {
         tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: ` NEWS: The Trade Deadline has officially passed. Rosters are locked for the playoffs.` }); // v248: day-format fix
-        // Lock the trades toggle
-        if (awardConfig.trades) {
-            awardConfig.trades = false;
-            const btn = document.getElementById('btnTrades');
-            if (btn) { btn.textContent = btn.textContent.replace('ON', 'OFF'); btn.style.opacity = '0.5'; }
-        }
+        // v283: don't flip the user's Trades setting off - it was never switched back on, so trading died
+        // after season 1 in every dynasty. getTradeProbabilityMultiplier() already returns 0 past the deadline.
     }
 }
 
