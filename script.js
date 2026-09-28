@@ -8000,7 +8000,9 @@ function renderLeagueTeamStats() {
 
 function renderTeamStats() {
         const sel = document.getElementById('teamViewSelect');
-        if (!sel || !sel.value) return;
+        if (!sel) return;
+        try { localStorage.setItem('nhl94_teamViewSelect', sel.value); } catch (e) {}
+        if (!sel.value) return;
         const tk = sel.value;
         const k = statMode || (typeof isPlayoffs !== 'undefined' && isPlayoffs ? 'playoff' : 'season'); 
         const struct = getRosterStructure(tk); 
@@ -10800,6 +10802,13 @@ function populateTeamSelect() {
         league.forEach(t => {
             sel.innerHTML += `<option value="${t.nrm}">${t.name} (${getDynamicTeamOvr(t.nrm)} OVR)</option>`;
         });
+    }
+    // Restore the last viewed team after reload
+    let saved = '';
+    try { saved = localStorage.getItem('nhl94_teamViewSelect') || ''; } catch (e) {}
+    if (saved && [...sel.options].some(o => o.value === saved)) {
+        sel.value = saved;
+        renderTeamStats();
     }
 }
 
