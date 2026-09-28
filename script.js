@@ -5083,10 +5083,14 @@ function simGame(idx) {
             const ppRoll     = Math.random();
             const advTeamObj2 = advTeam.nrm===g.h.nrm ? hTeamObj : aTeamObj;
             const pp1Names   = advTeamObj2?.specialTeams?.pp1 || [];
-            const advRoster  = rosters[advTeam.nrm] || [];
+            // Only players dressed for this game can take a PP shift — the saved PP names and the
+            // full roster both include healthy scratches, who were scoring without being in the lineup.
+            const advStructPP = advTeam.nrm===g.h.nrm ? hStruct : aStruct;
+            const dressedPP   = new Set([...(advStructPP?.f||[]).flat(), ...(advStructPP?.d||[]).flat()].filter(Boolean).map(p=>p.name));
+            const advRoster  = (rosters[advTeam.nrm] || []).filter(p => p && dressedPP.has(p.name));
             const pp1Roster  = pp1Names
                 .map(n=>(n&&typeof n==='object')?n:advRoster.find(p=>p.name===n))
-                .filter(p=>p&&!(playerStats[p.name]?.injury?.daysRemaining>0)&&!(playerStats[p.name]?.suspended?.days>0));
+                .filter(p=>p&&dressedPP.has(p.name)&&!(playerStats[p.name]?.injury?.daysRemaining>0)&&!(playerStats[p.name]?.suspended?.days>0));
             // v141: auto-build PP units by attr.off (not archetypes). Top 5 offensive skaters with
             // at least 1 D guaranteed. If the best available D outrates the 4th forward offensively,
             // he naturally ends up in the top 5; otherwise the D takes the 5th slot.
@@ -5107,7 +5111,7 @@ function simGame(idx) {
             const pp2Names   = advTeamObj2?.specialTeams?.pp2 || [];
             const pp2Roster  = pp2Names
                 .map(n=>(n&&typeof n==='object')?n:advRoster.find(p=>p.name===n))
-                .filter(p=>p&&!(playerStats[p.name]?.injury?.daysRemaining>0)&&!(playerStats[p.name]?.suspended?.days>0));
+                .filter(p=>p&&dressedPP.has(p.name)&&!(playerStats[p.name]?.injury?.daysRemaining>0)&&!(playerStats[p.name]?.suspended?.days>0));
             const autoPP1    = pp1Roster.length < 3 ? buildPPUnit(new Set()) : pp1Roster;
             const pp1NameSet = new Set(autoPP1.map(p => p.name));
             const autoPP2    = pp2Roster.length < 3 ? buildPPUnit(pp1NameSet) : pp2Roster;
@@ -5163,7 +5167,7 @@ function simGame(idx) {
                         delEv.tm=advTeam.code; delEv.cl=teamColors[advTeam.nrm]?.[0]||'#fff';
                         delEv.txt=buildGoalText(delEv.scorer,delEv.pAssist,delEv.sAssist,null,false,false,false,advTeam.nrm===g.h.nrm?hG:aG,advTeam.nrm===g.h.nrm?aG:hG,period);
                         allGoals.push(delEv);
-                        trk(delEv.scorer,'g',1); trk(delGNm,'sa',1); trk(delGNm,'ga',1);
+                        trk(delEv.scorer,'g',1); trk(delEv.scorer,'s',1); trk(delGNm,'sa',1); trk(delGNm,'ga',1); // team shot was counted, scorer's wasn't
                         if(delEv.pAssist)trk(delEv.pAssist,'a',1);
                         if(delEv.sAssist)trk(delEv.sAssist,'a',1);
                         if(!isASG&&playerStats[delEv.scorer])playerStats[delEv.scorer][k].esg=(playerStats[delEv.scorer][k].esg||0)+1;
@@ -5591,6 +5595,7 @@ function simGame(idx) {
                 const psPr = 0.32 + (shooterComp - goalieComp) * 0.005;
                 const psSc = Math.random()<Math.max(0.15,Math.min(0.65,psPr));
                 trk(psShooter.name,'s',1);
+                if (psHome) hShots++; else aShots++;   // was missing: player got the shot, team total didn't
                 if (psSc) {
                     if (psHome){hG++;trk(psShooter.name,'g',1);trk(aG_name,'ga',1);trk(aG_name,'sa',1);}
                     else{aG++;trk(psShooter.name,'g',1);trk(hG_name,'ga',1);trk(hG_name,'sa',1);}
@@ -5690,12 +5695,13 @@ function simGame(idx) {
                     if (psSc2) {
                         if (rushHome){hG++;trk(rushSh.name,'g',1);trk(psGNm,'ga',1);}
                         else{aG++;trk(rushSh.name,'g',1);trk(psGNm,'ga',1);}
-                        const psEv = processSingleGoal(attTeam.nrm, attTeam.code, rushSh, attOnIce.filter(p=>p.name!==rushSh.name), timeStr, period, minute, sec);
+                        const psEv = processSingleGoal(attTeam.nrm, attTeam.code, rushSh, [], timeStr, period, minute, sec); // penalty-shot goals are unassisted
                         if (psEv) {
                             psEv.tm=attTeam.code; psEv.cl=teamColors[attTeam.nrm]?.[0]||'#fff';
                             psEv.txt=`🎯 PENALTY SHOT GOAL — ${psEv.scorer} beats ${psGObj?.name||psGNm}!`;
+                            psEv.isPenaltyShotGoal = true;
                             allGoals.push(psEv);
-                            trk(psEv.scorer,'g',1);
+                            // goal already credited to rushSh above — crediting psEv.scorer again double-counted it
                             if(rushHome)hMomentum=Math.min(14,hMomentum+8);else aMomentum=Math.min(14,aMomentum+8);
                             lastGoalSide=rushHome?'h':'a';
                             doYankCheck(period,minute,sec,timeStr);
@@ -5899,8 +5905,7 @@ function simGame(idx) {
             const goalies = struct.g || [];
             const backup = goalies.find(p => p.name !== losingGoalie);
             if (backup) {
-                const sec2 = Math.floor(Math.random()*60);
-                allGoals.push({ p:2, m:20, s:sec2, str:`P2 20:${sec2<10?'0'+sec2:sec2}`, tm:losingTeam.code,
+                allGoals.push({ p:3, m:0, s:0, str:'P3 0:00', tm:losingTeam.code, // swap happens in the 2nd intermission
                     cl:'#888', txt:`GOALIE CHANGE: ${losingGoalie} pulled — ${backup.name} in net`, isNote:true });
                 return backup.name;
             }
