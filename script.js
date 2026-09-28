@@ -10198,7 +10198,7 @@ function runRealisticDraft() {
             const nD = ro.filter(p => p.pos === 'D').length;
             const pos = nG < 3 ? 'G'
                 : nD < 8 ? 'D'
-                : Math.random() < 0.06 ? 'G'
+                : (nG < 4 && Math.random() < 0.06) ? 'G'   // never stockpile more than 4 goalies
                 : Math.random() < 0.33 ? 'D'
                 : ['C', 'LW', 'RW'][Math.floor(Math.random() * 3)];
             makeProspect(t, pos, pick);
@@ -10214,6 +10214,14 @@ function trimRostersAfterOffseason() {
     const MAX = 29;
     league.forEach(t => {
         const ro = rosters[t.nrm]; if (!ro) return;
+        // no team needs more than 4 goalies: release the lowest-rated extras first
+        let gs = ro.filter(p => p.pos === 'G').sort((a, b) => (getPlayerWeightedStats(a.name)?.ovr || 0) - (getPlayerWeightedStats(b.name)?.ovr || 0));
+        while (gs.length > 4) {
+            const cut = gs.shift();
+            ro.splice(ro.findIndex(p => p.name === cut.name), 1);
+            delete playerStats[cut.name];
+            if (awardConfig.headlines) tradeLog.unshift({ day: 'OFFSEASON', details: `RELEASED: ${t.code} releases G ${cut.name}.` });
+        }
         while (ro.length > MAX) {
             const nF = ro.filter(p => p.pos !== 'G' && p.pos !== 'D').length;
             const nD = ro.filter(p => p.pos === 'D').length;
