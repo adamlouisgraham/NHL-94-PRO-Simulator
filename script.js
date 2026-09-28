@@ -2529,7 +2529,7 @@ const dynamicDuos = [
     // FLA
     ['Stu Barnes', 'John MacLean', 'Andrei Kovalenko'],
     ['Jason Arnott', 'Steve Thomas', 'German Titov'],
-    ['Brian Skrudland', 'Tom Fitzgerald', 'Dave Lowry'],
+    ['Paul Gillis', 'Tom Fitzgerald', 'Dave Lowry'],
     ['Brian Skrudland', 'Mike Hough', 'Mike Foligno'],
     // HFD
     ['Ron Francis', 'Cam Neely', 'Jocelyn Lemieux'],
@@ -2547,13 +2547,13 @@ const dynamicDuos = [
     ['Neal Broten', 'Paul Broten', 'Mike McPhee'],
     ['Shane Churla', 'Mike Craig', 'Alan May'],
     // MTL
-    ['Bernie Nicholls', 'Stephane Richer', 'Russ Courtnall'],
-    ['Vincent Damphousse', 'Stephan Lebeau', 'Gilbert Dionne'],
+    ['Bernie Nicholls', 'Stephane Richer', 'Gilbert Dionne'],
+    ['Vincent Damphousse', 'Stephan Lebeau', 'Russ Courtnall'],
     ['Guy Carbonneau', 'Mike Keane', 'Ron Wilson'],
     ['Laurie Boschman', 'Benoit Brunet', 'Chris Nilan'],
     // NJD
-    ['Brian Bradley', 'Dave Gagner', 'Claude Lemieux'],
-    ['Bill Guerin', 'Michael Nylander', 'Corey Millen'],
+    ['Michael Nylander', 'Dave Gagner', 'Claude Lemieux'],
+    ['Bill Guerin', 'Brian Bradley', 'Corey Millen'],
     ['Bobby Holik', 'Danton Cole', 'Randy McKay'],
     ['Bob Carpenter', 'Mike Peluso', 'Tom Chorske'],
     ['Derian Hatcher', 'Bruce Driver'],
