@@ -674,7 +674,7 @@ function buildSavePayload() {
             league, rosters, playerStats, tradeLog: savedTradeLog, hallOfFame, leagueHistory: savedLeagueHistory,
             retiredPlayers, calendar: lightweightCalendar, currentDay, currentSeason,
             isPlayoffs, isASG, currentCupChamp, playoffBracket: lightweightBracket, awardConfig, 
-            monthSnapshot, pendingTrades, realDatesMap, customDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, teamAssistants, _awardsPending, asgDoneThisSeason
+            monthSnapshot, pendingTrades, realDatesMap, customDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, teamAssistants, _awardsPending, asgDoneThisSeason, selectedTeam
         }
     };
 }
@@ -718,6 +718,7 @@ function applyLoadedSave(data) {
     customDuos = Array.isArray(data.customDuos) ? data.customDuos : [];
     if (typeof data.coachAdj === 'object' && data.coachAdj) coachAdj = { ...coachAdj, ...data.coachAdj };
     if (typeof data.coachTrust === 'number') coachTrust = data.coachTrust;
+    selectedTeam = (typeof data.selectedTeam === 'string' && data.selectedTeam) ? data.selectedTeam : null;
     if (typeof data.deadlineCountermove === 'object' && data.deadlineCountermove) deadlineCountermove = data.deadlineCountermove;
     if (typeof data.chemScores === 'object' && data.chemScores) chemScores = data.chemScores;
     if (typeof data.preseasonOvrSnapshot === 'object' && data.preseasonOvrSnapshot) preseasonOvrSnapshot = data.preseasonOvrSnapshot;
@@ -4182,7 +4183,9 @@ function simGame(idx) {
         if (userIsHome) { aWallMod += fMod; hWallMod += fMod * 0.5; }
         else            { hWallMod += fMod; aWallMod += fMod * 0.5; }
         // Coach trust: high trust slightly boosts user team's goalie, low trust slightly hurts
-        const trustMod = (coachTrust - 50) * 0.003; // ±0.15 at extremes
+        // v268: ±0.04 at extremes (was ±0.15). With my-team now live, the old size turned a weak
+        // team's losing into a spiral: trust hit ~0 and its goalie became 15% easier to beat.
+        const trustMod = (coachTrust - 50) * 0.0008;
         if (g.h.nrm === selectedTeam) hWallMod -= trustMod;
         if (g.a.nrm === selectedTeam) aWallMod -= trustMod;
     }
@@ -6067,7 +6070,8 @@ function simGame(idx) {
     allGoals.sort((a,b) => a.p !== b.p ? a.p - b.p : (a.m !== b.m ? a.m - b.m : a.s - b.s));
 
     // [AWD] GAME WINNING GOAL  -  credit the scorer of the winning team's lead-clinching goal
-    if (hG !== aG) {
+    // (not in the All-Star Game: k is 'playoff' there, so it was landing in playoff/career-playoff GWG)
+    if (hG !== aG && !isASG) {
         const winnerCode = hG > aG ? g.h.code : g.a.code;
         const loserFinalScore = hG > aG ? aG : hG;
         // GWG = first goal that put winner ahead by more than the loser's final total
@@ -6098,7 +6102,8 @@ function simGame(idx) {
     const aPulled = aG_name !== origAG_name;
     if (hG_obj) {
         const decisionGoalie = hPulled ? origHG_name : hG_name;
-        if (playerStats[decisionGoalie]?.[k]) {
+        // All-Star Game results must not count as playoff GP/W/L/T (k is 'playoff' during the ASG)
+        if (!isASG && playerStats[decisionGoalie]?.[k]) {
             playerStats[decisionGoalie][k].gp++;
             if (hStatus === 'win') playerStats[decisionGoalie][k].w++; else if (hStatus === 'loss') playerStats[decisionGoalie][k].l++; else playerStats[decisionGoalie][k].t++;
         }
@@ -6107,7 +6112,7 @@ function simGame(idx) {
         // swap. Every shot/save in this game was actually simulated under the original
         // starter's ratings the whole way through; the backup has zero real TOI/SA/SV to
         // back up an appearance, so crediting them a bare GP was a phantom stat line.
-        if (!hPulled && aG === 0) playerStats[hG_name][k].so++;
+        if (!isASG && !hPulled && aG === 0) playerStats[hG_name][k].so++;
         trk(origHG_name, 'toi', totalGameMinutes);
         // Persist computed GAA and SV% so saves/exports reflect real values
         const _hGs = playerStats[origHG_name]?.[k];
@@ -6118,11 +6123,12 @@ function simGame(idx) {
     }
     if (aG_obj) {
         const decisionGoalie = aPulled ? origAG_name : aG_name;
-        if (playerStats[decisionGoalie]?.[k]) {
+        // All-Star Game results must not count as playoff GP/W/L/T (k is 'playoff' during the ASG)
+        if (!isASG && playerStats[decisionGoalie]?.[k]) {
             playerStats[decisionGoalie][k].gp++;
             if (aStatus === 'win') playerStats[decisionGoalie][k].w++; else if (aStatus === 'loss') playerStats[decisionGoalie][k].l++; else playerStats[decisionGoalie][k].t++;
         }
-        if (!aPulled && hG === 0) playerStats[aG_name][k].so++;
+        if (!isASG && !aPulled && hG === 0) playerStats[aG_name][k].so++;
         trk(origAG_name, 'toi', totalGameMinutes);
         // Persist computed GAA and SV% so saves/exports reflect real values
         const _aGs = playerStats[origAG_name]?.[k];
@@ -6364,7 +6370,7 @@ function simGame(idx) {
         const userIsHome = g.h.nrm === selectedTeam;
         const userWon = userIsHome ? hG > aG : aG > hG;
         const userLost = userIsHome ? aG > hG : hG > aG;
-        coachTrust = Math.max(0, Math.min(100, coachTrust + (userWon ? 4 : userLost ? -3 : 1)));
+        coachTrust = Math.max(0, Math.min(100, coachTrust + (userWon ? 3 : userLost ? -2 : 1))); // v268: was +4/-3 — a sub-.430 team drifted to 0
     }
 
     // Surface milestone banners in trade log / news ticker
@@ -10459,6 +10465,29 @@ function openScoutingReport(day, gIdx) {
     document.getElementById('scoutingOverlay').style.display = 'flex';
 }
 
+// "My team": the team the coaching settings, coach trust, line matching and GM report card
+// apply to. It used to be declared but never set, so all of those features were inert.
+function _setMyTeam(nrm) {
+    const next = nrm || null;
+    if (next !== selectedTeam) coachTrust = 50; // new bench, fresh confidence
+    selectedTeam = next;
+    saveGame();
+    updateMyTeamLabel();
+    const ov = document.getElementById('coachingOverlay');
+    if (ov && ov.style.display && ov.style.display !== 'none') openCoachingPanel();
+}
+function setMyTeamFromView() {
+    const sel = document.getElementById('teamViewSelect');
+    if (!sel || !sel.value) return alert('Choose a team in SELECT TEAM first.');
+    _setMyTeam(sel.value);
+}
+function updateMyTeamLabel() {
+    const el = document.getElementById('myTeamLabel');
+    if (!el) return;
+    const t = league.find(x => x.nrm === selectedTeam);
+    el.innerText = t ? `MY TEAM: ${t.code}` : 'MY TEAM: NONE';
+}
+
 function openCoachingPanel() {
     const fLabels = ['DEFENSIVE', 'NEUTRAL', 'AGGRESSIVE'];
     const ppLabels = ['CYCLE', 'BALANCED', 'SHOOT'];
@@ -10472,7 +10501,15 @@ function openCoachingPanel() {
             background:${active?'#0d0800':'#000'};">${lbl}</button>`;
     }).join('');
 
+    const myTeamOpts = ['<option value="">-- NONE (all teams AI) --</option>',
+        ...[...league].sort((a, b) => a.name.localeCompare(b.name))
+            .map(t => `<option value="${t.nrm}" ${t.nrm === selectedTeam ? 'selected' : ''}>${t.name}</option>`)].join('');
     const html = `
+    <div style="margin-bottom:14px;">
+        <div style="font-size:6px;color:#888;letter-spacing:.12em;margin-bottom:6px;">MY TEAM</div>
+        <div style="font-size:5px;color:#444;margin-bottom:4px;">Coaching settings, coach confidence and the GM report card apply to this team's games.</div>
+        <select onchange="_setMyTeam(this.value)" class="stat-input" style="width:100%;">${myTeamOpts}</select>
+    </div>
     <div style="margin-bottom:14px;">
         <div style="font-size:6px;color:#888;letter-spacing:.12em;margin-bottom:6px;">FORECHECK STYLE</div>
         <div style="font-size:5px;color:#444;margin-bottom:4px;">Aggressive opens the game (more shots both ways). Defensive tightens it.</div>
@@ -10889,6 +10926,7 @@ function populateTeamSelect() {
             sel.innerHTML += `<option value="${t.nrm}">${t.name} (${getDynamicTeamOvr(t.nrm)} OVR)</option>`;
         });
     }
+    updateMyTeamLabel();
     // Restore the last viewed team after reload
     let saved = '';
     try { saved = localStorage.getItem('nhl94_teamViewSelect') || ''; } catch (e) {}

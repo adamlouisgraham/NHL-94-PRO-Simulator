@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
-    <script src="script.js?v=267"></script>
+    <script src="script.js?v=269"></script>
 </head>
 <body>
 
@@ -273,6 +273,8 @@
                     <div style="padding:15px; background:#111; display:flex; gap:15px; align-items:center;">
                         <span style="font-size:8px;">SELECT TEAM:</span>
                         <select id="teamViewSelect" class="stat-input" style="width:300px;" onchange="renderTeamStats()"></select>
+                        <button onclick="setMyTeamFromView()" style="font-size:7px;border-color:#FFA500;color:#FFA500;">SET AS MY TEAM</button>
+                        <span id="myTeamLabel" style="font-size:8px;color:#FFA500;">MY TEAM: NONE</span>
                     </div>
                     <div id="teamStatsContainer" style="padding:15px;"></div>
                 </div>
