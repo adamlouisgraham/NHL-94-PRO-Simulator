@@ -969,7 +969,7 @@ function refreshScheduleDashboardUI() {
         if (calendar.length === 0) dayEl.innerText = 'DAY 0/0';
         else {
             const dayNumber = Math.min(currentDay + 1, calendar.length); 
-            const dateText = realDatesMap && realDatesMap[currentDay] ? ` | ${realDatesMap[currentDay]}` : ''; 
+            const dateText = getSimDate() ? ` | ${getSimDate()}` : ''; 
             const asgText = (isASG && calendar[currentDay] && calendar[currentDay].some(g => g.isASG_game)) ? ' | ALL-STAR DAY' : '';
             dayEl.innerText = `DAY ${dayNumber}/${calendar.length}${dateText}${asgText}`;
         }
@@ -996,7 +996,7 @@ function renderScheduleDashboard() {
     const remainingDays = Math.max(totalDays - currentDay, 0);
     const slot = getSelectedSaveSlot(); 
     const meta = getSaveMeta(slot) || {}; 
-    const currentDate = realDatesMap && realDatesMap[currentDay] ? realDatesMap[currentDay] : ''; 
+    const currentDate = getSimDate(); 
     const slotLabel = getSelectedSaveSlotLabel(); 
     const versionLabel = meta.version ? `Save ${slotLabel}  |  v${meta.version}` : `Save ${slotLabel}  |  n/a`; 
     const isAsgDay = isASG && calendar[currentDay] && calendar[currentDay].some(g => g.isASG_game);
@@ -1008,7 +1008,7 @@ function renderScheduleDashboard() {
     const upcomingLines = (calendar[currentDay] || []).slice(0, 3).map((g, gIdx) => {
         const home = g.h ? (g.h.code || g.h.name || 'HOME') : 'HOME';
         const away = g.a ? (g.a.code || g.a.name || 'AWAY') : 'AWAY';
-        const when = realDatesMap && realDatesMap[currentDay] ? realDatesMap[currentDay] : `Day ${currentDay + 1}`;
+        const when = getSimDate() || `Day ${currentDay + 1}`;
         const goalieBadge = (tk) => {
             if (!tk) return '';
             const gp = getProjectedGoalie(tk);
@@ -1770,7 +1770,7 @@ async function startNewGame(useCustomRoster = false) {
                     parseInt(getCol(r, ["CAREER T", "C_T", "CAR T"], -1)) || 0
                 ),
                 careerPlayoff: {
-                    gp: parseInt(getCol(r, ["CAREER PLAYOFF GP"], -1)) || 0,
+                    gp: parseInt(getCol(r, ["GOALIE CAREER PLAYOFF GP"], -1)) || parseInt(getCol(r, ["CAREER PLAYOFF GP"], -1)) || 0,
                     w: parseInt(getCol(r, ["CAREER PLAYOFF W"], -1)) || 0,
                     l: parseInt(getCol(r, ["CAREER PLAYOFF L"], -1)) || 0,
                     t: 0,
@@ -7580,7 +7580,25 @@ function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 // iteration slows to a crawl the moment the tab loses focus — it looks frozen but is
 // just being throttled. MessageChannel posts a macrotask that isn't subject to that
 // clamp, so long sims keep running at full speed in the background.
+// Sim lock watchdog. Every sim loop stamps _lastSimBeat as it works. If a sim button
+// finds isSimulating still set but nothing has moved for SIM_STALE_MS, the previous sim
+// died without releasing the lock (seen after a native dialog stalled the playoff sim) -
+// clear it so the buttons are not dead until a reload.
+let _lastSimBeat = 0;
+const SIM_STALE_MS = 15000;
+function simBeat() { _lastSimBeat = Date.now(); }
+function simLockBusy() {
+    if (!isSimulating) return false;
+    if (Date.now() - _lastSimBeat > SIM_STALE_MS) {
+        console.warn('Sim lock was stale (no progress for ' + Math.round((Date.now() - _lastSimBeat) / 1000) + 's) - releasing it.');
+        isSimulating = false;
+        return false;
+    }
+    return true;
+}
+
 function yieldToRenderer() {
+    simBeat();
     return new Promise(resolve => {
         const ch = new MessageChannel();
         ch.port1.onmessage = () => { ch.port1.close(); ch.port2.close(); resolve(); };
@@ -7590,7 +7608,7 @@ function yieldToRenderer() {
 
 async function simDay(slowMode = true, bypassLock = false) {
     if (currentDay >= calendar.length) return;
-    if (!bypassLock && isSimulating) return;
+    if (!bypassLock && simLockBusy()) return;
     if (!bypassLock) isSimulating = true; 
     try {
         const dayGames = getGamesForDay(currentDay);
@@ -7609,6 +7627,7 @@ async function simDay(slowMode = true, bypassLock = false) {
 };
             // ------------------------------------------------
             simGame(i);
+            simBeat();
             activeIdx = i;   // keep jumbotron pointed at the most recently finished game
             // Only repaint per-game when the day is being watched. In batch mode there is
             // no await between games, so the browser never paints these — every render but
@@ -7681,7 +7700,7 @@ function advanceCalendar() {
 }
 
 async function simWeek() {
-    if (isSimulating) return;
+    if (simLockBusy()) return;
     isSimulating = true;
     // simDay's finally already repainted, and advanceCalendar repaints after the day rolls
     // over — no third render in between. Turbo skips the pacing sleep entirely.
@@ -7690,7 +7709,7 @@ async function simWeek() {
 }
 
 async function simMonth() {
-    if (isSimulating) return;
+    if (simLockBusy()) return;
     isSimulating = true;
     for (let i = 0; i < 30; i++) {
         if (currentDay >= calendar.length) break;
@@ -7705,7 +7724,7 @@ async function simMonth() {
 }
 
 async function simSeason(useTurbo = false) {
-    if (isSimulating && !isSimSeason) return;
+    if (simLockBusy() && !isSimSeason) return;
     const btnSim = document.getElementById('btnSimSeason'); const btnTurbo = document.getElementById('btnTurboSimSeason');
     const isPauseAction = isSimulating && isSimSeason;
 
@@ -7744,7 +7763,7 @@ async function simSeason(useTurbo = false) {
 }
 
 async function simRestOfSeason() {
-    if (isSimulating) return;
+    if (simLockBusy()) return;
     if (isPlayoffs) return;
     const remaining = calendar.slice(currentDay).filter(day => day && day.some(g => g && !g.result)).length;
     if (remaining === 0) { alert('No remaining regular season games.'); return; }
@@ -7798,7 +7817,7 @@ async function simRestOfSeason() {
 }
 
 async function simRound() {
-    if (isSimulating) return;
+    if (simLockBusy()) return;
     isSimulating = true; 
 
     // Failsafe: If the round is ALREADY over before clicking, advance it instantly
@@ -7836,11 +7855,12 @@ async function simRound() {
 // that case and would block the renderer indefinitely.
 async function simPlayoffs(turboOpt) {
     // Guard BEFORE prompting: a re-entrant call used to still pop the dialog and hang.
-    if (isSimulating) return;
-    const turbo = (turboOpt === undefined)
-        ? confirm("TURBO: simulate all playoff rounds instantly?\n\nCancel = normal speed (300ms/game).")
-        : !!turboOpt;
+    if (simLockBusy()) return;
+    // No confirm(): a native dialog left open froze the playoff sim with the lock held.
+    // The button always runs turbo; SIM ROUND is there for watching games play out.
+    const turbo = (turboOpt === undefined) ? true : !!turboOpt;
     isSimulating = true;
+    simBeat();
     try {
         // The playoff calendar only ever holds ONE day of games (genPlayoffSlate builds
         // a single slate for whichever series are still alive). So a round is played by
@@ -12049,6 +12069,29 @@ function refreshTradeBadge() {
         badge.style.cssText = 'display:inline-block;background:#FF4444;color:#fff;border-radius:50%;font-size:5px;min-width:12px;height:12px;line-height:12px;text-align:center;margin-left:4px;padding:0 2px;vertical-align:middle;';
         btn.appendChild(badge);
     }
+}
+
+// Display date for the current sim day. realDatesMap comes from the 1993-94 schedule sheet
+// and is reused every season, so shift the year by (season - 1). The playoff calendar is a
+// one-day slate rebuilt each day, so realDatesMap[currentDay] would always show opening
+// night; count playoff days on from the last regular-season date instead.
+function getSimDate() {
+    const shift = Math.max(0, (typeof currentSeason === 'number' ? currentSeason : 1) - 1);
+    const bump = str => { const m = /^(\d{4})(-\d\d-\d\d)$/.exec(str || ''); return m ? (Number(m[1]) + shift) + m[2] : (str || ''); };
+    if (isPlayoffs) {
+        const regDates = (realDatesMap || []).filter(d => /^\d{4}-\d\d-\d\d$/.test(d));
+        if (!regDates.length) return '';
+        const hist = playoffBracket.history || [];
+        const longest = series => Math.max(0, ...(series || []).map(x => (x.hW || 0) + (x.aW || 0)));
+        let days = hist.reduce((n, r) => n + longest(r.series), 0);
+        const lastHist = hist[hist.length - 1];
+        if (!lastHist || lastHist.round !== playoffBracket.round) days += longest(playoffBracket.series);
+        const d = new Date(regDates[regDates.length - 1] + 'T12:00:00');
+        d.setDate(d.getDate() + 3 + days);
+        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return bump(iso);
+    }
+    return bump(realDatesMap && realDatesMap[currentDay]);
 }
 
 function updateUI() {
