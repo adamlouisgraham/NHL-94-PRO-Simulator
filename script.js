@@ -4715,7 +4715,7 @@ function simGame(idx) {
                 hG_name = bk.name; hG_obj = bk;
                 hWallMod = Math.max(0.65, Math.min(1.35, 1.0 + (75-bkOvr)*0.013 + (Math.random()-0.5)*0.12));
                 hYanked = true;
-                allGoals.push({p:p_,m:min_%20||20,s:s_,str:ts_,tm:g.h.code,cl:'#888',
+                allGoals.push({p:p_,m:min_,s:s_,str:ts_,tm:g.h.code,cl:'#888',
                     txt:`GOALIE CHANGE: ${hGS[0].name} pulled — ${bk.name} enters (down ${hDef})`,isNote:true});
             }
         }
@@ -4728,7 +4728,7 @@ function simGame(idx) {
                 aG_name = bk.name; aG_obj = bk;
                 aWallMod = Math.max(0.65, Math.min(1.35, 1.0 + (75-bkOvr)*0.013 + (Math.random()-0.5)*0.12));
                 aYanked = true;
-                allGoals.push({p:p_,m:min_%20||20,s:s_,str:ts_,tm:g.a.code,cl:'#888',
+                allGoals.push({p:p_,m:min_,s:s_,str:ts_,tm:g.a.code,cl:'#888',
                     txt:`GOALIE CHANGE: ${aGS[0].name} pulled — ${bk.name} enters (down ${aDef})`,isNote:true});
             }
         }
@@ -4745,9 +4745,11 @@ function simGame(idx) {
             lastGoalSide = null; // reset for new period
         }
         period = newPeriod;
-        const minute  = Math.floor(t / 4) + 1;
-        const sec     = (t % 4) * 15;
-        const timeStr = `P${period} ${minute%20||20}:${sec<10?'0'+sec:sec}`;
+        // Elapsed time within the period. Each tick is 15 s; the old minute (floor(t/4)+1 then
+        // %20||20) ran 1..20 and produced impossible clocks like 'P2 20:45' on the last tick.
+        const minute  = Math.floor((t % 80) / 4);
+        const sec     = (t % 4) * 15 + Math.floor(Math.random() * 15);
+        const timeStr = `P${period} ${minute}:${sec<10?'0'+sec:sec}`;
 
         const hFLine  = homeFSchedule[t] || 0;
         const hDPair  = homeDSchedule[t] || 0;
@@ -4982,7 +4984,7 @@ function simGame(idx) {
                 const pool    = expandPool(sLog, onIce, t);
                 const assistP = pool.filter(p => p.name !== shooter.name);
 
-                const goalEv = processSingleGoal(teamObj.nrm, teamObj.code, shooter, assistP, timeStr, period, minute%20||20, sec);
+                const goalEv = processSingleGoal(teamObj.nrm, teamObj.code, shooter, assistP, timeStr, period, minute, sec);
                 if (goalEv) {
                     goalEv.tm  = teamObj.code;
                     goalEv.cl  = teamColors[teamObj.nrm]?.[0] || '#fff';
@@ -5005,8 +5007,8 @@ function simGame(idx) {
                     // v182: hat trick detection
                     if (goalEv.scorer) {
                         gameGoals[goalEv.scorer] = (gameGoals[goalEv.scorer]||0)+1;
-                        if (gameGoals[goalEv.scorer] === 3) allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:teamObj.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${goalEv.scorer}!`,isNote:true});
-                        else if (gameGoals[goalEv.scorer] > 3) allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:teamObj.code,cl:'#FFD700',txt:`🎩 ${gameGoals[goalEv.scorer]}-GOAL GAME — ${goalEv.scorer}!`,isNote:true});
+                        if (gameGoals[goalEv.scorer] === 3) allGoals.push({p:period,m:minute,s:sec,str:timeStr,tm:teamObj.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${goalEv.scorer}!`,isNote:true});
+                        else if (gameGoals[goalEv.scorer] > 3) allGoals.push({p:period,m:minute,s:sec,str:timeStr,tm:teamObj.code,cl:'#FFD700',txt:`🎩 ${gameGoals[goalEv.scorer]}-GOAL GAME — ${goalEv.scorer}!`,isNote:true});
                     }
                     // v182: buzzer beater label
                     if ([78,79,158,159,238,239].includes(t)) goalEv.txt = '🚨 BUZZER BEATER! ' + (goalEv.txt||'');
@@ -5058,7 +5060,7 @@ function simGame(idx) {
             if (skipChance > 0 && Math.random() < skipChance) continue;
 
             trk(offender, 'pim', pimAmt);
-            penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:penTeam.code,
+            penaltyEvents.push({p:period, m:minute, s:sec, str:timeStr, tm:penTeam.code,
                 cl:teamColors[penTeam.nrm]?.[0]||'#fff',
                 txt:`PENALTY: ${offender} (${isMajor?'5 min major':isDoubleMajor?'4 min double minor':'2 min minor'})`, isPenalty:true});
 
@@ -5067,7 +5069,7 @@ function simGame(idx) {
                 if (!playerStats[offender].suspended) playerStats[offender].suspended={days:0,reason:''};
                 playerStats[offender].suspended.days += days;
                 playerStats[offender].suspended.reason = 'Match penalty';
-                penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:penTeam.code,
+                penaltyEvents.push({p:period, m:minute, s:sec, str:timeStr, tm:penTeam.code,
                     cl:'#FF8800', txt:`SUSPENSION: ${offender} — ${days} game(s) (match penalty)`, isNote:true});
             }
 
@@ -5148,14 +5150,14 @@ function simGame(idx) {
             // if they score, the PP is nullified (NHL rule)
             let ppCancelled = false;
             if (!isMajor && !isDoubleMajor && Math.random() < 0.28 && ppUnit.length > 0) {
-                penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:penTeam.code,
+                penaltyEvents.push({p:period,m:minute,s:sec,str:timeStr,tm:penTeam.code,
                     cl:'#88AAFF',txt:`DELAYED PENALTY: ${offender} — ${advTeam.code} keeps possession`,isNote:true});
                 const delWallMod = advTeam.nrm===g.h.nrm ? aWallMod : hWallMod;
                 const delRate    = Math.max(0.015, Math.min(0.20, 0.0906 * delWallMod * 1.10));
                 if (Math.random() < delRate) {
                     const delSh = selectShooter(ppUnit, 'ES');
                     const delGNm = advTeam.nrm===g.h.nrm ? aG_name : hG_name;
-                    const delEv = processSingleGoal(advTeam.nrm, advTeam.code, delSh, ppUnit, timeStr, period, minute%20||20, sec);
+                    const delEv = processSingleGoal(advTeam.nrm, advTeam.code, delSh, ppUnit, timeStr, period, minute, sec);
                     if (delEv) {
                         if(advTeam.nrm===g.h.nrm){hG++;hShots++;}else{aG++;aShots++;}
                         delEv.tm=advTeam.code; delEv.cl=teamColors[advTeam.nrm]?.[0]||'#fff';
@@ -5168,18 +5170,18 @@ function simGame(idx) {
                         if(advTeam.nrm===g.h.nrm)hMomentum=8;else aMomentum=8;
                         lastGoalSide=advTeam.nrm===g.h.nrm?'h':'a';
                         doYankCheck(period,minute,sec,timeStr);
-                        penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:advTeam.code,
+                        penaltyEvents.push({p:period,m:minute,s:sec,str:timeStr,tm:advTeam.code,
                             cl:'#88AAFF',txt:`GOAL DURING DELAYED PENALTY — ${offender}'s minor nullified!`,isNote:true});
                         ppCancelled = true;
                         gameGoals[delEv.scorer]=(gameGoals[delEv.scorer]||0)+1;
-                        if(gameGoals[delEv.scorer]===3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:advTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${delEv.scorer}!`,isNote:true});
+                        if(gameGoals[delEv.scorer]===3)allGoals.push({p:period,m:minute,s:sec,str:timeStr,tm:advTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${delEv.scorer}!`,isNote:true});
                     }
                 }
             }
 
             if (!ppCancelled && ppRoll < ppConvRate && ppUnit.length > 0) {
                 const ppShooter = selectShooter(ppUnit, 'PP');
-                const ppEv = processSingleGoal(advTeam.nrm, advTeam.code, ppShooter, ppUnit, timeStr, period, minute%20||20, sec);
+                const ppEv = processSingleGoal(advTeam.nrm, advTeam.code, ppShooter, ppUnit, timeStr, period, minute, sec);
                 if (ppEv) {
                     ppEv.isPP=true; ppEv.tm=advTeam.code; ppEv.cl=teamColors[advTeam.nrm]?.[0]||'#FFD700';
                     ppEv.txt=buildGoalText(ppEv.scorer, ppEv.pAssist, ppEv.sAssist, null, true, false, false, 0, 0, 0);
@@ -5208,8 +5210,8 @@ function simGame(idx) {
                     doYankCheck(period, minute, sec, timeStr);
                     // v182: hat trick tracking for PP goals
                     gameGoals[ppEv.scorer]=(gameGoals[ppEv.scorer]||0)+1;
-                    if(gameGoals[ppEv.scorer]===3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:advTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${ppEv.scorer}!`,isNote:true});
-                    else if(gameGoals[ppEv.scorer]>3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:advTeam.code,cl:'#FFD700',txt:`🎩 ${gameGoals[ppEv.scorer]}-GOAL GAME — ${ppEv.scorer}!`,isNote:true});
+                    if(gameGoals[ppEv.scorer]===3)allGoals.push({p:period,m:minute,s:sec,str:timeStr,tm:advTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${ppEv.scorer}!`,isNote:true});
+                    else if(gameGoals[ppEv.scorer]>3)allGoals.push({p:period,m:minute,s:sec,str:timeStr,tm:advTeam.code,cl:'#FFD700',txt:`🎩 ${gameGoals[ppEv.scorer]}-GOAL GAME — ${ppEv.scorer}!`,isNote:true});
                 }
             }
 
@@ -5244,7 +5246,7 @@ function simGame(idx) {
             if (shgHasEliteF && shgHasEliteD) shgRate *= 1.20;
             if (ppRoll>=ppConvRate && Math.random()<shgRate && pkUnit.length>0) {
                 const shShooter = selectShooter(pkUnit, 'SH');
-                const shEv = processSingleGoal(penTeam.nrm, penTeam.code, shShooter, pkUnit, timeStr, period, minute%20||20, sec);
+                const shEv = processSingleGoal(penTeam.nrm, penTeam.code, shShooter, pkUnit, timeStr, period, minute, sec);
                 if (shEv) {
                     shEv.isSH=true; shEv.tm=penTeam.code; shEv.cl=teamColors[penTeam.nrm]?.[0]||'#00FFFF';
                     shEv.txt=buildGoalText(shEv.scorer, shEv.pAssist, shEv.sAssist, null, false, true, false, 0, 0, 0);
@@ -5269,8 +5271,8 @@ function simGame(idx) {
                     if (penTeam.nrm===g.h.nrm) hMomentum=8; else aMomentum=8;
                     // v182: hat trick tracking for SHG
                     gameGoals[shEv.scorer]=(gameGoals[shEv.scorer]||0)+1;
-                    if(gameGoals[shEv.scorer]===3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:penTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${shEv.scorer}!`,isNote:true});
-                    else if(gameGoals[shEv.scorer]>3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:penTeam.code,cl:'#FFD700',txt:`🎩 ${gameGoals[shEv.scorer]}-GOAL GAME — ${shEv.scorer}!`,isNote:true});
+                    if(gameGoals[shEv.scorer]===3)allGoals.push({p:period,m:minute,s:sec,str:timeStr,tm:penTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${shEv.scorer}!`,isNote:true});
+                    else if(gameGoals[shEv.scorer]>3)allGoals.push({p:period,m:minute,s:sec,str:timeStr,tm:penTeam.code,cl:'#FFD700',txt:`🎩 ${gameGoals[shEv.scorer]}-GOAL GAME — ${shEv.scorer}!`,isNote:true});
                 }
             }
 
@@ -5281,7 +5283,7 @@ function simGame(idx) {
                 const ppConvRate2 = ppConvBase * (isDoubleMajor ? 0.50 : 0.60);
                 if (ppRoll2 < ppConvRate2) {
                     const ppSh2 = selectShooter(ppUnit, 'PP');
-                    const ppEv2 = processSingleGoal(advTeam.nrm, advTeam.code, ppSh2, ppUnit, timeStr, period, minute%20||20, sec);
+                    const ppEv2 = processSingleGoal(advTeam.nrm, advTeam.code, ppSh2, ppUnit, timeStr, period, minute, sec);
                     if (ppEv2) {
                         ppEv2.isPP=true; ppEv2.tm=advTeam.code; ppEv2.cl=teamColors[advTeam.nrm]?.[0]||'#FFD700';
                         ppEv2.txt=buildGoalText(ppEv2.scorer,ppEv2.pAssist,ppEv2.sAssist,null,true,false,false,0,0,0);
@@ -5307,8 +5309,8 @@ function simGame(idx) {
                         doYankCheck(period, minute, sec, timeStr);
                         // v182: hat trick tracking for second PP sequence
                         gameGoals[ppEv2.scorer]=(gameGoals[ppEv2.scorer]||0)+1;
-                        if(gameGoals[ppEv2.scorer]===3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:advTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${ppEv2.scorer}!`,isNote:true});
-                        else if(gameGoals[ppEv2.scorer]>3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:advTeam.code,cl:'#FFD700',txt:`🎩 ${gameGoals[ppEv2.scorer]}-GOAL GAME — ${ppEv2.scorer}!`,isNote:true});
+                        if(gameGoals[ppEv2.scorer]===3)allGoals.push({p:period,m:minute,s:sec,str:timeStr,tm:advTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${ppEv2.scorer}!`,isNote:true});
+                        else if(gameGoals[ppEv2.scorer]>3)allGoals.push({p:period,m:minute,s:sec,str:timeStr,tm:advTeam.code,cl:'#FFD700',txt:`🎩 ${gameGoals[ppEv2.scorer]}-GOAL GAME — ${ppEv2.scorer}!`,isNote:true});
                     }
                 } else {
                     // Second sequence failed — credit PK with 1 saved shot
@@ -5331,7 +5333,7 @@ function simGame(idx) {
                 const capSkip = (name) => { const ov=Math.max(0,(playerStats[name]?.[k]?.pim||0)-150); return ov>0&&Math.random()<1-Math.pow(0.85,ov/10); };
                 if (!capSkip(hOff)) trk(hOff,'pim',2);
                 if (!capSkip(aOff)) trk(aOff,'pim',2);
-                penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:g.h.code,
+                penaltyEvents.push({p:period, m:minute, s:sec, str:timeStr, tm:g.h.code,
                     cl:'#FFAA66', txt:`COINCIDENTAL MINORS: ${hOff} & ${aOff} — roughing (2 min each)`, isPenalty:true});
             }
 
@@ -5404,7 +5406,7 @@ function simGame(idx) {
                             vPs.injury.daysRemaining = injDays; vPs.injury.severity = injDays; vPs.injury.source = 'hit';
                             vPs.injury.type = injDays>=10?'Hit — week-to-week':injDays>=5?'Hit — short-term':'Hit — day-to-day';
                             autoPlaceOnIR(victim.name, (ev.side==='h'?g.a:g.h).nrm, injDays);
-                            penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,
+                            penaltyEvents.push({p:period,m:minute,s:sec,str:timeStr,
                                 tm:(ev.side==='h'?g.a:g.h).code, cl:'#FF6666',
                                 txt:`🏥 INJURY: ${victim.name} shaken up after hit by ${hPicked.name} — day-to-day (${injDays}d)`,isNote:true});
                             if (awardConfig.headlines) tradeLog.unshift({day:`DAY ${currentDay+1}`, details:`🏥 INJURY: ${victim.name} (${(ev.side==='h'?g.a:g.h).code}) — hit by ${hPicked.name}, out ${injDays}d`});
@@ -5418,7 +5420,7 @@ function simGame(idx) {
                                     hPs.suspended.reason = 'Dangerous hit';
                                     if (!hPs.suspensionHistory) hPs.suspensionHistory = [];
                                     hPs.suspensionHistory.push({ day: currentDay, games: susDays, reason: 'Dangerous hit', season: currentSeason });
-                                    penaltyEvents.push({ p: period, m: minute % 20 || 20, s: sec, str: timeStr,
+                                    penaltyEvents.push({ p: period, m: minute, s: sec, str: timeStr,
                                         tm: (ev.side === 'h' ? g.h : g.a).code, cl: '#FF8800',
                                         txt: `SUSPENSION: ${hPicked.name} — ${susDays} game(s) (dangerous hit)`, isNote: true });
                                     if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `🚫 SUSPENSION: ${hPicked.name} suspended ${susDays} game(s) — dangerous hit on ${victim.name}.` });
@@ -5467,7 +5469,7 @@ function simGame(idx) {
             const aF = pickFighter(aFightPool);
             if (hF && aF) {
                 trk(hF.name,'pim',5); trk(aF.name,'pim',5);
-                penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:g.h.code,
+                penaltyEvents.push({p:period, m:minute, s:sec, str:timeStr, tm:g.h.code,
                     cl:'#FF4444', txt:`FIGHT: ${hF.name} vs ${aF.name} — coincidental majors (5 min each)`, isPenalty:false, isFight:true});
                 // FIGHT MOMENTUM — winner's bench gets a surge; toughness + v166: body weight edge
                 const getWgtNum = (n) => { const ps2=playerStats[n]; return ps2?.weight || ps2?.attr?.weight || 195; };
@@ -5486,7 +5488,7 @@ function simGame(idx) {
                         // v200: log to suspensionHistory
                         if (!playerStats[fighter.name].suspensionHistory) playerStats[fighter.name].suspensionHistory = [];
                         playerStats[fighter.name].suspensionHistory.push({ day: currentDay, games: days, reason: 'Match penalty', season: currentSeason });
-                        penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:g.h.code,
+                        penaltyEvents.push({p:period, m:minute, s:sec, str:timeStr, tm:g.h.code,
                             cl:'#FF8800', txt:`SUSPENSION: ${fighter.name} — ${days} game(s) (match penalty)`, isNote:true});
                     }
                 });
@@ -5502,7 +5504,7 @@ function simGame(idx) {
                                 fPs.injury.daysRemaining = injDays; fPs.injury.severity = injDays; fPs.injury.source = 'fight';
                                 fPs.injury.type = injDays>=10?'Fight — week-to-week':injDays>=5?'Fight — short-term':'Fight — day-to-day';
                                 autoPlaceOnIR(fighter.name, (fighter === hF ? g.h : g.a).nrm, injDays);
-                                penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,
+                                penaltyEvents.push({p:period,m:minute,s:sec,str:timeStr,
                                     tm:g.h.code, cl:'#FF6666',
                                     txt:`🏥 INJURY: ${fighter.name} hurt in fight — day-to-day (${injDays}d)`,isNote:true});
                                 if (awardConfig.headlines) tradeLog.unshift({day:`DAY ${currentDay+1}`, details:`🏥 INJURY: ${fighter.name} — injured in fight, out ${injDays}d`});
@@ -5523,7 +5525,7 @@ function simGame(idx) {
                     if (retPool.length && ppPool.length) {
                         const ret = retPool[Math.floor(Math.random() * retPool.length)];
                         trk(ret.name, 'pim', 2);
-                        penaltyEvents.push({p:period, m:minute%20||20, s:sec, str:timeStr, tm:penObj.code,
+                        penaltyEvents.push({p:period, m:minute, s:sec, str:timeStr, tm:penObj.code,
                             cl:teamColors[penObj.nrm]?.[0]||'#fff',
                             txt:`RETALIATION: ${ret.name} — 2 min minor (intimidation)`, isPenalty:true});
                         // v181: count retaliation as a real PPO so ppg/ppo ratio stays accurate
@@ -5536,7 +5538,7 @@ function simGame(idx) {
                         const ppConvR = getSpecialTeamsChance(advObj.nrm, penObj.nrm);
                         if (Math.random() < ppConvR) {
                             const ppSh2 = selectShooter(ppPool, 'PP');
-                            const ppEv2 = processSingleGoal(advObj.nrm, advObj.code, ppSh2, ppPool, timeStr, period, minute%20||20, sec);
+                            const ppEv2 = processSingleGoal(advObj.nrm, advObj.code, ppSh2, ppPool, timeStr, period, minute, sec);
                             if (ppEv2) {
                                 ppEv2.isPP=true; ppEv2.tm=advObj.code; ppEv2.cl=teamColors[advObj.nrm]?.[0]||'#FFD700';
                                 ppEv2.txt=buildGoalText(ppEv2.scorer,ppEv2.pAssist,ppEv2.sAssist,null,true,false,false,0,0,0);
@@ -5597,7 +5599,7 @@ function simGame(idx) {
                     else{trk(hG_name,'sv',1);trk(hG_name,'sa',1);}
                 }
                 const psTxt=`${psShooter.name} on a PENALTY SHOT — ${psSc?'GOAL':'STOPPED'}! (${psTeam.code} vs ${psGoalie.name})`;
-                allGoals.push({p:period, m:minute%20||20, s:sec, tm:psTeam.code,
+                allGoals.push({p:period, m:minute, s:sec, tm:psTeam.code,
                     cl:psSc?(teamColors[psTeam.nrm]?.[0]||'#fff'):'#888',
                     txt:psTxt, isPenaltyShot:true, isGoal:psSc,
                     scorer:psSc?psShooter.name:null, code:psTeam.code});
@@ -5648,7 +5650,7 @@ function simGame(idx) {
             if (Math.random() < rushConv) {
                 if (rushHome) { hG++; trk(defGNm2,'ga',1); } else { aG++; trk(defGNm2,'ga',1); }
                 const rushPool = attOnIce.filter(p=>p.name!==rushSh.name);
-                const rushEv   = processSingleGoal(attTeam.nrm, attTeam.code, rushSh, rushPool, timeStr, period, minute%20||20, sec);
+                const rushEv   = processSingleGoal(attTeam.nrm, attTeam.code, rushSh, rushPool, timeStr, period, minute, sec);
                 if (rushEv) {
                     rushEv.tm=attTeam.code; rushEv.cl=teamColors[attTeam.nrm]?.[0]||'#fff';
                     rushEv.txt=`⚡ BREAKAWAY — ${buildGoalText(rushEv.scorer,rushEv.pAssist,rushEv.sAssist,null,false,false,false,rushHome?hG:aG,rushHome?aG:hG,period)}`;
@@ -5664,8 +5666,8 @@ function simGame(idx) {
                     lastGoalSide=rushHome?'h':'a';
                     doYankCheck(period,minute,sec,timeStr);
                     gameGoals[rushEv.scorer]=(gameGoals[rushEv.scorer]||0)+1;
-                    if(gameGoals[rushEv.scorer]===3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:attTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${rushEv.scorer}!`,isNote:true});
-                    else if(gameGoals[rushEv.scorer]>3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:attTeam.code,cl:'#FFD700',txt:`🎩 ${gameGoals[rushEv.scorer]}-GOAL GAME — ${rushEv.scorer}!`,isNote:true});
+                    if(gameGoals[rushEv.scorer]===3)allGoals.push({p:period,m:minute,s:sec,str:timeStr,tm:attTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${rushEv.scorer}!`,isNote:true});
+                    else if(gameGoals[rushEv.scorer]>3)allGoals.push({p:period,m:minute,s:sec,str:timeStr,tm:attTeam.code,cl:'#FFD700',txt:`🎩 ${gameGoals[rushEv.scorer]}-GOAL GAME — ${rushEv.scorer}!`,isNote:true});
                 }
             } else {
                 trk(defGNm2,'sv',1);
@@ -5673,7 +5675,7 @@ function simGame(idx) {
                 const defSkaters = (rushHome ? aOnIce : hOnIce).filter(p=>p.pos!=='G');
                 const defAvgChk  = defSkaters.length ? defSkaters.reduce((s,p)=>s+(gradeToNum(playerStats[p.name]?.attr?.check)||50),0)/defSkaters.length : 50;
                 if (Math.random() < Math.max(0.08, Math.min(0.22, 0.15 + (defAvgChk-50)*0.001))) {
-                    penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:attTeam.code,
+                    penaltyEvents.push({p:period,m:minute,s:sec,str:timeStr,tm:attTeam.code,
                         cl:'#FFDD44',txt:`🎯 PENALTY SHOT AWARDED: ${rushSh.name} hauled down on breakaway!`,isNote:true});
                     const psGNm  = rushHome ? aG_name : hG_name;
                     const psGObj = rushHome ? aG_obj  : hG_obj;
@@ -5688,7 +5690,7 @@ function simGame(idx) {
                     if (psSc2) {
                         if (rushHome){hG++;trk(rushSh.name,'g',1);trk(psGNm,'ga',1);}
                         else{aG++;trk(rushSh.name,'g',1);trk(psGNm,'ga',1);}
-                        const psEv = processSingleGoal(attTeam.nrm, attTeam.code, rushSh, attOnIce.filter(p=>p.name!==rushSh.name), timeStr, period, minute%20||20, sec);
+                        const psEv = processSingleGoal(attTeam.nrm, attTeam.code, rushSh, attOnIce.filter(p=>p.name!==rushSh.name), timeStr, period, minute, sec);
                         if (psEv) {
                             psEv.tm=attTeam.code; psEv.cl=teamColors[attTeam.nrm]?.[0]||'#fff';
                             psEv.txt=`🎯 PENALTY SHOT GOAL — ${psEv.scorer} beats ${psGObj?.name||psGNm}!`;
@@ -5698,13 +5700,13 @@ function simGame(idx) {
                             lastGoalSide=rushHome?'h':'a';
                             doYankCheck(period,minute,sec,timeStr);
                             gameGoals[psEv.scorer]=(gameGoals[psEv.scorer]||0)+1;
-                            if(gameGoals[psEv.scorer]===3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:attTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${psEv.scorer}!`,isNote:true});
-                            else if(gameGoals[psEv.scorer]>3)allGoals.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:attTeam.code,cl:'#FFD700',txt:`🎩 ${gameGoals[psEv.scorer]}-GOAL GAME — ${psEv.scorer}!`,isNote:true});
+                            if(gameGoals[psEv.scorer]===3)allGoals.push({p:period,m:minute,s:sec,str:timeStr,tm:attTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${psEv.scorer}!`,isNote:true});
+                            else if(gameGoals[psEv.scorer]>3)allGoals.push({p:period,m:minute,s:sec,str:timeStr,tm:attTeam.code,cl:'#FFD700',txt:`🎩 ${gameGoals[psEv.scorer]}-GOAL GAME — ${psEv.scorer}!`,isNote:true});
                         }
                         if (awardConfig.headlines) tradeLog.unshift({day:`DAY ${currentDay+1}`, details:`🎯 PENALTY SHOT GOAL: ${rushSh.name} (${attTeam.code})`});
                     } else {
                         trk(psGNm,'sv',1);
-                        penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:attTeam.code,
+                        penaltyEvents.push({p:period,m:minute,s:sec,str:timeStr,tm:attTeam.code,
                             cl:'#888',txt:`🎯 PENALTY SHOT STOPPED — ${psGObj?.name||psGNm} turns away ${rushSh.name}!`,isNote:true});
                     }
                 }
@@ -5737,7 +5739,7 @@ function simGame(idx) {
             allBrawlers.forEach(p => { trk(p.name,'pim',15); if(!isASG) playerStats[p.name][k].fights=(playerStats[p.name][k].fights||0)+1; });
             const hNames = hBrawlers.map(p=>p.name).join(', ');
             const aNames = aBrawlers.map(p=>p.name).join(', ');
-            penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:g.h.code,
+            penaltyEvents.push({p:period,m:minute,s:sec,str:timeStr,tm:g.h.code,
                 cl:'#FF2222',txt:`🥊 LINE BRAWL: ${g.h.code} (${hNames}) vs ${g.a.code} (${aNames}) — ${allBrawlers.length} players ejected!`,isNote:true,isFight:true});
             // Big momentum swing to one side
             const hBrawlStr = hBrawlers.reduce((s,p)=>s+brawlWt(p.name),0);
@@ -5761,7 +5763,7 @@ function simGame(idx) {
                     playerStats[fighter.name].suspended.reason = 'Line brawl';
                     if (!playerStats[fighter.name].suspensionHistory) playerStats[fighter.name].suspensionHistory = [];
                     playerStats[fighter.name].suspensionHistory.push({ day: currentDay, games: days, reason: 'Line brawl', season: currentSeason });
-                    penaltyEvents.push({ p: period, m: minute % 20 || 20, s: sec, str: timeStr, tm: tmCode,
+                    penaltyEvents.push({ p: period, m: minute, s: sec, str: timeStr, tm: tmCode,
                         cl: '#FF8800', txt: `SUSPENSION: ${fighter.name} — ${days} game(s) (line brawl instigator)`, isNote: true });
                     if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `🚫 SUSPENSION: ${fighter.name} (${tmCode.toUpperCase()}) suspended ${days} game(s) — line brawl instigator.` });
                 }
@@ -5777,7 +5779,7 @@ function simGame(idx) {
                             fPs.injury.daysRemaining=injDays; fPs.injury.severity=injDays; fPs.injury.source='brawl';
                             fPs.injury.type=injDays>=10?'Line brawl — week-to-week':injDays>=5?'Line brawl — short-term':'Line brawl — day-to-day';
                             autoPlaceOnIR(fighter.name, (hBrawlers.includes(fighter) ? g.h : g.a).nrm, injDays);
-                            penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:g.h.code,
+                            penaltyEvents.push({p:period,m:minute,s:sec,str:timeStr,tm:g.h.code,
                                 cl:'#FF6666',txt:`🏥 INJURY: ${fighter.name} hurt in line brawl — day-to-day (${injDays}d)`,isNote:true});
                             if(awardConfig.headlines) tradeLog.unshift({day:`DAY ${currentDay+1}`,details:`🏥 INJURY: ${fighter.name} — hurt in line brawl, out ${injDays}d`});
                         }
@@ -5795,7 +5797,7 @@ function simGame(idx) {
             const icingTeam = (hPress && aPress) ? (Math.random()<0.5?g.h:g.a) : (hPress?g.a:g.h);
             if (icingTeam.nrm===g.h.nrm) aMomentum=Math.min(aMomentum+1,14);
             else                          hMomentum=Math.min(hMomentum+1,14);
-            penaltyEvents.push({p:period,m:minute%20||20,s:sec,str:timeStr,tm:icingTeam.code,
+            penaltyEvents.push({p:period,m:minute,s:sec,str:timeStr,tm:icingTeam.code,
                 cl:'#666',txt:`ICING: ${icingTeam.code} — defensive-zone face-off`,isNote:true});
 
         }
@@ -5824,9 +5826,9 @@ function simGame(idx) {
                 : (57 + Math.floor(Math.random()*2));  // down-1: 57-58 min
             const pullSec = Math.floor(Math.random()*60);
             const pullSecStr = pullSec < 10 ? '0'+pullSec : pullSec;
-            const pullTimeStr = `P3 ${pullMin}:${pullSecStr}`;
+            const pullTimeStr = `P3 ${pullMin - 40}:${pullSecStr}`; // pullMin is game minute (55-58); clock shows period minute
             const trailingTeam = trailerIsHome ? g.h : g.a;
-                allGoals.push({ p:3, m:pullMin, s:pullSec, str:pullTimeStr, tm: trailingTeam.code,
+                allGoals.push({ p:3, m:pullMin - 40, s:pullSec, str:pullTimeStr, tm: trailingTeam.code,
                     cl:'#888', txt:`${trailingTeam.code} pulls the goalie for the extra attacker — 6-on-5 with ${60-pullMin} minutes left!`, isNote:true });
                 const enScorerTeam = trailerIsHome ? g.a : g.h;
                 const enGoalie    = trailerIsHome ? hG_name : aG_name;
@@ -5839,7 +5841,7 @@ function simGame(idx) {
                 if (Math.random() < enConvRate && enShooters.length > 0) {
                     const enShooter = selectShooter(enShooters);
                     const sec = Math.floor(Math.random() * 60);
-                    const enEv = processSingleGoal(enScorerTeam.nrm, enScorerTeam.code, enShooter, enShooters, `P3 59:${sec<10?'0'+sec:sec}`, 3, 59, sec);
+                    const enEv = processSingleGoal(enScorerTeam.nrm, enScorerTeam.code, enShooter, enShooters, `P3 19:${sec<10?'0'+sec:sec}`, 3, 19, sec);
                     if (enEv) {
                         enEv.isEN = true;
                         enEv.tm = enScorerTeam.code;
@@ -5863,7 +5865,7 @@ function simGame(idx) {
                         // NHL rules: empty-net goals do NOT count against the pulled goalie
                         // v182: hat trick check for EN goals
                         gameGoals[enEv.scorer]=(gameGoals[enEv.scorer]||0)+1;
-                        if(gameGoals[enEv.scorer]===3) allGoals.push({p:3,m:59,s:0,str:'P3 59:00',tm:enScorerTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${enEv.scorer}!`,isNote:true});
+                        if(gameGoals[enEv.scorer]===3) allGoals.push({p:3,m:19,s:0,str:'P3 19:00',tm:enScorerTeam.code,cl:'#FFD700',txt:`🎩 HAT TRICK — ${enEv.scorer}!`,isNote:true});
                     }
                 } else {
                     // Trailing team gets a shot on empty net (rare tying goal)
@@ -5872,7 +5874,7 @@ function simGame(idx) {
                     if (Math.random() < 0.15 && tieShooters.length > 0) {
                         const tieShooter = selectShooter(tieShooters);
                         const sec = Math.floor(Math.random() * 60);
-                        const tieEv = processSingleGoal(tieScorerTeam.nrm, tieScorerTeam.code, tieShooter, tieShooters, `P3 59:${sec<10?'0'+sec:sec}`, 3, 59, sec);
+                        const tieEv = processSingleGoal(tieScorerTeam.nrm, tieScorerTeam.code, tieShooter, tieShooters, `P3 19:${sec<10?'0'+sec:sec}`, 3, 19, sec);
                         if (tieEv) {
                             tieEv.tm = tieScorerTeam.code;
                             tieEv.cl = teamColors[tieScorerTeam.nrm]?.[0] || '#fff';
@@ -6885,12 +6887,13 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
     return {
         time:     timeStr,
         period:   period,
+        p: period, m: minute, s: sec,   // same clock fields as penalty/note events so broadcasts can sort goals
         team:     teamName,
         code:     teamCode,
         scorer:   scorerStr,
         pAssist:  primaryAssist,
         sAssist:  secondaryAssist,
-        display:  `${timeStr} - ${teamCode} - GOAL! ${scorerStr} (${primaryAssist || 'None'}, ${secondaryAssist || 'None'})`
+        display:  `${timeStr} - ${teamCode} - GOAL! ${scorerStr}${primaryAssist ? ` (${[primaryAssist, secondaryAssist].filter(Boolean).join(', ')})` : ' (unassisted)'}`
     };
 }
 
@@ -8709,6 +8712,59 @@ function submitAdvGame() {
 }
 
 // --- WATCH LIVE GAME BROADCAST ---
+// Play-by-play for the live broadcast, generated from the finished game's real numbers:
+// every save is a real shot by a player who had shots, stopped by the goalie in net; hits and
+// blocks come from players who actually recorded them; faceoffs go to centres. Times avoid the
+// few seconds right before a goal so a "save" never lands on top of the goal it preceded.
+function buildBroadcastPlays(g) {
+    const r = g.result || {};
+    const ms = r.matchStats || {};
+    const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+    const periods = r.ot > 0 ? 4 : 3;
+    const goalTimes = (r.boxLog || []).filter(e => e.scorer && !e.isPenalty && !e.isNote)
+        .map(e => ({ p: e.p ?? e.period, t: (e.m ?? 0) * 60 + (e.s ?? 0) }));
+    const otGoal = goalTimes.find(x => x.p === 4);
+    const otLen = otGoal ? Math.max(20, otGoal.t) : 300;
+    const randTime = () => {
+        for (let k = 0; k < 20; k++) {
+            // regulation carries nearly all the play; OT only when the game went there
+            const p = periods === 4 && Math.random() < 0.05 ? 4 : 1 + Math.floor(Math.random() * 3);
+            const t = 10 + Math.floor(Math.random() * ((p === 4 ? otLen : 1200) - 10));
+            if (!goalTimes.some(x => x.p === p && t > x.t - 8 && t <= x.t + 20)) return { p, m: Math.floor(t / 60), s: t % 60 };
+        }
+        return { p: 1, m: 10, s: 0 };
+    };
+    const posOf = n => ((Object.values(rosters).flat().find(x => x && x.name === n)) || {}).pos || '';
+    const side = (names, code, oppGoalie, teamShots, teamGoals) => {
+        const out = [];
+        const skaters = (names || []).map(n => typeof n === 'string' ? n : n.name).filter(n => ms[n] && !(ms[n].sa > 0));
+        // Saves = this team's shots that did not go in, spread over the players who took them
+        const shooters = [];
+        skaters.forEach(n => { const miss = Math.max(0, (ms[n].s || 0) - (ms[n].g || 0)); for (let i = 0; i < miss; i++) shooters.push(n); });
+        const saves = Math.max(0, (teamShots ?? shooters.length + teamGoals) - teamGoals);
+        const shotTxt = ['wrist shot from the slot', 'slapshot from the point', 'snap shot off the rush', 'backhand in tight', 'one-timer from the circle', 'shot through traffic', 'quick release from the high slot', 'wraparound attempt'];
+        const saveTxt = ['glove save', 'blocker save', 'pad save', 'save, and he holds on for the whistle', 'save, kicked into the corner', 'save, steered aside', 'stop, and he covers up', 'save, getting just a piece of it'];
+        for (let i = 0; i < saves && shooters.length; i++) {
+            const n = shooters.splice(Math.floor(Math.random() * shooters.length), 1)[0];
+            out.push({ ...randTime(), tm: code, cl: '#555', isFiller: true, isShot: true,
+                txt: `${n} — ${pick(shotTxt)}. ${oppGoalie || 'The goalie'} with the ${pick(saveTxt)}.` });
+        }
+        // A share of the physical play, never more than actually happened
+        skaters.forEach(n => {
+            const hits = ms[n].hits || 0, blk = ms[n].blk || 0;
+            for (let i = 0; i < hits; i++) if (Math.random() < 0.5) out.push({ ...randTime(), tm: code, cl: '#555', isFiller: true, txt: `${n} ${pick(['finishes his check along the boards', 'lays a big hit at the blue line', 'rubs out his man in the corner', 'steps up with an open-ice hit'])}.` });
+            for (let i = 0; i < blk; i++) if (Math.random() < 0.5) out.push({ ...randTime(), tm: code, cl: '#555', isFiller: true, txt: `${n} ${pick(['blocks a shot from the point', 'gets in the lane and blocks it', 'drops to block a one-timer'])}.` });
+        });
+        const centres = skaters.filter(n => posOf(n) === 'C');
+        for (let i = 0; i < 3 && centres.length; i++) out.push({ ...randTime(), tm: code, cl: '#555', isFiller: true, txt: `${pick(centres)} wins the draw cleanly back to the point.` });
+        return out;
+    };
+    return [
+        ...side(r.awayRoster, g.a.code, r.hGoalie, r.aShots, r.aG || 0),
+        ...side(r.homeRoster, g.h.code, r.aGoalie, r.hShots, r.hG || 0),
+    ];
+}
+
 function startWatchLive() {
     if (activeIdx === null) return alert("Select a game from the ARENA menu first.");
     const g = getGameAt(currentDay, activeIdx);
@@ -8736,43 +8792,9 @@ function startWatchLive() {
     document.getElementById('btnWgSkip').style.display = 'block'; document.getElementById('btnWgClose').style.display = 'none';
     document.getElementById('watchGameOverlay').style.display = 'flex';
 
-    let fillerEvents = [];
-    const fillerPool = [
-        "winds up for a slapshot — kick save and a beauty!",
-        "lays a massive hit along the boards. The crowd feels that one.",
-        "fires a quick wrist shot — gloved down by the goalie.",
-        "intercepts a sloppy pass at centre ice.",
-        "hammers one from the point — clanks off the iron!",
-        "dumps the puck deep and chases it into the corner.",
-        "wins the faceoff cleanly.",
-        "blocks a heavy slapshot — he's slow to get up.",
-        "dangles around the defenceman and cuts to the slot.",
-        "takes a hit but manages to chip the puck out of the zone.",
-        "wheels behind the net looking for an opening.",
-        "rings one off the post — so close!",
-        "puts a big open-ice hit on the forechecker.",
-        "with a between-the-legs move — the crowd ooohs!",
-        "fires wide from the faceoff dot — goalie not tested.",
-        "wins a puck battle in the corner and feeds the point.",
-        "sauces a backhand pass through two sticks.",
-        "reads the play and breaks up the odd-man rush.",
-        "gets tangled up in front — both players jawing at each other.",
-        "snaps a shot on net — stopped, puck is loose!",
-        "with a spinning move at the blue line — impressive.",
-        "pressures the defenceman into a bad pinch.",
-        "wins the board battle and dishes it up the wall.",
-        "takes a slapshot from the point — tipped wide.",
-        "draws a whistle with a sharp turn into traffic.",
-    ];
-    for (let i = 0; i < 18; i++) {
-        const p = Math.floor(Math.random() * 3) + 1;
-        const m = Math.floor(Math.random() * 20);
-        const s = Math.floor(Math.random() * 60);
-        const t = Math.random() > 0.5 ? g.h : g.a;
-        let randPlayer = 'A player';
-        if (rosters[t.nrm]) { const sk = rosters[t.nrm].filter(x => x.pos !== 'G'); if (sk.length > 0) randPlayer = sk[Math.floor(Math.random() * sk.length)].name; }
-        fillerEvents.push({ p, m, s, tm: t.code, cl: '#555', isFiller: true, txt: `${randPlayer} ${fillerPool[Math.floor(Math.random() * fillerPool.length)]}` });
-    }
+    // Play-by-play built from what actually happened in the sim (shots, hits, blocks,
+    // goalies in net) instead of random players doing random things at random times.
+    let fillerEvents = buildBroadcastPlays(g);
 
     // ~15% chance of a line brawl (gated by headlines toggle)
     if (awardConfig.headlines && Math.random() < 0.005) {
@@ -8786,14 +8808,24 @@ function startWatchLive() {
         if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `BRAWL: ${g.a.code} @ ${g.h.code} — benches clear after ${hFighter} and ${aFighter} go at it. Multiple game misconducts.` });
     }
 
-    watchQueue = [...g.result.boxLog, ...fillerEvents];
+    const withClock = ev => {
+        if (ev.p !== undefined && ev.m !== undefined) return ev;
+        const mt = /^(?:P(\d)|OT(\d?))\s+(\d+):(\d+)/.exec(ev.time || ev.str || '');
+        if (!mt) return { ...ev, p: ev.period || 1, m: 0, s: 0 };
+        const per = mt[1] ? +mt[1] : 3 + (+mt[2] || 1);
+        return { ...ev, p: per, m: Math.min(19, +mt[3]), s: +mt[4] };
+    };
+    watchQueue = [...g.result.boxLog.map(withClock), ...fillerEvents];
     watchQueue.sort((a,b) => a.p !== b.p ? a.p - b.p : (a.m !== b.m ? a.m - b.m : a.s - b.s));
     let currentPeriod = 1;
+    const watchShots = { a: 0, h: 0 };
     const watchGoalsByPlayer = {};
     let watchMaxDeficit = { [g.h.code]: 0, [g.a.code]: 0 };
     let watchLastGoalTime = null; // { p, m } of last goal for momentum-swing detection
     
-    watchInterval = setInterval(() => {
+    // Variable pacing: routine plays tick by quickly, goals/penalties/notes get a beat to land.
+    // (clearInterval in skipWatchGame also cancels a setTimeout id — they share one id pool.)
+    const watchStep = () => {
         if (watchQueue.length === 0) {
             clearInterval(watchInterval);
             const finalStr = `FINAL${g.result.ot > 0 ? ' (OT)' : ''}`;
@@ -8801,12 +8833,17 @@ function startWatchLive() {
             document.getElementById('wgBugClock').innerText = finalStr;
             document.getElementById('wgBugAwayScore').innerText = watchCurrentScore.a;
             document.getElementById('wgBugHomeScore').innerText = watchCurrentScore.h;
-            document.getElementById('wgTicker').innerHTML += `<div style="color:var(--ea-yellow); text-align:center; margin-top:20px; font-size:12px;">!! FINAL HORN !!</div>`;
+            document.getElementById('wgTicker').innerHTML += `<div style="color:var(--ea-yellow); text-align:center; margin-top:20px; font-size:12px;">!! FINAL HORN !!</div><div style="color:var(--silver-mid); text-align:center; margin-top:6px;">SHOTS: ${g.a.code} ${g.result.aShots ?? watchShots.a} - ${g.h.code} ${g.result.hShots ?? watchShots.h}</div>`;
             document.getElementById('btnWgSkip').style.display = 'none'; document.getElementById('btnWgClose').style.display = 'block';
             let t = document.getElementById('wgTicker'); t.scrollTop = t.scrollHeight; return;
         }
         const ev = watchQueue.shift();
-        if (ev.p > currentPeriod) { document.getElementById('wgTicker').innerHTML += `<div style="color:var(--silver-mid); text-align:center; border-bottom:1px solid #333; margin:15px 0; padding-bottom:5px;">--- END OF PERIOD ${currentPeriod} ---</div>`; currentPeriod = ev.p; }
+        if (ev.p > currentPeriod) {
+            const perLbl = currentPeriod <= 3 ? `PERIOD ${currentPeriod}` : 'OVERTIME';
+            document.getElementById('wgTicker').innerHTML += `<div style="color:var(--silver-mid); text-align:center; border-bottom:1px solid #333; margin:15px 0; padding-bottom:5px;">--- END OF ${perLbl} --- ${g.a.code} ${watchCurrentScore.a}, ${g.h.code} ${watchCurrentScore.h} &middot; SHOTS ${g.a.code} ${watchShots.a} - ${g.h.code} ${watchShots.h}</div>`;
+            currentPeriod = ev.p;
+        }
+        if (ev.isShot || ev.isPenaltyShot) watchShots[ev.tm === g.a.code ? 'a' : 'h']++;
         const clockStr = `P${ev.p} ${ev.m}:${ev.s < 10 ? '0'+ev.s : ev.s}`;
         document.getElementById('wgClock').innerText = clockStr;
         document.getElementById('wgBugClock').innerText = clockStr;
@@ -8839,12 +8876,16 @@ function startWatchLive() {
         }
         
         if (ev.isPenaltyShot) {
+            if (ev.isGoal) {
+                if (ev.tm === g.a.code) { watchCurrentScore.a++; document.getElementById('wgAwayScore').innerText = watchCurrentScore.a; }
+                else if (ev.tm === g.h.code) { watchCurrentScore.h++; document.getElementById('wgHomeScore').innerText = watchCurrentScore.h; }
+            }
             const psColor = ev.isGoal ? '#FFD700' : '#888';
             document.getElementById('wgTicker').innerHTML += `<div style="background:#0d0d1a;border:2px solid ${psColor};padding:10px 12px;margin:8px 0;text-align:center;"><div style="color:${psColor};font-size:9px;">🚨 PENALTY SHOT — ${ev.isGoal ? 'GOAL!' : 'STOPPED!'}</div><div style="color:#aaa;font-size:7px;margin-top:3px;">${ev.txt}</div></div>`;
         } else if (ev.isBrawl) {
             document.getElementById('wgTicker').innerHTML += `<div style="background:#1a0000;border:2px solid #FF4444;padding:10px 12px;margin:8px 0;text-align:center;"><div style="color:#FF4444;font-size:10px;margin-bottom:4px;">🥊 BENCH CLEARING BRAWL 🥊</div><div style="color:#ff9999;font-size:7px;">${ev.txt}</div></div>`;
         } else if (ev.isFiller) {
-            document.getElementById('wgTicker').innerHTML += `<div><span style="color:#555; margin-right:10px;">[${ev.tm}]</span> <span style="color:#ccc;">${ev.txt}</span></div>`;
+            document.getElementById('wgTicker').innerHTML += `<div><span style="color:#555; margin-right:6px;">${ev.p <= 3 ? ev.m + ':' + String(ev.s).padStart(2,'0') : 'OT'}</span><span style="color:#555; margin-right:10px;">[${ev.tm}]</span> <span style="color:${ev.isShot ? '#ddd' : '#aaa'};">${ev.txt}</span></div>`;
         } else if (ev.isNote) {
             document.getElementById('wgTicker').innerHTML += `<div style="background:#0a0a14;border:2px solid #888;padding:8px 10px;margin:6px 0;text-align:center;"><div style="color:#ccc;font-size:8px;">🥅 ${ev.txt}</div></div>`;
         } else {
@@ -8867,6 +8908,7 @@ function startWatchLive() {
                     }
                 }
                 watchLastGoalTime = { p: ev.p, m: ev.m };
+                if (ev.scorer) watchShots[ev.tm === g.a.code ? 'a' : 'h']++;
                 if (ev.tm === g.a.code) {
                     const prevDeficit = watchCurrentScore.h - watchCurrentScore.a;
                     if (prevDeficit >= 2) watchMaxDeficit[g.a.code] = Math.max(watchMaxDeficit[g.a.code], prevDeficit);
@@ -8892,7 +8934,7 @@ function startWatchLive() {
                 if (ev.scorer) {
                     watchGoalsByPlayer[ev.scorer] = (watchGoalsByPlayer[ev.scorer] || 0) + 1;
                     if (watchGoalsByPlayer[ev.scorer] === 3) {
-                        document.getElementById('wgTicker').innerHTML += `<div style="background:#1a1400;border:2px solid #FFD700;padding:10px 12px;margin:8px 0;text-align:center;"><div style="color:#FFD700;font-size:11px;">🎩 HAT TRICK — ${ev.scorer}!</div><div style="color:#aa8800;font-size:7px;margin-top:3px;">The hats are on the ice!</div></div>`;
+                        // the sim already logs a HAT TRICK note in boxLog — no second card here
                         if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `HAT TRICK: ${ev.scorer} (${ev.tm}) scores three in the broadcast!` });
                     }
                     // HOT streak callout on first goal of the watch
@@ -8923,7 +8965,9 @@ function startWatchLive() {
             }
         }
         let t = document.getElementById('wgTicker'); t.scrollTop = t.scrollHeight;
-    }, 1200); 
+        watchInterval = setTimeout(watchStep, ev.isFiller ? 800 : 1700);
+    };
+    watchInterval = setTimeout(watchStep, 800);
 }
 
 function skipWatchGame() {
