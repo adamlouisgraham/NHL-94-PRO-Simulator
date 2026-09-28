@@ -65,13 +65,13 @@ const TEAM_CONF_DIV_OVERRIDES = {
 // real point-total lift, not just pure snipers.
 function getEliteShooterMod(tag) {
     switch (tag) {
-        case 'PRO SNIPER': return 1.38;
-        case 'SUPERSTAR': return 1.42;
-        case 'SNIPER': return 1.28;
+        case 'PRO SNIPER': return 1.24; // v265: 1.38→1.24 — elite snipers were shooting 16-19%
+        case 'SUPERSTAR': return 1.24; // v265: 1.42→1.24
+        case 'SNIPER': return 1.18; // v265: 1.28→1.18
         case 'PRO PLAYMAKER': return 1.18;
         case 'PLAYMAKER': return 1.10;
         case 'DANGLER': return 1.16; // v230: trimmed below POWER SNIPER
-        case 'POWER SNIPER': return 1.36; // v239: 1.42→1.36 — dialed back slightly, still above pre-v230 1.35 baseline
+        case 'POWER SNIPER': return 1.20; // v265: 1.36→1.20 (v239 was 1.42→1.36)
         case 'POWER FORWARD': return 1.20; // v230: 1.12→1.20
         case 'SPEEDSTER': return 1.14; // v230: trimmed below POWER SNIPER
         case 'TWO-WAY STAR F': return 1.08;
@@ -3765,13 +3765,13 @@ function calculateDynamicIceTime(struct) {
     // ==========================================
     
     // Base Baseline Targets (Per Player Average)
-    let fShares = [21, 19, 12, 5]; // L1/L2 get more ice time; L3/L4 scaled back
+    let fShares = [19, 16.5, 14, 10.5]; // v265: realistic '93-94 spread (was 21/19/12/5 — L1 played like a D1, L4 barely dressed)
 
     // RULE A: Line 1 heavily outweighs all other lines -> Play near max (22 mins per player)
     const line1DominantThreshold = 8; // If Line 1 is 8+ points better than average of lines 2, 3, 4
     const bottomLinesAvg = (f2Ovr + f3Ovr + f4Ovr) / 3;
     if (f1Ovr - bottomLinesAvg >= line1DominantThreshold) {
-        fShares[0] = 22; // Maximized
+        fShares[0] = 20.5; // v265: was 22
     }
 
     // RULE B: Even if Line 3 has lower OVR than Line 4, still play Line 3 more
@@ -3814,13 +3814,13 @@ function calculateDynamicIceTime(struct) {
     let finalForwardLineMins = fShares.map(share => share * scaleF);
 
     // Apply strict clamping boundaries to safeguard requested ranges
-    finalForwardLineMins[0] = Math.max(15, Math.min(24, finalForwardLineMins[0]));
+    finalForwardLineMins[0] = Math.max(15, Math.min(21, finalForwardLineMins[0]));
     if (bottomThreeSplit) {
         for (let i = 1; i <= 3; i++) finalForwardLineMins[i] = Math.max(10, Math.min(18, finalForwardLineMins[i]));
     } else {
-        finalForwardLineMins[1] = Math.max(14, Math.min(22, finalForwardLineMins[1]));
-        finalForwardLineMins[2] = Math.max(12, Math.min(16, finalForwardLineMins[2]));
-        finalForwardLineMins[3] = Math.max(4,  Math.min(9,  finalForwardLineMins[3]));
+        finalForwardLineMins[1] = Math.max(13, Math.min(19, finalForwardLineMins[1]));
+        finalForwardLineMins[2] = Math.max(11, Math.min(16, finalForwardLineMins[2]));
+        finalForwardLineMins[3] = Math.max(8,  Math.min(12, finalForwardLineMins[3]));
     }
 
     // Normalize again if clamping caused a slight mathematical offset from 180
@@ -3834,7 +3834,7 @@ function calculateDynamicIceTime(struct) {
     // ==========================================
     
     // Baseline Targets (Per Player Average)
-    let dShares = [24, 19.5, 16.5];
+    let dShares = [25.5, 21, 15.5]; // v265: top pair plays the most minutes on the team (was 24/19.5/16.5)
 
     // Closeness adjustments for defense lines within 3 rating points
     if (Math.abs(d1Ovr - d2Ovr) <= ratingClosenessThreshold) {
@@ -4977,7 +4977,7 @@ function simGame(idx) {
 
             const prob      = (0.0906 + dSign*diff*0.0002)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; v174: 0.0888; v181: 0.0930; v182: 0.0918→0.0906 target 7.0 GPG
 
-            if (Math.random() < Math.max(0.015, Math.min(0.26, prob))) {
+            if (Math.random() < Math.max(0.015, Math.min(0.26, prob * finishDamp(shooter.name)))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
 
                 // Option A: draw assisters from expanded shift pool (last 90 sec of shifts)
@@ -5159,7 +5159,7 @@ function simGame(idx) {
                 const delWallMod = advTeam.nrm===g.h.nrm ? aWallMod : hWallMod;
                 const delRate    = Math.max(0.015, Math.min(0.20, 0.0906 * delWallMod * 1.10));
                 if (Math.random() < delRate) {
-                    const delSh = selectShooter(ppUnit, 'ES');
+                    const delSh = selectShooter(ppUnit, 'GOAL');
                     const delGNm = advTeam.nrm===g.h.nrm ? aG_name : hG_name;
                     const delEv = processSingleGoal(advTeam.nrm, advTeam.code, delSh, ppUnit, timeStr, period, minute, sec);
                     if (delEv) {
@@ -6378,6 +6378,18 @@ function simGame(idx) {
 // --- Weighted Shooter Selection Helper ---
 // We don't want a 50/50 shot between a Defender and a Center.
 // We assign weight probabilities based on Position.
+// v265: shooting-% governor. Nobody sustains much over 15% across a season (1993-94's best
+// high-volume snipers sat around 13-16%), but per-shot bonuses plus variance and goals credited
+// without a shot roll (PP/rush) let stars run 17-19%. Once a shooter is past 13.5% on 40+ shots,
+// scale his finishing down smoothly: 15% -> x0.78, 16.5% -> x0.55, 18% -> x0.33.
+function finishDamp(name) {
+    const ps = playerStats[name];
+    const st = ps && ps[(typeof isPlayoffs !== 'undefined' && isPlayoffs) ? 'playoff' : 'season'];
+    if (!st || !(st.s >= 40)) return 1;
+    const pct = (st.g || 0) / st.s;
+    return pct <= 0.135 ? 1 : Math.max(0.25, 1 - (pct - 0.135) * 15);
+}
+
 function selectShooter(unit, context = 'ES') {
     if (!unit || unit.length === 0) return null;
 
@@ -6423,6 +6435,9 @@ function selectShooter(unit, context = 'ES') {
 
         // Archetype multiplier
         weight *= (arch.shotRate || 1.0);
+
+        // Goal already decided (PP/SH/delayed/EN pick): steer credit away from shooters past the %-ceiling
+        if (context !== 'ES' && context !== 'CLUTCH') weight *= finishDamp(name);
 
         // SH context: speed/grit archetypes preferred on shorthanded goals
         // v176: enhanced — TWO-WAY bumped, DANGLER/SNIPER added; ENFORCER/GRINDER softly suppressed
