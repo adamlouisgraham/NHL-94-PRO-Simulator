@@ -7505,7 +7505,19 @@ function processOffseasonGrowth() {
             // skater around them aged normally. Apply the same oChg every skater gets.
             p.attr.ovr = Math.max(20, Math.min(99, (parseInt(p.attr.ovr) || parseInt(p.attr.gDef) || 70) + oChg));
         }
-        else { p.attr.off = Math.max(20, Math.min(99, p.attr.off + oChg)); p.attr.def = Math.max(20, Math.min(99, p.attr.def + dChg)); p.attr.ovr = getPlayerWeightedStats(p.name).ovr; }
+        else {
+            // v275: develop/decline the whole skill set (OVR is built from shooting, passing, speed etc.,
+            // so moving only off/def left prospects stuck and veterans' skills frozen)
+            const bump = (k, d) => { const cur = parseInt(p.attr[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur + d)); };
+            bump('off', oChg); bump('def', dChg);
+            ['shotAcc', 'shotPwr', 'pass', 'stkHnd'].forEach(k => bump(k, oChg));
+            bump('check', dChg);
+            const phys = p.age <= 24 ? (oChg > 0 ? 1 : 0) : p.age >= 31 ? -Math.max(1, Math.round(-oChg / 2)) : 0;
+            ['speed', 'agil', 'endur'].forEach(k => bump(k, phys));
+            if (p.attr.grades) Object.keys(p.attr.grades).forEach(k => { if (p.attr[k] !== undefined) p.attr.grades[k] = String(p.attr[k]); });
+            delete _wpCache[p.name];
+            p.attr.ovr = getPlayerWeightedStats(p.name).ovr;
+        }
         if (awardConfig.headlines) {
             if (oChg >= 4 && p.age <= 22) logs.push(` BREAKOUT: ${p.name} (${p.teamCode}) gained +${oChg} OVR this summer!`);
             if (pChg <= -2 && p.age >= 34 && Math.random() < 0.3) logs.push(` FATHER TIME: ${p.name} (${p.teamCode}) lost a step over the summer.`);
@@ -10078,8 +10090,26 @@ function getConnSmytheScore(p) {
             const meetsCareerBar = isGoalie ? (carGP >= 250 || carW >= 100) : (carPts >= 150 || carGP >= 350);
             // v145: use attr.ovr (aging-updated) not attr.gDef for goalie early-retire threshold
             const eliteOvr = isGoalie ? (parseInt(p.attr.ovr || p.attr.gDef) || 70) : ((p.attr.off+p.attr.def)/2);
-            if(meetsCareerBar && ((p.age > 36 && roll < 0.25) || (p.age >= 33 && eliteOvr >= 90 && roll < 0.05))) {
-                ind.push(p.name);
+            // v275: everyone can retire by age (was: only players past the career bar, after 36, 25%/yr,
+            // so depth players never left and the league aged ~0.7 yrs a season). Weak veterans go sooner,
+            // stars hang on a bit longer. Only career-bar players are inducted into the Hall of Fame.
+            const curOvr = getPlayerWeightedStats(p.name)?.ovr || 60;
+            const ageP = p.age >= 39 ? 0.90 : p.age === 38 ? 0.70 : p.age === 37 ? 0.50 : p.age === 36 ? 0.32 : p.age === 35 ? 0.20 : p.age === 34 ? 0.12 : p.age === 33 ? 0.06 : 0;
+            let retireP = ageP;
+            if (p.age >= 31 && curOvr < 50) retireP += 0.15;          // fringe veteran can't find a job
+            if (curOvr >= 85) retireP *= 0.5;                         // stars play longer
+            const retires = roll < retireP || (meetsCareerBar && p.age >= 33 && eliteOvr >= 90 && roll < 0.05);
+            if (retires && !meetsCareerBar) {
+                retiredPlayers.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, age: p.age, asgApp: p.asgAppearances || 0,
+                    gp: carGP, g: carG, a: carA, pts: carPts, w: carW });
+                const tkO = league.find(t => t.name === p.team); if (tkO && rosters[tkO.nrm]) rosters[tkO.nrm] = rosters[tkO.nrm].filter(r => r.name !== p.name);
+                delete playerStats[p.name];
+                return;
+            }
+            if(retires && meetsCareerBar) {
+                // v275: Hall of Fame needs a real HOF career; the old 150-pt/350-GP bar inducted ~17 a year
+                const hofWorthy = isGoalie ? carW >= 300 : (carPts >= 900 || carG >= 450 || (carGP >= 1200 && carPts >= 700));
+                if (hofWorthy) ind.push(p.name);
                 const cp = p.careerPlayoff || {};
                 const pl = p.playoff || {};
                 const hofCarGP = (p.career.gp||0)+(p.season.gp||0), hofCarW = (p.career.w||0)+(p.season.w||0), hofCarSO = (p.career.so||0)+(p.season.so||0);
@@ -10087,57 +10117,115 @@ function getConnSmytheScore(p) {
                     const hofCarL = (p.career.l||0)+(p.season.l||0), hofCarT = (p.career.t||0)+(p.season.t||0);
                     const hofCarSV = (p.career.sv||0)+(p.season.sv||0), hofCarSA = (p.career.sa||0)+(p.season.sa||0);
                     const hofPlGP = (cp.gp||0)+(pl.gp||0), hofPlW = (cp.w||0)+(pl.w||0), hofPlL = (cp.l||0)+(pl.l||0), hofPlSO = (cp.so||0)+(pl.so||0), hofPlSV = (cp.sv||0)+(pl.sv||0), hofPlSA = (cp.sa||0)+(pl.sa||0);
-                    hallOfFame.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: hofCarGP, w: hofCarW, so: hofCarSO, mvp: p.asgMvp });
+                    if (hofWorthy) hallOfFame.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: hofCarGP, w: hofCarW, so: hofCarSO, mvp: p.asgMvp });
                     retiredPlayers.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, age: p.age, asgApp: p.asgAppearances || 0, gp: hofCarGP, w: hofCarW, l: hofCarL, t: hofCarT, so: hofCarSO, sv: hofCarSV, sa: hofCarSA, plGP: hofPlGP, plW: hofPlW, plL: hofPlL, plSO: hofPlSO, plSV: hofPlSV, plSA: hofPlSA });
                 } else {
                     const hofCarG = (p.career.g||0)+(p.season.g||0), hofCarA = (p.career.a||0)+(p.season.a||0);
                     const hofPPG = (p.career.ppg||0)+(p.season.ppg||0), hofPM = (p.career.pm||0)+(p.season.pm||0), hofGWG = (p.career.gwg||0)+(p.season.gwg||0);
                     const hofPlGP = (cp.gp||0)+(pl.gp||0), hofPlG = (cp.g||0)+(pl.g||0), hofPlA = (cp.a||0)+(pl.a||0);
-                    hallOfFame.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: hofCarGP, g: hofCarG, a: hofCarA, pts: hofCarG+hofCarA, w: hofCarW, so: hofCarSO, mvp: p.asgMvp });
+                    if (hofWorthy) hallOfFame.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: hofCarGP, g: hofCarG, a: hofCarA, pts: hofCarG+hofCarA, w: hofCarW, so: hofCarSO, mvp: p.asgMvp });
                     retiredPlayers.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, age: p.age, asgApp: p.asgAppearances || 0, gp: hofCarGP, g: hofCarG, a: hofCarA, pts: hofCarG+hofCarA, ppg: hofPPG, pm: hofPM, gwg: hofGWG, plGP: hofPlGP, plG: hofPlG, plA: hofPlA, plPTS: hofPlG+hofPlA });
                 }
                 const tkObj = league.find(t=>t.name===p.team); const tk = tkObj ? tkObj.nrm : null; 
                 if(tk && rosters[tk]) rosters[tk] = rosters[tk].filter(r => r.name !== p.name);
                 delete playerStats[p.name];
-                tradeLog.unshift({ day: 'POST', details: `RETIRED: Legend ${p.name} inducted.` });
+                tradeLog.unshift({ day: 'POST', details: hofWorthy ? `RETIRED: Legend ${p.name} inducted into the Hall of Fame.` : `RETIRED: ${p.name} (${p.teamCode || p.team}) hangs up the skates at ${p.age}.` });
             } 
         }); 
         res += "<h3 style='margin-top:15px; color:var(--silver-light);'>HALL OF FAME:</h3><p style='font-size:7px; color:#888;'>" + (ind.join(', ') || 'None') + "</p>";
         pruneCustomDuos();
     }
     
-    if(awardConfig.draft) { 
-        let sorting = [...league].sort((a,b) => a.season.pts - b.season.pts);
-        sorting.forEach(t => { 
-            let rN;
-            do { rN = "ROOKIE-" + Math.floor(Math.random()*90000+10000); } while (playerStats[rN]);
-            if (!rosters[t.nrm]) rosters[t.nrm] = [];
-            // Real position so center/goalie roster-viability checks see this player correctly
-            const rPos = ['C', 'LW', 'RW'][Math.floor(Math.random() * 3)];
-            // v142: rookies were missing `potential` — processOffseasonGrowth fell through to the
-            // Bust/else branch (oChg = Math.floor(r*1.5)) for every drafted player aged ≤24,
-            // giving all of them the worst possible growth rate for their entire development window.
-            const rPot = Math.random() < 0.05 ? 'Franchise' : Math.random() < 0.25 ? 'Top 6' : Math.random() < 0.60 ? 'Depth' : 'Bust';
-            playerStats[rN] = {
-                name: rN, team: t.name, teamCode: t.code, pos: rPos, age: 18,
-                potential: rPot,
-                streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false,
-                morale: 100, suspended: { days: 0, reason: "" }, weight: 190 + Math.floor(Math.random()*30),
-                injury: { severity: 0, daysRemaining: 0 }, attr: { off: 65 + Math.floor(Math.random()*15), def: 60 + Math.floor(Math.random()*15), gDef: 60 },
-                preSimCareerGP: 0,
-                career: {gp:0, g:0, a:0, pts:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, t:0, so:0, sv:0, sa:0, hits:0, blk:0},
-                careerPlayoff: {gp:0, g:0, a:0, pts:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, so:0, sv:0, sa:0, hits:0, blk:0},
-                season: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, t:0, so:0, sv:0, sa:0, consStarts:0, hits:0, blk:0},
-                playoff: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, so:0, sv:0, sa:0, consStarts:0, hits:0, blk:0}
-            };
-            rosters[t.nrm].push({name: rN, pos: rPos});
-        }); 
-        res += "<p style='font-size:7px; color:var(--neon-cyan);'>Draft Completed: 1 Rookie added per team.</p>"; 
+    if(awardConfig.draft) {
+        const picks = runRealisticDraft();
+        res += `<p style='font-size:7px; color:var(--neon-cyan);'>Draft Completed: ${picks} prospects selected (2 rounds).</p>`;
     }
+    // Keep rosters playable once the draft is adding players: cap 29 (largest opening roster)
+    if (awardConfig.draft) trimRostersAfterOffseason();
 
     document.getElementById('awardWinnerContent').innerHTML = res; 
     document.getElementById('awardOverlay').style.display = 'flex';
     saveGame();
+}
+
+// v275: realistic entry draft. Two rounds in reverse order of standings. Each pick fills the team's
+// biggest positional need (goalie if under 3, defence if under 8, otherwise forwards), starts as an
+// 18-year-old rated in the 40s-50s with EVERY skill set (the old ROOKIE-##### had only off/def, so
+// speed/shooting/passing defaulted to 70 and they arrived as instant top-six forwards), and grows
+// by potential through processOffseasonGrowth.
+function makeProspect(t, pos, pickNo) {
+    const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+    const potRoll = Math.random();
+    const potential = potRoll < 0.06 ? 'Franchise' : potRoll < 0.28 ? 'Top 6' : potRoll < 0.70 ? 'Depth' : 'Bust';
+    const base = { Franchise: 55, 'Top 6': 50, Depth: 46, Bust: 42 }[potential] + rnd(-3, 3);
+    const yy = String((1993 + currentSeason) % 100).padStart(2, '0');
+    let name, n = pickNo;
+    do { name = `Prospect ${pos} ${yy}-${String(n).padStart(2, '0')}`; n += 100; } while (playerStats[name]);
+    const v = (adj = 0) => Math.max(25, Math.min(99, base + adj + rnd(-6, 6)));
+    let attr;
+    if (pos === 'G') {
+        const ovr = v();
+        attr = { ovr, gDef: v(2), agil: v(), speed: v(), stkHnd: v(-3), stickL: v(), stickR: v(), gloveL: v(), gloveR: v(), pass: v(-5), off: v(-5), weight: rnd(170, 210) };
+    } else {
+        const isD = pos === 'D';
+        attr = { off: v(isD ? -5 : 3), def: v(isD ? 5 : -3), shotAcc: v(isD ? -4 : 2), shotPwr: v(isD ? 2 : 0), pass: v(), stkHnd: v(isD ? -3 : 1),
+                 speed: v(), agil: v(), check: v(isD ? 4 : -2), endur: v(), rough: v(), aggr: v(), gDef: 70, gOff: 70, handed: Math.random() < 0.6 ? 'L' : 'R' };
+    }
+    playerStats[name] = {
+        name, team: t.name, teamCode: t.code, pos, age: 18, potential,
+        streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false,
+        morale: 100, suspended: { days: 0, reason: "" }, weight: rnd(175, 215),
+        injury: { severity: 0, daysRemaining: 0 }, attr,
+        preSimCareerGP: 0,
+        career: {gp:0, g:0, a:0, pts:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, t:0, so:0, sv:0, sa:0, hits:0, blk:0},
+        careerPlayoff: {gp:0, g:0, a:0, pts:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, so:0, sv:0, sa:0, hits:0, blk:0},
+        season: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, t:0, so:0, sv:0, sa:0, consStarts:0, hits:0, blk:0},
+        playoff: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, shg:0, gwg:0, s:0, toi:0, w:0, l:0, so:0, sv:0, sa:0, consStarts:0, hits:0, blk:0}
+    };
+    if (!rosters[t.nrm]) rosters[t.nrm] = [];
+    rosters[t.nrm].push({ name, pos });
+    return name;
+}
+
+function runRealisticDraft() {
+    const order = [...league].sort((a, b) => a.season.pts - b.season.pts);
+    let pick = 0;
+    for (let round = 1; round <= 2; round++) {
+        order.forEach(t => {
+            pick++;
+            const ro = rosters[t.nrm] || [];
+            const nG = ro.filter(p => p.pos === 'G').length;
+            const nD = ro.filter(p => p.pos === 'D').length;
+            const pos = nG < 3 ? 'G'
+                : nD < 8 ? 'D'
+                : Math.random() < 0.06 ? 'G'
+                : Math.random() < 0.33 ? 'D'
+                : ['C', 'LW', 'RW'][Math.floor(Math.random() * 3)];
+            makeProspect(t, pos, pick);
+        });
+    }
+    clearWpCache();
+    return pick;
+}
+
+// Roster cap after retirements + draft: release the lowest-rated skaters over 29, only from a
+// position group with depth to spare (keep >= 13 F and >= 8 D), never a goalie.
+function trimRostersAfterOffseason() {
+    const MAX = 29;
+    league.forEach(t => {
+        const ro = rosters[t.nrm]; if (!ro) return;
+        while (ro.length > MAX) {
+            const nF = ro.filter(p => p.pos !== 'G' && p.pos !== 'D').length;
+            const nD = ro.filter(p => p.pos === 'D').length;
+            const pool = ro.filter(p => p.pos !== 'G' && ((p.pos === 'D' && nD > 8) || (p.pos !== 'D' && nF > 13)))
+                           .sort((a, b) => (getPlayerWeightedStats(a.name)?.ovr || 0) - (getPlayerWeightedStats(b.name)?.ovr || 0));
+            const cut = pool[0]; if (!cut) break;
+            ro.splice(ro.findIndex(p => p.name === cut.name), 1);
+            delete playerStats[cut.name];
+            if (awardConfig.headlines) tradeLog.unshift({ day: 'OFFSEASON', details: `RELEASED: ${t.code} releases ${cut.name}.` });
+        }
+    });
+    clearWpCache();
 }
 
 function handleEndOfSeasonRestart() {
@@ -12171,6 +12259,8 @@ function isContenderTeam(nrm) {
 }
 
 function checkTradeDeadlineAnnouncements() {
+    // Playoff calendar is a 1-day slate, so deadlineDay came out as 0 and the notice fired at puck drop
+    if (isPlayoffs || isASG) return;
     let totalDays = calendar.length;
     if (!totalDays) return;
     
