@@ -2540,14 +2540,14 @@ const dynamicDuos = [
     ['Brent Sutter', 'Rich Sutter', 'Paul Ysebaert'],
     ['Gary Suter', 'Eric Weinrich'],
     // DET
-    ['Sergei Fedorov', 'Vachslav Kozlov', 'Keith Primeau'],
+    ['Sergei Fedorov', 'Vyacheslav Kozlov', 'Keith Primeau'],
     ['Ray Sheppard', 'Steve Yzerman', 'Dino Ciccarelli'],
     ['Kris Draper', 'Kirk Maltby', 'Darren McCarty'],
     ['Bob Probert', 'Greg Johnson', 'Shawn Burr'],
     ['Nicklas Lidstrom', 'Vladimir Konstantinov'],
     // EDM
     ['Wayne Gretzky', 'Jari Kurri', 'Glenn Anderson'],
-    ['Christan Ruuttu', 'Geoff Sanderson', 'Shayne Corson'],
+    ['Christian Ruuttu', 'Geoff Sanderson', 'Shayne Corson'],
     ['Paul Coffey', 'Charlie Huddy'],
     // FLA
     ['Stu Barnes', 'John MacLean', 'Andrei Kovalenko'],
@@ -2592,7 +2592,7 @@ const dynamicDuos = [
     ['Craig MacTavish', 'Ed Olczyk', 'Stephane Matteau'],
     ['Mike Hudson', 'Andy Brickley', 'Nick Kypreos'],
     // OTT
-    ['Alexei Yashin', 'Alexnder Daigle', 'Michal Pivonka'],
+    ['Alexei Yashin', 'Alexander Daigle', 'Michal Pivonka'],
     ['Paul Ranheim', 'Owen Nolan', 'Sergio Momesso'],
     ['Shaun VanAllen', 'Wayne Presley', 'Oleg Petrov'],
     ['Jamie Baker', 'David Archibald', 'Matthew Barnaby'],
@@ -2606,8 +2606,8 @@ const dynamicDuos = [
     ['Martin Straka', 'Markus Naslund', 'Jaromir Jagr'],
     ['Bryan Trottier', 'Garry Valk', 'Phil Bourque'],
     ['Jiri Hrdina', 'Mike Donnelly', 'Jim McKenzie'],
-    ['Darius Kasparitis', 'Mike Ramsey'],
-    ['Kjell Samuelsson', 'Scott Niedrmayer'],
+    ['Darius Kasparaitis', 'Mike Ramsey'],
+    ['Kjell Samuelsson', 'Scott Niedermayer'],
     // QUE
     ['Joe Sakic', 'Theoren Fleury', 'Andrei Lomakin'],
     ['Dale Hunter', 'Mike Gartner', 'Mike Ricci'],
@@ -2630,7 +2630,7 @@ const dynamicDuos = [
     // TBL
     ['Kirk Muller', 'Petr Klima', 'Chris Gratton'],
     ['Jesse Belanger', 'Patrick Poulin', 'Bob Kudelski'],
-    ['Alexnder Semak', 'John Tucker', 'Jim Cummins'],
+    ['Alexander Semak', 'John Tucker', 'Jim Cummins'],
     ['Marc Bureau', 'Brent Gilchrist', 'Mikael Andersson'],
     ['Roman Hamrlik', 'Alexei Kasatonov'],
     ['Craig Muni', 'Zarley Zalapski'],
@@ -2638,9 +2638,9 @@ const dynamicDuos = [
     ['Doug Gilmour', 'Dave Andreychuk', 'Rob Zamuner'],
     ['Wendel Clark', 'Mats Sundin'],
     ['Peter Zezel', 'Mike Krushelnyski', 'Mark Osborne'],
-    ['Mike Eastwood', 'Gary Leeman', 'Ken Baumgartnr'],
+    ['Mike Eastwood', 'Gary Leeman', 'Ken Baumgartner'],
     ['Al Iafrate', 'Todd Gill'],
-    ['Vachslav Fetisov', 'Dmitri Mironov'],
+    ['Vyacheslav Fetisov', 'Dmitri Mironov'],
     // VAN
     ['Trevor Linden', 'Pavel Bure', 'Greg Adams'],
     ['Robert Kron', 'Geoff Courtnall', 'Martin Gelinas'],
