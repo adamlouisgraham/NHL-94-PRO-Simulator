@@ -134,7 +134,7 @@ Osgood,77,DET,Detroit Red Wings,Fedorov,A+,A,C,Sergei,B,B-,C,D,A,D,A,A,A+,A+,99,
 Essesna,56,DET,Detroit Red Wings,Yzerman,A-,B+,C,Steve,C,A,F,F,A+,F,B-,A-,A,A-,93,28,9,757,445,595,1040,1.43,39,50,57,26,36,62,Bob,97,84,13,4,0,26,5903,6584,5,265,300,0
 ,,DET,Detroit Red Wings,Coffey,A-,B-,D,Paul,B,A,C,F,A,D,C+,A,A+,A,83,32,12,953,330,871,1201,1.26,234,30,130,46,101,147,,,,,,,,,,,,,
 ,,DET,Detroit Red Wings,Ciccarelli,B-,B-,LW,Dino,B-,C+,B,C,B,D,B,C,A ,C,73,33,6,907,485,472,957,1.10,-10,53,101,53,39,92,,,,,,,,,,,,,
-,,DET,Detroit Red Wings,Kozlov,B,D,LW,Vachslav,B,C,D,A,C,F,B,B,B,C,63,21,0,24,4,3,7,0.29,-3,0,4,0,2,2,,,,,,,,,,,,,
+,,DET,Detroit Red Wings,Kozlov,B,D,LW,Vyacheslav,B,C,D,A,C,F,B,B,B,C,63,21,0,24,4,3,7,0.29,-3,0,4,0,2,2,,,,,,,,,,,,,
 ,,DET,Detroit Red Wings,Konstantinov,41,73,D,Vladimir,C,C,A,D,B,B,F,C,B,B,63,26,0,161,13,43,56,0.50,47,2,18,0,2,2,,,,,,,,,,,,,
 ,,DET,Detroit Red Wings,Kennedy,D,D,RW,Sheldon,D,D,F,A,D,F,C,D,C,A,50,24,0,122,25,26,51,0.42,-4,4,7,1,1,2,,,,,,,,,,,,,
 ,,DET,Detroit Red Wings,Lidstrom,C+,B,D,Nicklas,B,B,F,D,B,D,C+,C+,B,C,61,23,0,164,18,83,101,0.66,43,3,18,2,2,4,,,,,,,,,,,,,
@@ -277,7 +277,7 @@ Mario Gosselin,46,NJD,New Jersey Devils,Zelepukin,B,B,LW,Valeri,C,C,D,D,C,F,B,B,
 ,,NJD,New Jersey Devils,Holik,C,B+,C,Bobby,C+,C-,C+,C,C,C+,B-,C+,C+,C+,52,22,0,215,62,65,127,0.43,-5,9,18,1,2,3,,,,,,,,,,,,,
 ,,NJD,New Jersey Devils,Smith,F,C,D,Jason,D,C-,D,D,C,C,F,C,C,C,49,35,0,0,0,0,0,0.00,0,0,0,0,0,0,,,,,,,,,,,,,
 ,,NJD,New Jersey Devils,Modry,D,C+,D,Jaroslav,D,C,F,D,C,D,F,C,C,C,49,29,0,0,0,0,0,0.00,0,0,0,0,0,0,,,,,,,,,,,,,
-,,NJD,New Jersey Devils,Fetisov,C-,B,D,Vachslav,B-,C+,C,F,C,C+,C-,C,B,C-,46,30,0,285,18,96,114,0.61,32,1,24,0,7,7,,,,,,,,,,,,,
+,,NJD,New Jersey Devils,Fetisov,C-,B,D,Vyacheslav,B-,C+,C,F,C,C+,C-,C,B,C-,46,30,0,285,18,96,114,0.61,32,1,24,0,7,7,,,,,,,,,,,,,
 ,,NJD,New Jersey Devils,Albelin,D,C,D,Tommy,D,B-,D,D,C,C,D,C,C,C=,47,29,0,290,21,95,116,0.40,12,3,9,3,2,5,,,,,,,,,,,,,
 ,,NJD,New Jersey Devils,Carpenter,D,A-,C,Bob,C+,C+,C,C,C,C-,D,C-,C,C-,49,28,0,825,285,337,622,0.63,-76,38,80,17,25,42,,,,,,,,,,,,,
 ,,NJD,New Jersey Devils,Daneyko,F,B,D,Ken,F,F,B,B,B,A,F-,D,C,D,47,24,0,613,26,87,113,0.22,-24,2,45,3,10,13,,,,,,,,,,,,,
@@ -543,7 +543,7 @@ Dafoe,52,WAS,Washington Capitals,Ridley,B,C,C,Mike,C,B,D,F,B,D,A,B,B,B,75,27,1,6
 ,,WAS,Washington Capitals,Reekie,D,D,D,Joe,C,C,C,D,B,C,D,C,C,D,50,23,0,297,13,62,75,0.23,54,3,2,0,0,0,,,,,,,,,,,,,
 ,,WAS,Washington Capitals,Anderson,D,D,D,Shawn,D,D,C,C,C,C,D,C,C,D,43,26,0,204,11,42,53,0.24,2,0,11,0,1,1,,,,,,,,,,,,,
 Cheveldae,64,WPG,Winnipeg Jets,Selanne,A+,C-,RW,Teemu,A+,B,D,C+,A+,C,A+,A+,A+,A+,90,24,1,84,76,56,132,1.57,8,7,6,4,2,6,Tim,112,84,8,9,2,29,5759,6519,15,614,685,1
-O'Neill,39,WPG,Winnipeg Jets,Emerson,D,B,RW,Nelson,D,D,B,C,B,B,D,B,C,C,62,23,0,165,45,90,135,0.78,-5,6,17,4,9,13,Mike,0,0,0,0,0,1,34,41,0,0,0,0
+ONeill,39,WPG,Winnipeg Jets,Emerson,D,B,RW,Nelson,D,D,B,C,B,B,D,B,C,C,62,23,0,165,45,90,135,0.78,-5,6,17,4,9,13,Mike,0,0,0,0,0,1,34,41,0,0,0,0
 ,,WPG,Winnipeg Jets,Drake,D,C,RW,Dallas,D,C,F,D,C,D,C,C,C,C,52,26,0,72,18,26,44,0.61,15,5,7,3,3,6,,,,,,,,,,,,,
 ,,WPG,Winnipeg Jets,Zhamnov,B,B,C,Alexei,C,B,D,F,B,D,C,B,A,C,73,21,0,68,25,47,72,1.06,7,4,6,0,2,2,,,,,,,,,,,,,
 ,,WPG,Winnipeg Jets,Manson,C,B,D,Dave,A,C,B,B,A,B,F,C,B,B,65,33,1,492,69,150,219,0.42,-4,6,66,5,22,27,,,,,,,,,,,,,

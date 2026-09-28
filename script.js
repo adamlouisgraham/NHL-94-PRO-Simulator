@@ -8872,7 +8872,10 @@ function startWatchLive() {
         return { ...ev, p: per, m: Math.min(19, +mt[3]), s: +mt[4] };
     };
     watchQueue = [...g.result.boxLog.map(withClock), ...fillerEvents];
-    watchQueue.sort((a,b) => a.p !== b.p ? a.p - b.p : (a.m !== b.m ? a.m - b.m : a.s - b.s));
+    // Same-second ties: routine play, then the whistle (penalty / notes), then the goal — so a PP goal
+    // never reads as coming before the penalty that created the power play.
+    const evRank = e => e.isFiller ? 0 : (e.isPenalty || e.isNote) ? 1 : (e.scorer || e.isPenaltyShot) ? 2 : 1;
+    watchQueue.sort((a,b) => a.p !== b.p ? a.p - b.p : (a.m !== b.m ? a.m - b.m : (a.s !== b.s ? a.s - b.s : evRank(a) - evRank(b))));
     let currentPeriod = 1;
     const watchShots = { a: 0, h: 0 };
     const watchGoalsByPlayer = {};
