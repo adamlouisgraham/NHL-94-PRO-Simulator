@@ -8746,17 +8746,18 @@ function buildBroadcastPlays(g) {
         const saveTxt = ['glove save', 'blocker save', 'pad save', 'save, and he holds on for the whistle', 'save, kicked into the corner', 'save, steered aside', 'stop, and he covers up', 'save, getting just a piece of it'];
         for (let i = 0; i < saves && shooters.length; i++) {
             const n = shooters.splice(Math.floor(Math.random() * shooters.length), 1)[0];
-            out.push({ ...randTime(), tm: code, cl: '#555', isFiller: true, isShot: true,
+            // Only ~1 in 3 saves is called on air; the rest still count toward the shot totals
+            out.push({ ...randTime(), tm: code, cl: '#555', isFiller: true, isShot: true, isHidden: Math.random() > 0.35,
                 txt: `${n} — ${pick(shotTxt)}. ${oppGoalie || 'The goalie'} with the ${pick(saveTxt)}.` });
         }
         // A share of the physical play, never more than actually happened
         skaters.forEach(n => {
             const hits = ms[n].hits || 0, blk = ms[n].blk || 0;
-            for (let i = 0; i < hits; i++) if (Math.random() < 0.5) out.push({ ...randTime(), tm: code, cl: '#555', isFiller: true, txt: `${n} ${pick(['finishes his check along the boards', 'lays a big hit at the blue line', 'rubs out his man in the corner', 'steps up with an open-ice hit'])}.` });
-            for (let i = 0; i < blk; i++) if (Math.random() < 0.5) out.push({ ...randTime(), tm: code, cl: '#555', isFiller: true, txt: `${n} ${pick(['blocks a shot from the point', 'gets in the lane and blocks it', 'drops to block a one-timer'])}.` });
+            for (let i = 0; i < hits; i++) if (Math.random() < 0.3) out.push({ ...randTime(), tm: code, cl: '#555', isFiller: true, txt: `${n} ${pick(['finishes his check along the boards', 'lays a big hit at the blue line', 'rubs out his man in the corner', 'steps up with an open-ice hit'])}.` });
+            for (let i = 0; i < blk; i++) if (Math.random() < 0.3) out.push({ ...randTime(), tm: code, cl: '#555', isFiller: true, txt: `${n} ${pick(['blocks a shot from the point', 'gets in the lane and blocks it', 'drops to block a one-timer'])}.` });
         });
         const centres = skaters.filter(n => posOf(n) === 'C');
-        for (let i = 0; i < 3 && centres.length; i++) out.push({ ...randTime(), tm: code, cl: '#555', isFiller: true, txt: `${pick(centres)} wins the draw cleanly back to the point.` });
+        for (let i = 0; i < 2 && centres.length; i++) out.push({ ...randTime(), tm: code, cl: '#555', isFiller: true, txt: `${pick(centres)} wins the draw cleanly back to the point.` });
         return out;
     };
     return [
@@ -8844,6 +8845,7 @@ function startWatchLive() {
             currentPeriod = ev.p;
         }
         if (ev.isShot || ev.isPenaltyShot) watchShots[ev.tm === g.a.code ? 'a' : 'h']++;
+        if (ev.isHidden) { watchInterval = setTimeout(watchStep, 0); return; }
         const clockStr = `P${ev.p} ${ev.m}:${ev.s < 10 ? '0'+ev.s : ev.s}`;
         document.getElementById('wgClock').innerText = clockStr;
         document.getElementById('wgBugClock').innerText = clockStr;
