@@ -964,10 +964,32 @@ function syncArenaScoreboardUI() {
     else jumbo.innerText = 'SELECT A GAME FROM ARENA.';
 }
 
+// Playoff status for the header/progress bar. The playoff calendar is a one-day slate rebuilt
+// every day, so the regular "DAY x/y" read "DAY 1/1 · 0%" for the whole postseason.
+function getPlayoffStatus() {
+    const ser = (playoffBracket && playoffBracket.series) || [];
+    const rnd = playoffBracket && playoffBracket.round || 1;
+    const names = ['DIVISION SEMIS', 'DIVISION FINALS', 'CONF FINALS', 'STANLEY CUP FINAL'];
+    const done = ser.filter(x => x.hW >= 4 || x.aW >= 4).length;
+    const live = ser.filter(x => x.hW < 4 && x.aW < 4);
+    const gameNo = live.length ? Math.max(...live.map(x => x.hW + x.aW)) + 1 : null;
+    let lead = '';
+    if (ser.length === 1) {
+        const x = ser[0], h = x.h.code, a = x.a.code;
+        lead = x.hW === x.aW ? ` · TIED ${x.hW}-${x.aW}` : x.hW > x.aW ? ` · ${h} ${x.hW >= 4 ? 'WINS' : 'LEADS'} ${x.hW}-${x.aW}` : ` · ${a} ${x.aW >= 4 ? 'WINS' : 'LEADS'} ${x.aW}-${x.hW}`;
+    }
+    const label = currentCupChamp ? `STANLEY CUP CHAMPIONS: ${currentCupChamp.toUpperCase()}`
+        : `ROUND ${rnd} · ${names[rnd - 1] || ''}${gameNo ? ` · GAME ${gameNo}` : ''}${ser.length > 1 ? ` · ${done}/${ser.length} SERIES DONE` : lead}`;
+    // overall postseason progress: completed rounds plus the share of this round's series decided
+    const pct = currentCupChamp ? 100 : Math.round(((rnd - 1) + (ser.length ? done / ser.length : 0)) / 4 * 100);
+    return { label, pct };
+}
+
 function refreshScheduleDashboardUI() {
     const dayEl = document.getElementById('dayDisplay');
     if (dayEl) {
-        if (calendar.length === 0) dayEl.innerText = 'DAY 0/0';
+        if (isPlayoffs) dayEl.innerText = `${getPlayoffStatus().label}${getSimDate() ? ` | ${getSimDate()}` : ''}`;
+        else if (calendar.length === 0) dayEl.innerText = 'DAY 0/0';
         else {
             const dayNumber = Math.min(currentDay + 1, calendar.length); 
             const dateText = getSimDate() ? ` | ${getSimDate()}` : ''; 
@@ -978,11 +1000,11 @@ function refreshScheduleDashboardUI() {
     const progressFill = document.getElementById('scheduleProgressFill');
     if (progressFill) {
         const totalDays = Math.max(calendar.length, 1);
-        const percent = currentDay >= calendar.length ? 100 : Math.round((currentDay / totalDays) * 100);
+        const percent = isPlayoffs ? getPlayoffStatus().pct : (currentDay >= calendar.length ? 100 : Math.round((currentDay / totalDays) * 100));
         progressFill.style.width = `${percent}%`;
         // Surface the raw day count + percent so the bar is readable without doing the math
         const pctEl = document.getElementById('scheduleProgressPct');
-        if (pctEl) pctEl.innerText = `DAY ${Math.min(currentDay, totalDays)}/${totalDays}  ·  ${percent}%`;
+        if (pctEl) pctEl.innerText = isPlayoffs ? `PLAYOFFS  ·  ${percent}%` : `DAY ${Math.min(currentDay, totalDays)}/${totalDays}  ·  ${percent}%`;
     }
     renderScheduleDashboard(); 
     updateSaveMetadataDisplay();
@@ -1001,7 +1023,7 @@ function renderScheduleDashboard() {
     const slotLabel = getSelectedSaveSlotLabel(); 
     const versionLabel = meta.version ? `Save ${slotLabel}  |  v${meta.version}` : `Save ${slotLabel}  |  n/a`; 
     const isAsgDay = isASG && calendar[currentDay] && calendar[currentDay].some(g => g.isASG_game);
-    const statusText = totalDays === 0 ? 'Schedule not loaded' : currentDay >= totalDays ? 'Season complete' : `${isAsgDay ? 'ALL-STAR DAY' : `Day ${currentDay + 1} / ${totalDays}`}`;
+    const statusText = isPlayoffs ? getPlayoffStatus().label : totalDays === 0 ? 'Schedule not loaded' : currentDay >= totalDays ? 'Season complete' : `${isAsgDay ? 'ALL-STAR DAY' : `Day ${currentDay + 1} / ${totalDays}`}`;
 
     summaryEl.innerHTML = `<span>${statusText}</span><span>Completed: ${completedDays}</span><span>Remaining: ${remainingDays}</span><span>${currentDate}</span><span>${versionLabel}</span>`;
     if (totalDays === 0 || currentDay >= totalDays) { upcomingEl.innerHTML = `<div class="schedule-game-line">No upcoming matchups.</div>`; return; }
@@ -3835,16 +3857,18 @@ function calculateDynamicIceTime(struct) {
     // ==========================================
     
     // Baseline Targets (Per Player Average)
-    let dShares = [25.5, 21, 15.5]; // v265: top pair plays the most minutes on the team (was 24/19.5/16.5)
+    let dShares = [26.5, 21, 14.5]; // v271: 25.5/21/15.5 still left #1 pairs at ~23 min after PP/PK rotation // v265: top pair plays the most minutes on the team (was 24/19.5/16.5)
 
     // Closeness adjustments for defense lines within 3 rating points
+    // v270: close only HALF the gap for near-equal pairs. Full averaging meant most teams' top
+    // pair played ~23 min instead of ~25 — coaches still lean on the #1 pair when ratings are close.
     if (Math.abs(d1Ovr - d2Ovr) <= ratingClosenessThreshold) {
         let avg = (dShares[0] + dShares[1]) / 2;
-        dShares[0] = avg; dShares[1] = avg;
+        dShares[0] = (dShares[0] + avg) / 2; dShares[1] = (dShares[1] + avg) / 2;
     }
     if (Math.abs(d2Ovr - d3Ovr) <= ratingClosenessThreshold) {
         let avg = (dShares[1] + dShares[2]) / 2;
-        dShares[1] = avg; dShares[2] = avg;
+        dShares[1] = (dShares[1] + avg) / 2; dShares[2] = (dShares[2] + avg) / 2;
     }
 
     // Scale Defense Shares to exactly fit 120 total blueline minutes (2 players per pairing)
@@ -5928,10 +5952,11 @@ function simGame(idx) {
     //  5. OVERTIME RESOLUTION
     let otPeriods = 0;
     // REGULAR SEASON OT — 5-minute sudden death (93-94 rules): all tied games go to OT,
-    // ~15% resolve, ~85% remain tied — targets ~13-14% tie rate
+    // v270: ~44% resolve (was 15%). ~23% of games are tied after regulation, so 15% left ~18-19%
+    // of all games as ties; real 1993-94 was 12.9% (141/1092), i.e. OT settled ~44% of them.
     if (!isPlayoffs && !isASG && hG === aG) {
         otPeriods = 1;
-        if (Math.random() < 0.15) {
+        if (Math.random() < 0.44) {
             const otLine = (struct) => [...(struct.f[0]||[]), ...(struct.d[0]||[])];
             const otBest = (struct) => {
                 const line = otLine(struct);
@@ -5954,30 +5979,34 @@ function simGame(idx) {
                 return line[Math.floor(Math.random()*line.length)].name;
             };
             const hStar = otBest(hStruct), aStar = otBest(aStruct);
+            // v271: the best OT player still decides the odds, but the goal goes to a weighted pick from
+            // the unit — crediting the star every time piled ~60 extra OT goals a season onto top scorers.
+            const otScorer = (struct, star) => { const pk = selectShooter(otLine(struct), 'GOAL'); return (pk && pk.name) || star.name; };
+            const hScorer = otScorer(hStruct, hStar), aScorer = otScorer(aStruct, aStar);
             // v172: goalie wallMod shifts OT odds — a WALL goalie makes it harder to win in OT
             // wallMod > 1 = easier to score on (bad goalie) → away team benefits; < 1 = harder → home benefits
             const otGoalieMod = Math.max(-0.08, Math.min(0.08, (aWallMod - hWallMod) * 0.25));
             const hWinProb = Math.max(0.25, Math.min(0.75, 0.52 + (hStar.ovr - aStar.ovr) * 0.005 + otGoalieMod));
             const otSec = Math.floor(Math.random()*300);
-            const otM = Math.floor(otSec/60)+1, otS = otSec%60;
+            const otM = Math.floor(otSec/60), otS = otSec%60; // elapsed 0:00-4:59 (was +1 → 1:00-5:59)
             if (Math.random() < hWinProb) {
                 hG++; hShots++;
                 trk(aG_name,'sa',1); trk(aG_name,'ga',1);
-                if (hStar.name) { trk(hStar.name,'g',1); trk(hStar.name,'s',1); }
-                const hAssist = hStar.name ? otAssist(hStruct, hStar.name) : null;
+                if (hScorer) { trk(hScorer,'g',1); trk(hScorer,'s',1); }
+                const hAssist = hScorer ? otAssist(hStruct, hScorer) : null;
                 if (hAssist) trk(hAssist,'a',1);
                 allGoals.push({ p:4, m:otM, s:otS, str:`OT ${otM}:${otS<10?'0'+otS:otS}`, tm:g.h.code,
                     cl:teamColors[g.h.nrm]?.[0]||'#fff',
-                    txt:buildGoalText(hStar.name, hAssist, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:hStar.name, pAssist:hAssist, code:g.h.code });
+                    txt:buildGoalText(hScorer, hAssist, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:hScorer, pAssist:hAssist, code:g.h.code });
             } else {
                 aG++; aShots++;
                 trk(hG_name,'sa',1); trk(hG_name,'ga',1);
-                if (aStar.name) { trk(aStar.name,'g',1); trk(aStar.name,'s',1); }
-                const aAssist = aStar.name ? otAssist(aStruct, aStar.name) : null;
+                if (aScorer) { trk(aScorer,'g',1); trk(aScorer,'s',1); }
+                const aAssist = aScorer ? otAssist(aStruct, aScorer) : null;
                 if (aAssist) trk(aAssist,'a',1);
                 allGoals.push({ p:4, m:otM, s:otS, str:`OT ${otM}:${otS<10?'0'+otS:otS}`, tm:g.a.code,
                     cl:teamColors[g.a.nrm]?.[0]||'#fff',
-                    txt:buildGoalText(aStar.name, aAssist, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:aStar.name, pAssist:aAssist, code:g.a.code });
+                    txt:buildGoalText(aScorer, aAssist, null, 'SNIPER', false, false, false, 0, 0, 4), scorer:aScorer, pAssist:aAssist, code:g.a.code });
             }
         }
         // else: OT not resolved — game remains a tie
