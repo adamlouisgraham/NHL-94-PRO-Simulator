@@ -7599,16 +7599,27 @@ function processOffseasonGrowth() {
         p.age++; 
         if (!awardConfig.aging) return; 
         let oChg = 0, dChg = 0, pChg = 0;
-        if (p.age <= 24) {
+        // v303: development runs to 25 and is big enough for a Franchise pick (drafted ~55) to reach the
+        // mid-80s and a Top 6 pick the mid-70s (old ranges capped prospects in the 70s, so the league lost
+        // its stars as the 1993-94 veterans aged out). Decline now starts at 32 and is gentler until 35.
+        if (p.age <= 25) {
             let r = Math.random();
-            if (p.potential === 'Franchise') { oChg = 2 + Math.floor(r * 3); dChg = 2 + Math.floor(r * 3); pChg = r > 0.5 ? 1 : 0; }
-            else if (p.potential === 'Top 6') { oChg = 1 + Math.floor(r * 2); dChg = 1 + Math.floor(r * 2); pChg = r > 0.7 ? 1 : 0; }
-            else if (p.potential === 'Depth') { oChg = Math.floor(r * 2); dChg = Math.floor(r * 2); }
-            else { oChg = Math.floor(r * 1.5); dChg = Math.floor(r * 1.5); } 
-        } else if (p.age >= 25 && p.age <= 30) {
+            const ramp = p.age <= 22 ? 1 : 0.6; // growth slows in the last few development years
+            if (p.potential === 'Franchise') { oChg = Math.round((3 + r * 4) * ramp); dChg = Math.round((3 + r * 4) * ramp); pChg = r > 0.5 ? 1 : 0; }
+            else if (p.potential === 'Top 6') { oChg = Math.round((2 + r * 3) * ramp); dChg = Math.round((2 + r * 3) * ramp); pChg = r > 0.7 ? 1 : 0; }
+            else if (p.potential === 'Depth') { oChg = Math.round((1 + r * 1.5) * ramp); dChg = Math.round((1 + r * 1.5) * ramp); }
+            else { oChg = Math.floor(r * 1.5); dChg = Math.floor(r * 1.5); }
+            // ceiling by potential, so an already-good young player doesn't grow past what his tier allows
+            const cap = { Franchise: 92, 'Top 6': 82, Depth: 70 }[p.potential] || 60;
+            const nowOvr = getPlayerWeightedStats(p.name)?.ovr || 0;
+            if (nowOvr >= cap) { oChg = 0; dChg = 0; pChg = 0; }
+            else if (nowOvr + oChg > cap) { oChg = cap - nowOvr; dChg = Math.min(dChg, oChg); }
+        } else if (p.age >= 26 && p.age <= 31) {
             if (Math.random() < 0.15) { oChg = Math.random() > 0.5 ? 1 : -1; dChg = Math.random() > 0.5 ? 1 : -1; }
-        } else if (p.age >= 31) {
-            let sev = p.age >= 35 ? 2 : 1; let r = Math.random(); oChg = -(Math.floor(r * 2) + sev); dChg = -(Math.floor(r * 2) + (sev - 1)); pChg = -(Math.floor(r * 1.5) + sev);
+        } else if (p.age >= 32) {
+            let r = Math.random();
+            if (p.age <= 34) { oChg = -(1 + Math.floor(r * 2)); dChg = -Math.floor(r * 2); pChg = -1; }
+            else { oChg = -(2 + Math.floor(r * 2)); dChg = -(1 + Math.floor(r * 2)); pChg = -(2 + Math.floor(r * 1.5)); }
         }
         if (p.pos === 'G') {
             p.attr.gDef = Math.max(20, Math.min(99, (parseInt(p.attr.gDef) || 70) + dChg));
@@ -10275,6 +10286,20 @@ function getConnSmytheScore(p) {
     }
     // Keep rosters playable once the draft is adding players: cap 29 (largest opening roster)
     if (awardConfig.draft) trimRostersAfterOffseason();
+    // v303: refill short rosters to 28 with extra prospects (retirements were outpacing the 2-round draft)
+    if (awardConfig.draft) {
+        let extra = 0;
+        league.forEach(t => {
+            const ro = rosters[t.nrm] || [];
+            while (ro.length < 28) {
+                const nG = ro.filter(p => p.pos === 'G').length, nD = ro.filter(p => p.pos === 'D').length;
+                const nF = ro.length - nG - nD;
+                const pos = nG < 3 ? 'G' : nD < 9 ? 'D' : nF < 15 ? ['C', 'LW', 'RW'][Math.floor(Math.random() * 3)] : (Math.random() < 0.35 ? 'D' : 'C');
+                makeProspect(t, pos, 200 + (++extra));
+            }
+        });
+        if (extra) { clearWpCache(); res += `<p style='font-size:7px; color:var(--neon-cyan);'>Free-agent call-ups: ${extra} young players signed to fill rosters to 28.</p>`; }
+    }
 
     document.getElementById('awardWinnerContent').innerHTML = res; 
     document.getElementById('awardOverlay').style.display = 'flex';
