@@ -3591,6 +3591,10 @@ let seasonLines = {};
 // v301: scoring-distribution dials. LINE_FINISH = per-shot finish multiplier for F lines [L1, L2, L3/L4];
 // FWD_FINISH offsets them to hold league scoring; PP1_SHARE = share of power plays run by PP unit 1.
 let LINE_FINISH = [0.88, 1.20, 0.62], FWD_FINISH = 1.18, PP1_SHARE = 0.43;
+// v307: SHOT_BASE = even-strength shot lambda per team; FINISH_BASE = per-shot goal multiplier (sets league save %)
+let SHOT_BASE = 23, FINISH_BASE = 1.30;
+// v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
+let PLAYOFF_EDGE = 1.75;
 function getRosterStructure(tk) {
     if (_structCache[tk]) return _structCache[tk];
     let struct;
@@ -4173,7 +4177,7 @@ function simGame(idx) {
         const starter = gs[0]; const backup = gs[1]; const sStats = playerStats[starter.name][k];
         let diff = baseG(starter.name) - baseG(backup.name);
         // v278: 1993-94 starters played ~60-70 GP; the old 45%/30% rest chances capped starters near 55
-        let restChance = diff > 15 ? 0.05 : diff > 10 ? 0.10 : diff > 5 ? 0.20 : 0.40;
+        let restChance = diff > 15 ? 0.15 : diff > 10 ? 0.20 : diff > 5 ? 0.30 : 0.50; // v307: +10 pts each (starters averaged 64 GP, 3/4 of teams 60+)
         // B2B rest only applies if THIS goalie (the current OVR-ranked starter) is the one who
         // actually played yesterday — playedYesterday(tk) is team-wide and would otherwise bench
         // the true starter (who didn't play) just because the backup had a game the day before,
@@ -4181,7 +4185,7 @@ function simGame(idx) {
         if (playerStats[starter.name]?.lastPlayedDay === currentDay - 1) restChance += 0.45; // v278: was 0.60
 
         const bStats = playerStats[backup.name]?.[k];
-        if (sStats.consStarts >= 12 || Math.random() < restChance) { // v278: forced rest after 12 straight (was 7)
+        if (sStats.consStarts >= 10 || Math.random() < restChance) { // v307: 12 -> 10 // v278: forced rest after 12 straight (was 7)
             sStats.consStarts = 0;
             if (bStats) bStats.consStarts = (bStats.consStarts || 0) + 1;
             return backup;
@@ -4605,10 +4609,11 @@ function simGame(idx) {
     const hFowLambda  = fowDiff * 0.08;  // +1.2 shots at max diff (elite vs poor C)
     const aFowLambda  = -fowDiff * 0.08;
 
-    const hBaseLambda  = 26 + Math.max(0, Math.min(5, (hTeamStyle - 60) * 0.2)) + hFowLambda;
-    const aBaseLambda  = 26 + Math.max(0, Math.min(5, (aTeamStyle - 60) * 0.2)) + aFowLambda;
-    const hShotCount   = poissonRand(hBaseLambda * (1 + preGameDiff * 0.008));
-    const aShotCount   = poissonRand(aBaseLambda * (1 - preGameDiff * 0.008));
+    const hBaseLambda  = SHOT_BASE + Math.max(0, Math.min(5, (hTeamStyle - 60) * 0.2)) + hFowLambda;
+    const aBaseLambda  = SHOT_BASE + Math.max(0, Math.min(5, (aTeamStyle - 60) * 0.2)) + aFowLambda;
+    const poEdge = (isPlayoffs && !isASG) ? PLAYOFF_EDGE : 1;
+    const hShotCount   = poissonRand(hBaseLambda * (1 + preGameDiff * 0.008 * poEdge));
+    const aShotCount   = poissonRand(aBaseLambda * (1 - preGameDiff * 0.008 * poEdge));
     // v167: penCount scaled by roster avg penaltyRate (archMods) + forecheck coaching adj
     // Goon-heavy rosters (avg 1.25) → ~9 pens; skills game (avg 0.85) → ~6 pens; flat 7.5 baseline
     const calcTeamPenRate = (tk) => {
@@ -5125,7 +5130,7 @@ function simGame(idx) {
             const depthLineMod = LINE_FINISH[Math.min(2, atkFLine)] ?? 1.0;
             // v287: D were converting ~9% (real ~5%): point shots finish less; forwards up slightly to hold league scoring
             const posFinMod = isDefPos ? 0.62 : FWD_FINISH;
-            const prob      = posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; v174: 0.0888; v181: 0.0930; v182: 0.0918→0.0906 target 7.0 GPG
+            const prob      = FINISH_BASE*posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002*poEdge)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; v174: 0.0888; v181: 0.0930; v182: 0.0918→0.0906 target 7.0 GPG
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob * finishDamp(shooter.name)))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
