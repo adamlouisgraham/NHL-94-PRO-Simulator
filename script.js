@@ -5158,7 +5158,7 @@ function simGame(idx) {
             const pp1NameSet = new Set(autoPP1.map(p => p.name));
             const autoPP2    = pp2Roster.length < 3 ? buildPPUnit(pp1NameSet) : pp2Roster;
             // Alternate PP1/PP2 on successive penalties (~70% PP1, ~30% PP2)
-            const activeUnit = (Math.random() < 0.70 || autoPP2.length < 3) ? autoPP1 : autoPP2;
+            const activeUnit = (Math.random() < 0.64 || autoPP2.length < 3) ? autoPP1 : autoPP2; // v292: 0.70 -> 0.64 (top-3 F had ~44% of PP goals, target ~40%)
             const ppUnit = activeUnit.length>=3 ? activeUnit : (advTeam.nrm===g.h.nrm?hOnIce:aOnIce);
             const pkUnit = advTeam.nrm===g.h.nrm ? aOnIce : hOnIce;
 
