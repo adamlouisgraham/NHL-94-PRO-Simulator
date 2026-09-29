@@ -5014,9 +5014,9 @@ function simGame(idx) {
 
             // v286: depth lines finish a bit more, top line a bit less (3rd/4th lines were ~10% under real share)
             const atkFLine  = isHome ? hFLine : aFLine;
-            const depthLineMod = atkFLine >= 2 ? 1.12 : atkFLine === 1 ? 1.04 : 0.86;
+            const depthLineMod = atkFLine >= 2 ? 0.93 : atkFLine === 1 ? 1.07 : 0.97;
             // v287: D were converting ~9% (real ~5%): point shots finish less; forwards up slightly to hold league scoring
-            const posFinMod = isDefPos ? 0.62 : 1.06;
+            const posFinMod = isDefPos ? 0.62 : 1.08;
             const prob      = posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; v174: 0.0888; v181: 0.0930; v182: 0.0918→0.0906 target 7.0 GPG
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob * finishDamp(shooter.name)))) {
