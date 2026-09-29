@@ -3588,6 +3588,7 @@ const buildRosterStructure = (tk, ignoreHealth = false) => {
 // back down. Lines are rebuilt from the season base each time, so returns need no bookkeeping.
 // Coach-saved custom lines and non-league (All-Star) rosters keep the old auto-build.
 let seasonLines = {};
+let deadlineDeals = [], deadlineDealsSeason = -1; // v317: this season's buyer/seller deals, for the deadline wrap-up
 // v301: scoring-distribution dials. LINE_FINISH = per-shot finish multiplier for F lines [L1, L2, L3/L4];
 // FWD_FINISH offsets them to hold league scoring; PP1_SHARE = share of power plays run by PP unit 1.
 let LINE_FINISH = [0.88, 1.20, 0.62], FWD_FINISH = 1.18, PP1_SHARE = 0.43;
@@ -12000,6 +12001,15 @@ function processDailyUpdates() {
 
     let tradeMult = getTradeProbabilityMultiplier();
     let daysUntilDeadline = Math.floor(calendar.length * 0.75) - currentDay;
+    // v317: deadline-day wrap-up headline
+    if (!isPlayoffs && daysUntilDeadline < 0 && awardConfig.trades && deadlineDealsSeason === currentSeason) {
+        const buyers = [...new Set(deadlineDeals.map(d => d.buyer))], sellers = [...new Set(deadlineDeals.map(d => d.seller))];
+        tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: deadlineDeals.length
+            ? `TRADE DEADLINE PASSES: ${deadlineDeals.length} deadline deal${deadlineDeals.length > 1 ? 's' : ''}. Buyers: ${buyers.join(', ')}. Sellers: ${sellers.join(', ')}.`
+            : `TRADE DEADLINE PASSES: a quiet deadline — no buyer/seller deals this year.` });
+        deadlineDealsSeason = -1;
+    }
+    if (deadlineDealsSeason !== currentSeason && daysUntilDeadline > 0) { deadlineDeals = []; deadlineDealsSeason = currentSeason; }
     let isDeadlineWindow = tradeMult > 1.0 && daysUntilDeadline >= 0;
 
     if (awardConfig.trades && Math.random() < (0.08 * tradeMult)) { // v283: 0.05 -> 0.08 (~15 AI trades a season)
@@ -12007,6 +12017,11 @@ function processDailyUpdates() {
         let activeTeams = Object.keys(rosters).filter(k => league.some(t => t.nrm === k));
         let teamA = activeTeams[Math.floor(Math.random() * activeTeams.length)];
         let teamB = activeTeams[Math.floor(Math.random() * activeTeams.length)];
+        // v317: in the deadline window, pair a contender with a seller so buyer/seller deals actually happen
+        if (isDeadlineWindow) {
+            const opp = activeTeams.filter(k => k !== teamA && isContenderTeam(k) !== isContenderTeam(teamA));
+            if (opp.length) teamB = opp[Math.floor(Math.random() * opp.length)];
+        }
 
         if (teamA !== teamB && rosters[teamA].length > 15 && rosters[teamB].length > 15) {
             let playerA, playerB, dealTag = 'BLOCKBUSTER';
@@ -12038,7 +12053,12 @@ function processDailyUpdates() {
                         if (veteran && prospect && veteran.name !== prospect.name) {
                             playerA = (sellerKey === teamA) ? veteran : prospect;
                             playerB = (sellerKey === teamA) ? prospect : veteran;
-                            dealTag = `DEADLINE DEAL: Seller ${sellerKey.toUpperCase()} sends veteran ${veteran.name} to contender ${buyerKey.toUpperCase()} for prospect ${prospect.name}`;
+                            // v317: readable deadline headline — team names, records, position and age
+                            const tObj = k => league.find(t => t.nrm === k) || { name: k, season: {} };
+                            const rec = t => `${t.season.w || 0}-${t.season.l || 0}-${t.season.t || 0}`;
+                            const bT = tObj(buyerKey), sT = tObj(sellerKey), vPs = playerStats[veteran.name] || {}, pPs = playerStats[prospect.name] || {};
+                            dealTag = `DEADLINE DEAL: Contender ${bT.name} (${rec(bT)}) acquire veteran ${vPs.pos || ''} ${veteran.name} (age ${vPs.age || '?'}) from seller ${sT.name} (${rec(sT)}) for ${pPs.pos || ''} ${prospect.name} (age ${pPs.age || '?'})`;
+                            deadlineDeals.push({ buyer: bT.name, seller: sT.name });
                         }
                     }
                 }
@@ -12480,10 +12500,10 @@ function getTradeProbabilityMultiplier() {
     let daysUntil = deadlineDay - currentDay;
 
     // 2. DEADLINE DAY: Absolute chaos (500% increase in AI trades)
-    if (daysUntil === 0) return 5.0; 
+    if (daysUntil === 0) return 15.0; // v317: was 5 (deadline produced <1 buyer/seller deal a season)
 
     // 3. THE DEADLINE FRENZY: The 5 days leading up to the deadline
-    if (daysUntil <= 5) return 2.5; 
+    if (daysUntil <= 7) return 5.0; // v317: 5 days x2.5 -> 7 days x5
 
     // 4. REGULAR SEASON: Normal baseline trading
     return 1.0; 
