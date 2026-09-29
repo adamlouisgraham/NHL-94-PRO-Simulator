@@ -2537,7 +2537,7 @@ const dynamicDuos = [
     // BUF
     ['Derek Plante', 'Donald Audette'],
     ['Alexander Mogilny', 'Dale Hawerchuk', 'Yuri Khmylev'],
-    ['Brad May', 'Rob Ray', 'Dave Hannan'],
+    ['Bob Sweeney', 'Dave Hannan', 'Rob Ray'],
     ['Petr Svoboda', 'Philippe Boucher'],
     // CGY
     ['Gary Roberts', 'Joe Nieuwendyk', 'Johan Garpenlov'],
@@ -2573,7 +2573,7 @@ const dynamicDuos = [
     ['Mike Modano', 'Kevin Stevens', 'Trent Klatt'],
     ['Pelle Eklund', 'Brian Bellows', 'Paul DiPietro'],
     ['Neal Broten', 'Paul Broten', 'Mike McPhee'],
-    ['Shane Churla', 'Mike Craig', 'Alan May'],
+    ['Shane Churla', 'Mike Craig', 'Dean Evason'],
     // MTL
     ['Bernie Nicholls', 'Stephane Richer', 'Gilbert Dionne'],
     ['Vincent Damphousse', 'Stephan Lebeau', 'Russ Courtnall'],
