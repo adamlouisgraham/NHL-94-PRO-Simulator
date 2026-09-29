@@ -3597,7 +3597,7 @@ let SHOT_BASE = 22, FINISH_BASE = 1.21;
 let PLAYOFF_EDGE = 1.75;
 // v309: PEN_BASE = minor-penalty lambda per game (1993-94 had ~5 PP chances/team/game); PP_CONV scales PP conversion
 let PEN_BASE = 9.6, PP_CONV = 1.05;
-let FIGHT_RATE = 0.9; // v311: mean fights per game
+let FIGHT_RATE = 0.028, FIGHT_HIT_RESPONSE = 0.06; // v312: per-scrum fight chance per toughness point^2; chance an on-ice enforcer answers a hit
 function getRosterStructure(tk) {
     if (_structCache[tk]) return _structCache[tk];
     let struct;
@@ -4644,8 +4644,10 @@ function simGame(idx) {
     // aggr 90 → coin ×1.30, goon ×1.40; aggr 50 → coin ×0.70, goon ×0.60
     const coinCount   = poissonRand(3.6 * Math.max(0.60, Math.min(1.40, 1.0 + (gameAvgAggr-70)*0.015)));
     const goonCount   = poissonRand(1.9 * Math.max(0.50, Math.min(1.60, 1.0 + (gameAvgAggr-70)*0.025)));
-    // v311: 1993-94 averaged ~0.9 fights/game (was max 1, in 45% of games); tougher matchups fight more, cap 3
-    const fightCount  = Math.min(3, poissonRand(FIGHT_RATE * Math.max(0.6, Math.min(1.5, 1.0 + (gameAvgAggr - 70) * 0.02))));
+    // v312: fights come from who is on the ice — ~8 scrum moments a game; each becomes a fight only if both
+    // sides have a willing fighter on the ice, far likelier with enforcers (see the 'fight' handler). Big hits
+    // on a team with its enforcer on the ice can also start one.
+    const fightCount  = poissonRand(8 * Math.max(0.7, Math.min(1.4, 1.0 + (gameAvgAggr - 70) * 0.015)));
     // v130: hits/blocked shots — additive stat-only events, don't touch score/SOG/saves.
     // Kept separate from hShotCount/aShotCount so the already-tuned ~30 SOG/team/game
     // average isn't diluted by carving blocks out of it.
@@ -4848,6 +4850,17 @@ function simGame(idx) {
         return out;
     };
 
+    // v312: who will drop the gloves, and how eager they are (0 = won't fight)
+    const canFightP = (p) => { const ps = playerStats[p?.name]; if (!ps || p.pos === 'G') return false; return (gradeToNum(ps.attr?.aggr)||50) >= 56 && (gradeToNum(ps.attr?.rough)||50) >= 56; };
+    const foughtThisGame = new Set();
+    const fightTough = (p) => {
+        if (!canFightP(p) || foughtThisGame.has(p.name)) return 0;   // one fight per player per game
+        const tg = PLAYER_TAG_OVERRIDES[p.name] || getPlayerWeightedStats(p.name)?.tag || '';
+        // D play ~40% of the game, so tough D are rated lower than forward enforcers or they'd fight constantly
+        return tg === 'ENFORCER F' ? 3 : tg === 'ENFORCER D' ? 2.2 : tg === 'INTIMIDATOR' ? (p.pos === 'D' ? 1.8 : 2.5)
+             : (tg === 'GRINDER' || tg === 'PEST' || tg === 'POWER FORWARD') ? 1.5 : 1;
+    };
+    let fightsThisGame = 0;
     let period = 1; // hoisted so PATRICK ROY PROTOCOL can read it after the loop
     let prevEvTick = 0;
     // v179: period-end momentum carry — track who scored last in each period
@@ -5544,6 +5557,19 @@ function simGame(idx) {
             let hr = Math.random()*hTotal, hPicked = hitPool[hitPool.length-1];
             for (let i=0;i<hitPool.length;i++){ hr-=hWt[i]; if(hr<=0){ hPicked=hitPool[i]; break; } }
             trk(hPicked.name, 'hits', 1);
+            // v312: an enforcer on the ice answers a big hit on a teammate
+            if (!isASG && fightsThisGame < 3) {
+                const answerSide = ev.side === 'h' ? aOnIce : hOnIce;
+                const enf = answerSide.filter(p => fightTough(p) >= 2.2).sort((x, y) => fightTough(y) - fightTough(x))[0];
+                if (enf && Math.random() < FIGHT_HIT_RESPONSE) {
+                    const hitterSide = ev.side === 'h' ? hOnIce : aOnIce;
+                    const opp = canFightP(hPicked) ? hPicked : hitterSide.filter(p => fightTough(p) > 0).sort((x, y) => fightTough(y) - fightTough(x))[0];
+                    if (opp) {
+                        const at = evStream.indexOf(ev);
+                        evStream.splice(at + 1, 0, { t: ev.t, type: 'fight', forced: true, hF: ev.side === 'h' ? opp : enf, aF: ev.side === 'h' ? enf : opp });
+                    }
+                }
+            }
             // v190: injury during hit — 5% trigger, then scaled by matchup
             if (!isASG && Math.random() < 0.0798) { // v228: 0.076→0.0798 (+5%, all-source except fight/brawl)
                 const victimPool = (ev.side === 'h' ? aOnIce : hOnIce).filter(p => p.pos !== 'G');
@@ -5624,12 +5650,19 @@ function simGame(idx) {
             const pickFighter = (pool) => { if(!pool.length) return null; const w=pool.map(p=>fightWt(p.name)); const tot=w.reduce((a2,b)=>a2+b,0); if(!tot) return pool[0]; let r2=Math.random()*tot; for(let i=0;i<pool.length;i++){r2-=w[i];if(r2<=0)return pool[i];} return pool[0]; };
             // v172: draw fighters from full bench not just on-ice — ENFORCERs get proper representation
             // even when sitting on the 4th line; 70% chance to use full roster pool, else on-ice only
-            const hBench = (rosters[g.h.nrm]||[]).filter(p=>p.pos!=='G'&&canFight(p));
-            const aBench = (rosters[g.a.nrm]||[]).filter(p=>p.pos!=='G'&&canFight(p));
-            const hFightPool = (Math.random()<0.70 && hBench.length) ? hBench : hOnIce.filter(p=>p.pos!=='G'&&canFight(p));
-            const aFightPool = (Math.random()<0.70 && aBench.length) ? aBench : aOnIce.filter(p=>p.pos!=='G'&&canFight(p));
-            const hF = pickFighter(hFightPool);
-            const aF = pickFighter(aFightPool);
+            // v312: fighters come from the players on the ice (was 70% from the whole bench)
+            let hF = null, aF = null;
+            if (fightsThisGame >= 3) continue;
+            if (ev.forced) { hF = ev.hF; aF = ev.aF; }
+            else {
+                const hFightPool = hOnIce.filter(p => fightTough(p) > 0);
+                const aFightPool = aOnIce.filter(p => fightTough(p) > 0);
+                if (!hFightPool.length || !aFightPool.length) continue;
+                const hS = Math.max(...hFightPool.map(fightTough)), aS = Math.max(...aFightPool.map(fightTough));
+                if (Math.random() >= FIGHT_RATE * hS * aS) continue;   // enforcer vs enforcer ~25%, two average tough guys ~3%
+                hF = pickFighter(hFightPool); aF = pickFighter(aFightPool);
+            }
+            if (hF && aF) { fightsThisGame++; foughtThisGame.add(hF.name); foughtThisGame.add(aF.name); }
             if (hF && aF) {
                 trk(hF.name,'pim',5); trk(aF.name,'pim',5);
                 penaltyEvents.push({p:period, m:minute, s:sec, str:timeStr, tm:g.h.code,
