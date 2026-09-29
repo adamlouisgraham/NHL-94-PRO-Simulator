@@ -4852,10 +4852,12 @@ function simGame(idx) {
 
     // v312: who will drop the gloves, and how eager they are (0 = won't fight)
     const canFightP = (p) => { const ps = playerStats[p?.name]; if (!ps || p.pos === 'G') return false; return (gradeToNum(ps.attr?.aggr)||50) >= 56 && (gradeToNum(ps.attr?.rough)||50) >= 56; };
-    const foughtThisGame = new Set();
+    const foughtThisGame = {};
     const fightTough = (p) => {
-        if (!canFightP(p) || foughtThisGame.has(p.name)) return 0;   // one fight per player per game
+        if (!canFightP(p)) return 0;
         const tg = PLAYER_TAG_OVERRIDES[p.name] || getPlayerWeightedStats(p.name)?.tag || '';
+        // one fight per player per game — forward enforcers can go twice
+        if ((foughtThisGame[p.name] || 0) >= (tg === 'ENFORCER F' ? 2 : 1)) return 0;
         // D play ~40% of the game, so tough D are rated lower than forward enforcers or they'd fight constantly
         return tg === 'ENFORCER F' ? 3 : tg === 'ENFORCER D' ? 2.2 : tg === 'INTIMIDATOR' ? (p.pos === 'D' ? 1.8 : 2.5)
              : (tg === 'GRINDER' || tg === 'PEST' || tg === 'POWER FORWARD') ? 1.5 : 1;
@@ -5662,7 +5664,7 @@ function simGame(idx) {
                 if (Math.random() >= FIGHT_RATE * hS * aS) continue;   // enforcer vs enforcer ~25%, two average tough guys ~3%
                 hF = pickFighter(hFightPool); aF = pickFighter(aFightPool);
             }
-            if (hF && aF) { fightsThisGame++; foughtThisGame.add(hF.name); foughtThisGame.add(aF.name); }
+            if (hF && aF) { fightsThisGame++; [hF, aF].forEach(f => { foughtThisGame[f.name] = (foughtThisGame[f.name] || 0) + 1; }); }
             if (hF && aF) {
                 trk(hF.name,'pim',5); trk(aF.name,'pim',5);
                 penaltyEvents.push({p:period, m:minute, s:sec, str:timeStr, tm:g.h.code,
