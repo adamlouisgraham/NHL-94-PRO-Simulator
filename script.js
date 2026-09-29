@@ -3653,6 +3653,14 @@ function applySeasonLines(tk) {
             const same = cands.filter(n => pos(n) === wp);
             return (same.length ? same : cands).sort((a, b) => ovr(b) - ovr(a))[0];
         };
+        // v316: an enforcer who is out is replaced like-for-like by a healthy bench enforcer, straight into
+        // his slot (no cascade), so the team still dresses its tough guy
+        const isEnfF = n => (PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || '') === 'ENFORCER F';
+        if (!isD) lines.forEach((l, i) => l.forEach((n, j) => {
+            if (n || !isEnfF(baseLines[i][j])) return;
+            const sub = bench.filter(isEnfF)[0];
+            if (sub) { l[j] = sub; bench.splice(bench.indexOf(sub), 1); }
+        }));
         for (let i = 0; i < lines.length; i++) {
             for (let j = 0; j < lines[i].length; j++) {
                 if (lines[i][j]) continue;
