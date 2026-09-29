@@ -2530,6 +2530,7 @@ const dynamicDuos = [
     // ANA
     ['Rod BrindAmour', 'Mark Recchi', 'Jason Dawe'],
     ['Joe Sacco', 'Ulf Dahlen', 'Ted Donato'],
+    ['Martin Rucinsky', 'Rob Niedermayer', 'Troy Loney'],
     ['Kevin Hatcher', 'Bill Houlder'],
     ['Steve Konroyd', 'Sean Hill'],
 
