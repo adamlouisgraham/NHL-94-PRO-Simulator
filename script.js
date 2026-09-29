@@ -2828,15 +2828,14 @@ function renderTeamDirectory(tk) {
     container.innerHTML = h;
 }
 
-const getRosterStructure = (tk) => {
-    if (_structCache[tk]) return _structCache[tk];
+const buildRosterStructure = (tk, ignoreHealth = false) => {
     let r = rosters[tk] || [];
 
     // Local helper — avoids dependency on getLineOvr defined 2700 lines later
     const localLineOvr = (line) => line.length === 0 ? 0 : line.reduce((s,p) => s + (getPlayerWeightedStats(p.name).ovr||70), 0) / line.length;
 
     // -- Honor custom lines if the coach saved them ------------------------
-    if (customLines[tk]) {
+    if (customLines[tk] && !ignoreHealth) {
         const cl = customLines[tk];
         const isHealthy = n => { const ps = playerStats[n]; return ps && !ps.onIR && (!ps.injury || ps.injury.daysRemaining === 0) && (!ps.suspended || ps.suspended.days === 0); };
         const byName = n => { const p = r.find(pl => pl.name === n); return (p && isHealthy(n)) ? p : null; };
@@ -2883,9 +2882,9 @@ const getRosterStructure = (tk) => {
 
     let healthySkaters = r.filter(p => {
         let ps = playerStats[p.name];
-        return getPos(p) !== 'G' && ps && !ps.onIR
+        return getPos(p) !== 'G' && ps && (ignoreHealth || (!ps.onIR
             && (!ps.injury || ps.injury.daysRemaining === 0)
-            && (!ps.suspended || ps.suspended.days === 0);
+            && (!ps.suspended || ps.suspended.days === 0)));
     });
 
     let fPool = healthySkaters.filter(p => getPos(p) !== 'D')
@@ -3557,9 +3556,93 @@ const getRosterStructure = (tk) => {
         }
     });
 
-    const struct = { f: cleanF, d: cleanD, g: gPool };
+    return { f: cleanF, d: cleanD, g: gPool };
+};
+
+// v294: SEASON LINES — each team's opening-day lines (Dynamic Duos + auto-build, everyone treated
+// as healthy) are frozen per season. When a player is out, the best player from the line below
+// (same position if possible) moves up to fill the hole, cascading down; a healthy bench player
+// fills the bottom line. When the player returns he gets his old slot back and everyone drops
+// back down. Lines are rebuilt from the season base each time, so returns need no bookkeeping.
+// Coach-saved custom lines and non-league (All-Star) rosters keep the old auto-build.
+let seasonLines = {};
+function getRosterStructure(tk) {
+    if (_structCache[tk]) return _structCache[tk];
+    let struct;
+    if (customLines[tk] || !league.some(t => t.nrm === tk)) struct = buildRosterStructure(tk);
+    else struct = applySeasonLines(tk);
     _structCache[tk] = struct;
     return struct;
+}
+function applySeasonLines(tk) {
+    const r = rosters[tk] || [];
+    const byName = new Map(r.map(p => [p.name, p]));
+    let base = seasonLines[tk];
+    // Reseed at a new season, or when a base player has left the roster (trade/retirement/waivers)
+    if (!base || base.season !== currentSeason || [...base.f.flat(), ...base.d.flat()].some(n => !byName.has(n))) {
+        const seed = buildRosterStructure(tk, true);
+        base = seasonLines[tk] = { season: currentSeason, f: seed.f.map(l => l.map(p => p.name)), d: seed.d.map(l => l.map(p => p.name)) };
+        // Opening-day lines honor every Dynamic Duo in full: a duo member left on the bench (e.g. a
+        // second enforcer) replaces the weakest non-duo, non-center player on his duo's line.
+        const duoNames = new Set(getAllDuos().flat());
+        getAllDuos().forEach(duo => {
+            if (!duo.every(n => byName.has(n))) return;
+            const group = [...base.f, ...base.d];
+            const lineOf = n => group.find(l => l.includes(n));
+            const seated = duo.filter(n => lineOf(n));
+            const benched = duo.filter(n => !lineOf(n));
+            if (!seated.length || !benched.length) return;
+            const line = lineOf(seated[0]);
+            benched.forEach(n => {
+                // prefer a non-duo winger, then any non-duo player, then anyone not in this duo
+                const rank = x => (duoNames.has(x) ? 2 : 0) + (getPlayerPosition(byName.get(x)) === 'C' ? 1 : 0);
+                const victim = line.filter(x => !duo.includes(x))
+                    .sort((x, y) => rank(x) - rank(y) || (getPlayerWeightedStats(x).ovr || 0) - (getPlayerWeightedStats(y).ovr || 0))[0];
+                if (victim) line[line.indexOf(victim)] = n;
+            });
+        });
+    }
+    const avail = n => {
+        const ps = playerStats[n];
+        return !!ps && byName.has(n) && !ps.onIR && (!ps.injury || ps.injury.daysRemaining === 0) && (!ps.suspended || ps.suspended.days === 0);
+    };
+    const ovr = n => getPlayerWeightedStats(n).ovr || 0;
+    const pos = n => getPlayerPosition(byName.get(n));
+    const fill = (baseLines, isD) => {
+        const lines = baseLines.map(l => l.map(n => avail(n) ? n : null));
+        const inLines = new Set(baseLines.flat());
+        const bench = r.filter(p => !inLines.has(p.name) && pos(p.name) !== 'G' && (pos(p.name) === 'D') === isD && avail(p.name))
+            .map(p => p.name).sort((a, b) => ovr(b) - ovr(a));
+        // Pick a replacement for a slot whose original occupant was `want`: same position first, then best OVR
+        const take = (pool, want) => {
+            const cands = pool.filter(Boolean);
+            if (!cands.length) return null;
+            const wp = pos(want);
+            const same = cands.filter(n => pos(n) === wp);
+            return (same.length ? same : cands).sort((a, b) => ovr(b) - ovr(a))[0];
+        };
+        for (let i = 0; i < lines.length; i++) {
+            for (let j = 0; j < lines[i].length; j++) {
+                if (lines[i][j]) continue;
+                const want = baseLines[i][j];
+                let pick = null;
+                if (i + 1 < lines.length) {
+                    pick = take(lines[i + 1], want);
+                    if (pick) lines[i + 1][lines[i + 1].indexOf(pick)] = null; // opens a hole below -> cascades
+                }
+                if (!pick) {
+                    // bottom line (or nothing left below): call up from the bench
+                    pick = take(bench, want);
+                    if (pick) bench.splice(bench.indexOf(pick), 1);
+                }
+                lines[i][j] = pick;
+            }
+        }
+        return lines.map(l => l.filter(Boolean).map(n => byName.get(n)));
+    };
+    const f = fill(base.f, false), d = fill(base.d, true);
+    const g = r.filter(p => getPlayerPosition(p) === 'G' && avail(p.name)).sort((a, b) => ovr(b.name) - ovr(a.name));
+    return { f, d, g };
 }
 
 //  SPECIAL TEAMS AUTO-COACH ENGINE
