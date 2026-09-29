@@ -533,6 +533,8 @@ function tradeKeepsRostersViable(teamAKey, outA, teamBKey, outB) {
 }
 // Drop any duo where a member retired or the pair is no longer on the same team roster
 function pruneCustomDuos() {
+    const stillTogether = duo => duo.every(n => playerStats[n]) && new Set(duo.map(n => playerStats[n].teamCode)).size === 1;
+    autoDuos = autoDuos.filter(stillTogether);
     customDuos = customDuos.filter(duo => {
         if (!duo.every(n => playerStats[n])) return false;
         const teamCodes = new Set(duo.map(n => playerStats[n].teamCode));
@@ -681,7 +683,7 @@ function buildSavePayload() {
             league, rosters, playerStats, tradeLog: savedTradeLog, hallOfFame, leagueHistory: savedLeagueHistory,
             retiredPlayers, calendar: lightweightCalendar, currentDay, currentSeason,
             isPlayoffs, isASG, currentCupChamp, playoffBracket: lightweightBracket, awardConfig, 
-            monthSnapshot, pendingTrades, realDatesMap, customDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, teamAssistants, _awardsPending, asgDoneThisSeason, selectedTeam
+            monthSnapshot, pendingTrades, realDatesMap, customDuos, autoDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, teamAssistants, _awardsPending, asgDoneThisSeason, selectedTeam
         }
     };
 }
@@ -723,6 +725,7 @@ function applyLoadedSave(data) {
     monthSnapshot = typeof data.monthSnapshot === 'object' && data.monthSnapshot ? data.monthSnapshot : {};
     pendingTrades = Array.isArray(data.pendingTrades) ? data.pendingTrades : [];
     customDuos = Array.isArray(data.customDuos) ? data.customDuos : [];
+    autoDuos = Array.isArray(data.autoDuos) ? data.autoDuos : [];
     if (typeof data.coachAdj === 'object' && data.coachAdj) coachAdj = { ...coachAdj, ...data.coachAdj };
     if (typeof data.coachTrust === 'number') coachTrust = data.coachTrust;
     selectedTeam = (typeof data.selectedTeam === 'string' && data.selectedTeam) ? data.selectedTeam : null;
@@ -1535,7 +1538,7 @@ async function startNewGame(useCustomRoster = false) {
     // to preserve.
     currentDay = 0; currentSeason = 1; isPlayoffs = false; isASG = false; asgDoneThisSeason = false;
     isSimulating = false; isSimSeason = false; isTurboMode = false; currentCupChamp = "";
-    playoffBracket = { round: 1, series: [] }; tradeLog = []; hallOfFame = []; leagueHistory = [];
+    playoffBracket = { round: 1, series: [] }; tradeLog = []; hallOfFame = []; autoDuos = []; seasonLines = {}; leagueHistory = [];
     retiredPlayers = []; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
     monthSnapshot = {}; activeIdx = null; statMode = 'season'; activeSubInfo = null;
         // Clear cached CSV data if not using custom roster — force fresh fetch from Google Sheets
@@ -2666,7 +2669,25 @@ const dynamicDuos = [
     ['Igor Ulanov', 'Phil Housley']
 ];
 
-function getAllDuos() { return [...dynamicDuos, ...customDuos]; }
+function getAllDuos() { return [...dynamicDuos, ...customDuos, ...autoDuos]; }
+// v302: new duos form over time. At season's end, linemates on the same opening-day line (top 3 F lines
+// and all D pairs) who each played 40+ games and aren't already in a duo become a duo for next season.
+let autoDuos = [];
+function formAutoDuos() {
+    const inDuo = new Set(getAllDuos().flat());
+    league.forEach(t => {
+        const base = seasonLines[t.nrm];
+        if (!base || base.season !== currentSeason) return;
+        const onTeam = new Set((rosters[t.nrm] || []).map(p => p.name));
+        [...base.f.slice(0, 3), ...base.d].forEach(line => {
+            const mates = line.filter(n => onTeam.has(n) && !inDuo.has(n) && (playerStats[n]?.season?.gp || 0) >= 40);
+            if (mates.length < 2) return;
+            autoDuos.push(mates);
+            mates.forEach(n => inDuo.add(n));
+            tradeLog.unshift({ day: 'POST', details: `NEW DUO: ${mates.join(' / ')} (${t.code}) — chemistry built over the season.` });
+        });
+    });
+}
 
 
 // Example helper to ensure every player has a tag
@@ -10182,6 +10203,7 @@ function getConnSmytheScore(p) {
     res += awardCard('JENNINGS TROPHY — FEWEST GA', 'Team Allowing Fewest Goals Against', 'Jennings', ORNG);
     res += awardCard('THE ESPO — CLUTCH PERFORMER', 'Most Game-Winning Goals (Phil Esposito)', 'The Espo', ORNG);
     
+    formAutoDuos(); // v302: before retirements/draft change rosters
     if(awardConfig.retirements) { 
         let ind = []; 
         Object.values(playerStats).forEach(p => { 
@@ -10202,8 +10224,14 @@ function getConnSmytheScore(p) {
             const ageP = p.age >= 39 ? 0.90 : p.age === 38 ? 0.70 : p.age === 37 ? 0.50 : p.age === 36 ? 0.32 : p.age === 35 ? 0.20 : p.age === 34 ? 0.12 : p.age === 33 ? 0.06 : 0;
             let retireP = ageP;
             if (p.age >= 31 && curOvr < 50) retireP += 0.15;          // fringe veteran can't find a job
-            if (curOvr >= 85) retireP *= 0.5;                         // stars play longer
-            const retires = roll < retireP || (meetsCareerBar && p.age >= 33 && eliteOvr >= 90 && roll < 0.05);
+            // v302: players still performing at an elite level hang on much longer (graded by rating and
+            // this season's production). Removed the old extra 5% retire roll for 90+ stars past 33.
+            if      (curOvr >= 90) retireP *= 0.25;
+            else if (curOvr >= 85) retireP *= 0.40;
+            else if (curOvr >= 80) retireP *= 0.65;
+            const sGP = p.season.gp || 0, sPPG = sGP >= 40 ? ((p.season.g || 0) + (p.season.a || 0)) / sGP : 0;
+            if (!isGoalie && sPPG >= 1.0) retireP *= 0.5; else if (!isGoalie && sPPG >= 0.75) retireP *= 0.75;
+            const retires = roll < retireP;
             if (retires && !meetsCareerBar) {
                 retiredPlayers.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, age: p.age, asgApp: p.asgAppearances || 0,
                     gp: carGP, g: carG, a: carA, pts: carPts, w: carW });
