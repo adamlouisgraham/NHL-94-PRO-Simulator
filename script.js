@@ -3592,9 +3592,11 @@ let seasonLines = {};
 // FWD_FINISH offsets them to hold league scoring; PP1_SHARE = share of power plays run by PP unit 1.
 let LINE_FINISH = [0.88, 1.20, 0.62], FWD_FINISH = 1.18, PP1_SHARE = 0.43;
 // v307: SHOT_BASE = even-strength shot lambda per team; FINISH_BASE = per-shot goal multiplier (sets league save %)
-let SHOT_BASE = 23, FINISH_BASE = 1.30;
+let SHOT_BASE = 22, FINISH_BASE = 1.21;
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.75;
+// v309: PEN_BASE = minor-penalty lambda per game (1993-94 had ~5 PP chances/team/game); PP_CONV scales PP conversion
+let PEN_BASE = 9.6, PP_CONV = 1.05;
 function getRosterStructure(tk) {
     if (_structCache[tk]) return _structCache[tk];
     let struct;
@@ -4630,7 +4632,7 @@ function simGame(idx) {
         ? Math.max(0.90, Math.min(1.12, 1.0 + coachAdj.forecheck * 0.08)) : 1.0;
     // v180: referee personality — each game has a tone; tight refs call more, loose refs swallow whistles
     const refTone = Math.random() < 0.25 ? 1.20 : Math.random() < 0.67 ? 1.00 : 0.80;
-    const penCount = poissonRand(7.5 * Math.max(0.75, Math.min(1.40, gameAvgPenRate)) * forecheckPenMult * refTone);
+    const penCount = poissonRand(PEN_BASE * Math.max(0.75, Math.min(1.40, gameAvgPenRate)) * forecheckPenMult * refTone);
     // v157: coincidental and goon events scaled by game avg aggr — dirty games have more scrums
     const calcTeamAggr = (tk) => {
         const sk = (rosters[tk] || []).filter(p => p.pos !== 'G');
@@ -5301,7 +5303,7 @@ function simGame(idx) {
             // v180: double-minor and majors get 2 PP sequences at reduced per-attempt rates
             // Calibrated so weighted avg PP% stays ~16-17% (historical 93-94 range)
             // Minor: 1 seq at full | Double minor: seq1 ×0.60, seq2 ×0.50 → ~17% total | Major: ×0.70+×0.60 → ~19%
-            const ppConvBase = getSpecialTeamsChance(advTeam.nrm, penTeam.nrm)*ppStratMod*pkSuppressMod*ppChemMod;
+            const ppConvBase = PP_CONV*getSpecialTeamsChance(advTeam.nrm, penTeam.nrm)*ppStratMod*pkSuppressMod*ppChemMod;
             const ppConvRate = isDoubleMajor ? ppConvBase * 0.60 : isMajor ? ppConvBase * 0.70 : ppConvBase;
             let ppSeqScored = false;
 
