@@ -3566,6 +3566,9 @@ const buildRosterStructure = (tk, ignoreHealth = false) => {
 // back down. Lines are rebuilt from the season base each time, so returns need no bookkeeping.
 // Coach-saved custom lines and non-league (All-Star) rosters keep the old auto-build.
 let seasonLines = {};
+// v301: scoring-distribution dials. LINE_FINISH = per-shot finish multiplier for F lines [L1, L2, L3/L4];
+// FWD_FINISH offsets them to hold league scoring; PP1_SHARE = share of power plays run by PP unit 1.
+let LINE_FINISH = [0.88, 1.20, 0.62], FWD_FINISH = 1.18, PP1_SHARE = 0.43;
 function getRosterStructure(tk) {
     if (_structCache[tk]) return _structCache[tk];
     let struct;
@@ -5097,9 +5100,9 @@ function simGame(idx) {
 
             // v286: depth lines finish a bit more, top line a bit less (3rd/4th lines were ~10% under real share)
             const atkFLine  = isHome ? hFLine : aFLine;
-            const depthLineMod = atkFLine >= 2 ? 0.93 : atkFLine === 1 ? 1.07 : 0.97;
+            const depthLineMod = LINE_FINISH[Math.min(2, atkFLine)] ?? 1.0;
             // v287: D were converting ~9% (real ~5%): point shots finish less; forwards up slightly to hold league scoring
-            const posFinMod = isDefPos ? 0.62 : 1.08;
+            const posFinMod = isDefPos ? 0.62 : FWD_FINISH;
             const prob      = posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; v174: 0.0888; v181: 0.0930; v182: 0.0918→0.0906 target 7.0 GPG
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob * finishDamp(shooter.name)))) {
@@ -5241,7 +5244,7 @@ function simGame(idx) {
             const pp1NameSet = new Set(autoPP1.map(p => p.name));
             const autoPP2    = pp2Roster.length < 3 ? buildPPUnit(pp1NameSet) : pp2Roster;
             // Alternate PP1/PP2 on successive penalties (~70% PP1, ~30% PP2)
-            const activeUnit = (Math.random() < 0.64 || autoPP2.length < 3) ? autoPP1 : autoPP2; // v292: 0.70 -> 0.64 (top-3 F had ~44% of PP goals, target ~40%)
+            const activeUnit = (Math.random() < PP1_SHARE || autoPP2.length < 3) ? autoPP1 : autoPP2; // v292: 0.70 -> 0.64 (top-3 F had ~44% of PP goals, target ~40%)
             const ppUnit = activeUnit.length>=3 ? activeUnit : (advTeam.nrm===g.h.nrm?hOnIce:aOnIce);
             const pkUnit = advTeam.nrm===g.h.nrm ? aOnIce : hOnIce;
 
