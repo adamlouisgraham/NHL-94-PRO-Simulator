@@ -3597,6 +3597,7 @@ let SHOT_BASE = 22, FINISH_BASE = 1.21;
 let PLAYOFF_EDGE = 1.75;
 // v309: PEN_BASE = minor-penalty lambda per game (1993-94 had ~5 PP chances/team/game); PP_CONV scales PP conversion
 let PEN_BASE = 9.6, PP_CONV = 1.05;
+let FIGHT_RATE = 0.9; // v311: mean fights per game
 function getRosterStructure(tk) {
     if (_structCache[tk]) return _structCache[tk];
     let struct;
@@ -4643,7 +4644,8 @@ function simGame(idx) {
     // aggr 90 → coin ×1.30, goon ×1.40; aggr 50 → coin ×0.70, goon ×0.60
     const coinCount   = poissonRand(3.6 * Math.max(0.60, Math.min(1.40, 1.0 + (gameAvgAggr-70)*0.015)));
     const goonCount   = poissonRand(1.9 * Math.max(0.50, Math.min(1.60, 1.0 + (gameAvgAggr-70)*0.025)));
-    const fightCount  = Math.random() < 0.45 ? 1 : 0; // v208: 45% of games have a fight (era-accurate ~50-70%)
+    // v311: 1993-94 averaged ~0.9 fights/game (was max 1, in 45% of games); tougher matchups fight more, cap 3
+    const fightCount  = Math.min(3, poissonRand(FIGHT_RATE * Math.max(0.6, Math.min(1.5, 1.0 + (gameAvgAggr - 70) * 0.02))));
     // v130: hits/blocked shots — additive stat-only events, don't touch score/SOG/saves.
     // Kept separate from hShotCount/aShotCount so the already-tuned ~30 SOG/team/game
     // average isn't diluted by carving blocks out of it.
@@ -4703,7 +4705,7 @@ function simGame(idx) {
     randTicks(aHitCount).forEach(t  => evStream.push({t, type:'hit', side:'a'}));
     randTicks(hBlockCount).forEach(t => evStream.push({t, type:'block', side:'h'}));
     randTicks(aBlockCount).forEach(t => evStream.push({t, type:'block', side:'a'}));
-    if (fightCount)      evStream.push({t: Math.floor(Math.random()*240), type:'fight'});
+    for (let i = 0; i < fightCount; i++) evStream.push({t: Math.floor(Math.random()*240), type:'fight'});
     if (!isASG && Math.random() < 0.48) evStream.push({t: Math.floor(Math.random()*240), type:'pshot'});
     // v182: Odd-man rushes — 0-1 per team per game, speed-weighted
     // v231: PLAYMAKER/QUARTERBACK on the roster sets up transition plays more often (+5% trigger);
