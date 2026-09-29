@@ -11106,6 +11106,13 @@ function renderChemEditor() {
         h += `<div style="margin-bottom:16px;"></div>`;
     }
 
+    // v305: duos that formed on their own from season-long linemates
+    if (autoDuos.length > 0) {
+        h += `<div style="font-size:6px;color:#00FFFF;letter-spacing:.12em;margin-bottom:6px;">FORMED IN-SEASON (${autoDuos.length})</div>`;
+        h += autoDuos.map(pair => pairTag(pair, false, -1)).join('');
+        h += `<div style="margin-bottom:16px;"></div>`;
+    }
+
     // Built-in duos
     h += `<div style="font-size:6px;color:#555;letter-spacing:.12em;margin-bottom:6px;">BUILT-IN PAIRS (${dynamicDuos.length})</div>`;
     h += dynamicDuos.map(pair => pairTag(pair, false, -1)).join('');
