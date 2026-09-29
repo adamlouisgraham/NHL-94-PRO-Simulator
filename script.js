@@ -2567,8 +2567,7 @@ const dynamicDuos = [
     // HFD
     ['Ron Francis', 'Cam Neely', 'Jocelyn Lemieux'],
     ['Darren Turcotte', 'Pat Verbeek', 'Tomas Sandstrom'],
-    ['Steve Dubinsky', 'Brian Propp', 'Scott Mellanby'],
-    ['Mark Janssens', 'Jim Sandlak', 'Kevin Smyth'],
+    ['', 'Brian Propp', 'Scott Mellanby'],
     // LAK
     ['Pierre Turgeon', 'Luc Robitaille', 'Sylvain Turgeon'],
     ['Denis Savard', 'Tony Granato', 'Dixon Ward'],
@@ -2633,7 +2632,7 @@ const dynamicDuos = [
     ['Craig Janney', 'Brett Hull', 'Terry Yake'],
     ['Cliff Ronning', 'Keith Tkachuk', 'Mikael Renberg'],
     ['Igor Korolev', 'Vitali Karamnov', 'Igor Chibirev'],
-    ['Jim Montgomery', 'Brian Noonan', 'Basil McRae'],
+    ['Jim Montgomery', 'Brian Noonan', 'Bob Corkum'],
     ['Chris Pronger', 'Teppo Numminen'],
     ['Steve Duchesne', 'Doug Crossman'],
     // TBL
@@ -2653,8 +2652,8 @@ const dynamicDuos = [
     // VAN
     ['Trevor Linden', 'Greg Adams', 'Pavel Bure'],
     ['Petr Nedved', 'Geoff Courtnall', 'Martin Gelinas'],
-    ['Robert Kron', 'Jimmy Carson', 'Murray Craven'],
-    ['', 'Jose Charboneau', 'Gino Odjick'],
+    ['Robert Kron', 'Jimmy Carson', 'Mark Janssens'],
+    ['', 'Jose Charboneau', 'Kevin Smyth'],
     ['Jeff Brown', 'Gerald Diduck'],
     ['Jyrki Lumme', 'Jiri Slegr'],
     // WAS
@@ -3591,9 +3590,9 @@ let seasonLines = {};
 let deadlineDeals = [], deadlineDealsSeason = -1; // v317: this season's buyer/seller deals, for the deadline wrap-up
 // v301: scoring-distribution dials. LINE_FINISH = per-shot finish multiplier for F lines [L1, L2, L3, L4];
 // FWD_FINISH offsets them to hold league scoring; PP1_SHARE = share of power plays run by PP unit 1.
-let LINE_FINISH = [0.95, 1.10, 0.62, 0.85], FWD_FINISH = 1.18, PP1_SHARE = 0.41;
+let LINE_FINISH = [0.95, 1.10, 0.62, 1.00], FWD_FINISH = 1.18, PP1_SHARE = 0.41;
 // v307: SHOT_BASE = even-strength shot lambda per team; FINISH_BASE = per-shot goal multiplier (sets league save %)
-let SHOT_BASE = 22, FINISH_BASE = 1.18;
+let SHOT_BASE = 22, FINISH_BASE = 1.13;
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.75;
 // v309: PEN_BASE = minor-penalty lambda per game (1993-94 had ~5 PP chances/team/game); PP_CONV scales PP conversion
@@ -5279,25 +5278,23 @@ function simGame(idx) {
             // he naturally ends up in the top 5; otherwise the D takes the 5th slot.
             const ppOff = p => parseInt(playerStats[p.name]?.attr?.off) || 0;
             const ppAvail = advRoster.filter(p=>p&&p.pos!=='G'&&!(playerStats[p.name]?.injury?.daysRemaining>0)&&!(playerStats[p.name]?.suspended?.days>0));
-            const buildPPUnit = (exclude) => {
-                const pool   = ppAvail.filter(p => !exclude.has(p.name));
-                const sorted = [...pool].sort((a,b) => ppOff(b)-ppOff(a));
-                const top5   = sorted.slice(0, 5);
-                // Guarantee at least one D in the unit
-                const hasD   = top5.some(p => p.pos==='D');
-                if (!hasD) {
-                    const topD = pool.find(p => p.pos==='D'); // highest off D not already top-5
-                    if (topD) { top5.splice(4, 1, topD); }   // replace 5th spot with top D
-                }
-                return top5;
+            // v324: PP1 = top 4 forwards by OVR + the most offensive D; PP2 = next 4 forwards by offense +
+            // the next most offensive D (was: top 5 skaters by offense, which often put 2 D on PP1 and
+            // pushed a top-4 forward down to PP2)
+            const ppOvr = p => getPlayerWeightedStats(p.name)?.ovr || 0;
+            const buildPPUnit = (exclude, first) => {
+                const pool = ppAvail.filter(p => !exclude.has(p.name));
+                const fwd  = pool.filter(p => p.pos !== 'D').sort((a,b) => first ? ppOvr(b)-ppOvr(a) : ppOff(b)-ppOff(a)).slice(0, 4);
+                const dman = pool.filter(p => p.pos === 'D').sort((a,b) => ppOff(b)-ppOff(a)).slice(0, 1);
+                return [...fwd, ...dman];
             };
             const pp2Names   = advTeamObj2?.specialTeams?.pp2 || [];
             const pp2Roster  = pp2Names
                 .map(n=>(n&&typeof n==='object')?n:advRoster.find(p=>p.name===n))
                 .filter(p=>p&&dressedPP.has(p.name)&&!(playerStats[p.name]?.injury?.daysRemaining>0)&&!(playerStats[p.name]?.suspended?.days>0));
-            const autoPP1    = pp1Roster.length < 3 ? buildPPUnit(new Set()) : pp1Roster;
+            const autoPP1    = pp1Roster.length < 3 ? buildPPUnit(new Set(), true) : pp1Roster;
             const pp1NameSet = new Set(autoPP1.map(p => p.name));
-            const autoPP2    = pp2Roster.length < 3 ? buildPPUnit(pp1NameSet) : pp2Roster;
+            const autoPP2    = pp2Roster.length < 3 ? buildPPUnit(pp1NameSet, false) : pp2Roster;
             // Alternate PP1/PP2 on successive penalties (~70% PP1, ~30% PP2)
             const activeUnit = (Math.random() < PP1_SHARE || autoPP2.length < 3) ? autoPP1 : autoPP2; // v292: 0.70 -> 0.64 (top-3 F had ~44% of PP goals, target ~40%)
             const ppUnit = activeUnit.length>=3 ? activeUnit : (advTeam.nrm===g.h.nrm?hOnIce:aOnIce);
