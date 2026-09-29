@@ -10252,7 +10252,14 @@ function getConnSmytheScore(p) {
             }
             if(retires && meetsCareerBar) {
                 // v275: Hall of Fame needs a real HOF career; the old 150-pt/350-GP bar inducted ~17 a year
-                const hofWorthy = isGoalie ? carW >= 300 : (carPts >= 900 || carG >= 450 || (carGP >= 1200 && carPts >= 700));
+                // v304: Hall of Fame score instead of raw totals (the totals bar let in long-career
+                // compilers — 76 inductees in 10 seasons). Skaters: points (D x1.25), points per game,
+                // All-Star appearances and trophies; goalies: wins, All-Star appearances and trophies.
+                const asgN = p.asgAppearances || 0, awdN = (p.career.awards || 0);
+                const hofScore = isGoalie
+                    ? carW / 5 + asgN * 5 + awdN * 10
+                    : carPts / 25 * (p.pos === 'D' ? 1.25 : 1) + (carGP >= 400 ? (carPts / carGP) * 20 : 0) + asgN * 4 + awdN * 8;
+                const hofWorthy = (isGoalie ? (carGP >= 300 || carW >= 150) : (carGP >= 500 || carPts >= 700)) && hofScore >= 85; // points/wins also satisfy the GP gate (a few sheet rows lack career GP)
                 if (hofWorthy) ind.push(p.name);
                 const cp = p.careerPlayoff || {};
                 const pl = p.playoff || {};
