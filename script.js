@@ -2653,7 +2653,7 @@ const dynamicDuos = [
     ['Trevor Linden', 'Greg Adams', 'Pavel Bure'],
     ['Petr Nedved', 'Geoff Courtnall', 'Martin Gelinas'],
     ['Robert Kron', 'Jimmy Carson', 'Mark Janssens'],
-    ['', 'Jose Charboneau', 'Kevin Smyth'],
+    ['Jose Charboneau', 'Kevin Smyth'],
     ['Jeff Brown', 'Gerald Diduck'],
     ['Jyrki Lumme', 'Jiri Slegr'],
     // WAS
@@ -3622,15 +3622,23 @@ function applySeasonLines(tk) {
             const group = [...base.f, ...base.d];
             const lineOf = n => group.find(l => l.includes(n));
             const seated = duo.filter(n => lineOf(n));
-            const benched = duo.filter(n => !lineOf(n));
-            if (!seated.length || !benched.length) return;
-            const line = lineOf(seated[0]);
-            benched.forEach(n => {
+            if (!seated.length) return;
+            // v325: the duo's line = the one holding most of its members (highest line on a tie);
+            // members benched OR seated on a different line are brought onto it
+            const line = [...new Set(seated.map(lineOf))].sort((a, b) =>
+                duo.filter(n => b.includes(n)).length - duo.filter(n => a.includes(n)).length || group.indexOf(a) - group.indexOf(b))[0];
+            const strays = duo.filter(n => !line.includes(n));
+            if (!strays.length) return;
+            strays.forEach(n => {
+                const from = lineOf(n);
                 // prefer a non-duo winger, then any non-duo player, then anyone not in this duo
                 const rank = x => (duoNames.has(x) ? 2 : 0) + (getPlayerPosition(byName.get(x)) === 'C' ? 1 : 0);
                 const victim = line.filter(x => !duo.includes(x))
                     .sort((x, y) => rank(x) - rank(y) || (getPlayerWeightedStats(x).ovr || 0) - (getPlayerWeightedStats(y).ovr || 0))[0];
-                if (victim) line[line.indexOf(victim)] = n;
+                if (!victim) return;
+                const vi = line.indexOf(victim);
+                if (from) from[from.indexOf(n)] = victim;   // swap places: the displaced player takes the stray's old spot
+                line[vi] = n;
             });
         });
     }
