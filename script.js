@@ -3591,15 +3591,15 @@ let seasonLines = {};
 let deadlineDeals = [], deadlineDealsSeason = -1; // v317: this season's buyer/seller deals, for the deadline wrap-up
 // v301: scoring-distribution dials. LINE_FINISH = per-shot finish multiplier for F lines [L1, L2, L3, L4];
 // FWD_FINISH offsets them to hold league scoring; PP1_SHARE = share of power plays run by PP unit 1.
-let LINE_FINISH = [1.08, 0.98, 0.40, 1.00], FWD_FINISH = 1.18, PP1_SHARE = 0.41;
+let LINE_FINISH = [1.08, 0.98, 0.40, 1.00], FWD_FINISH = 1.18, PP1_SHARE = 0.65;
 // v307: SHOT_BASE = even-strength shot lambda per team; FINISH_BASE = per-shot goal multiplier (sets league save %)
 // v335: elite offensive defencemen get a slight boost to goals and assists (ES + PP)
 const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D') return false; const tg = PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || ''; return (parseInt(ps.attr?.off) || 0) >= 78 || ['FRANCHISE D','PRO OFFENSIVE D','BOOMER','QUARTERBACK','OFFENSIVE D'].includes(tg); };
-let SHOT_BASE = 24, FINISH_BASE = 1.24;
+let SHOT_BASE = 24, FINISH_BASE = 1.17;
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.75;
 // v309: PEN_BASE = minor-penalty lambda per game (1993-94 had ~5 PP chances/team/game); PP_CONV scales PP conversion
-let PEN_BASE = 9.6, PP_CONV = 1.12;
+let PEN_BASE = 9.6, PP_CONV = 1.05;
 let FIGHT_RATE = 0.028, FIGHT_HIT_RESPONSE = 0.06; // v312: per-scrum fight chance per toughness point^2; chance an on-ice enforcer answers a hit
 function getRosterStructure(tk) {
     if (_structCache[tk]) return _structCache[tk];
@@ -5337,7 +5337,9 @@ function simGame(idx) {
             // v180: double-minor and majors get 2 PP sequences at reduced per-attempt rates
             // Calibrated so weighted avg PP% stays ~16-17% (historical 93-94 range)
             // Minor: 1 seq at full | Double minor: seq1 ×0.60, seq2 ×0.50 → ~17% total | Major: ×0.70+×0.60 → ~19%
-            const ppConvBase = PP_CONV*getSpecialTeamsChance(advTeam.nrm, penTeam.nrm)*ppStratMod*pkSuppressMod*ppChemMod;
+            // v336: the top unit converts slightly better than the second unit
+            const ppUnitMod = (activeUnit === autoPP1) ? 1.06 : 0.94;
+            const ppConvBase = PP_CONV*ppUnitMod*getSpecialTeamsChance(advTeam.nrm, penTeam.nrm)*ppStratMod*pkSuppressMod*ppChemMod;
             const ppConvRate = isDoubleMajor ? ppConvBase * 0.60 : isMajor ? ppConvBase * 0.70 : ppConvBase;
             let ppSeqScored = false;
 
