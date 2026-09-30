@@ -2569,7 +2569,7 @@ const dynamicDuos = [
     // HFD
     ['Ron Francis', 'Cam Neely', 'Jocelyn Lemieux'],
     ['Darren Turcotte', 'Pat Verbeek', 'Tomas Sandstrom'],
-    ['', 'Brian Propp', 'Scott Mellanby'],
+    ['Murray Craven', 'Brian Propp', 'Scott Mellanby'],
     // LAK
     ['Pierre Turgeon', 'Luc Robitaille', 'Sylvain Turgeon'],
     ['Denis Savard', 'Tony Granato', 'Dixon Ward'],
@@ -2583,12 +2583,12 @@ const dynamicDuos = [
     ['Bernie Nicholls', 'Stephane Richer', 'Gilbert Dionne'],
     ['Vincent Damphousse', 'Stephan Lebeau', 'Russ Courtnall'],
     ['Guy Carbonneau', 'Mike Keane', 'Ron Wilson'],
-    ['', 'Benoit Brunet', 'Chris Nilan'],
+    ['Laurie Boschman', 'Benoit Brunet', 'Chris Nilan'],
     // NJD
     ['Michael Nylander', 'Dave Gagner', 'Claude Lemieux'],
     ['Bill Guerin', 'Brian Bradley', 'Randy McKay'],
     ['Bobby Holik', 'Tom Chorske', 'Corey Millen'],
-    ['Bob Carpenter', 'Mike Peluso', ''],
+    ['Bob Carpenter', 'Mike Peluso', 'Danton Cole'],
     ['Derian Hatcher', 'Bruce Driver'],
     ['Ulf Samuelsson', 'Ken Daneyko'],
     // NYI
