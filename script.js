@@ -2561,6 +2561,7 @@ const dynamicDuos = [
     ['Christian Ruuttu', 'Geoff Sanderson', 'Shayne Corson'],
     ['Paul Coffey', 'Charlie Huddy'],
     // FLA
+    ['Mike Foligno', 'Dave Lowry', 'Chris Simon'],
     ['Stu Barnes', 'John MacLean', 'Andrei Kovalenko'],
     ['Jason Arnott', 'Steve Thomas', 'German Titov'],
     ['Brian Skrudland', 'Mike Hough', 'Tom Fitzgerald'],
@@ -2620,7 +2621,7 @@ const dynamicDuos = [
     ['Joe Sakic', 'Theoren Fleury', 'Andrei Lomakin'],
     ['Dale Hunter', 'Mike Gartner', 'Mike Ricci'],
     ['Ron Sutter', 'Claude Lapointe', 'Scott Young'],
-    ['Bob Bassen', 'Chris Simon', 'Todd Elik'],
+    ['Bob Bassen', 'Basil McRae', 'Todd Elik'],
     ['Curtis Leschyshyn', 'Alexei Gusarov'],
     // SJS
     ['Igor Larionov', 'Sergei Makarov', 'Valeri Kamensky'],
@@ -2665,7 +2666,7 @@ const dynamicDuos = [
     ['Alexei Zhamnov', 'Teemu Selanne', 'Dallas Drake'],
     ['Peter Stastny', 'Nelson Emerson', 'Thomas Steen'],
     ['Randy Gilhen', 'Darrin Shannon', 'Tie Domi'],
-    ['Luciano Borsato', 'Mike Eagles', 'Doug Evans'],
+    ['Luciano Borsato', 'Mike Eagles', 'Ed Kastelic'],
     ['Igor Ulanov', 'Phil Housley']
 ];
 
