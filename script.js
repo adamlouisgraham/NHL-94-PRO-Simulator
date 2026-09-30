@@ -3593,6 +3593,8 @@ let deadlineDeals = [], deadlineDealsSeason = -1; // v317: this season's buyer/s
 // FWD_FINISH offsets them to hold league scoring; PP1_SHARE = share of power plays run by PP unit 1.
 let LINE_FINISH = [1.08, 0.98, 0.40, 1.00], FWD_FINISH = 1.18, PP1_SHARE = 0.41;
 // v307: SHOT_BASE = even-strength shot lambda per team; FINISH_BASE = per-shot goal multiplier (sets league save %)
+// v335: elite offensive defencemen get a slight boost to goals and assists (ES + PP)
+const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D') return false; const tg = PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || ''; return (parseInt(ps.attr?.off) || 0) >= 78 || ['FRANCHISE D','PRO OFFENSIVE D','BOOMER','QUARTERBACK','OFFENSIVE D'].includes(tg); };
 let SHOT_BASE = 24, FINISH_BASE = 1.24;
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.75;
@@ -5165,7 +5167,7 @@ function simGame(idx) {
             const atkFLine  = isHome ? hFLine : aFLine;
             const depthLineMod = LINE_FINISH[Math.min(3, atkFLine)] ?? 1.0;
             // v287: D were converting ~9% (real ~5%): point shots finish less; forwards up slightly to hold league scoring
-            const posFinMod = isDefPos ? 0.62 : FWD_FINISH;
+            const posFinMod = isDefPos ? 0.62 * (isEliteOffD(shooter.name) ? 1.05 : 1) : FWD_FINISH;
             const prob      = FINISH_BASE*posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002*poEdge)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; v174: 0.0888; v181: 0.0930; v182: 0.0918→0.0906 target 7.0 GPG
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob * finishDamp(shooter.name)))) {
@@ -6869,7 +6871,7 @@ function selectShooter(unit, context = 'ES') {
         // produces historically (Bourque/MacInnis/Coffey territory).
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
-        const dPenalty = (context === 'PP') ? 0.95 : 0.80;
+        const dPenalty = ((context === 'PP') ? 0.95 : 0.80) * (isD && isEliteOffD(name) ? 1.06 : 1);
         weight *= isD ? dPenalty : (pos === 'LW' || pos === 'RW') ? 1.12 : (pos === 'C') ? 0.95 : 1.0;
 
         // Hot/cold modifier
@@ -7051,7 +7053,7 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         // Position modifier  -  centers are primary distributors, D penalized ~20%
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
-        weight *= isD ? 0.80 : (pos === 'C') ? 1.15 : 1.0;
+        weight *= isD ? 0.80 * (isEliteOffD(name) ? 1.06 : 1) : (pos === 'C') ? 1.15 : 1.0;
 
         // Hot/cold streak modifier
         // [FIX] ps.isHot/isCold were never set — read the actual streak fields
