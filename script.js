@@ -2652,8 +2652,8 @@ const dynamicDuos = [
     // VAN
     ['Trevor Linden', 'Greg Adams', 'Pavel Bure'],
     ['Petr Nedved', 'Geoff Courtnall', 'Martin Gelinas'],
-    ['Robert Kron', 'Jimmy Carson'],
-    ['Mark Janssens', 'Jose Charboneau', 'Kevin Smyth'],
+    ['Robert Kron', 'Jimmy Carson', 'Mark Janssens'],
+    ['Jose Charboneau', 'Tim Hunter', 'Kevin Smyth'],
     ['Jeff Brown', 'Gerald Diduck'],
     ['Jyrki Lumme', 'Jiri Slegr'],
     // WAS
