@@ -3591,9 +3591,9 @@ let seasonLines = {};
 let deadlineDeals = [], deadlineDealsSeason = -1; // v317: this season's buyer/seller deals, for the deadline wrap-up
 // v301: scoring-distribution dials. LINE_FINISH = per-shot finish multiplier for F lines [L1, L2, L3, L4];
 // FWD_FINISH offsets them to hold league scoring; PP1_SHARE = share of power plays run by PP unit 1.
-let LINE_FINISH = [0.95, 1.10, 0.62, 1.00], FWD_FINISH = 1.18, PP1_SHARE = 0.41;
+let LINE_FINISH = [1.08, 0.98, 0.40, 1.00], FWD_FINISH = 1.18, PP1_SHARE = 0.41;
 // v307: SHOT_BASE = even-strength shot lambda per team; FINISH_BASE = per-shot goal multiplier (sets league save %)
-let SHOT_BASE = 22, FINISH_BASE = 1.13;
+let SHOT_BASE = 22, FINISH_BASE = 1.18;
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.75;
 // v309: PEN_BASE = minor-penalty lambda per game (1993-94 had ~5 PP chances/team/game); PP_CONV scales PP conversion
