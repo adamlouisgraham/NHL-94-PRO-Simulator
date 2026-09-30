@@ -2583,12 +2583,12 @@ const dynamicDuos = [
     ['Bernie Nicholls', 'Stephane Richer', 'Gilbert Dionne'],
     ['Vincent Damphousse', 'Stephan Lebeau', 'Russ Courtnall'],
     ['Guy Carbonneau', 'Mike Keane', 'Ron Wilson'],
-    ['Laurie Boschman', 'Benoit Brunet', 'Chris Nilan'],
+    ['Benoit Brunet', 'Chris Nilan'],
     // NJD
     ['Michael Nylander', 'Dave Gagner', 'Claude Lemieux'],
     ['Bill Guerin', 'Brian Bradley', 'Randy McKay'],
     ['Bobby Holik', 'Tom Chorske', 'Corey Millen'],
-    ['Bob Carpenter', 'Mike Peluso', 'Danton Cole'],
+    ['Bob Carpenter', 'Mike Peluso'],
     ['Derian Hatcher', 'Bruce Driver'],
     ['Ulf Samuelsson', 'Ken Daneyko'],
     // NYI
