@@ -3600,6 +3600,8 @@ const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D')
 let SHOT_BASE = 24, FINISH_BASE = 1.22; // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.75;
+// v347: playoff hockey is tighter - real 1993-94 playoffs scored ~9% under the regular season; the sim was scoring ~4% MORE
+let PLAYOFF_FINISH = 0.88;
 // v309: PEN_BASE = minor-penalty lambda per game (1993-94 had ~5 PP chances/team/game); PP_CONV scales PP conversion
 let PEN_BASE = 9.6, PP_CONV = 1.05;
 // v344: PIM where the discipline damper kicks in - enforcers keep 175 so goons still reach 300+;
@@ -5185,7 +5187,7 @@ function simGame(idx) {
             const depthLineMod = LINE_FINISH[Math.min(3, atkFLine)] ?? 1.0;
             // v287: D were converting ~9% (real ~5%): point shots finish less; forwards up slightly to hold league scoring
             const posFinMod = isDefPos ? 0.66 * (isEliteOffD(shooter.name) ? 1.05 : 1) : FWD_FINISH;
-            const prob      = FINISH_BASE*posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002*poEdge)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; v174: 0.0888; v181: 0.0930; v182: 0.0918→0.0906 target 7.0 GPG
+            const prob      = FINISH_BASE*((isPlayoffs&&!isASG)?PLAYOFF_FINISH:1)*posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002*poEdge)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; v174: 0.0888; v181: 0.0930; v182: 0.0918→0.0906 target 7.0 GPG
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob * finishDamp(shooter.name)))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
@@ -5366,7 +5368,7 @@ function simGame(idx) {
             // Minor: 1 seq at full | Double minor: seq1 ×0.60, seq2 ×0.50 → ~17% total | Major: ×0.70+×0.60 → ~19%
             // v336: the top unit converts slightly better than the second unit
             const ppUnitMod = (activeUnit === autoPP1) ? 1.03 : 0.97;
-            const ppConvBase = PP_CONV*ppUnitMod*getSpecialTeamsChance(advTeam.nrm, penTeam.nrm)*ppStratMod*pkSuppressMod*ppChemMod;
+            const ppConvBase = PP_CONV*((isPlayoffs&&!isASG)?PLAYOFF_FINISH:1)*ppUnitMod*getSpecialTeamsChance(advTeam.nrm, penTeam.nrm)*ppStratMod*pkSuppressMod*ppChemMod;
             const ppConvRate = isDoubleMajor ? ppConvBase * 0.60 : isMajor ? ppConvBase * 0.70 : ppConvBase;
             let ppSeqScored = false;
 
