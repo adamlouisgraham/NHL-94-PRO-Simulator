@@ -4201,10 +4201,18 @@ function simGame(idx) {
         if (!gs.length) { const allG = (rosters[tk] || []).filter(p => p.pos === 'G'); return allG.length ? allG[0] : null; }
         if (gs.length === 1 || isPlayoffs || isASG) return gs[0];
 
-        const starter = gs[0]; const backup = gs[1]; const sStats = playerStats[starter.name][k];
-        let diff = baseG(starter.name) - baseG(backup.name);
+        let starter = gs[0]; let backup = gs[1];
+        // v345: the hot hand earns the net - once both have 8+ GP, a backup outplaying the starter by
+        // .012+ save % takes the #1 job (if within 12 OVR); a starter clearly outplaying his backup rests less
+        const svp = n => { const st = playerStats[n]?.[k]; return st && st.gp >= 8 && st.sa > 0 ? st.sv / st.sa : null; };
+        const sSv = svp(starter.name), bSv = svp(backup.name);
+        const formGap = (sSv !== null && bSv !== null) ? bSv - sSv : 0;
+        if (formGap >= 0.012 && baseG(starter.name) - baseG(backup.name) <= 12) { const t = starter; starter = backup; backup = t; }
+        const sStats = playerStats[starter.name][k];
+        let diff = Math.abs(baseG(starter.name) - baseG(backup.name));
         // v278: 1993-94 starters played ~60-70 GP; the old 45%/30% rest chances capped starters near 55
         let restChance = diff > 15 ? 0.15 : diff > 10 ? 0.20 : diff > 5 ? 0.30 : 0.50; // v307: +10 pts each (starters averaged 64 GP, 3/4 of teams 60+)
+        if (Math.abs(formGap) >= 0.012) restChance = Math.min(restChance, 0.25); // v345: clear form gap -> ride the hot goalie
         // B2B rest only applies if THIS goalie (the current OVR-ranked starter) is the one who
         // actually played yesterday — playedYesterday(tk) is team-wide and would otherwise bench
         // the true starter (who didn't play) just because the backup had a game the day before,
