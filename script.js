@@ -36,26 +36,26 @@ const TEAM_CONF_DIV_OVERRIDES = {
     "ENFORCER F":         { shotRate: 0.50, penaltyRate: 1.60,  assistRate: 0.50 },
     "PEST":               { shotRate: 0.92, penaltyRate: 1.30,  assistRate: 0.95 }, // Agitator — draws calls, gets under skin
     "OFFENSIVE FORWARD":  { shotRate: 1.14, penaltyRate: 0.75,  assistRate: 1.14 },
-    "DEFENSIVE FORWARD":  { shotRate: 0.89, penaltyRate: 0.75,  assistRate: 1.05 },
-    "DEFENSIVE SPECIALIST": { shotRate: 0.82, penaltyRate: 0.80, assistRate: 0.98 },
+    "DEFENSIVE FORWARD":  { shotRate: 0.89, penaltyRate: 0.75,  assistRate: 0.99 },
+    "DEFENSIVE SPECIALIST": { shotRate: 0.82, penaltyRate: 0.80, assistRate: 0.92 },
     "OFFENSIVE FWD":      { shotRate: 0.90, penaltyRate: 1.00,  assistRate: 1.00 },
-    "DEFENSIVE FWD":      { shotRate: 0.75, penaltyRate: 1.00,  assistRate: 0.95 },
+    "DEFENSIVE FWD":      { shotRate: 0.75, penaltyRate: 1.00,  assistRate: 0.89 },
 
     // --- DEFENSEMEN ---
     "FRANCHISE D":    { shotRate: 1.15, penaltyRate: 0.75,  assistRate: 1.45 }, // Elite two-way D — Bourque/Leetch/Murphy
     "QUARTERBACK":    { shotRate: 1.00, penaltyRate: 0.80,  assistRate: 1.50 }, // Pass-first offensive D — Coffey/Housley
     "BOOMER":         { shotRate: 1.25, penaltyRate: 1.05,  assistRate: 1.18 }, // Big-shot D — MacInnis/Iafrate
     "TWO-WAY STAR D": { shotRate: 1.08, penaltyRate: 0.88,  assistRate: 1.20 }, // Elite two-way — Lidstrom/Chelios
-    "SHUTDOWN":       { shotRate: 0.78, penaltyRate: 1.15,  assistRate: 0.82 }, // Defensive stopper — physical, low offense
+    "SHUTDOWN":       { shotRate: 0.78, penaltyRate: 1.15,  assistRate: 0.77 }, // Defensive stopper — physical, low offense
     "ENFORCER D":     { shotRate: 0.55, penaltyRate: 1.70,  assistRate: 0.55 }, // Pure fighter — lots of PIMs, almost no points
     "INTIMIDATOR":    { shotRate: 0.82, penaltyRate: 1.25,  assistRate: 0.85 }, // Physical presence — hits, penalties, minimal offense
     "PUCK RUSHER":    { shotRate: 1.20, penaltyRate: 0.85,  assistRate: 1.25 }, // Mobile puck-carrier — Niedermayer/Zhitnik type
     "PRO OFFENSIVE D":{ shotRate: 1.05, penaltyRate: 0.88,  assistRate: 1.18 }, // Solid offensive D — above average but not elite
-    "PRO DEFENSIVE D":{ shotRate: 0.76, penaltyRate: 0.92,  assistRate: 0.88 }, // Solid defensive D — above average but not SHUTDOWN
+    "PRO DEFENSIVE D":{ shotRate: 0.76, penaltyRate: 0.92,  assistRate: 0.83 }, // Solid defensive D — above average but not SHUTDOWN
     "IRONMAN":        { shotRate: 0.74, penaltyRate: 0.95,  assistRate: 0.85 }, // Workhorse — plays big minutes, won't show in stats
     "OFFENSIVE D":    { shotRate: 0.95, penaltyRate: 1.00,  assistRate: 1.05 }, // Offensively-minded but not proven at top level
     "TWO-WAY D":      { shotRate: 0.95, penaltyRate: 1.00,  assistRate: 1.00 }, // Balanced D — no standout trait
-    "STAY-AT-HOME":   { shotRate: 0.62, penaltyRate: 0.92,  assistRate: 0.78 }  // Positional defender — clears the crease, no offense
+    "STAY-AT-HOME":   { shotRate: 0.62, penaltyRate: 0.92,  assistRate: 0.73 }  // Positional defender — clears the crease, no offense
 };
 
 // Goal-conversion bonus by archetype, applied on top of archMods shot/assist attempt-rate
@@ -3597,7 +3597,7 @@ let LINE_FINISH = [1.02, 0.98, 0.40, 0.92], FWD_FINISH = 1.18, PP1_SHARE = 0.55;
 // v307: SHOT_BASE = even-strength shot lambda per team; FINISH_BASE = per-shot goal multiplier (sets league save %)
 // v335: elite offensive defencemen get a slight boost to goals and assists (ES + PP)
 const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D') return false; const tg = PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || ''; return (parseInt(ps.attr?.off) || 0) >= 78 || ['FRANCHISE D','PRO OFFENSIVE D','BOOMER','QUARTERBACK','OFFENSIVE D'].includes(tg); };
-let SHOT_BASE = 24, FINISH_BASE = 1.23;
+let SHOT_BASE = 24, FINISH_BASE = 1.22; // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.75;
 // v309: PEN_BASE = minor-penalty lambda per game (1993-94 had ~5 PP chances/team/game); PP_CONV scales PP conversion
