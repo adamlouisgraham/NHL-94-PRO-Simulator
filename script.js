@@ -1926,7 +1926,8 @@ function getPlayerWeightedStats(pName) {
             else if (pwr >= 85 && off >= 75) tag = "BOOMER";
             else if (def >= 75 && off >= 70) tag = "TWO-WAY STAR D";
             else if (def >= 75 && off < 70 && check >= 70) tag = "SHUTDOWN";
-            else if (rough >= 75 && aggr >= 75 && off < 60 && def < 60) tag = "ENFORCER D";
+            // v344: ENFORCER D removed - tough D now fall through to INTIMIDATOR/STAY-AT-HOME etc.
+            // (enforcer D were racking up 300+ PIM; only forwards did that in 1993-94)
             else if (off < 70 && (check >= 80 || (aggr >= 70 && check >= 65 && def >= 60))) tag = "INTIMIDATOR";
             else if (spd >= 70 && agl >= 70 && off >= 60) tag = "PUCK RUSHER";
             else if (off >= 65 && off > def) tag = "PRO OFFENSIVE D";
@@ -3601,6 +3602,9 @@ let SHOT_BASE = 24, FINISH_BASE = 1.23;
 let PLAYOFF_EDGE = 1.75;
 // v309: PEN_BASE = minor-penalty lambda per game (1993-94 had ~5 PP chances/team/game); PP_CONV scales PP conversion
 let PEN_BASE = 9.6, PP_CONV = 1.05;
+// v344: PIM where the discipline damper kicks in - enforcers keep 175 so goons still reach 300+;
+// everyone else damps from 110 (was 175 for all -> ~60-70 skaters over 200 PIM vs ~25-30 in 1993-94)
+const pimCapFor = (name) => (getPlayerWeightedStats(name)?.tag || '').includes('ENFORCER') ? 175 : 110;
 let FIGHT_RATE = 0.028, FIGHT_HIT_RESPONSE = 0.06; // v312: per-scrum fight chance per toughness point^2; chance an on-ice enforcer answers a hit
 function getRosterStructure(tk) {
     if (_structCache[tk]) return _structCache[tk];
@@ -4813,7 +4817,7 @@ function simGame(idx) {
         const base = Math.pow((aggr+rough)/2, 1.3) * tagMult * line4Mult * archPenMult * p3TrailMult * p3LeadMult;
         // [FIX] was ps.season?.pim — during playoffs k='playoff', so season PIM was
         // used to cap playoff penalty rates. Use the active bucket instead.
-        const overCap = Math.max(0, (ps[k]?.pim||0) - 175); // v174: raised from 150 → 175 so true goons reach realistic 300+ PIM
+        const overCap = Math.max(0, (ps[k]?.pim||0) - pimCapFor(name)); // v174: raised from 150 → 175 so true goons reach realistic 300+ PIM
         return base * Math.pow(0.85, overCap/10);
     };
     const pickOffender = (skaters, isHomeTeam) => {
@@ -4879,7 +4883,11 @@ function simGame(idx) {
         // one fight per player per game — forward enforcers can go twice
         if ((foughtThisGame[p.name] || 0) >= (tg === 'ENFORCER F' ? 2 : 1)) return 0;
         // D play ~40% of the game, so tough D are rated lower than forward enforcers or they'd fight constantly
-        return tg === 'ENFORCER F' ? 3 : tg === 'ENFORCER D' ? 2.2 : tg === 'INTIMIDATOR' ? (p.pos === 'D' ? 1.8 : 2.5)
+        // v344: no ENFORCER D tag any more - tough D (high aggr AND rough) still drop the gloves readily
+        const ps2 = playerStats[p.name];
+        const toughD = p.pos === 'D' && (gradeToNum(ps2.attr?.aggr)||50) >= 75 && (gradeToNum(ps2.attr?.rough)||50) >= 75;
+        if (toughD) return 1.9;
+        return tg === 'ENFORCER F' ? 3 : tg === 'INTIMIDATOR' ? (p.pos === 'D' ? 1.8 : 2.5)
              : (tg === 'GRINDER' || tg === 'PEST' || tg === 'POWER FORWARD') ? 1.5 : 1;
     };
     let fightsThisGame = 0;
@@ -5249,7 +5257,7 @@ function simGame(idx) {
             const pimAmt     = isMajor ? 5 : isDoubleMajor ? 4 : 2;
             // Active bucket, not always .season — otherwise playoff PIMs never accrue toward
             // the discipline cap while a frozen regular-season total keeps gating the player.
-            const overCap2   = Math.max(0, (playerStats[offender]?.[k]?.pim||0) - 175); // v174: matches penWeight threshold
+            const overCap2   = Math.max(0, (playerStats[offender]?.[k]?.pim||0) - pimCapFor(offender)); // v174: matches penWeight threshold
             const skipChance = 1 - Math.pow(0.85, overCap2/10);
             if (skipChance > 0 && Math.random() < skipChance) continue;
 
@@ -5257,12 +5265,22 @@ function simGame(idx) {
             penaltyEvents.push({p:period, m:minute, s:sec, str:timeStr, tm:penTeam.code,
                 cl:teamColors[penTeam.nrm]?.[0]||'#fff',
                 txt:`PENALTY: ${offender} (${isMajor?'5 min major':isDoubleMajor?'4 min double minor':'2 min minor'})`, isPenalty:true});
+            // v344: 10-minute misconduct tacked onto a call (abuse of officials etc.) - PIM only, no PP.
+            // ~6% of calls, hotheads more often -> ~0.3 per team per game like 1993-94
+            if (Math.random() < Math.max(0.02, Math.min(0.12, 0.05 + (offenderAggr-50)*0.0015))) {
+                trk(offender, 'pim', 10);
+                penaltyEvents.push({p:period, m:minute, s:sec, str:timeStr, tm:penTeam.code,
+                    cl:teamColors[penTeam.nrm]?.[0]||'#fff', txt:`PENALTY: ${offender} (10 min misconduct)`, isPenalty:true});
+            }
 
             if (isMajor && Math.random()<0.01 && playerStats[offender] && !(playerStats[offender].suspended?.days>0)) {
                 const days = Math.ceil(Math.random()*3);
                 if (!playerStats[offender].suspended) playerStats[offender].suspended={days:0,reason:''};
                 playerStats[offender].suspended.days += days;
                 playerStats[offender].suspended.reason = 'Match penalty';
+                // v344: this path never logged history, so suspension counts came up short
+                if (!playerStats[offender].suspensionHistory) playerStats[offender].suspensionHistory = [];
+                playerStats[offender].suspensionHistory.push({ day: currentDay, games: days, reason: 'Match penalty', season: currentSeason });
                 penaltyEvents.push({p:period, m:minute, s:sec, str:timeStr, tm:penTeam.code,
                     cl:'#FF8800', txt:`SUSPENSION: ${offender} — ${days} game(s) (match penalty)`, isNote:true});
             }
@@ -5522,13 +5540,15 @@ function simGame(idx) {
         // COINCIDENTAL MINORS (4-on-4, no PP)
         } else if (ev.type === 'coin') {
             if (isASG) continue;
+            // v344: offsetting minors were ~3x real 1993-94 (2.8/game vs ~0.9) and padded everyone's PIM
+            if (Math.random() < 0.68) continue;
             const hSk = hOnIce.filter(p=>p.pos!=='G');
             const aSk = aOnIce.filter(p=>p.pos!=='G');
             if (!hSk.length || !aSk.length) continue;
             const hOff = pickOffender(hSk);
             const aOff = pickOffender(aSk);
             if (hOff && aOff) {
-                const capSkip = (name) => { const ov=Math.max(0,(playerStats[name]?.[k]?.pim||0)-150); return ov>0&&Math.random()<1-Math.pow(0.85,ov/10); };
+                const capSkip = (name) => { const ov=Math.max(0,(playerStats[name]?.[k]?.pim||0)-pimCapFor(name)+25); return ov>0&&Math.random()<1-Math.pow(0.85,ov/10); };
                 if (!capSkip(hOff)) trk(hOff,'pim',2);
                 if (!capSkip(aOff)) trk(aOff,'pim',2);
                 penaltyEvents.push({p:period, m:minute, s:sec, str:timeStr, tm:g.h.code,
@@ -5549,7 +5569,7 @@ function simGame(idx) {
             if (!gPool.length) continue;
             // [FIX] was ps.season?.pim — goon cap must use active bucket (k) so playoff
             // PIMs count toward discipline suppression, matching penWeight above.
-            const gWt    = gPool.map(p => { const ps=playerStats[p.name]; const a2=gradeToNum(ps.attr?.aggr)||50; const r2=gradeToNum(ps.attr?.rough)||50; const tm=(getPlayerWeightedStats(p.name)?.tag||'').includes('ENFORCER')?3:1; const ov=Math.max(0,(ps[k]?.pim||0)-150); return Math.pow((a2+r2)/2,1.8)*tm*Math.pow(0.85,ov/10); });
+            const gWt    = gPool.map(p => { const ps=playerStats[p.name]; const a2=gradeToNum(ps.attr?.aggr)||50; const r2=gradeToNum(ps.attr?.rough)||50; const tm=(getPlayerWeightedStats(p.name)?.tag||'').includes('ENFORCER')?3:1; const ov=Math.max(0,(ps[k]?.pim||0)-pimCapFor(p.name)+25); return Math.pow((a2+r2)/2,1.8)*tm*Math.pow(0.85,ov/10); });
             const gTotal = gWt.reduce((a2,b)=>a2+b,0);
             if (gTotal<=0) continue;
             let gr=Math.random()*gTotal, gPicked=gPool[gPool.length-1];
