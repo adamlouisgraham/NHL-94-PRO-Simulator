@@ -2641,13 +2641,13 @@ const dynamicDuos = [
     // TBL
     ['Kirk Muller', 'Petr Klima', 'Chris Gratton'],
     ['Jesse Belanger', 'Patrick Poulin', 'Bob Kudelski'],
-    ['Alexander Semak', 'John Tucker', 'Jim Cummins'],
-    ['Marc Bureau', 'Brent Gilchrist', 'Mikael Andersson'],
+    ['Marc Bureau', 'John Tucker', 'Jim Cummins'],
+    ['Alexander Semak', 'Brent Gilchrist', 'Mikael Andersson'],
     ['Roman Hamrlik', 'Alexei Kasatonov'],
     ['Craig Muni', 'Zarley Zalapski'],
     // TOR
     ['Doug Gilmour', 'Dave Andreychuk', 'Rob Zamuner'],
-    ['Wendel Clark', 'Mats Sundin'],
+    ['Wendel Clark', 'Mats Sundin', 'Esa Tikkanen'],
     ['Peter Zezel', 'Mike Krushelnyski', 'Mark Osborne'],
     ['Mike Eastwood', 'Gary Leeman', 'Ken Baumgartner'],
     ['Al Iafrate', 'Todd Gill'],
@@ -2668,7 +2668,7 @@ const dynamicDuos = [
     ['Alexei Zhamnov', 'Teemu Selanne', 'Dallas Drake'],
     ['Peter Stastny', 'Nelson Emerson', 'Thomas Steen'],
     ['Randy Gilhen', 'Darrin Shannon', 'Tie Domi'],
-    ['Luciano Borsato', 'Mike Eagles', 'Ed Kastelic'],
+    ['Mike Eagles',],
     ['Igor Ulanov', 'Phil Housley']
 ];
 
@@ -2997,13 +2997,13 @@ const buildRosterStructure = (tk, ignoreHealth = false) => {
         startingCenters[0] = allCenters[0];
         startingCenters[1] = allCenters[1];
         
-        // 2. Force the absolute worst center to the 4th line (so better centers can play wing)
-        startingCenters[3] = allCenters[allCenters.length - 1];
-        
-        // 3. Find the best defensive center from the remaining middle pack for Line 3
-        let middlePack = allCenters.slice(2, allCenters.length - 1);
+        // 2. Line 3 = best defensive center of the rest; 3. Line 4 = best remaining center by OVR.
+        // v360: line 4 used to take the absolute WORST center, so a team with 5+ centers dressed its
+        // weakest one ahead of better ones (CHI: Craigwell 46 over Peake 56).
+        let middlePack = allCenters.slice(2);
         middlePack.sort((a, b) => getDef(b) - getDef(a)); // Sort highest DEF to lowest
-        startingCenters[2] = middlePack[0]; 
+        startingCenters[2] = middlePack[0];
+        startingCenters[3] = middlePack.slice(1).sort((a, b) => getOvr(b) - getOvr(a))[0] || null; 
         
         // NOTE: Any center left in the 'middlePack' array is ignored here. 
         // Because they aren't added to 'usedNames' yet, your Winger Draft will 
@@ -3694,6 +3694,24 @@ function applySeasonLines(tk) {
                     if (pick) bench.splice(bench.indexOf(pick), 1);
                 }
                 lines[i][j] = pick;
+            }
+        }
+        // v358: rotate a better extra in. If the best healthy extra out-rates the weakest rotatable regular on the
+        // bottom two lines (bottom pair for D) - never a Dynamic Duo member or forward enforcer, so duos and the
+        // tough guy stay - he dresses in that player's place for this game: 15% of games + 7% per OVR point of
+        // gap (max 70%). Regular season only.
+        if (!isPlayoffs && bench.length) {
+            const duoSet = new Set(getAllDuos().flat());
+            const rows = isD ? [lines.length - 1] : [lines.length - 2, lines.length - 1];
+            const slots = [];
+            rows.forEach(i => (lines[i] || []).forEach((n, j) => { if (n && !duoSet.has(n) && !isEnfF(n)) slots.push([i, j, n]); }));
+            slots.sort((a, b) => ovr(a[2]) - ovr(b[2]));
+            const ex = bench.filter(n => !duoSet.has(n))[0];
+            if (ex && slots.length) {
+                // same position first so lines keep a center; otherwise the weakest rotatable regular
+                const sp = slots.find(sl => pos(sl[2]) === pos(ex)) || slots[0];
+                const gap = ovr(ex) - ovr(sp[2]);
+                if (gap > 0 && Math.random() < Math.min(0.70, 0.15 + 0.07 * gap)) lines[sp[0]][sp[1]] = ex;
             }
         }
         return lines.map(l => l.filter(Boolean).map(n => byName.get(n)));
@@ -4646,8 +4664,11 @@ function simGame(idx) {
     const hFowLambda  = fowDiff * 0.08;  // +1.2 shots at max diff (elite vs poor C)
     const aFowLambda  = -fowDiff * 0.08;
 
-    const hBaseLambda  = SHOT_BASE + Math.max(0, Math.min(5, (hTeamStyle - 60) * 0.2)) + hFowLambda;
-    const aBaseLambda  = SHOT_BASE + Math.max(0, Math.min(5, (aTeamStyle - 60) * 0.2)) + aFowLambda;
+    // v348: home ice carries real weight - the rating bonus alone moved finishing ~1%, so home and road teams
+    // won equally (45% / 44%); 1993-94 home teams outshot visitors and took ~54% of decisions
+    const homeShotEdge = isASG ? 0 : 1.2;
+    const hBaseLambda  = SHOT_BASE + homeShotEdge + Math.max(0, Math.min(5, (hTeamStyle - 60) * 0.2)) + hFowLambda;
+    const aBaseLambda  = SHOT_BASE - homeShotEdge + Math.max(0, Math.min(5, (aTeamStyle - 60) * 0.2)) + aFowLambda;
     const poEdge = (isPlayoffs && !isASG) ? PLAYOFF_EDGE : 1;
     const hShotCount   = poissonRand(hBaseLambda * (1 + preGameDiff * 0.008 * poEdge));
     const aShotCount   = poissonRand(aBaseLambda * (1 - preGameDiff * 0.008 * poEdge));
@@ -5691,6 +5712,15 @@ function simGame(idx) {
             let br = Math.random()*bTotal, bPicked = blkPool[blkPool.length-1];
             for (let i=0;i<blkPool.length;i++){ br-=bWt[i]; if(br<=0){ bPicked=blkPool[i]; break; } }
             trk(bPicked.name, 'blk', 1);
+            // v359: blocking a shot can hurt - ~0.4% of blocks cost 1-5 games (defencemen block most shots)
+            const bps = playerStats[bPicked.name];
+            if (!isPlayoffs && awardConfig.injuries && bps && !(bps.injury?.daysRemaining > 0) && Math.random() < 0.004) {
+                const bTk = ev.side === 'h' ? g.h.nrm : g.a.nrm;
+                const bDays = 1 + Math.floor(Math.random() * 5);
+                bps.injury = { severity: bDays, daysRemaining: bDays, source: 'blocked-shot' };
+                autoPlaceOnIR(bPicked.name, bTk, bDays);
+                tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `[INJ] BLOCKED SHOT: ${bPicked.name} (${bTk.toUpperCase()}) - out ${bDays} game${bDays > 1 ? 's' : ''}.` });
+            }
 
         // FIGHT
         } else if (ev.type === 'fight') {
@@ -5977,8 +6007,10 @@ function simGame(idx) {
                 }
                 return picks;
             };
-            const hBrawlPool = (rosters[g.h.nrm]||[]).filter(canFightB);
-            const aBrawlPool = (rosters[g.a.nrm]||[]).filter(canFightB);
+            // v358: only players dressed for this game (was the whole roster - scratches picked up 15 PIM without playing)
+            const dressed = st => [...(st?.f || []).flat(), ...(st?.d || []).flat()].filter(Boolean);
+            const hBrawlPool = dressed(hStruct).filter(canFightB);
+            const aBrawlPool = dressed(aStruct).filter(canFightB);
             if (!hBrawlPool.length || !aBrawlPool.length) continue;
             const brawlCnt = 2 + (Math.random()<0.4?1:0); // 2-3 fighters per side
             const hBrawlers = pickBrawlers(hBrawlPool, brawlCnt);
@@ -7690,31 +7722,108 @@ function _doRoundAdvance(turbo = false) {
 
 function processOffseasonGrowth() {
     let logs = [];
+    // v352: performance-driven development. perf (-1..+1) = how last season's PER-GAME production compared
+    // with players of the same position and rating. Skaters: goals, assists, +/-, shots, hits and blocks per
+    // game, each scored against a league fit on OVR (F and D separately) in residual-SD units and weighted by
+    // position. Goalies: save % vs league. Every game counts, but a short season carries less weight
+    // (reliability gp/(gp+12)), so a handful of great or awful games still nudges development.
+    const STATS = { F: { g: 0.30, a: 0.25, pm: 0.15, s: 0.12, hits: 0.10, blk: 0.08 },
+                    D: { g: 0.10, a: 0.22, pm: 0.25, s: 0.08, hits: 0.15, blk: 0.20 } };
+    const grp = p => p.pos === 'D' ? 'D' : 'F';
+    const pool = Object.entries(playerStats).filter(([n, p]) => p.pos !== 'G' && (p.season?.gp || 0) >= 10);
+    // compare against the same player TAG (snipers vs snipers, grinders vs grinders); a tag with fewer
+    // than 12 qualifying players falls back to the whole position group
+    const tagOf = n => PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || '-';
+    const fits = {};
+    const buildFit = (key, G, members) => {
+        const rows = members.map(([n, p]) => ({ x: getPlayerWeightedStats(n)?.baseOvr || 0, st: p.season }));
+        fits[key] = {};
+        Object.keys(STATS[G]).forEach(k => {
+            const pts = rows.map(r => [r.x, (r.st[k] || 0) / r.st.gp]);
+            const n = pts.length; if (n < 10) return;
+            let sx = 0, sy = 0, sxx = 0, sxy = 0; pts.forEach(([x, y]) => { sx += x; sy += y; sxx += x * x; sxy += x * y; });
+            const b = (n * sxy - sx * sy) / Math.max(1e-9, n * sxx - sx * sx), a = (sy - b * sx) / n;
+            const sd = Math.sqrt(pts.reduce((q, [x, y]) => q + Math.pow(y - (a + b * x), 2), 0) / n) || 1;
+            fits[key][k] = { a, b, sd };
+        });
+    };
+    ['F', 'D'].forEach(G => buildFit(G, G, pool.filter(([n, p]) => grp(p) === G)));
+    const byTag = {}; pool.forEach(([n, p]) => { const k = grp(p) + ':' + tagOf(n); (byTag[k] = byTag[k] || []).push([n, p]); });
+    Object.entries(byTag).forEach(([k, m]) => { if (m.length >= 12) buildFit(k, k[0], m); });
+    // (byTag also supplies the same-tag, similar-rating peer groups used in perfOf)
+    const gl = Object.values(playerStats).filter(p => p.pos === 'G' && (p.season?.sa || 0) > 0);
+    const lgSv = gl.reduce((s, p) => s + (p.season.sv || 0), 0) / Math.max(1, gl.reduce((s, p) => s + (p.season.sa || 0), 0));
+    const perfOf = (p) => {
+        const st = p.season || {}; const gp = st.gp || 0; if (!gp) return 0;
+        const rel = gp / (gp + 12);
+        if (p.pos === 'G') {
+            if (!(st.sa > 0)) return 0;
+            // v356: vs goalies within ±10 OVR (league average made elite goalies climb every year - Roy 91 -> 99)
+            const go = getPlayerWeightedStats(p.name)?.baseOvr || 0;
+            const peers = gl.filter(g2 => g2 !== p && (g2.season.gp || 0) >= 10 && Math.abs((getPlayerWeightedStats(g2.name)?.baseOvr || 0) - go) <= 10);
+            const ref = peers.length >= 4 ? peers.reduce((q, g2) => q + g2.season.sv, 0) / Math.max(1, peers.reduce((q, g2) => q + g2.season.sa, 0)) : lgSv;
+            return Math.max(-1, Math.min(1, (st.sv / st.sa - ref) / 0.012)) * rel;
+        }
+        const G = grp(p), x = getPlayerWeightedStats(p.name)?.baseOvr || 0;
+        // peers = same tag AND similar rating (±5 OVR, widening to ±10); fewer than 6 peers -> tag fit -> position fit
+        let ref = null;
+        const mates = byTag[G + ':' + tagOf(p.name)] || [];
+        for (const band of [5, 10]) {
+            const peers = mates.filter(([n2]) => n2 !== p.name && Math.abs((getPlayerWeightedStats(n2)?.baseOvr || 0) - x) <= band);
+            if (peers.length >= 6) {
+                ref = {};
+                Object.keys(STATS[G]).forEach(k => {
+                    const v = peers.map(([n2, p2]) => (p2.season[k] || 0) / p2.season.gp);
+                    const m = v.reduce((q, y) => q + y, 0) / v.length;
+                    const sd = Math.sqrt(v.reduce((q, y) => q + (y - m) * (y - m), 0) / v.length) || (fits[G][k]?.sd || 1);
+                    ref[k] = { a: m, b: 0, sd: Math.max(sd, (fits[G][k]?.sd || 0) * 0.5) };
+                });
+                break;
+            }
+        }
+        if (!ref) ref = fits[G + ':' + tagOf(p.name)] || fits[G];
+        let z = 0;
+        Object.entries(STATS[G]).forEach(([k, w]) => { const f = ref[k]; if (f) z += w * Math.max(-2.5, Math.min(2.5, ((st[k] || 0) / gp - (f.a + f.b * x)) / f.sd)); });
+        return Math.max(-1, Math.min(1, z / 1.2)) * rel; // z/1.2: a strong all-round season (~+1.2 SD) = full +1
+    };
     Object.values(playerStats).forEach(p => {
+        const perf = perfOf(p);
         p.age++; 
         if (!awardConfig.aging) return; 
         let oChg = 0, dChg = 0, pChg = 0;
-        // v303: development runs to 25 and is big enough for a Franchise pick (drafted ~55) to reach the
-        // mid-80s and a Top 6 pick the mid-70s (old ranges capped prospects in the 70s, so the league lost
-        // its stars as the 1993-94 veterans aged out). Decline now starts at 32 and is gentler until 35.
+        const r = Math.random();
+        const pr = (scale) => Math.round(perf * scale + (Math.random() - 0.5) * 0.6); // performance step with a little noise
         if (p.age <= 25) {
-            let r = Math.random();
-            const ramp = p.age <= 22 ? 1 : 0.6; // growth slows in the last few development years
-            if (p.potential === 'Franchise') { oChg = Math.round((3 + r * 4) * ramp); dChg = Math.round((3 + r * 4) * ramp); pChg = r > 0.5 ? 1 : 0; }
-            else if (p.potential === 'Top 6') { oChg = Math.round((2 + r * 3) * ramp); dChg = Math.round((2 + r * 3) * ramp); pChg = r > 0.7 ? 1 : 0; }
-            else if (p.potential === 'Depth') { oChg = Math.round((1 + r * 1.5) * ramp); dChg = Math.round((1 + r * 1.5) * ramp); }
-            else { oChg = Math.floor(r * 1.5); dChg = Math.floor(r * 1.5); }
+            // the biggest growth: potential sets the pace, a strong season speeds it up, a poor one slows it
+            const ramp = p.age <= 22 ? 1 : (p.potential === 'Franchise' ? 0.85 : 0.6);
+            const pm = Math.max(0.3, 1 + 0.5 * perf);
+            if (p.potential === 'Franchise') { oChg = Math.round((3 + r * 4) * ramp * pm); dChg = Math.round((3 + r * 4) * ramp * pm); pChg = r > 0.5 ? 1 : 0; }
+            else if (p.potential === 'Top 6') { oChg = Math.round((2 + r * 3) * ramp * pm); dChg = Math.round((2 + r * 3) * ramp * pm); pChg = r > 0.7 ? 1 : 0; }
+            else if (p.potential === 'Depth') { oChg = Math.round((1 + r * 1.5) * ramp * pm); dChg = Math.round((1 + r * 1.5) * ramp * pm); }
+            else { oChg = Math.max(0, Math.floor(r * 1.5) + pr(1)); dChg = Math.max(0, Math.floor(r * 1.5)); }
             // ceiling by potential, so an already-good young player doesn't grow past what his tier allows
             const cap = { Franchise: 92, 'Top 6': 82, Depth: 70 }[p.potential] || 60;
             const nowOvr = getPlayerWeightedStats(p.name)?.ovr || 0;
-            if (nowOvr >= cap) { oChg = 0; dChg = 0; pChg = 0; }
-            else if (nowOvr + oChg > cap) { oChg = cap - nowOvr; dChg = Math.min(dChg, oChg); }
-        } else if (p.age >= 26 && p.age <= 31) {
-            if (Math.random() < 0.15) { oChg = Math.random() > 0.5 ? 1 : -1; dChg = Math.random() > 0.5 ? 1 : -1; }
-        } else if (p.age >= 32) {
-            let r = Math.random();
-            if (p.age <= 34) { oChg = -(1 + Math.floor(r * 2)); dChg = -Math.floor(r * 2); pChg = -1; }
-            else { oChg = -(2 + Math.floor(r * 2)); dChg = -(1 + Math.floor(r * 2)); pChg = -(2 + Math.floor(r * 1.5)); }
+            // v356: a strong season (perf > 0.3) can push past the tier cap by 1-2 a year (Lindros sat at 83 through 50-goal years)
+            const over = perf > 0.6 ? 2 : perf > 0.3 ? 1 : 0;
+            if (nowOvr >= cap) { oChg = Math.min(over, oChg); dChg = Math.min(over, dChg); pChg = 0; }
+            else if (nowOvr + oChg > cap + over) { oChg = cap + over - nowOvr; dChg = Math.min(dChg, oChg); }
+        } else if (p.age <= 30) {
+            // still improving, slower: +0..1 baseline, performance moves it -1..+3
+            oChg = Math.max(-1, Math.min(3, (r < 0.15 ? 1 : 0) + pr(2))); // v356: baseline 35% -> 15% (league ratings were inflating)
+            dChg = Math.max(-1, Math.min(2, (r > 0.85 ? 1 : 0) + pr(1)));
+        } else if (p.age <= 35) {
+            // stagnant baseline - performance alone decides up or down (-2..+2)
+            oChg = Math.max(-2, Math.min(2, pr(2)));
+            dChg = Math.max(-2, Math.min(1, pr(1)));
+            pChg = oChg < 0 ? -1 : 0;
+        } else {
+            // 36+: always declining; a strong season only slows it (never a gain)
+            const baseO = p.age <= 39 ? -(2 + Math.floor(r * 2)) : -(3 + Math.floor(r * 2));
+            const baseD = p.age <= 39 ? -(1 + Math.floor(r * 2)) : -(2 + Math.floor(r * 2));
+            const slow = Math.max(0, Math.round(perf * 2));
+            oChg = Math.min(-1, baseO + slow); dChg = Math.min(0, baseD + slow);
+            pChg = -(2 + Math.floor(r * 1.5)) + Math.min(1, slow);
         }
         if (p.pos === 'G') {
             p.attr.gDef = Math.max(20, Math.min(99, (parseInt(p.attr.gDef) || 70) + dChg));
@@ -7728,6 +7837,7 @@ function processOffseasonGrowth() {
             // 40-year-old performed identically to their 22-year-old self, while every
             // skater around them aged normally. Apply the same oChg every skater gets.
             p.attr.ovr = Math.max(20, Math.min(99, (parseInt(p.attr.ovr) || parseInt(p.attr.gDef) || 70) + oChg));
+            delete _wpCache[p.name]; // v356: goalies kept their cached pre-summer rating until the next cache clear
         }
         else {
             // v275: develop/decline the whole skill set (OVR is built from shooting, passing, speed etc.,
@@ -7736,7 +7846,7 @@ function processOffseasonGrowth() {
             bump('off', oChg); bump('def', dChg);
             ['shotAcc', 'shotPwr', 'pass', 'stkHnd'].forEach(k => bump(k, oChg));
             bump('check', dChg);
-            const phys = p.age <= 24 ? (oChg > 0 ? 1 : 0) : p.age >= 31 ? -Math.max(1, Math.round(-oChg / 2)) : 0;
+            const phys = p.age <= 24 ? (oChg > 0 ? 1 : 0) : p.age >= 36 ? -Math.max(1, Math.round(-oChg / 2)) : p.age >= 31 ? (oChg < 0 ? -1 : 0) : 0;
             ['speed', 'agil', 'endur'].forEach(k => bump(k, phys));
             if (p.attr.grades) Object.keys(p.attr.grades).forEach(k => { if (p.attr[k] !== undefined) p.attr.grades[k] = String(p.attr[k]); });
             delete _wpCache[p.name];
@@ -10336,7 +10446,15 @@ function getConnSmytheScore(p) {
             else if (curOvr >= 85) retireP *= 0.40;
             else if (curOvr >= 80) retireP *= 0.65;
             const sGP = p.season.gp || 0, sPPG = sGP >= 40 ? ((p.season.g || 0) + (p.season.a || 0)) / sGP : 0;
-            if (!isGoalie && sPPG >= 1.0) retireP *= 0.5; else if (!isGoalie && sPPG >= 0.75) retireP *= 0.75;
+            // v357: still producing = not retiring. Judged per game (10+ GP, so an injury-shortened year still
+            // counts). Strong production -> stays (only 41+ can still go, at a reduced rate); solid -> stays through 37.
+            const pg = Math.max(1, sGP), ptsPG = ((p.season.g || 0) + (p.season.a || 0)) / pg;
+            const svp = isGoalie && (p.season.sa || 0) > 0 ? p.season.sv / p.season.sa : 0;
+            const strong = sGP >= 10 && (isGoalie ? svp >= 0.905 : p.pos === 'D' ? ptsPG >= 0.65 : ptsPG >= 0.90);
+            const solid  = sGP >= 10 && (isGoalie ? svp >= 0.895 : p.pos === 'D' ? ptsPG >= 0.45 : ptsPG >= 0.65);
+            if (strong) retireP = p.age >= 41 ? retireP * 0.3 : 0;
+            else if (solid) retireP = p.age >= 38 ? retireP * 0.35 : 0;
+            else if (sGP < 10 && curOvr >= 85) retireP *= 0.4; // star who lost the year to injury - usually comes back
             const retires = roll < retireP;
             if (retires && !meetsCareerBar) {
                 retiredPlayers.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, age: p.age, asgApp: p.asgAppearances || 0,
@@ -12324,8 +12442,8 @@ function withLongTermChance(days) {
 
 function rollInGameInjuries(homeCode, awayCode) {
     if (!awardConfig.injuries) return;
-    const SKATER_CHANCE = 0.00236; // v228: increased from 0.00225 (+5%, all-source except fight/brawl)
-    const GOALIE_CHANCE = 0.0016; // v228: increased from 0.00152 (+5%)
+    const SKATER_CHANCE = 0.00260; // v350: 0.00236 -> 0.00260 (+10%, more short-term injuries)
+    const GOALIE_CHANCE = 0.0029; // v362: 0.0016 -> 0.0029 (~0.5 -> ~0.9 goalie injuries per team per season)
 
     [homeCode, awayCode].forEach(tk => {
         if (!rosters[tk]) return;
@@ -12364,7 +12482,11 @@ function rollInGameInjuries(homeCode, awayCode) {
             const fatigueCont = fatigueAmt * agilFatMult * 0.0005 * (1 - ironmanRelief);
             const endurProt   = Math.max(-0.0015, (pEndur - 70) * -0.00005); // high endur reduces chance
             const agilProt    = Math.max(-0.0010, (pAgil  - 70) * -0.00003); // high agil dodges hits
-            const injChance = SKATER_CHANCE + fatigueCont + endurProt + agilProt + checkBonus;
+            // v359: risk scales with ice time (per game, a 22-min D used to carry the same risk as a 9-min 4th liner)
+            const sst = ps.season || {};
+            const avgToi = (sst.gp || 0) >= 3 ? (sst.toi || 0) / sst.gp : (p.pos === 'D' ? 19 : 14);
+            const toiMult = Math.max(0.65, Math.min(1.35, avgToi / 16));
+            const injChance = (SKATER_CHANCE + fatigueCont + endurProt + agilProt + checkBonus) * toiMult;
             if (Math.random() < Math.max(0.0005, injChance)) {
                 const rawRoll = Math.random();
                 // v158: endur shifts toward less severe; high fatigue shifts toward more severe
@@ -12381,7 +12503,8 @@ function rollInGameInjuries(homeCode, awayCode) {
                 const adjRoll = Math.max(0, Math.min(1, roll + roughProt));
                 // v227: 4-tier severity — 47%: 0-1g | 35%: 2-4g | 15%: 5-8g | 3%: 9-12g,
                 // with a 12g roll (top of tier 4) extending into a rare 12-15g re-roll.
-                if      (adjRoll < 0.47) days = Math.floor(Math.random() * 2);           // 0–1 games
+                // v350: more short (2-4g) injuries - was 47% 0-1g / 35% 2-4g
+                if      (adjRoll < 0.35) days = Math.floor(Math.random() * 2);           // 0–1 games
                 else if (adjRoll < 0.82) days = Math.floor(Math.random() * 3) + 2;       // 2–4 games
                 else if (adjRoll < 0.97) days = Math.floor(Math.random() * 4) + 5;       // 5–8 games
                 else {
