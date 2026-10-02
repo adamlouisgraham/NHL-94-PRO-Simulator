@@ -3590,6 +3590,7 @@ const buildRosterStructure = (tk, ignoreHealth = false) => {
 // back down. Lines are rebuilt from the season base each time, so returns need no bookkeeping.
 // Coach-saved custom lines and non-league (All-Star) rosters keep the old auto-build.
 let seasonLines = {};
+let leagueOvrTarget = null; // v363: league average rating held through the offseason (set on first offseason)
 let deadlineDeals = [], deadlineDealsSeason = -1; // v317: this season's buyer/seller deals, for the deadline wrap-up
 // v301: scoring-distribution dials. LINE_FINISH = per-shot finish multiplier for F lines [L1, L2, L3, L4];
 // FWD_FINISH offsets them to hold league scoring; PP1_SHARE = share of power plays run by PP unit 1.
@@ -7858,6 +7859,25 @@ function processOffseasonGrowth() {
         }
     });
     if (logs.length > 0 && awardConfig.headlines) { logs.sort(() => 0.5 - Math.random()).slice(0, 5).forEach(msg => { tradeLog.unshift({ day: 'OFFSEASON', details: msg }); }); }
+    // v363: hold the league's average rating steady. Relative progression is untouched; only the league-wide
+    // drift (avg 57.9 -> 61.3 over 10 years, driving 100-pt seasons 15 -> 43) is removed by shifting every
+    // skater's skills (and goalies' rating) back toward the opening-day average.
+    if (awardConfig.aging) {
+        clearWpCache();
+        const rostered = new Set(Object.values(rosters).flat().map(x => x.name));
+        const grpAvg = isG => { const v = [...rostered].filter(n => playerStats[n] && (playerStats[n].pos === 'G') === isG).map(n => getPlayerWeightedStats(n)?.baseOvr || 0); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; };
+        if (!leagueOvrTarget) leagueOvrTarget = { sk: 57.9, g: grpAvg(true) || 70 };
+        const shiftSk = Math.round(grpAvg(false) - leagueOvrTarget.sk), shiftG = Math.round(grpAvg(true) - leagueOvrTarget.g);
+        Object.values(playerStats).forEach(p => {
+            const bump = (k, d) => { const cur = parseInt(p.attr?.[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur - d)); };
+            if (p.pos === 'G') { if (shiftG) { bump('ovr', shiftG); bump('gDef', shiftG); } return; }
+            if (!shiftSk) return;
+            ['off', 'def', 'shotAcc', 'shotPwr', 'pass', 'stkHnd', 'check', 'speed', 'agil'].forEach(k => bump(k, shiftSk));
+            if (p.attr?.grades) Object.keys(p.attr.grades).forEach(k => { if (p.attr[k] !== undefined) p.attr.grades[k] = String(p.attr[k]); });
+        });
+        clearWpCache();
+        Object.values(playerStats).forEach(p => { if (p.pos !== 'G' && p.attr) p.attr.ovr = getPlayerWeightedStats(p.name).ovr; });
+    }
 }
 
 async function beginNewYear() {
@@ -10437,7 +10457,7 @@ function getConnSmytheScore(p) {
             // so depth players never left and the league aged ~0.7 yrs a season). Weak veterans go sooner,
             // stars hang on a bit longer. Only career-bar players are inducted into the Hall of Fame.
             const curOvr = getPlayerWeightedStats(p.name)?.ovr || 60;
-            const ageP = p.age >= 39 ? 0.90 : p.age === 38 ? 0.70 : p.age === 37 ? 0.50 : p.age === 36 ? 0.32 : p.age === 35 ? 0.20 : p.age === 34 ? 0.12 : p.age === 33 ? 0.06 : 0;
+            const ageP = p.age >= 39 ? 0.90 : p.age === 38 ? 0.70 : p.age === 37 ? 0.65 : p.age === 36 ? 0.45 : /* v364: 36-37 were 0.32/0.50 (league carried ~2x real 36-37 year olds) */ p.age === 35 ? 0.20 : p.age === 34 ? 0.12 : p.age === 33 ? 0.06 : 0;
             let retireP = ageP;
             if (p.age >= 31 && curOvr < 50) retireP += 0.15;          // fringe veteran can't find a job
             // v302: players still performing at an elite level hang on much longer (graded by rating and
@@ -10452,8 +10472,9 @@ function getConnSmytheScore(p) {
             const svp = isGoalie && (p.season.sa || 0) > 0 ? p.season.sv / p.season.sa : 0;
             const strong = sGP >= 10 && (isGoalie ? svp >= 0.905 : p.pos === 'D' ? ptsPG >= 0.65 : ptsPG >= 0.90);
             const solid  = sGP >= 10 && (isGoalie ? svp >= 0.895 : p.pos === 'D' ? ptsPG >= 0.45 : ptsPG >= 0.65);
-            if (strong) retireP = p.age >= 41 ? retireP * 0.3 : 0;
-            else if (solid) retireP = p.age >= 38 ? retireP * 0.35 : 0;
+            // v363: was 'strong -> never until 41, solid -> never through 37' - players 36+ went 15 -> 105 in 10 years
+            if (strong) retireP = p.age >= 38 ? retireP * 0.6 : 0;
+            else if (solid) retireP *= 0.5;
             else if (sGP < 10 && curOvr >= 85) retireP *= 0.4; // star who lost the year to injury - usually comes back
             const retires = roll < retireP;
             if (retires && !meetsCareerBar) {
@@ -10503,6 +10524,24 @@ function getConnSmytheScore(p) {
     if(awardConfig.draft) {
         const picks = runRealisticDraft();
         res += `<p style='font-size:7px; color:var(--neon-cyan);'>Draft Completed: ${picks} prospects selected (2 rounds).</p>`;
+        // v363: teams short of tough guys sign a young enforcer (the 1993-94 goons retired and the draft never
+        // replaced them: by year 10 every team had <2 forward enforcers and fights fell 0.81 -> 0.26/game)
+        let enfSigned = 0;
+        league.forEach(t => {
+            const ro = rosters[t.nrm] || [];
+            let have = ro.filter(p => (getPlayerWeightedStats(p.name)?.tag || '') === 'ENFORCER F').length;
+            while (have < 2) {
+                const nm = makeProspect(t, ['LW', 'RW'][Math.floor(Math.random() * 2)], 300 + (++enfSigned));
+                const ps = playerStats[nm], r = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+                ps.age = r(20, 23); ps.potential = 'Depth'; ps.weight = r(205, 235);
+                Object.assign(ps.attr, { rough: r(80, 95), aggr: r(80, 95), check: r(68, 85), off: r(32, 48), def: r(38, 55),
+                    shotAcc: r(30, 45), shotPwr: r(50, 70), pass: r(30, 45), stkHnd: r(30, 45), speed: r(45, 62), agil: r(40, 58), endur: r(60, 78) });
+                delete _wpCache[nm]; ps.attr.ovr = getPlayerWeightedStats(nm).ovr;
+                have++;
+            }
+        });
+        clearWpCache();
+        if (enfSigned) res += `<p style='font-size:7px; color:var(--neon-cyan);'>Enforcers signed: ${enfSigned} young tough guys to teams short on muscle.</p>`;
     }
     // Keep rosters playable once the draft is adding players: cap 29 (largest opening roster)
     if (awardConfig.draft) trimRostersAfterOffseason();
@@ -10603,7 +10642,10 @@ function trimRostersAfterOffseason() {
         while (ro.length > MAX) {
             const nF = ro.filter(p => p.pos !== 'G' && p.pos !== 'D').length;
             const nD = ro.filter(p => p.pos === 'D').length;
-            const pool = ro.filter(p => p.pos !== 'G' && ((p.pos === 'D' && nD > 8) || (p.pos !== 'D' && nF > 13)))
+            // v363: never cut a team's last two forward enforcers (the trim was releasing the just-signed tough guys)
+            const isEnfF = p => (getPlayerWeightedStats(p.name)?.tag || '') === 'ENFORCER F';
+            const nEnf = ro.filter(isEnfF).length;
+            const pool = ro.filter(p => p.pos !== 'G' && ((p.pos === 'D' && nD > 8) || (p.pos !== 'D' && nF > 13)) && !(isEnfF(p) && nEnf <= 2))
                            .sort((a, b) => (getPlayerWeightedStats(a.name)?.ovr || 0) - (getPlayerWeightedStats(b.name)?.ovr || 0));
             const cut = pool[0]; if (!cut) break;
             ro.splice(ro.findIndex(p => p.name === cut.name), 1);
