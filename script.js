@@ -21,14 +21,15 @@ const TEAM_CONF_DIV_OVERRIDES = {
     // =========================================================
     const archMods = {
     // --- FORWARDS ---
-    "SUPERSTAR":          { shotRate: 1.32, penaltyRate: 0.70,  assistRate: 2.30 },
-    "PRO SNIPER":         { shotRate: 1.30, penaltyRate: 0.85,  assistRate: 1.25 }, // v244: 1.38→1.30 — was HIGHER than SUPERSTAR's 1.32, inverting the intended SUPERSTAR>PRO SNIPER hierarchy and driving Mogilny's 96-goal outlier season
-    "PRO PLAYMAKER":      { shotRate: 0.97, penaltyRate: 0.80,  assistRate: 2.50 }, // Elite playmaker — Gretzky, Oates, Lemieux
-    "SNIPER":             { shotRate: 1.16, penaltyRate: 0.85,  assistRate: 0.82 }, // Solid 30-40G scorer
+    // v365: star scoring tags trimmed ~5% (100-pt seasons ran 21-25 vs ~8 in 1993-94)
+    "SUPERSTAR":          { shotRate: 1.26, penaltyRate: 0.70,  assistRate: 2.18 },
+    "PRO SNIPER":         { shotRate: 1.24, penaltyRate: 0.85,  assistRate: 1.25 }, // v244: 1.38→1.30 — was HIGHER than SUPERSTAR's 1.32, inverting the intended SUPERSTAR>PRO SNIPER hierarchy and driving Mogilny's 96-goal outlier season
+    "PRO PLAYMAKER":      { shotRate: 0.97, penaltyRate: 0.80,  assistRate: 2.36 }, // Elite playmaker — Gretzky, Oates, Lemieux
+    "SNIPER":             { shotRate: 1.12, penaltyRate: 0.85,  assistRate: 0.82 }, // Solid 30-40G scorer
     "PLAYMAKER":          { shotRate: 1.00, penaltyRate: 0.85,  assistRate: 1.60 }, // Solid passer — Francis, Janney, Juneau
     "SPEEDSTER":          { shotRate: 1.20, penaltyRate: 0.80,  assistRate: 1.30 }, // v230: trimmed below POWER SNIPER
     "DANGLER":            { shotRate: 1.15, penaltyRate: 0.80,  assistRate: 1.45 }, // v230: trimmed below POWER SNIPER
-    "POWER SNIPER":       { shotRate: 1.26, penaltyRate: 1.15,  assistRate: 0.90 }, // v239: 1.32→1.26 — dialed back slightly, still above pre-v230 1.22 baseline
+    "POWER SNIPER":       { shotRate: 1.21, penaltyRate: 1.15,  assistRate: 0.90 }, // v239: 1.32→1.26 — dialed back slightly, still above pre-v230 1.22 baseline
     "POWER FORWARD":      { shotRate: 1.28, penaltyRate: 1.20,  assistRate: 0.97 }, // v230: 1.20→1.28
     "TWO-WAY STAR F":     { shotRate: 1.15, penaltyRate: 0.95,  assistRate: 1.20 },
     "TWO-WAY FWD":        { shotRate: 1.04, penaltyRate: 0.95,  assistRate: 1.15 }, // v170: two-ways still shoot; v172: assists 1.05→1.15 (Brind'Amour/Muller type)
@@ -7864,10 +7865,17 @@ function processOffseasonGrowth() {
     // skater's skills (and goalies' rating) back toward the opening-day average.
     if (awardConfig.aging) {
         clearWpCache();
-        const rostered = new Set(Object.values(rosters).flat().map(x => x.name));
-        const grpAvg = isG => { const v = [...rostered].filter(n => playerStats[n] && (playerStats[n].pos === 'G') === isG).map(n => getPlayerWeightedStats(n)?.baseOvr || 0); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; };
-        if (!leagueOvrTarget) leagueOvrTarget = { sk: 57.9, g: grpAvg(true) || 70 };
-        const shiftSk = Math.round(grpAvg(false) - leagueOvrTarget.sk), shiftG = Math.round(grpAvg(true) - leagueOvrTarget.g);
+        // v365: measured on each team's DRESSED core - top 12 F + top 6 D (opening day 63.25) and its best goalie
+        // (opening day 80). Averaging the whole roster let depth/prospect growth mask the starters fading
+        // (starting G 80 -> 72.5 over 10 years, pushing GPG 7.1 -> 7.5).
+        const o = n => getPlayerWeightedStats(n)?.baseOvr || 0;
+        const core = league.map(t => { const r = rosters[t.nrm] || [];
+            return [...r.filter(p => p.pos !== 'G' && p.pos !== 'D').map(p => o(p.name)).sort((a, b) => b - a).slice(0, 12),
+                    ...r.filter(p => p.pos === 'D').map(p => o(p.name)).sort((a, b) => b - a).slice(0, 6)]; }).flat();
+        const startG = league.map(t => Math.max(0, ...(rosters[t.nrm] || []).filter(p => p.pos === 'G').map(p => o(p.name)))).filter(v => v > 0);
+        const avg = v => v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
+        if (!leagueOvrTarget || leagueOvrTarget.core === undefined) leagueOvrTarget = { core: 63.25, g: 80 };
+        const shiftSk = Math.round(avg(core) - leagueOvrTarget.core), shiftG = Math.round(avg(startG) - leagueOvrTarget.g);
         Object.values(playerStats).forEach(p => {
             const bump = (k, d) => { const cur = parseInt(p.attr?.[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur - d)); };
             if (p.pos === 'G') { if (shiftG) { bump('ovr', shiftG); bump('gDef', shiftG); } return; }
@@ -10473,8 +10481,9 @@ function getConnSmytheScore(p) {
             const strong = sGP >= 10 && (isGoalie ? svp >= 0.905 : p.pos === 'D' ? ptsPG >= 0.65 : ptsPG >= 0.90);
             const solid  = sGP >= 10 && (isGoalie ? svp >= 0.895 : p.pos === 'D' ? ptsPG >= 0.45 : ptsPG >= 0.65);
             // v363: was 'strong -> never until 41, solid -> never through 37' - players 36+ went 15 -> 105 in 10 years
-            if (strong) retireP = p.age >= 38 ? retireP * 0.6 : 0;
-            else if (solid) retireP *= 0.5;
+            // v365: from 36 even strong producers can go (36+ count climbed to ~60 as the 93-94 stars aged together)
+            if (strong) retireP = p.age >= 38 ? retireP * 0.6 : p.age >= 36 ? retireP * 0.3 : 0;
+            else if (solid) retireP *= p.age >= 36 ? 0.75 : 0.5;
             else if (sGP < 10 && curOvr >= 85) retireP *= 0.4; // star who lost the year to injury - usually comes back
             const retires = roll < retireP;
             if (retires && !meetsCareerBar) {
