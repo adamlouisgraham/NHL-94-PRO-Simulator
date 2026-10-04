@@ -3654,6 +3654,23 @@ function applySeasonLines(tk) {
             });
         });
     }
+    // v367: every team dresses at least one forward enforcer. The 1993-94 goons dress through their Dynamic
+    // Duos; the young enforcers signed in a dynasty aren't in duos and sat (fights fell 0.79 -> 0.52/game).
+    {
+        const isEnfN = n => (PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || '') === 'ENFORCER F';
+        if (!base.f.flat().some(isEnfN)) {
+            const inBase = new Set([...base.f.flat(), ...base.d.flat()]);
+            const tough = n => { const a = playerStats[n]?.attr || {}; return (gradeToNum(a.rough) || 50) + (gradeToNum(a.aggr) || 50); };
+            const enf = r.filter(p => !inBase.has(p.name) && getPlayerPosition(p) !== 'G' && getPlayerPosition(p) !== 'D' && isEnfN(p.name))
+                .sort((x, y) => tough(y.name) - tough(x.name))[0];
+            const duoSet = new Set(getAllDuos().flat());
+            const l4 = base.f[base.f.length - 1] || [];
+            const victim = l4.filter(n => !duoSet.has(n) && getPlayerPosition(byName.get(n)) !== 'C')
+                .sort((x, y) => (getPlayerWeightedStats(x).ovr || 0) - (getPlayerWeightedStats(y).ovr || 0))[0]
+                || l4.filter(n => !duoSet.has(n)).sort((x, y) => (getPlayerWeightedStats(x).ovr || 0) - (getPlayerWeightedStats(y).ovr || 0))[0];
+            if (enf && victim) l4[l4.indexOf(victim)] = enf.name;
+        }
+    }
     const avail = n => {
         const ps = playerStats[n];
         return !!ps && byName.has(n) && !ps.onIR && (!ps.injury || ps.injury.daysRemaining === 0) && (!ps.suspended || ps.suspended.days === 0);
