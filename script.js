@@ -2636,7 +2636,7 @@ const dynamicDuos = [
     ['Craig Janney', 'Brett Hull', 'Terry Yake'],
     ['Cliff Ronning', 'Keith Tkachuk', 'Mikael Renberg'],
     ['Igor Korolev', 'Vitali Karamnov', 'Igor Chibirev'],
-    ['Jim Montgomery', 'Brian Noonan', 'Bob Corkum'],
+    ['Jim Montgomery', 'Kelly Chase', 'Tony Twist'],
     ['Chris Pronger', 'Teppo Numminen'],
     ['Steve Duchesne', 'Doug Crossman'],
     // TBL
@@ -3609,7 +3609,9 @@ let PEN_BASE = 9.6, PP_CONV = 1.05;
 // v344: PIM where the discipline damper kicks in - enforcers keep 175 so goons still reach 300+;
 // everyone else damps from 110 (was 175 for all -> ~60-70 skaters over 200 PIM vs ~25-30 in 1993-94)
 const pimCapFor = (name) => (getPlayerWeightedStats(name)?.tag || '').includes('ENFORCER') ? 175 : 110;
-let FIGHT_RATE = 0.028, FIGHT_HIT_RESPONSE = 0.06; // v312: per-scrum fight chance per toughness point^2; chance an on-ice enforcer answers a hit
+let FIGHT_RATE = 0.028, FIGHT_HIT_RESPONSE = 0.06;
+// v372: playoff hockey has ~1/3 the fights (0.71/game in the sim vs ~0.25 in the 1993-94 playoffs)
+const PLAYOFF_FIGHT_MULT = 0.35; // v312: per-scrum fight chance per toughness point^2; chance an on-ice enforcer answers a hit
 function getRosterStructure(tk) {
     if (_structCache[tk]) return _structCache[tk];
     let struct;
@@ -3658,7 +3660,7 @@ function applySeasonLines(tk) {
     // Duos; the young enforcers signed in a dynasty aren't in duos and sat (fights fell 0.79 -> 0.52/game).
     {
         const isEnfN = n => (PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || '') === 'ENFORCER F';
-        if (!base.f.flat().some(isEnfN)) {
+        if (!isPlayoffs && !base.f.flat().some(isEnfN)) { // v372: not in the playoffs
             const inBase = new Set([...base.f.flat(), ...base.d.flat()]);
             const tough = n => { const a = playerStats[n]?.attr || {}; return (gradeToNum(a.rough) || 50) + (gradeToNum(a.aggr) || 50); };
             const enf = r.filter(p => !inBase.has(p.name) && getPlayerPosition(p) !== 'G' && getPlayerPosition(p) !== 'D' && isEnfN(p.name))
@@ -3667,7 +3669,10 @@ function applySeasonLines(tk) {
             const l4 = base.f[base.f.length - 1] || [];
             const victim = l4.filter(n => !duoSet.has(n) && getPlayerPosition(byName.get(n)) !== 'C')
                 .sort((x, y) => (getPlayerWeightedStats(x).ovr || 0) - (getPlayerWeightedStats(y).ovr || 0))[0]
-                || l4.filter(n => !duoSet.has(n)).sort((x, y) => (getPlayerWeightedStats(x).ovr || 0) - (getPlayerWeightedStats(y).ovr || 0))[0];
+                || l4.filter(n => !duoSet.has(n)).sort((x, y) => (getPlayerWeightedStats(x).ovr || 0) - (getPlayerWeightedStats(y).ovr || 0))[0]
+                // v368: whole 4th line is a duo -> bump its weakest non-center member (the enforcer still dresses)
+                || l4.filter(n => getPlayerPosition(byName.get(n)) !== 'C').sort((x, y) => (getPlayerWeightedStats(x).ovr || 0) - (getPlayerWeightedStats(y).ovr || 0))[0]
+                || l4.slice().sort((x, y) => (getPlayerWeightedStats(x).ovr || 0) - (getPlayerWeightedStats(y).ovr || 0))[0];
             if (enf && victim) l4[l4.indexOf(victim)] = enf.name;
         }
     }
@@ -3694,7 +3699,7 @@ function applySeasonLines(tk) {
         // his slot (no cascade), so the team still dresses its tough guy
         const isEnfF = n => (PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || '') === 'ENFORCER F';
         if (!isD) lines.forEach((l, i) => l.forEach((n, j) => {
-            if (n || !isEnfF(baseLines[i][j])) return;
+            if (n || !isEnfF(baseLines[i][j]) || isPlayoffs) return; // v372: playoffs don't call up a replacement goon
             const sub = bench.filter(isEnfF)[0];
             if (sub) { l[j] = sub; bench.splice(bench.indexOf(sub), 1); }
         }));
@@ -3715,6 +3720,33 @@ function applySeasonLines(tk) {
                 lines[i][j] = pick;
             }
         }
+        // v369: dress ONE forward enforcer by default. A second (or third) only dresses if he has earned it -
+        // a Dynamic Duo member (e.g. STL Chase-Twist) or good enough to play on merit (OVR 55+, e.g. Probert).
+        // Extra unprotected enforcers sit for the best non-enforcer extra; simGame adds one back to match an
+        // opponent that dresses two or more.
+        if (!isD) {
+            const duoSetE = new Set(getAllDuos().flat());
+            const protectedEnf = n => duoSetE.has(n) || ovr(n) >= 55;
+            const dressedEnf = () => lines.flat().filter(n => n && isEnfF(n));
+            let extraEnf = dressedEnf().filter(n => !protectedEnf(n)).sort((a, b) => ovr(a) - ovr(b));
+            // v372: in the playoffs unprotected goons sit entirely (keep = 0); regular season keeps one
+            const keep = isPlayoffs ? 0 : 1;
+            while (dressedEnf().length > keep && extraEnf.length) {
+                const out = extraEnf.shift();
+                const sub = bench.filter(n => !isEnfF(n)).sort((a, b) => (pos(b) === pos(out)) - (pos(a) === pos(out)) || ovr(b) - ovr(a))[0];
+                if (!sub) break;
+                lines.forEach(l => { const k = l.indexOf(out); if (k >= 0) l[k] = sub; });
+                bench.splice(bench.indexOf(sub), 1); bench.push(out);
+            }
+            // v372: never more than 2 forward enforcers dressed (even protected ones) unless no one else is healthy
+            let over = dressedEnf().sort((a, b) => (protectedEnf(b) - protectedEnf(a)) || (ovr(b) - ovr(a))).slice(2);
+            over.forEach(out => {
+                const sub = bench.filter(n => !isEnfF(n)).sort((a, b) => (pos(b) === pos(out)) - (pos(a) === pos(out)) || ovr(b) - ovr(a))[0];
+                if (!sub) return;
+                lines.forEach(l => { const k = l.indexOf(out); if (k >= 0) l[k] = sub; });
+                bench.splice(bench.indexOf(sub), 1); bench.push(out);
+            });
+        }
         // v358: rotate a better extra in. If the best healthy extra out-rates the weakest rotatable regular on the
         // bottom two lines (bottom pair for D) - never a Dynamic Duo member or forward enforcer, so duos and the
         // tough guy stay - he dresses in that player's place for this game: 15% of games + 7% per OVR point of
@@ -3723,9 +3755,15 @@ function applySeasonLines(tk) {
             const duoSet = new Set(getAllDuos().flat());
             const rows = isD ? [lines.length - 1] : [lines.length - 2, lines.length - 1];
             const slots = [];
-            rows.forEach(i => (lines[i] || []).forEach((n, j) => { if (n && !duoSet.has(n) && !isEnfF(n)) slots.push([i, j, n]); }));
+            const ex0 = bench.filter(n => !duoSet.has(n))[0];
+            // v368: on defence a duo member on the bottom pair can be rotated out too, but only by an extra
+            // who is 5+ OVR better (defence duos locked every pair, so extra D almost never played)
+            rows.forEach(i => (lines[i] || []).forEach((n, j) => {
+                if (!n || isEnfF(n)) return;
+                if (!duoSet.has(n) || (isD && ex0 && ovr(ex0) - ovr(n) >= 5)) slots.push([i, j, n]);
+            }));
             slots.sort((a, b) => ovr(a[2]) - ovr(b[2]));
-            const ex = bench.filter(n => !duoSet.has(n))[0];
+            const ex = ex0;
             if (ex && slots.length) {
                 // same position first so lines keep a center; otherwise the weakest rotatable regular
                 const sp = slots.find(sl => pos(sl[2]) === pos(ex)) || slots[0];
@@ -4515,6 +4553,24 @@ function simGame(idx) {
     let penaltyEvents = [];
     let hStruct = getRosterStructure(g.h.nrm);
     let aStruct = getRosterStructure(g.a.nrm);
+    // v369: enforcer matching - if one side dresses 2+ forward enforcers, the other dresses a second one
+    // (its best healthy bench enforcer, replacing the weakest non-duo 4th-liner) when it has one.
+    if (!isASG && !isPlayoffs && !customLines[g.h.nrm] && !customLines[g.a.nrm]) { // v372: no goon matching in the playoffs
+        const isEnfX = p => (PLAYER_TAG_OVERRIDES[p.name] || getPlayerWeightedStats(p.name)?.tag || '') === 'ENFORCER F';
+        const healthy = n => { const ps = playerStats[n]; return ps && !ps.onIR && !(ps.injury?.daysRemaining > 0) && !(ps.suspended?.days > 0); };
+        const duoM = new Set(getAllDuos().flat());
+        const match = (st, tk, oppSt) => {
+            const mine = st.f.flat().filter(isEnfX).length, theirs = oppSt.f.flat().filter(isEnfX).length;
+            if (theirs < 2 || mine >= 2) return;
+            const dressed = new Set(st.f.flat().map(p => p.name));
+            const sub = (rosters[tk] || []).filter(p => !dressed.has(p.name) && p.pos !== 'G' && p.pos !== 'D' && isEnfX(p) && healthy(p.name))[0];
+            const l4 = st.f[st.f.length - 1] || [];
+            const out = l4.filter(p => !isEnfX(p) && !duoM.has(p.name)).sort((a, b) => (getPlayerWeightedStats(a.name).ovr || 0) - (getPlayerWeightedStats(b.name).ovr || 0))[0];
+            if (sub && out) { const nst = { ...st, f: st.f.map(l => l.map(p => p === out ? sub : p)) }; return nst; }
+        };
+        const hm = match(hStruct, g.h.nrm, aStruct), am = match(aStruct, g.a.nrm, hStruct);
+        if (hm) hStruct = hm; if (am) aStruct = am;
+    }
     // v180: shift fatigue per line — lines over-deployed lose OVR; expected shifts = 240/numLines
     const hLineShifts = [0,0,0,0], aLineShifts = [0,0,0,0];
     const hExpShift = 240 / Math.max(1, hStruct.f.length);
@@ -5653,7 +5709,7 @@ function simGame(idx) {
             if (!isASG && fightsThisGame < 3) {
                 const answerSide = ev.side === 'h' ? aOnIce : hOnIce;
                 const enf = answerSide.filter(p => fightTough(p) >= 2.2).sort((x, y) => fightTough(y) - fightTough(x))[0];
-                if (enf && Math.random() < FIGHT_HIT_RESPONSE) {
+                if (enf && Math.random() < FIGHT_HIT_RESPONSE * (isPlayoffs ? PLAYOFF_FIGHT_MULT : 1)) {
                     const hitterSide = ev.side === 'h' ? hOnIce : aOnIce;
                     const opp = canFightP(hPicked) ? hPicked : hitterSide.filter(p => fightTough(p) > 0).sort((x, y) => fightTough(y) - fightTough(x))[0];
                     if (opp) {
@@ -5733,9 +5789,9 @@ function simGame(idx) {
             trk(bPicked.name, 'blk', 1);
             // v359: blocking a shot can hurt - ~0.4% of blocks cost 1-5 games (defencemen block most shots)
             const bps = playerStats[bPicked.name];
-            if (!isPlayoffs && awardConfig.injuries && bps && !(bps.injury?.daysRemaining > 0) && Math.random() < 0.004) {
+            if (!isPlayoffs && awardConfig.injuries && bps && !(bps.injury?.daysRemaining > 0) && Math.random() < 0.006) { // v370: 0.004 -> 0.006
                 const bTk = ev.side === 'h' ? g.h.nrm : g.a.nrm;
-                const bDays = 1 + Math.floor(Math.random() * 5);
+                const bDays = 1 + Math.floor(Math.random() * 8); // v370: 1-5 -> 1-8 games
                 bps.injury = { severity: bDays, daysRemaining: bDays, source: 'blocked-shot' };
                 autoPlaceOnIR(bPicked.name, bTk, bDays);
                 tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `[INJ] BLOCKED SHOT: ${bPicked.name} (${bTk.toUpperCase()}) - out ${bDays} game${bDays > 1 ? 's' : ''}.` });
@@ -5760,7 +5816,7 @@ function simGame(idx) {
                 const aFightPool = aOnIce.filter(p => fightTough(p) > 0);
                 if (!hFightPool.length || !aFightPool.length) continue;
                 const hS = Math.max(...hFightPool.map(fightTough)), aS = Math.max(...aFightPool.map(fightTough));
-                if (Math.random() >= FIGHT_RATE * hS * aS) continue;   // enforcer vs enforcer ~25%, two average tough guys ~3%
+                if (Math.random() >= FIGHT_RATE * hS * aS * (isPlayoffs ? PLAYOFF_FIGHT_MULT : 1)) continue;   // enforcer vs enforcer ~25%, two average tough guys ~3%
                 hF = pickFighter(hFightPool); aF = pickFighter(aFightPool);
             }
             if (hF && aF) { fightsThisGame++; [hF, aF].forEach(f => { foughtThisGame[f.name] = (foughtThisGame[f.name] || 0) + 1; }); }
@@ -12554,7 +12610,8 @@ function rollInGameInjuries(homeCode, awayCode) {
             const sst = ps.season || {};
             const avgToi = (sst.gp || 0) >= 3 ? (sst.toi || 0) / sst.gp : (p.pos === 'D' ? 19 : 14);
             const toiMult = Math.max(0.65, Math.min(1.35, avgToi / 16));
-            const injChance = (SKATER_CHANCE + fatigueCont + endurProt + agilProt + checkBonus) * toiMult;
+            // v370: defencemen get hurt more (blocking shots, taking the hits behind the net) - x1.25
+            const injChance = (SKATER_CHANCE + fatigueCont + endurProt + agilProt + checkBonus) * toiMult * (p.pos === 'D' ? 1.25 : 1);
             if (Math.random() < Math.max(0.0005, injChance)) {
                 const rawRoll = Math.random();
                 // v158: endur shifts toward less severe; high fatigue shifts toward more severe
@@ -12584,6 +12641,8 @@ function rollInGameInjuries(homeCode, awayCode) {
                     else if (p.pos === 'D' && !hasSpareDefenseman(tk)) days = 1;
                 }
                 days = withLongTermChance(days);
+                // v370: a defenceman's 5+ game injury has an extra 12% chance to become long-term (15-45 games)
+                if (p.pos === 'D' && days >= 5 && days < 15 && Math.random() < 0.12) days = 15 + Math.floor(Math.random() * 31);
                 if (days > 0) { ps.injury = { severity: days, daysRemaining: days, source: 'in-game-skater' }; autoPlaceOnIR(p.name, tk, days); }
                 else ps.shakenUpToday = true; // exempt from a second independent injury roll later this game
                 const label = days === 0 ? 'shaken up — playing through' : `out ${days} game${days > 1 ? 's' : ''}`;
