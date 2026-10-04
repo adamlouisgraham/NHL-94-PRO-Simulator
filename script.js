@@ -4276,7 +4276,15 @@ function simGame(idx) {
         const gs = rosters[tk] ? rosters[tk].filter(p => p.pos === 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0 && (!playerStats[p.name].suspended || playerStats[p.name].suspended.days === 0))
             .sort((a, b) => { const d = baseG(b.name) - baseG(a.name); return Math.abs(d) > 3 ? d : getPlayerWeightedStats(b.name).ovr - getPlayerWeightedStats(a.name).ovr; }) : [];
         if (!gs.length) { const allG = (rosters[tk] || []).filter(p => p.pos === 'G'); return allG.length ? allG[0] : null; }
-        if (gs.length === 1 || isPlayoffs || isASG) return gs[0];
+        if (gs.length === 1 || isASG) return gs[0];
+        if (isPlayoffs) {
+            // v373: playoff hook - a starter below .875 after 3+ playoff games loses the net to a backup within
+            // 10 OVR, who keeps it while he is outplaying him (starters used to play every game regardless)
+            const po = n => playerStats[n]?.playoff || {}; const pSv = n => { const st = po(n); return st.sa > 0 ? st.sv / st.sa : null; };
+            const s0 = gs[0], b0 = gs[1], sS = pSv(s0.name), sB = pSv(b0.name);
+            if ((po(s0.name).gp || 0) >= 3 && sS !== null && sS < 0.875 && baseG(s0.name) - baseG(b0.name) <= 10 && (sB === null || sB >= sS)) return b0;
+            return s0;
+        }
 
         let starter = gs[0]; let backup = gs[1];
         // v345: the hot hand earns the net - once both have 8+ GP, a backup outplaying the starter by
@@ -10538,7 +10546,7 @@ function getConnSmytheScore(p) {
             // so depth players never left and the league aged ~0.7 yrs a season). Weak veterans go sooner,
             // stars hang on a bit longer. Only career-bar players are inducted into the Hall of Fame.
             const curOvr = getPlayerWeightedStats(p.name)?.ovr || 60;
-            const ageP = p.age >= 39 ? 0.90 : p.age === 38 ? 0.70 : p.age === 37 ? 0.65 : p.age === 36 ? 0.45 : /* v364: 36-37 were 0.32/0.50 (league carried ~2x real 36-37 year olds) */ p.age === 35 ? 0.20 : p.age === 34 ? 0.12 : p.age === 33 ? 0.06 : 0;
+            const ageP = p.age >= 39 ? 0.90 : p.age === 38 ? 0.70 : p.age === 37 ? 0.75 : p.age === 36 ? 0.55 : /* v373: 0.45/0.65 -> 0.55/0.75 (36+ still 30-42 by year 10 vs ~25-30 real) */ /* v364: 36-37 were 0.32/0.50 (league carried ~2x real 36-37 year olds) */ p.age === 35 ? 0.20 : p.age === 34 ? 0.12 : p.age === 33 ? 0.06 : 0;
             let retireP = ageP;
             if (p.age >= 31 && curOvr < 50) retireP += 0.15;          // fringe veteran can't find a job
             // v302: players still performing at an elite level hang on much longer (graded by rating and
