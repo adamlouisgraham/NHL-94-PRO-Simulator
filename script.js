@@ -419,6 +419,8 @@ function assignTeamCaptains() {
 // opens a roster spot for the depth check below (hasSpareForward/hasSpareDefenseman), instead of
 // IR being a purely cosmetic badge with no gameplay effect.
 function autoPlaceOnIR(pName, tk, days) {
+    // v377: games lost to injury this season (offseason progression: a long injury year costs agility)
+    if (playerStats[pName] && days > 0 && !isPlayoffs) playerStats[pName].injGamesSeason = (playerStats[pName].injGamesSeason || 0) + days;
     if (days < 4) return;
     const ps = playerStats[pName];
     if (!ps || ps.onIR) return;
@@ -1661,6 +1663,7 @@ async function startNewGame(useCustomRoster = false) {
     gDef: gradeToNum(getCol(r, ["GOALIE DEFENSE RATING", "GOALIE DEF RATING"], 45)),
     gOff: gradeToNum(getCol(r, ["GOALIE OFFENSE AWARENESS"], 10)),
     handed: getCol(r, ["HANDED"], -1) || 'L',
+    clutch: parseInt(getCol(r, ["CLUTCH"], -1)) || 65, // v381: sheet 'Clutch' column, default 65
 
     // --- SHARED PHYSICALS (Checks for Goalie headers first, then Skater headers) ---
     speed: gradeToNum(getCol(r, ["GOALIE SPEED", "SPEED", "SPD"], 18)), 
@@ -1780,6 +1783,7 @@ async function startNewGame(useCustomRoster = false) {
                     stkHnd: gPuckCtrl,
                     stickR: gStickR, stickL: gStickL, gloveR: gGloveR, gloveL: gGloveL,
                     ovr: gOverall || 70,
+                    clutch: parseInt(getCol(r, ["GOALIE CLUTCH", "CLUTCH"], -1)) || 65, // v381
                     weight: getWeightLbs(gc(34)) || 210
                 },
                 
@@ -3729,8 +3733,16 @@ function applySeasonLines(tk) {
             const protectedEnf = n => duoSetE.has(n) || ovr(n) >= 55;
             const dressedEnf = () => lines.flat().filter(n => n && isEnfF(n));
             let extraEnf = dressedEnf().filter(n => !protectedEnf(n)).sort((a, b) => ovr(a) - ovr(b));
-            // v372: in the playoffs unprotected goons sit entirely (keep = 0); regular season keeps one
-            const keep = isPlayoffs ? 0 : 1;
+            // v372: in the playoffs unprotected goons sit entirely (keep = 0); regular season keeps one.
+            // v375: ...and in ~35% of regular-season games the coach dresses his second tough guy (opponent then
+            // matches) - the duo goons who used to dress in pairs retire and fights faded 0.80 -> 0.62/game
+            const keep = isPlayoffs ? 0 : (Math.random() < 0.35 ? 2 : 1);
+            if (keep === 2 && dressedEnf().length === 1) {
+                const benchEnf = bench.filter(isEnfF)[0];
+                const l4 = lines[lines.length - 1] || [];
+                const out = l4.filter(n => n && !isEnfF(n) && !duoSetE.has(n) && pos(n) !== 'C').sort((a, b) => ovr(a) - ovr(b))[0];
+                if (benchEnf && out) { l4[l4.indexOf(out)] = benchEnf; bench.splice(bench.indexOf(benchEnf), 1); bench.push(out); }
+            }
             while (dressedEnf().length > keep && extraEnf.length) {
                 const out = extraEnf.shift();
                 const sub = bench.filter(n => !isEnfF(n)).sort((a, b) => (pos(b) === pos(out)) - (pos(a) === pos(out)) || ovr(b) - ovr(a))[0];
@@ -5114,7 +5126,7 @@ function simGame(idx) {
             const skaters = onIce.filter(p => p.pos !== 'G');
             if (!skaters.length) continue;
 
-            const isClutch  = period === 3 && Math.abs(hG - aG) <= 1;
+            const isClutch  = period >= 3 && Math.abs(hG - aG) <= 1; // v381: OT counts as clutch too
             const shooter   = selectShooter(skaters, isClutch ? 'CLUTCH' : 'ES');
             if (!shooter) continue;
 
@@ -5291,7 +5303,8 @@ function simGame(idx) {
             const depthLineMod = LINE_FINISH[Math.min(3, atkFLine)] ?? 1.0;
             // v287: D were converting ~9% (real ~5%): point shots finish less; forwards up slightly to hold league scoring
             const posFinMod = isDefPos ? 0.66 * (isEliteOffD(shooter.name) ? 1.05 : 1) : FWD_FINISH;
-            const prob      = FINISH_BASE*((isPlayoffs&&!isASG)?PLAYOFF_FINISH:1)*posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002*poEdge)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod; // v143: 0.094→0.086→0.079; v174: 0.0888; v181: 0.0930; v182: 0.0918→0.0906 target 7.0 GPG
+            const prob      = FINISH_BASE*((isPlayoffs&&!isASG)?PLAYOFF_FINISH:1)*posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002*poEdge)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod
+                * (isClutch && !isASG ? Math.max(0.85, Math.min(1.15, 1 + ((parseInt(playerStats[shooter.name]?.attr?.clutch) || 65) - 65) * 0.004 - ((parseInt(playerStats[defGNm]?.attr?.clutch) || 65) - 65) * 0.003)) : 1); // v381 clutch; v143: 0.094→0.086→0.079; v174: 0.0888; v181: 0.0930; v182: 0.0918→0.0906 target 7.0 GPG
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob * finishDamp(shooter.name)))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
@@ -6446,9 +6459,30 @@ function simGame(idx) {
                 if (playerStats[ev.scorer]) {
                     playerStats[ev.scorer][k].gwg = (playerStats[ev.scorer][k].gwg || 0) + 1;
                 }
+                // v382: assists on the GWG (primary counts for forwards' clutch, both for defencemen's)
+                if (ev.pAssist && playerStats[ev.pAssist]) { const st = playerStats[ev.pAssist][k]; st.cA1 = (st.cA1 || 0) + 1; st.cA = (st.cA || 0) + 1; }
+                if (ev.sAssist && playerStats[ev.sAssist]) { const st = playerStats[ev.sAssist][k]; st.cA = (st.cA || 0) + 1; }
                 break;
             }
         }
+    }
+
+    // v381: clutch tracking - a skater's tying/go-ahead goals in the 3rd/OT; the goalie in net's goals allowed in the
+    // 3rd/OT while the game was within one, plus close games (decided by 0-1) he played in
+    if (!isASG) {
+        let hs = 0, as = 0;
+        allGoals.filter(ev => ev.scorer).forEach(ev => {
+            const home = ev.code === g.h.code, diff = home ? hs - as : as - hs;
+            if (ev.p >= 3 && diff >= -1 && diff <= 0 && playerStats[ev.scorer]) {
+                playerStats[ev.scorer][k].clutchG = (playerStats[ev.scorer][k].clutchG || 0) + 1;
+                // v382: assists on tying/go-ahead 3rd/OT goals
+                if (ev.pAssist && playerStats[ev.pAssist]) { const st = playerStats[ev.pAssist][k]; st.cA1 = (st.cA1 || 0) + 1; st.cA = (st.cA || 0) + 1; }
+                if (ev.sAssist && playerStats[ev.sAssist]) { const st = playerStats[ev.sAssist][k]; st.cA = (st.cA || 0) + 1; }
+            }
+            if (ev.p >= 3 && Math.abs(hs - as) <= 1) { const gn = home ? aG_name : hG_name; if (playerStats[gn]) playerStats[gn][k].clutchGA = (playerStats[gn][k].clutchGA || 0) + 1; }
+            if (home) hs++; else as++;
+        });
+        if (Math.abs(hG - aG) <= 1) [hG_name, aG_name].forEach(gn => { if (playerStats[gn]) playerStats[gn][k].closeGP = (playerStats[gn][k].closeGP || 0) + 1; });
     }
 
     // ðŸ¤• 7. INJURIES
@@ -7805,6 +7839,16 @@ function _doRoundAdvance(turbo = false) {
 
 function processOffseasonGrowth() {
     let logs = [];
+    // v380: dressed-core skating levels before this offseason's changes (target for the skating hold below)
+    let skateTarget = null;
+    if (awardConfig.aging) {
+        const o0 = n => getPlayerWeightedStats(n)?.baseOvr || 0;
+        const core0 = league.map(t => { const r = rosters[t.nrm] || [];
+            return [...r.filter(p => p.pos !== 'G' && p.pos !== 'D').map(p => p.name).sort((a, b) => o0(b) - o0(a)).slice(0, 12),
+                    ...r.filter(p => p.pos === 'D').map(p => p.name).sort((a, b) => o0(b) - o0(a)).slice(0, 6)]; }).flat();
+        const a0 = k => { const v = core0.map(n => parseInt(playerStats[n]?.attr?.[k]) || 0); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : 0; };
+        skateTarget = { speed: a0('speed'), agil: a0('agil') };
+    }
     // v352: performance-driven development. perf (-1..+1) = how last season's PER-GAME production compared
     // with players of the same position and rating. Skaters: goals, assists, +/-, shots, hits and blocks per
     // game, each scored against a league fit on OVR (F and D separately) in residual-SD units and weighted by
@@ -7834,6 +7878,14 @@ function processOffseasonGrowth() {
     const byTag = {}; pool.forEach(([n, p]) => { const k = grp(p) + ':' + tagOf(n); (byTag[k] = byTag[k] || []).push([n, p]); });
     Object.entries(byTag).forEach(([k, m]) => { if (m.length >= 12) buildFit(k, k[0], m); });
     // (byTag also supplies the same-tag, similar-rating peer groups used in perfOf)
+    // v378: league baselines for hits/game and shooting % (by F/D) - checking follows hits, shot accuracy follows sh%
+    const base378 = {};
+    ['F', 'D'].forEach(G => {
+        const m = pool.filter(([n, p]) => grp(p) === G).map(([n, p]) => p.season);
+        const hits = m.reduce((q, st) => q + (st.hits || 0), 0), gpS = m.reduce((q, st) => q + (st.gp || 0), 0);
+        const goals = m.reduce((q, st) => q + (st.g || 0), 0), shots = m.reduce((q, st) => q + (st.s || 0), 0);
+        base378[G] = { hpg: gpS ? hits / gpS : 0, sh: shots ? goals / shots : 0 };
+    });
     const gl = Object.values(playerStats).filter(p => p.pos === 'G' && (p.season?.sa || 0) > 0);
     const lgSv = gl.reduce((s, p) => s + (p.season.sv || 0), 0) / Math.max(1, gl.reduce((s, p) => s + (p.season.sa || 0), 0));
     const perfOf = (p) => {
@@ -7869,8 +7921,17 @@ function processOffseasonGrowth() {
         Object.entries(STATS[G]).forEach(([k, w]) => { const f = ref[k]; if (f) z += w * Math.max(-2.5, Math.min(2.5, ((st[k] || 0) / gp - (f.a + f.b * x)) / f.sd)); });
         return Math.max(-1, Math.min(1, z / 1.2)) * rel; // z/1.2: a strong all-round season (~+1.2 SD) = full +1
     };
+    // v381: league baselines for the special-teams / clutch rules
+    const lg381 = { F: {}, D: {}, G: {} };
+    ['F', 'D'].forEach(G => { const m = pool.filter(([n, p]) => grp(p) === G).map(([n, p]) => p.season), gpS = m.reduce((q, st) => q + (st.gp || 0), 0) || 1;
+        // v383: clutch baseline = clutch goals + GWG (assists are a bonus-only add-on, below)
+        const cpts = st => (st.clutchG || 0) + (st.gwg || 0);
+        lg381[G] = { pp: m.reduce((q, st) => q + (st.ppg || 0) + (st.ppa || 0), 0) / gpS, cl: m.reduce((q, st) => q + cpts(st), 0) / gpS }; });
+    { const gs = gl.filter(p => (p.season.closeGP || 0) >= 10); lg381.G.cga = gs.reduce((q, p) => q + (p.season.clutchGA || 0), 0) / Math.max(1, gs.reduce((q, p) => q + (p.season.closeGP || 0), 0)); }
     Object.values(playerStats).forEach(p => {
-        const perf = perfOf(p);
+        // v381: playoff performance counts too - a 4+ GP playoff run is blended in at 25%
+        const perfReg = perfOf(p), poGP = p.playoff?.gp || 0;
+        const perf = poGP >= 4 ? perfReg * 0.75 + perfOf({ ...p, season: p.playoff }) * 0.25 : perfReg;
         p.age++; 
         if (!awardConfig.aging) return; 
         let oChg = 0, dChg = 0, pChg = 0;
@@ -7920,6 +7981,17 @@ function processOffseasonGrowth() {
             // 40-year-old performed identically to their 22-year-old self, while every
             // skater around them aged normally. Apply the same oChg every skater gets.
             p.attr.ovr = Math.max(20, Math.min(99, (parseInt(p.attr.ovr) || parseInt(p.attr.gDef) || 70) + oChg));
+            // v379: a strong/weak save-% year (vs goalies within +-10 OVR) moves glove and stick hands; 6+ shutouts +1 OVR
+            const gStep = perf > 0.4 ? 1 : perf < -0.4 ? -1 : 0;
+            if (gStep) ['gloveL', 'gloveR', 'stickL', 'stickR'].forEach(k => { const cur = parseInt(p.attr[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur + gStep)); });
+            if ((p.season?.so || 0) >= 6) p.attr.ovr = Math.min(99, (parseInt(p.attr.ovr) || 70) + 1);
+            // v381: goalie clutch - 3rd-period/OT goals allowed in close games (vs league) + playoff save % vs his
+            // regular season; moves proportionally, up or down
+            { const gs0 = p.season || {}, po = p.playoff || {}; let cz = 0;
+              if ((gs0.closeGP || 0) >= 10 && lg381.G.cga > 0) cz += (lg381.G.cga - (gs0.clutchGA || 0) / gs0.closeGP) / lg381.G.cga;
+              if ((po.gp || 0) >= 4 && po.sa > 0 && gs0.sa > 0) cz += Math.max(-1, Math.min(1, ((po.sv / po.sa) - (gs0.sv / gs0.sa)) / 0.015));
+              const cStep = Math.max(-3, Math.min(3, Math.round(cz * 2)));
+              if (cStep) p.attr.clutch = Math.max(20, Math.min(99, (parseInt(p.attr.clutch) || 65) + cStep)); }
             delete _wpCache[p.name]; // v356: goalies kept their cached pre-summer rating until the next cache clear
         }
         else {
@@ -7931,6 +8003,63 @@ function processOffseasonGrowth() {
             bump('check', dChg);
             const phys = p.age <= 24 ? (oChg > 0 ? 1 : 0) : p.age >= 36 ? -Math.max(1, Math.round(-oChg / 2)) : p.age >= 31 ? (oChg < 0 ? -1 : 0) : 0;
             ['speed', 'agil', 'endur'].forEach(k => bump(k, phys));
+            // v377: skating, endurance and agility respond to the season too
+            const st = p.season || {};
+            if (p.age <= 25 && perf > 0.3) bump('speed', 1);                       // breakout year -> a step quicker
+            const toi = (st.gp || 0) >= 20 ? (st.toi || 0) / st.gp : null;         // minutes per game
+            if (toi !== null) {
+                const heavy = p.pos === 'D' ? 22 : 18, light = p.pos === 'D' ? 14 : 10;
+                if (toi >= heavy && p.age <= 33) bump('endur', 1);                  // big minutes build the engine
+                else if (toi < light) bump('endur', -1);                            // a spare part loses his legs
+            }
+            const inj = p.injGamesSeason || 0;
+            if (inj >= 30) bump('agil', -2); else if (inj >= 15) bump('agil', -1);  // long injury years cost agility
+            // v378: checking follows hits per game (vs position average), shot accuracy follows shooting %
+            const b = base378[p.pos === 'D' ? 'D' : 'F'];
+            if ((st.gp || 0) >= 20 && b && b.hpg > 0) {
+                const hr = ((st.hits || 0) / st.gp) / b.hpg;
+                if (hr >= 1.5 && p.age <= 33) bump('check', 1); else if (hr <= 0.5) bump('check', -1);
+            }
+            if ((st.s || 0) >= 50 && b && b.sh > 0) {
+                const sh = (st.g || 0) / st.s;
+                if (sh >= b.sh + 0.035) bump('shotAcc', 1); else if (sh <= b.sh - 0.035) bump('shotAcc', -1);
+            }
+            // v379: specific stats -> specific skills, judged per game against the same-position fit on OVR (in SD units)
+            if ((st.gp || 0) >= 20) {
+                const G = p.pos === 'D' ? 'D' : 'F', xo = getPlayerWeightedStats(p.name)?.baseOvr || 0;
+                const z = k => { const f = fits[G]?.[k]; return f ? ((st[k] || 0) / st.gp - (f.a + f.b * xo)) / f.sd : 0; };
+                const step = v => v >= 1 ? 1 : v <= -1 ? -1 : 0;
+                const zg = step(z('g')), za = step(z('a')), zb = step(z('blk'));
+                if (zg) { bump('off', zg); bump('shotPwr', zg); }        // goals -> scoring instinct + shot
+                if (za) { bump('pass', za); bump('stkHnd', za); }        // assists -> vision + hands
+                if (zb > 0 || (zb < 0 && p.pos === 'D')) bump('def', zb); // shot blocking -> reading the play
+            }
+            // v379: toughness is no longer frozen - a young player who lives in the box toughens up; veterans mellow
+            const pimPg = (st.gp || 0) >= 20 ? (st.pim || 0) / st.gp : 0;
+            if (p.age <= 25 && (pimPg >= 1.8 || (st.fights || 0) >= 10)) bump('rough', 1);
+            if (p.age >= 33) bump('aggr', -1);
+            if ((st.gp || 0) >= 20) {
+                const L = lg381[p.pos === 'D' ? 'D' : 'F'];
+                // v381: power-play production -> offensive awareness (goals) / passing (assists)
+                const ppPg = ((st.ppg || 0) + (st.ppa || 0)) / st.gp;
+                if (L.pp > 0 && ppPg >= L.pp * 2) { if ((st.ppg || 0) >= (st.ppa || 0)) bump('off', 1); else bump('pass', 1); }
+                // v381: shorthanded goals / plus-minus -> defensive awareness
+                if ((st.shg || 0) >= 2) bump('def', 1);
+                const pmPg = (st.pm || 0) / st.gp;
+                if (pmPg >= 0.3 && p.age <= 33) bump('def', 1); else if (pmPg <= -0.3) bump('def', -1);
+                // v381: clutch - tying/go-ahead 3rd-period/OT goals + GWGs per game vs position average, plus playoff
+                // production vs regular season; moves proportionally, up or down
+                const cPg = ((st.clutchG || 0) + (st.gwg || 0)) / st.gp;
+                let cz = L.cl > 0 ? (cPg - L.cl) / L.cl : 0;                           // relative to average (e.g. +0.5 = 50% more)
+                const po = p.playoff || {};
+                if ((po.gp || 0) >= 4) { const rs = ((st.g || 0) + (st.a || 0)) / st.gp, ps = ((po.g || 0) + (po.a || 0)) / po.gp; if (rs > 0.2) cz += Math.max(-1, Math.min(1, (ps - rs) / rs)); }
+                // v383: assists on clutch goals / GWGs only ADD clutch (forwards: primary assists, 1 per 3;
+                // defencemen: all assists, 1 per 3) - up to +2, never a penalty for not having them
+                const cAst = p.pos === 'D' ? (st.cA || 0) : (st.cA1 || 0);
+                const bonus = Math.min(2, Math.floor(cAst / 3));
+                const cStep = Math.max(-3, Math.min(3, Math.round(cz * 2) + bonus));
+                if (cStep) p.attr.clutch = Math.max(20, Math.min(99, (parseInt(p.attr.clutch) || 65) + cStep));
+            }
             if (p.attr.grades) Object.keys(p.attr.grades).forEach(k => { if (p.attr[k] !== undefined) p.attr.grades[k] = String(p.attr[k]); });
             delete _wpCache[p.name];
             p.attr.ovr = getPlayerWeightedStats(p.name).ovr;
@@ -7961,8 +8090,31 @@ function processOffseasonGrowth() {
             const bump = (k, d) => { const cur = parseInt(p.attr?.[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur - d)); };
             if (p.pos === 'G') { if (shiftG) { bump('ovr', shiftG); bump('gDef', shiftG); } return; }
             if (!shiftSk) return;
-            ['off', 'def', 'shotAcc', 'shotPwr', 'pass', 'stkHnd', 'check', 'speed', 'agil'].forEach(k => bump(k, shiftSk));
+            ['off', 'def', 'shotAcc', 'shotPwr', 'pass', 'stkHnd', 'check'].forEach(k => bump(k, shiftSk)); // v380: skating has its own hold
             if (p.attr?.grades) Object.keys(p.attr.grades).forEach(k => { if (p.attr[k] !== undefined) p.attr.grades[k] = String(p.attr[k]); });
+        });
+        clearWpCache();
+        // v374: hold the offence/defence BALANCE too. The overall hold kept OVR flat while performance progression
+        // pushed offensive skills up and defensive skills down (core off 66 -> 68, F def 62 -> 59), so shooting %
+        // and GPG crept 7.1 -> 7.45 late in dynasties. Shift offensive skills to the opening core off (62.13) and
+        // defensive skills to the opening core def (63.91).
+        const coreNames = league.map(t => { const r = rosters[t.nrm] || [];
+            return [...r.filter(p => p.pos !== 'G' && p.pos !== 'D').map(p => p.name).sort((a, b) => o(b) - o(a)).slice(0, 12),
+                    ...r.filter(p => p.pos === 'D').map(p => p.name).sort((a, b) => o(b) - o(a)).slice(0, 6)]; }).flat();
+        const attrAvg = k => avg(coreNames.map(n => parseInt(playerStats[n]?.attr?.[k]) || 0));
+        const shiftOff = Math.round(attrAvg('off') - 62.13), shiftDef = Math.round(attrAvg('def') - 63.91);
+        // v380: skating hold - speed and agility each held at the dressed core's level from before this offseason's
+        // changes (the overall hold was shaving skating every year: 546 players lost agility, 0 gained)
+        if (skateTarget) ['speed', 'agil'].forEach(k => {
+            const sh = Math.round(attrAvg(k) - skateTarget[k]);
+            if (sh) Object.values(playerStats).forEach(p => { if (p.pos === 'G' || !p.attr) return; const cur = parseInt(p.attr[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur - sh)); });
+        });
+        if (shiftOff || shiftDef) Object.values(playerStats).forEach(p => {
+            if (p.pos === 'G' || !p.attr) return;
+            const bump = (k, d) => { const cur = parseInt(p.attr[k]); if (!isNaN(cur) && d) p.attr[k] = Math.max(20, Math.min(99, cur - d)); };
+            ['off', 'shotAcc', 'shotPwr', 'pass', 'stkHnd'].forEach(k => bump(k, shiftOff));
+            ['def', 'check'].forEach(k => bump(k, shiftDef));
+            if (p.attr.grades) Object.keys(p.attr.grades).forEach(k => { if (p.attr[k] !== undefined) p.attr.grades[k] = String(p.attr[k]); });
         });
         clearWpCache();
         Object.values(playerStats).forEach(p => { if (p.pos !== 'G' && p.attr) p.attr.ovr = getPlayerWeightedStats(p.name).ovr; });
@@ -8039,6 +8191,7 @@ async function beginNewYear() {
 
             // Wipe clean for the new year
             p.season = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, consStarts:0, hits:0, blk:0};
+            p.injGamesSeason = 0; // v377
             p.playoff = {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, consStarts:0, hits:0, blk:0};
         }
         p.streakType = 'stable'; p.hasScored = false; p.seasonTicks = 0;
@@ -10672,11 +10825,14 @@ function makeProspect(t, pos, pickNo) {
     let attr;
     if (pos === 'G') {
         const ovr = v();
-        attr = { ovr, gDef: v(2), agil: v(), speed: v(), stkHnd: v(-3), stickL: v(), stickR: v(), gloveL: v(), gloveR: v(), pass: v(-5), off: v(-5), weight: rnd(170, 210) };
+        attr = { clutch: rnd(55, 75), ovr, gDef: v(2), agil: v(), speed: v(), stkHnd: v(-3), stickL: v(), stickR: v(), gloveL: v(), gloveR: v(), pass: v(-5), off: v(-5), weight: rnd(170, 210) };
     } else {
         const isD = pos === 'D';
         attr = { off: v(isD ? -5 : 3), def: v(isD ? 5 : -3), shotAcc: v(isD ? -4 : 2), shotPwr: v(isD ? 2 : 0), pass: v(), stkHnd: v(isD ? -3 : 1),
-                 speed: v(), agil: v(), check: v(isD ? 4 : -2), endur: v(), rough: v(), aggr: v(), gDef: 70, gOff: 70, handed: Math.random() < 0.6 ? 'L' : 'R' };
+                 speed: v(), agil: v(), check: v(isD ? 4 : -2), endur: v(),
+                 // v376: toughness independent of skill (35-85) - from the skill base it sat at ~40-55, below the 56/56
+                 // fight threshold, so as the 1993-94 grinders retired the league went soft and fights faded
+                 rough: rnd(35, 85), aggr: rnd(35, 85), clutch: rnd(55, 75), gDef: 70, gOff: 70, handed: Math.random() < 0.6 ? 'L' : 'R' };
     }
     playerStats[name] = {
         name, team: t.name, teamCode: t.code, pos, age: 18, potential,
