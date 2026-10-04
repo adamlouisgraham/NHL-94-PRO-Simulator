@@ -1664,6 +1664,7 @@ async function startNewGame(useCustomRoster = false) {
     gOff: gradeToNum(getCol(r, ["GOALIE OFFENSE AWARENESS"], 10)),
     handed: getCol(r, ["HANDED"], -1) || 'L',
     clutch: parseInt(getCol(r, ["CLUTCH"], -1)) || 65, // v381: sheet 'Clutch' column, default 65
+    fo: parseInt(getCol(r, ["FACEOFFS", "FACEOFF", "FO"], -1)) || 0, // v384: sheet 'Faceoffs' column (0 = not set -> derived)
 
     // --- SHARED PHYSICALS (Checks for Goalie headers first, then Skater headers) ---
     speed: gradeToNum(getCol(r, ["GOALIE SPEED", "SPEED", "SPD"], 18)), 
@@ -3595,6 +3596,15 @@ const buildRosterStructure = (tk, ignoreHealth = false) => {
 // back down. Lines are rebuilt from the season base each time, so returns need no bookkeeping.
 // Coach-saved custom lines and non-league (All-Star) rosters keep the old auto-build.
 let seasonLines = {};
+// v384: faceoff rating - sheet 'Faceoffs' column when set; otherwise centres use the old proxy
+// (pass .4 / def .3 / off .3) and everyone else 45
+function faceoffRating(name) {
+    const ps = playerStats[name]; if (!ps) return 45;
+    const fo = parseInt(ps.attr?.fo); if (fo > 0) return fo;
+    if (ps.pos !== 'C') return 45;
+    const a = ps.attr || {};
+    return (parseInt(a.pass) || 70) * 0.40 + (parseInt(a.def) || 70) * 0.30 + (parseInt(a.off) || 70) * 0.30;
+}
 let leagueOvrTarget = null; // v363: league average rating held through the offseason (set on first offseason)
 let deadlineDeals = [], deadlineDealsSeason = -1; // v317: this season's buyer/seller deals, for the deadline wrap-up
 // v301: scoring-distribution dials. LINE_FINISH = per-shot finish multiplier for F lines [L1, L2, L3, L4];
@@ -4748,10 +4758,7 @@ function simGame(idx) {
         const centers = (rosters[tk] || []).filter(p => getPlayerPosition(p) === 'C' && playerStats[p.name] &&
             (!playerStats[p.name].injury || playerStats[p.name].injury.daysRemaining === 0));
         if (!centers.length) return 70;
-        return centers.reduce((s, p) => {
-            const pA = playerStats[p.name]?.attr || {};
-            return s + ((pA.pass||70)*0.40 + (pA.def||70)*0.30 + (pA.off||70)*0.30);
-        }, 0) / centers.length;
+        return centers.reduce((s, p) => s + faceoffRating(p.name), 0) / centers.length; // v384
     };
     const hTeamFow    = calcTeamFow(g.h.nrm);
     const aTeamFow    = calcTeamFow(g.a.nrm);
@@ -6484,6 +6491,18 @@ function simGame(idx) {
         });
         if (Math.abs(hG - aG) <= 1) [hG_name, aG_name].forEach(gn => { if (playerStats[gn]) playerStats[gn][k].closeGP = (playerStats[gn][k].closeGP || 0) + 1; });
     }
+    // v384: faceoffs - ~60 draws a game split across the four lines (35/30/20/15%); each line's centre takes them
+    // against the matching opposing centre, win chance from the faceoff ratings (+-0.6% per point, 30-70%)
+    if (!isASG) {
+        const ctr = (st, i) => { const l = (st.f || [])[i] || []; return (l.find(p => getPlayerPosition(p) === 'C') || l[0])?.name; };
+        const share = [0.35, 0.30, 0.20, 0.15], draws = 54 + Math.floor(Math.random() * 13);
+        share.forEach((sh, i) => {
+            const hc = ctr(hStruct, i), ac = ctr(aStruct, i); if (!hc || !ac) return;
+            const pW = Math.max(0.30, Math.min(0.70, 0.5 + (faceoffRating(hc) - faceoffRating(ac)) * 0.006));
+            const n = Math.round(draws * sh); let w = 0; for (let d = 0; d < n; d++) if (Math.random() < pW) w++;
+            [[hc, w], [ac, n - w]].forEach(([nm, won]) => { const st = playerStats[nm]?.[k]; if (st) { st.fow = (st.fow || 0) + won; st.foa = (st.foa || 0) + n; } });
+        });
+    }
 
     // ðŸ¤• 7. INJURIES
     rollInGameInjuries(g.h.nrm, g.a.nrm);
@@ -8035,6 +8054,11 @@ function processOffseasonGrowth() {
                 if (zb > 0 || (zb < 0 && p.pos === 'D')) bump('def', zb); // shot blocking -> reading the play
             }
             // v379: toughness is no longer frozen - a young player who lives in the box toughens up; veterans mellow
+            // v384: faceoff % moves the faceoff rating proportionally (55% -> +2, 45% -> -2, max +-3)
+            if ((st.foa || 0) >= 300) {
+                const pct = st.fow / st.foa, step = Math.max(-3, Math.min(3, Math.round((pct - 0.5) * 40)));
+                if (step) p.attr.fo = Math.max(20, Math.min(99, Math.round(faceoffRating(p.name)) + step));
+            }
             const pimPg = (st.gp || 0) >= 20 ? (st.pim || 0) / st.gp : 0;
             if (p.age <= 25 && (pimPg >= 1.8 || (st.fights || 0) >= 10)) bump('rough', 1);
             if (p.age >= 33) bump('aggr', -1);
@@ -10832,7 +10856,7 @@ function makeProspect(t, pos, pickNo) {
                  speed: v(), agil: v(), check: v(isD ? 4 : -2), endur: v(),
                  // v376: toughness independent of skill (35-85) - from the skill base it sat at ~40-55, below the 56/56
                  // fight threshold, so as the 1993-94 grinders retired the league went soft and fights faded
-                 rough: rnd(35, 85), aggr: rnd(35, 85), clutch: rnd(55, 75), gDef: 70, gOff: 70, handed: Math.random() < 0.6 ? 'L' : 'R' };
+                 rough: rnd(35, 85), aggr: rnd(35, 85), clutch: rnd(55, 75), fo: pos === 'C' ? rnd(45, 65) : rnd(35, 50), gDef: 70, gOff: 70, handed: Math.random() < 0.6 ? 'L' : 'R' };
     }
     playerStats[name] = {
         name, team: t.name, teamCode: t.code, pos, age: 18, potential,
