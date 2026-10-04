@@ -1750,20 +1750,23 @@ async function startNewGame(useCustomRoster = false) {
             // 4. PULL ALL RAW GRADES AND CONVERT THEM TO NUMBERS
             // Goalie-specific columns are read by direct index to avoid partial keyword matches
             // hitting skater columns (e.g. "AGILITY" at col 15) which are blank on goalie rows.
+            // v390: look goalie columns up by their EXACT header (index only as a fallback) - inserting a column
+            // (Faceoffs) shifted every fixed index and every goalie imported with the wrong ratings
+            const gcol = (names, idx) => { const i = pHeaders.findIndex(h => names.includes(h)); const j = i >= 0 ? i : idx; return r[j] != null && r[j] !== '' ? String(r[j]).trim() : ''; };
             const gc = (idx) => r[idx] != null && r[idx] !== '' ? String(r[idx]).trim() : '';
-            let gOverall  = parseInt(gc(35)) || 70;
-            let gAgil     = gradeToNum(gc(36)) || 70;
+            let gOverall  = parseInt(gcol(['GOALIE OVERALL'], 35)) || 70;
+            let gAgil     = gradeToNum(gcol(['GOALIE AGILITY'], 36)) || 70;
             let gDefAware = gradeToNum(getCol(r, ["GOALIE DEFENSE RATING", "GOALIE DEF RATING"], 45));
-            let gPuckCtrl = gradeToNum(gc(39)) || 70;
-            let gSpeed    = gradeToNum(gc(37)) || 70;
+            let gPuckCtrl = gradeToNum(gcol(['PUCK CONTROL'], 39)) || 70;
+            let gSpeed    = gradeToNum(gcol(['GOALIE SPEED'], 37)) || 70;
 
             // Pull the specific goalie pad stats
-            let gStickR = gradeToNum(gc(40));
-            let gStickL = gradeToNum(gc(41));
-            let gGloveR = gradeToNum(gc(42));
-            let gGloveL = gradeToNum(gc(43));
+            let gStickR = gradeToNum(gcol(['STICK RIGHT'], 40));
+            let gStickL = gradeToNum(gcol(['STICK LEFT'], 41));
+            let gGloveR = gradeToNum(gcol(['GLOVE RIGHT'], 42));
+            let gGloveL = gradeToNum(gcol(['GLOVE LEFT', 'GLOVE LIEFT'], 43));
             // Handed (L/R): determines which physical side is glove vs stick — used by shot zone coverage
-            const gHanded = (gc(44) || 'L').toString().trim().toUpperCase() === 'R' ? 'R' : 'L';
+            const gHanded = (gcol(['HANDED'], 44) || 'L').toString().trim().toUpperCase() === 'R' ? 'R' : 'L';
 
             playerStats[uniqueGN] = {
                 name: uniqueGN, team: teamObj.name, teamCode: teamObj.code, pos: 'G', age: parseInt(getCol(r, ["AGE"], -1)) || (Math.floor(Math.random()*15)+18),
@@ -1786,7 +1789,7 @@ async function startNewGame(useCustomRoster = false) {
                     stickR: gStickR, stickL: gStickL, gloveR: gGloveR, gloveL: gGloveL,
                     ovr: gOverall || 70,
                     clutch: parseInt(getCol(r, ["GOALIE CLUTCH", "CLUTCH"], -1)) || 65, // v381
-                    weight: getWeightLbs(gc(34)) || 210
+                    weight: getWeightLbs(gcol(['GOALIE WEIGHT'], 34)) || 210
                 },
                 
                 // v146: goalies were hardcoded 'Depth' — young elite goalies (Brodeur, Roy) never
