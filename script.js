@@ -8226,6 +8226,9 @@ async function beginNewYear() {
             // Archive Regular Season to Career Regular Season
             p.career.gp = (p.career.gp || 0) + p.season.gp; p.career.g = (p.career.g || 0) + p.season.g; p.career.a = (p.career.a || 0) + p.season.a; p.career.pts = (p.career.pts || 0) + (p.season.g + p.season.a); p.career.pm = (p.career.pm || 0) + (p.season.pm || 0); p.career.pim = (p.career.pim || 0) + (p.season.pim || 0); p.career.ppg = (p.career.ppg || 0) + (p.season.ppg || 0); p.career.ppa = (p.career.ppa || 0) + (p.season.ppa || 0); p.career.shg = (p.career.shg || 0) + (p.season.shg || 0); p.career.gwg = (p.career.gwg || 0) + (p.season.gwg || 0); p.career.s = (p.career.s || 0) + (p.season.s || 0); p.career.toi = (p.career.toi || 0) + (p.season.toi || 0); p.career.hits = (p.career.hits || 0) + (p.season.hits || 0); p.career.blk = (p.career.blk || 0) + (p.season.blk || 0); // v123: defensive || 0 on all career fields to prevent NaN from pre-loaded players with undefined career PP/SH stats
 
+            // v388: faceoffs into career totals
+            p.career.fow = (p.career.fow || 0) + (p.season.fow || 0); p.career.foa = (p.career.foa || 0) + (p.season.foa || 0);
+            p.careerPlayoff.fow = (p.careerPlayoff.fow || 0) + (p.playoff.fow || 0); p.careerPlayoff.foa = (p.careerPlayoff.foa || 0) + (p.playoff.foa || 0);
             // Archive Playoff to Career Playoff
             p.careerPlayoff.gp = (p.careerPlayoff.gp || 0) + p.playoff.gp; p.careerPlayoff.g = (p.careerPlayoff.g || 0) + p.playoff.g; p.careerPlayoff.a = (p.careerPlayoff.a || 0) + p.playoff.a; p.careerPlayoff.pts = (p.careerPlayoff.pts || 0) + (p.playoff.g + p.playoff.a); p.careerPlayoff.pm = (p.careerPlayoff.pm || 0) + (p.playoff.pm || 0); p.careerPlayoff.pim = (p.careerPlayoff.pim || 0) + (p.playoff.pim || 0); p.careerPlayoff.ppg = (p.careerPlayoff.ppg || 0) + (p.playoff.ppg || 0); p.careerPlayoff.ppa = (p.careerPlayoff.ppa || 0) + (p.playoff.ppa || 0); p.careerPlayoff.shg = (p.careerPlayoff.shg || 0) + (p.playoff.shg || 0); p.careerPlayoff.gwg = (p.careerPlayoff.gwg || 0) + (p.playoff.gwg || 0); p.careerPlayoff.s = (p.careerPlayoff.s || 0) + (p.playoff.s || 0); p.careerPlayoff.toi = (p.careerPlayoff.toi || 0) + (p.playoff.toi || 0); p.careerPlayoff.hits = (p.careerPlayoff.hits || 0) + (p.playoff.hits || 0); p.careerPlayoff.blk = (p.careerPlayoff.blk || 0) + (p.playoff.blk || 0);
 
@@ -10739,7 +10742,7 @@ function getConnSmytheScore(p) {
             // so depth players never left and the league aged ~0.7 yrs a season). Weak veterans go sooner,
             // stars hang on a bit longer. Only career-bar players are inducted into the Hall of Fame.
             const curOvr = getPlayerWeightedStats(p.name)?.ovr || 60;
-            const ageP = p.age >= 39 ? 0.90 : p.age === 38 ? 0.70 : p.age === 37 ? 0.75 : p.age === 36 ? 0.55 : /* v373: 0.45/0.65 -> 0.55/0.75 (36+ still 30-42 by year 10 vs ~25-30 real) */ /* v364: 36-37 were 0.32/0.50 (league carried ~2x real 36-37 year olds) */ p.age === 35 ? 0.20 : p.age === 34 ? 0.12 : p.age === 33 ? 0.06 : 0;
+            const ageP = p.age >= 39 ? 0.90 : p.age === 38 ? 0.70 : p.age === 37 ? 0.75 : p.age === 36 ? 0.63 : /* v388: 36 0.55 -> 0.63; v373: 0.45/0.65 -> 0.55/0.75 (36+ still 30-42 by year 10 vs ~25-30 real) */ /* v364: 36-37 were 0.32/0.50 (league carried ~2x real 36-37 year olds) */ p.age === 35 ? 0.20 : p.age === 34 ? 0.12 : p.age === 33 ? 0.06 : 0;
             let retireP = ageP;
             if (p.age >= 31 && curOvr < 50) retireP += 0.15;          // fringe veteran can't find a job
             // v302: players still performing at an elite level hang on much longer (graded by rating and
@@ -10762,7 +10765,7 @@ function getConnSmytheScore(p) {
             const retires = roll < retireP;
             if (retires && !meetsCareerBar) {
                 retiredPlayers.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, age: p.age, asgApp: p.asgAppearances || 0,
-                    gp: carGP, g: carG, a: carA, pts: carPts, w: carW });
+                    gp: carGP, g: carG, a: carA, pts: carPts, w: carW, gwg: (p.career.gwg||0)+(p.season.gwg||0), fow: (p.career.fow||0)+(p.season.fow||0), foa: (p.career.foa||0)+(p.season.foa||0) }); // v388
                 const tkO = league.find(t => t.name === p.team); if (tkO && rosters[tkO.nrm]) rosters[tkO.nrm] = rosters[tkO.nrm].filter(r => r.name !== p.name);
                 delete playerStats[p.name];
                 return;
@@ -10792,7 +10795,7 @@ function getConnSmytheScore(p) {
                     const hofPPG = (p.career.ppg||0)+(p.season.ppg||0), hofPM = (p.career.pm||0)+(p.season.pm||0), hofGWG = (p.career.gwg||0)+(p.season.gwg||0);
                     const hofPlGP = (cp.gp||0)+(pl.gp||0), hofPlG = (cp.g||0)+(pl.g||0), hofPlA = (cp.a||0)+(pl.a||0);
                     if (hofWorthy) hallOfFame.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, gp: hofCarGP, g: hofCarG, a: hofCarA, pts: hofCarG+hofCarA, w: hofCarW, so: hofCarSO, mvp: p.asgMvp });
-                    retiredPlayers.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, age: p.age, asgApp: p.asgAppearances || 0, gp: hofCarGP, g: hofCarG, a: hofCarA, pts: hofCarG+hofCarA, ppg: hofPPG, pm: hofPM, gwg: hofGWG, plGP: hofPlGP, plG: hofPlG, plA: hofPlA, plPTS: hofPlG+hofPlA });
+                    retiredPlayers.unshift({ year: currentSeason, name: p.name, pos: p.pos, team: p.team, age: p.age, asgApp: p.asgAppearances || 0, gp: hofCarGP, g: hofCarG, a: hofCarA, pts: hofCarG+hofCarA, ppg: hofPPG, pm: hofPM, gwg: hofGWG, plGP: hofPlGP, plG: hofPlG, plA: hofPlA, plPTS: hofPlG+hofPlA, fow: (p.career.fow||0)+(p.season.fow||0), foa: (p.career.foa||0)+(p.season.foa||0) }); // v388
                 }
                 const tkObj = league.find(t=>t.name===p.team); const tk = tkObj ? tkObj.nrm : null; 
                 if(tk && rosters[tk]) rosters[tk] = rosters[tk].filter(r => r.name !== p.name);
@@ -11735,6 +11738,13 @@ function openAllTimeRecords() {
     rLb('allTimePts', [...sk].sort((a,b)=>b.pts-a.pts), p=>p.pts); rLb('allTimeGls', [...sk].sort((a,b)=>b.g-a.g), p=>p.g);
     rLb('allTimeAst', [...sk].sort((a,b)=>b.a-a.a), p=>p.a); rLb('allTimePpg', [...sk].sort((a,b)=>b.ppg-a.ppg), p=>p.ppg);
     rLb('allTimePim', [...sk].sort((a,b)=>b.pim-a.pim), p=>p.pim); rLb('allTimeWins', [...gl].sort((a,b)=>b.w-a.w), p=>p.w);
+    // v388: career game-winning goals and faceoff % (career + current season; retired players carry their totals)
+    const ext = {}; Object.values(playerStats).forEach(p => { const c = p.career || {}, ss = p.season || {};
+        ext[p.name] = { gwg: (c.gwg||0) + (ss.gwg||0), fow: (c.fow||0) + (ss.fow||0), foa: (c.foa||0) + (ss.foa||0) }; });
+    retiredPlayers.forEach(r => { ext[r.name + ' (RET)'] = { gwg: r.gwg || 0, fow: r.fow || 0, foa: r.foa || 0 }; });
+    const ex = p => ext[p.name] || { gwg: 0, fow: 0, foa: 0 };
+    if (document.getElementById('allTimeGwg')) rLb('allTimeGwg', [...sk].sort((a,b)=>ex(b).gwg-ex(a).gwg), p=>ex(p).gwg);
+    if (document.getElementById('allTimeFo')) rLb('allTimeFo', [...sk].filter(p=>ex(p).foa>=1000).sort((a,b)=>ex(b).fow/ex(b).foa-ex(a).fow/ex(a).foa), p=>(100*ex(p).fow/ex(p).foa).toFixed(1)+'%');
     
     document.getElementById('allTimeOverlay').style.display = 'flex';
 }
@@ -12098,8 +12108,10 @@ function pcBuildStats(pName, tab) {
                 // v147: career/playoff goalie saves stored as c.sv not c.svg — use sv (already computed above)
                 ['SVG',f(c.svg||sv)],['TOI',fTOI(c.toi,gp)]],[4,5]);
         }
+        const cFoa = c.foa||0, cFow = c.fow||0; // v388 (career totals, same basis as the other career columns)
         return tbl([['GP',f(c.gp)],['G',f(c.g)],['A',f(c.a)],['PTS',c.pts||((c.g||0)+(c.a||0))],
-            ['+/-',pm(c.pm||c.plusMinus||0)],['PIM',f(c.pim)],['SOG',f(c.s)],['TOI',fTOI(c.toi,c.gp)]],[2,3]);
+            ['+/-',pm(c.pm||c.plusMinus||0)],['PIM',f(c.pim)],['SOG',f(c.s)],['TOI',fTOI(c.toi,c.gp)],
+            ['GWG',f(c.gwg)],['FO%',cFoa>0?(100*cFow/cFoa).toFixed(1):'--'],['CLU',parseInt(p.attr.clutch)||65],['',' ']],[2,3]);
     }
     if (tab==='playoff' || tab==='c-po') {
         const src = tab==='playoff' ? (p.playoff||{}) : (p.careerPlayoff||{});
@@ -12114,7 +12126,8 @@ function pcBuildStats(pName, tab) {
                 ['SVG',f(src.svg||sv)],['TOI',fTOI(src.toi,gp)]],[4,5]);
         }
         return tbl([['GP',f(src.gp)],['G',f(src.g)],['A',f(src.a)],['PTS',src.pts||((src.g||0)+(src.a||0))],
-            ['+/-',pm(src.pm||0)],['PIM',f(src.pim)],['SOG',f(src.s)],['TOI',fTOI(src.toi,src.gp)]],[2,3]);
+            ['+/-',pm(src.pm||0)],['PIM',f(src.pim)],['SOG',f(src.s)],['TOI',fTOI(src.toi,src.gp)],
+            ['GWG',f(src.gwg)],['FO%',(src.foa||0)>0?(100*(src.fow||0)/src.foa).toFixed(1):'--'],['CLU',parseInt(p.attr.clutch)||65],['',' ']],[2,3]); // v388
     }
     // ATTR tab — visual bar display
     const wGrade = p.attr.weight || lbsToWeightGrade(p.weight) || 'C';
