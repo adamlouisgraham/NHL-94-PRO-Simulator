@@ -3631,6 +3631,13 @@ function getRosterStructure(tk) {
     let struct;
     if (customLines[tk] || !league.some(t => t.nrm === tk)) struct = buildRosterStructure(tk);
     else struct = applySeasonLines(tk);
+    // v386: each forward line's assigned faceoff centre. Auto lines: the line's best faceoff man. Coach-set
+    // (custom) lines: the player listed at C, falling back to the best faceoff man.
+    if (struct && struct.f) struct.fc = struct.f.map(l => {
+        const line = (l || []).filter(Boolean);
+        const c = customLines[tk] ? line.find(p => getPlayerPosition(p) === 'C') : null;
+        return (c || line.slice().sort((x, y) => faceoffRating(y.name) - faceoffRating(x.name))[0])?.name || null;
+    });
     _structCache[tk] = struct;
     return struct;
 }
@@ -6494,13 +6501,22 @@ function simGame(idx) {
     // v384: faceoffs - ~60 draws a game split across the four lines (35/30/20/15%); each line's centre takes them
     // against the matching opposing centre, win chance from the faceoff ratings (+-0.6% per point, 30-70%)
     if (!isASG) {
-        const ctr = (st, i) => { const l = (st.f || [])[i] || []; return (l.find(p => getPlayerPosition(p) === 'C') || l[0])?.name; };
+        // v386: the line's assigned centre takes the draw; ~8% of the time he's kicked out of the circle and the
+        // line's best other forward steps in
+        const lineOf = (st, i) => ((st.f || [])[i] || []).filter(Boolean).map(p => p.name);
+        const ctr = (st, i) => { const l = lineOf(st, i); return (st.fc && l.includes(st.fc[i])) ? st.fc[i] : l.slice().sort((x, y) => faceoffRating(y) - faceoffRating(x))[0]; }; // assigned centre if he's still on the line
+        const sub = (st, i, c) => lineOf(st, i).filter(n => n !== c).sort((x, y) => faceoffRating(y) - faceoffRating(x))[0] || c;
+        const KICK = 0.08;
         const share = [0.35, 0.30, 0.20, 0.15], draws = 54 + Math.floor(Math.random() * 13);
+        const rec = (nm, won) => { const st = playerStats[nm]?.[k]; if (st) { st.fow = (st.fow || 0) + (won ? 1 : 0); st.foa = (st.foa || 0) + 1; } };
         share.forEach((sh, i) => {
-            const hc = ctr(hStruct, i), ac = ctr(aStruct, i); if (!hc || !ac) return;
-            const pW = Math.max(0.30, Math.min(0.70, 0.5 + (faceoffRating(hc) - faceoffRating(ac)) * 0.006));
-            const n = Math.round(draws * sh); let w = 0; for (let d = 0; d < n; d++) if (Math.random() < pW) w++;
-            [[hc, w], [ac, n - w]].forEach(([nm, won]) => { const st = playerStats[nm]?.[k]; if (st) { st.fow = (st.fow || 0) + won; st.foa = (st.foa || 0) + n; } });
+            const hc0 = ctr(hStruct, i), ac0 = ctr(aStruct, i); if (!hc0 || !ac0) return;
+            const n = Math.round(draws * sh);
+            for (let d = 0; d < n; d++) {
+                const hc = Math.random() < KICK ? sub(hStruct, i, hc0) : hc0, ac = Math.random() < KICK ? sub(aStruct, i, ac0) : ac0;
+                const pW = Math.max(0.30, Math.min(0.70, 0.5 + (faceoffRating(hc) - faceoffRating(ac)) * 0.006));
+                const hw = Math.random() < pW; rec(hc, hw); rec(ac, !hw);
+            }
         });
     }
 
@@ -11688,6 +11704,11 @@ function openStatLeaders() {
     h += tbl('+/-',   top(skaters, (a,b)=>b[k].pm-a[k].pm).map(p=>row(p,(p[k].pm>=0?'+':'')+p[k].pm,'#88FF88')).join(''));
     h += tbl('PIM',   top(skaters, (a,b)=>b[k].pim-a[k].pim).map(p=>row(p,p[k].pim,'#FF8800')).join(''));
     h += tbl('GWG',   top(skaters, (a,b)=>(b[k].gwg||0)-(a[k].gwg||0)).map(p=>row(p,p[k].gwg||0,'#FFD700')).join(''));
+    // v385: clutch goals (tying/go-ahead in the 3rd/OT) and faceoff % (300+ draws)
+    h += tbl('Clutch Goals', top(skaters, (a,b)=>(b[k].clutchG||0)-(a[k].clutchG||0)).map(p=>row(p,p[k].clutchG||0,'#FFD700')).join(''));
+    const foPct = p => (p[k].foa||0) > 0 ? (p[k].fow||0) / p[k].foa : 0;
+    const foMin = Math.max(50, Math.round((typeof currentDay === 'number' ? currentDay : 0) * 3));
+    h += tbl('Faceoff %', top(skaters.filter(p => (p[k].foa||0) >= foMin), (a,b)=>foPct(b)-foPct(a)).map(p=>row(p,(100*foPct(p)).toFixed(1)+'%','#CCCCFF')).join(''));
     h += tbl('Hits',  top(skaters, (a,b)=>(b[k].hits||0)-(a[k].hits||0)).map(p=>row(p,p[k].hits||0,'#FFA500')).join(''));
     h += tbl('Blocked Shots', top(skaters, (a,b)=>(b[k].blk||0)-(a[k].blk||0)).map(p=>row(p,p[k].blk||0,'#88CCFF')).join(''));
     h += tbl('SV%',   top(goalies,  (a,b)=>goalieSvp(b)-goalieSvp(a)).filter(p=>p[k].sa>=10).map(p=>row(p,goalieSvp(p).toFixed(3),'var(--neon-cyan)')).join(''));
@@ -12059,11 +12080,15 @@ function pcBuildStats(pName, tab) {
             const sa=s.sa||0,sv=s.sv||0,ga=Math.max(0,sa-sv),gp=s.gp||0;
             return tbl([['GP',f(gp)],['W',f(s.w)],['L',f(s.l)],['SO',f(s.so)],
                 ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',fGAA(ga,gp,s.toi)],
-                ['SVG',f(s.svg||sv)],['TOI',fTOI(s.toi,gp)]],[4,5]);
+                ['SVG',f(s.svg||sv)],['TOI',fTOI(s.toi,gp)],
+                // v385: clutch - goals allowed per close game in the 3rd/OT, clutch rating
+                ['CL-GA',(s.closeGP||0)>0?((s.clutchGA||0)/s.closeGP).toFixed(2):'--'],['CLOSE',f(s.closeGP)],['CLU',parseInt(p.attr.clutch)||65],['',' ']],[4,5]);
         }
         const g=s.g||0,a=s.a||0;
         return tbl([['GP',f(s.gp)],['G',f(g)],['A',f(a)],['PTS',g+a],
-            ['+/-',pm(s.pm||0)],['PIM',f(s.pim)],['SOG',f(s.s)],['TOI',fTOI(s.toi,s.gp)]],[2,3]);
+            ['+/-',pm(s.pm||0)],['PIM',f(s.pim)],['SOG',f(s.s)],['TOI',fTOI(s.toi,s.gp)],
+            // v385: game-winning goals, clutch (tying/go-ahead 3rd/OT) goals, faceoff %, clutch rating
+            ['GWG',f(s.gwg)],['CLG',f(s.clutchG)],['FO%',(s.foa||0)>0?(100*(s.fow||0)/s.foa).toFixed(1):'--'],['CLU',parseInt(p.attr.clutch)||65]],[2,3]);
     }
     if (tab==='career') {
         const c=p.career||{};
@@ -12125,7 +12150,8 @@ function pcBuildStats(pName, tab) {
             barRow('G.OVR', gOvr) + barRow('G.OFF', p.attr.gOff||'--') +
             barRow('SPD', gd('speed',p.attr.speed)) + barRow('AGIL', gd('agil',p.attr.agil)) +
             barRow('STK', gd('stkHnd',p.attr.stkHnd)) + barRow('ENDUR', gd('endur',p.attr.endur)) +
-            barRow('AGGR', gd('aggr',p.attr.aggr)) + barRow('ROUGH', gd('rough',p.attr.rough))
+            barRow('AGGR', gd('aggr',p.attr.aggr)) + barRow('ROUGH', gd('rough',p.attr.rough)) +
+            barRow('CLUTCH', parseInt(p.attr.clutch)||65) // v385
         ) + wtRow;
     }
     return attrWrap(
@@ -12134,7 +12160,8 @@ function pcBuildStats(pName, tab) {
         barRow('S.PWR', gd('shotPwr',p.attr.shotPwr)) + barRow('S.ACC', gd('shotAcc',p.attr.shotAcc)) +
         barRow('PASS', gd('pass',p.attr.pass)) + barRow('STK', gd('stkHnd',p.attr.stkHnd)) +
         barRow('CHK', gd('check',p.attr.check)) + barRow('ROUGH', gd('rough',p.attr.rough)) +
-        barRow('ENDUR', gd('endur',p.attr.endur)) + barRow('AGGR', gd('aggr',p.attr.aggr))
+        barRow('ENDUR', gd('endur',p.attr.endur)) + barRow('AGGR', gd('aggr',p.attr.aggr)) +
+        barRow('CLUTCH', parseInt(p.attr.clutch)||65) + barRow('F.OFF', Math.round(faceoffRating(pName))) // v385
     ) + wtRow;
 }
 
