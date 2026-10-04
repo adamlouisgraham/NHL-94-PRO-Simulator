@@ -1722,6 +1722,7 @@ async function startNewGame(useCustomRoster = false) {
                         season: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, svg:0, hits:0, blk:0}, playoff: {gp:0, g:0, a:0, pm:0, pim:0, ppg:0, ppa:0, shg:0, gwg:0, s:0, toi:0, svg:0, hits:0, blk:0}
                     };
                     playerStats[uniquePN].preSimCareerGP = playerStats[uniquePN].career.gp;
+                    playerStats[uniquePN].preSimPlayoffGP = playerStats[uniquePN].careerPlayoff?.gp || 0; // v389
                 }
             }
             // --- GOALIE CREATION ---
@@ -1822,6 +1823,7 @@ async function startNewGame(useCustomRoster = false) {
                 playoff: {gp:0, g:0, a:0, pm:0, so:0, sv:0, sa:0, w:0, l:0, pim:0, ppg:0,lastGAA: 0, lastSV: 0, consStarts: 0, toi:0, svg:0}
             };
             playerStats[uniqueGN].preSimCareerGP = playerStats[uniqueGN].career.gp;
+            playerStats[uniqueGN].preSimPlayoffGP = playerStats[uniqueGN].careerPlayoff?.gp || 0; // v389
         }
     }
         });
@@ -12073,6 +12075,9 @@ function pcBuildStats(pName, tab) {
         const m = Math.floor(avg), s = Math.round((avg - m) * 60);
         return `${m}:${String(s).padStart(2,'0')}`;
     };
+    // v389: career TOI = minutes per game over games played IN THE SIM (career GP also counts pre-1993-94
+    // history from the sheet, which has no ice time), shown to a tenth of a minute
+    const fTOIc = (toi, gpAll, preGP) => { const g = Math.max(0, (gpAll || 0) - (preGP || 0)); return g > 0 ? (toi / g).toFixed(1) : '--'; };
     const fGAA = (ga, gp, toi) => (gp > 0 || toi > 0) ? calcGAA(ga, gp, toi).toFixed(2) : '0.00';
     const cell = (l,v,hi) => `<td style="color:#555;padding:2px 3px 2px 0;font-size:6px;white-space:nowrap">${l}</td><td style="color:${hi?'#FFD060':'#ccc'};padding:2px 8px 2px 0;font-weight:700;font-size:8px">${v}</td>`;
     const tbl = (pairs, his=[]) => {
@@ -12106,11 +12111,11 @@ function pcBuildStats(pName, tab) {
             return tbl([['GP',f(gp)],['W',f(c.w)],['L',f(c.l)],['SO',f(c.so)],
                 ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',fGAA(ga,gp,c.toi)],
                 // v147: career/playoff goalie saves stored as c.sv not c.svg — use sv (already computed above)
-                ['SVG',f(c.svg||sv)],['TOI',fTOI(c.toi,gp)]],[4,5]);
+                ['SVG',f(c.svg||sv)],['TOI',fTOIc(c.toi,gp,p.preSimCareerGP)]],[4,5]);
         }
         const cFoa = c.foa||0, cFow = c.fow||0; // v388 (career totals, same basis as the other career columns)
         return tbl([['GP',f(c.gp)],['G',f(c.g)],['A',f(c.a)],['PTS',c.pts||((c.g||0)+(c.a||0))],
-            ['+/-',pm(c.pm||c.plusMinus||0)],['PIM',f(c.pim)],['SOG',f(c.s)],['TOI',fTOI(c.toi,c.gp)],
+            ['+/-',pm(c.pm||c.plusMinus||0)],['PIM',f(c.pim)],['SOG',f(c.s)],['TOI',fTOIc(c.toi,c.gp,p.preSimCareerGP)],
             ['GWG',f(c.gwg)],['FO%',cFoa>0?(100*cFow/cFoa).toFixed(1):'--'],['CLU',parseInt(p.attr.clutch)||65],['',' ']],[2,3]);
     }
     if (tab==='playoff' || tab==='c-po') {
@@ -12123,10 +12128,10 @@ function pcBuildStats(pName, tab) {
             return tbl([['GP',f(gp)],['W',f(src.w)],['L',f(src.l)],['SO',f(src.so)],
                 ['SV%',sa>0?(sv/sa).toFixed(3):'.000'],['GAA',fGAA(ga,gp,src.toi)],
                 // v147: playoff/career-playoff goalie saves stored as src.sv not src.svg — use sv (already computed above)
-                ['SVG',f(src.svg||sv)],['TOI',fTOI(src.toi,gp)]],[4,5]);
+                ['SVG',f(src.svg||sv)],['TOI',tab==='c-po'?fTOIc(src.toi,gp,p.preSimPlayoffGP):fTOI(src.toi,gp)]],[4,5]);
         }
         return tbl([['GP',f(src.gp)],['G',f(src.g)],['A',f(src.a)],['PTS',src.pts||((src.g||0)+(src.a||0))],
-            ['+/-',pm(src.pm||0)],['PIM',f(src.pim)],['SOG',f(src.s)],['TOI',fTOI(src.toi,src.gp)],
+            ['+/-',pm(src.pm||0)],['PIM',f(src.pim)],['SOG',f(src.s)],['TOI',tab==='c-po'?fTOIc(src.toi,src.gp,p.preSimPlayoffGP):fTOI(src.toi,src.gp)],
             ['GWG',f(src.gwg)],['FO%',(src.foa||0)>0?(100*(src.fow||0)/src.foa).toFixed(1):'--'],['CLU',parseInt(p.attr.clutch)||65],['',' ']],[2,3]); // v388
     }
     // ATTR tab — visual bar display
