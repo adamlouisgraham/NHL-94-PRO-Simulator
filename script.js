@@ -11705,7 +11705,6 @@ function openStatLeaders() {
     h += tbl('PIM',   top(skaters, (a,b)=>b[k].pim-a[k].pim).map(p=>row(p,p[k].pim,'#FF8800')).join(''));
     h += tbl('GWG',   top(skaters, (a,b)=>(b[k].gwg||0)-(a[k].gwg||0)).map(p=>row(p,p[k].gwg||0,'#FFD700')).join(''));
     // v385: clutch goals (tying/go-ahead in the 3rd/OT) and faceoff % (300+ draws)
-    h += tbl('Clutch Goals', top(skaters, (a,b)=>(b[k].clutchG||0)-(a[k].clutchG||0)).map(p=>row(p,p[k].clutchG||0,'#FFD700')).join(''));
     const foPct = p => (p[k].foa||0) > 0 ? (p[k].fow||0) / p[k].foa : 0;
     const foMin = Math.max(50, Math.round((typeof currentDay === 'number' ? currentDay : 0) * 3));
     h += tbl('Faceoff %', top(skaters.filter(p => (p[k].foa||0) >= foMin), (a,b)=>foPct(b)-foPct(a)).map(p=>row(p,(100*foPct(p)).toFixed(1)+'%','#CCCCFF')).join(''));
@@ -12088,7 +12087,7 @@ function pcBuildStats(pName, tab) {
         return tbl([['GP',f(s.gp)],['G',f(g)],['A',f(a)],['PTS',g+a],
             ['+/-',pm(s.pm||0)],['PIM',f(s.pim)],['SOG',f(s.s)],['TOI',fTOI(s.toi,s.gp)],
             // v385: game-winning goals, clutch (tying/go-ahead 3rd/OT) goals, faceoff %, clutch rating
-            ['GWG',f(s.gwg)],['CLG',f(s.clutchG)],['FO%',(s.foa||0)>0?(100*(s.fow||0)/s.foa).toFixed(1):'--'],['CLU',parseInt(p.attr.clutch)||65]],[2,3]);
+            ['GWG',f(s.gwg)],['FO%',(s.foa||0)>0?(100*(s.fow||0)/s.foa).toFixed(1):'--'],['CLU',parseInt(p.attr.clutch)||65],['',' ']],[2,3]);
     }
     if (tab==='career') {
         const c=p.career||{};
