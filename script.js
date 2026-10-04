@@ -1705,7 +1705,7 @@ async function startNewGame(useCustomRoster = false) {
                             a: parseInt(getCol(r, ["CAREER A", "C_A", "CAR A"], -1)) || 0, 
                             pts: parseInt(getCol(r, ["CAREER PTS", "C_PTS", "CAR PTS"], -1)) || 0, 
                             pm: parseInt(getCol(r, ["CAREER PM", "C_PM", "CAR PM", "CAREER +/-"], -1)) || 0, 
-                            pim: 0, ppg: 0, ppa: 0, shg: 0,
+                            pim: 0, ppg: parseInt(getCol(r, ["CAREER PPG"], -1)) || 0, ppa: 0, shg: 0, // v392: sheet career power-play goals
                             gwg: parseInt(getCol(r, ["CAREER GWG"], -1)) || 0,
                             asg: parseInt(getCol(r, ["CAREER ASG", "ALL STAR"], -1)) || 0,
                             // toi/svg are present on careerPlayoff, season and playoff; without
@@ -1789,14 +1789,14 @@ async function startNewGame(useCustomRoster = false) {
                     stickR: gStickR, stickL: gStickL, gloveR: gGloveR, gloveL: gGloveL,
                     ovr: gOverall || 70,
                     clutch: parseInt(getCol(r, ["GOALIE CLUTCH", "CLUTCH"], -1)) || 65, // v381
-                    weight: getWeightLbs(gcol(['GOALIE WEIGHT'], 34)) || 210
+                    weight: parseWeightCell(gcol(['GOALIE WEIGHT'], 34)).lbs || 210 // v391: sheet has lbs (185), getWeightLbs only took letter grades -> always 210
                 },
                 
                 // v146: goalies were hardcoded 'Depth' — young elite goalies (Brodeur, Roy) never
                 // got Franchise/Top6 growth; match the same random distribution skaters get
                 potential: Math.random() < 0.05 ? 'Franchise' : (Math.random() < 0.25 ? 'Top 6' : (Math.random() < 0.60 ? 'Depth' : 'Bust')),
                 career: ((_cW, _cL, _cT) => {
-                    const _cGP_explicit = parseInt(getCol(r, ["GOALIE CAREER GP", "GOALIE CAREER GAMES PLAYED", "G CAREER GP", "CAREER GP", "C_GP", "CAR GP", "CGP"], -1)) || 0;
+                    const _cGP_explicit = parseInt(gcol(["GOALIE CAREER GP", "GOALIE CAREER GAMES PLAYED", "G CAREER GP"], -1)) || 0; // v391: exact goalie header (getCol hit the skater CAREER GP column first)
                     return {
                         // v197: derive GP from W+L+T when no explicit column exists
                         gp: _cGP_explicit || (_cW + _cL + _cT),
@@ -7887,7 +7887,13 @@ function processOffseasonGrowth() {
             return [...r.filter(p => p.pos !== 'G' && p.pos !== 'D').map(p => p.name).sort((a, b) => o0(b) - o0(a)).slice(0, 12),
                     ...r.filter(p => p.pos === 'D').map(p => p.name).sort((a, b) => o0(b) - o0(a)).slice(0, 6)]; }).flat();
         const a0 = k => { const v = core0.map(n => parseInt(playerStats[n]?.attr?.[k]) || 0); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : 0; };
-        skateTarget = { speed: a0('speed'), agil: a0('agil') };
+        skateTarget = { speed: a0('speed'), agil: a0('agil'), endur: a0('endur'), rough: a0('rough'), check: a0('check') };
+        // v394: centres' faceoff level before this offseason
+        const fc0 = core0.filter(n => playerStats[n]?.pos === 'C').map(n => faceoffRating(n));
+        skateTarget.fo = fc0.length ? fc0.reduce((x, y) => x + y, 0) / fc0.length : 0;
+        // v393: league clutch average before this offseason (target for the clutch hold)
+        const cl0 = Object.values(playerStats).map(p => parseInt(p.attr?.clutch)).filter(v => v > 0);
+        skateTarget.clutch = cl0.length ? cl0.reduce((x, y) => x + y, 0) / cl0.length : 65;
     }
     // v352: performance-driven development. perf (-1..+1) = how last season's PER-GAME production compared
     // with players of the same position and rating. Skaters: goals, assists, +/-, shots, hits and blocks per
@@ -8130,12 +8136,16 @@ function processOffseasonGrowth() {
         const startG = league.map(t => Math.max(0, ...(rosters[t.nrm] || []).filter(p => p.pos === 'G').map(p => o(p.name)))).filter(v => v > 0);
         const avg = v => v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
         if (!leagueOvrTarget || leagueOvrTarget.core === undefined) leagueOvrTarget = { core: 63.25, g: 80 };
-        const shiftSk = Math.round(avg(core) - leagueOvrTarget.core), shiftG = Math.round(avg(startG) - leagueOvrTarget.g);
+        // v394: every hold shifts by the exact (fractional) drift using stochastic rounding per player - plain rounding
+        // turned a 0.3-0.5/yr drift into 0 every year, so over 10 years agility fell 5.7, endurance 5.4, etc.
+        const stochShift = (d) => Math.floor(d) + (Math.random() < d - Math.floor(d) ? 1 : 0);
+        const shiftSk = avg(core) - leagueOvrTarget.core, shiftG = avg(startG) - leagueOvrTarget.g;
         Object.values(playerStats).forEach(p => {
             const bump = (k, d) => { const cur = parseInt(p.attr?.[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur - d)); };
-            if (p.pos === 'G') { if (shiftG) { bump('ovr', shiftG); bump('gDef', shiftG); } return; }
-            if (!shiftSk) return;
-            ['off', 'def', 'shotAcc', 'shotPwr', 'pass', 'stkHnd', 'check'].forEach(k => bump(k, shiftSk)); // v380: skating has its own hold
+            if (p.pos === 'G') { if (Math.abs(shiftG) >= 0.05) { const st = stochShift(shiftG); bump('ovr', st); bump('gDef', st); } return; }
+            if (Math.abs(shiftSk) < 0.05) return;
+            const st = stochShift(shiftSk);
+            ['off', 'def', 'shotAcc', 'shotPwr', 'pass', 'stkHnd', 'check'].forEach(k => bump(k, st)); // v380: skating has its own hold
             if (p.attr?.grades) Object.keys(p.attr.grades).forEach(k => { if (p.attr[k] !== undefined) p.attr.grades[k] = String(p.attr[k]); });
         });
         clearWpCache();
@@ -8147,20 +8157,42 @@ function processOffseasonGrowth() {
             return [...r.filter(p => p.pos !== 'G' && p.pos !== 'D').map(p => p.name).sort((a, b) => o(b) - o(a)).slice(0, 12),
                     ...r.filter(p => p.pos === 'D').map(p => p.name).sort((a, b) => o(b) - o(a)).slice(0, 6)]; }).flat();
         const attrAvg = k => avg(coreNames.map(n => parseInt(playerStats[n]?.attr?.[k]) || 0));
-        const shiftOff = Math.round(attrAvg('off') - 62.13), shiftDef = Math.round(attrAvg('def') - 63.91);
+        const shiftOff = attrAvg('off') - 62.13, shiftDef = attrAvg('def') - 63.91; // v394: fractional, applied stochastically
         // v380: skating hold - speed and agility each held at the dressed core's level from before this offseason's
         // changes (the overall hold was shaving skating every year: 546 players lost agility, 0 gained)
-        if (skateTarget) ['speed', 'agil'].forEach(k => {
-            const sh = Math.round(attrAvg(k) - skateTarget[k]);
-            if (sh) Object.values(playerStats).forEach(p => { if (p.pos === 'G' || !p.attr) return; const cur = parseInt(p.attr[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur - sh)); });
+        // v393: endurance joins the skating hold, and the shift is applied with stochastic rounding - a drift of
+        // ~0.4/yr rounded to 0 every year, so agility (65.6 -> 63.9) and endurance (69.5 -> 68.1) slid anyway
+        // v394: roughness and checking get their own hold too (young-PIM / big-hit bonuses only pushed them up)
+        if (skateTarget) ['speed', 'agil', 'endur', 'rough'].forEach(k => {
+            const d = attrAvg(k) - skateTarget[k];
+            if (Math.abs(d) >= 0.05) Object.values(playerStats).forEach(p => { if (p.pos === 'G' || !p.attr) return; const cur = parseInt(p.attr[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur - stochShift(d))); });
         });
-        if (shiftOff || shiftDef) Object.values(playerStats).forEach(p => {
+        // v393: clutch hold - keep the league clutch average where it was before the offseason (assist bonuses only
+        // add, so it crept 64.9 -> 66.7 in four years); players still move relative to each other
+        if (skateTarget && skateTarget.clutch) {
+            const cl = Object.values(playerStats).filter(p => parseInt(p.attr?.clutch) > 0);
+            const d = cl.reduce((q, p) => q + parseInt(p.attr.clutch), 0) / Math.max(1, cl.length) - skateTarget.clutch;
+            if (Math.abs(d) >= 0.05) cl.forEach(p => { p.attr.clutch = Math.max(20, Math.min(99, parseInt(p.attr.clutch) - stochShift(d))); });
+        }
+        if (Math.abs(shiftOff) >= 0.05 || Math.abs(shiftDef) >= 0.05) Object.values(playerStats).forEach(p => {
             if (p.pos === 'G' || !p.attr) return;
             const bump = (k, d) => { const cur = parseInt(p.attr[k]); if (!isNaN(cur) && d) p.attr[k] = Math.max(20, Math.min(99, cur - d)); };
-            ['off', 'shotAcc', 'shotPwr', 'pass', 'stkHnd'].forEach(k => bump(k, shiftOff));
-            ['def', 'check'].forEach(k => bump(k, shiftDef));
+            const so = stochShift(shiftOff), sd = stochShift(shiftDef);
+            ['off', 'shotAcc', 'shotPwr', 'pass', 'stkHnd'].forEach(k => bump(k, so));
+            bump('def', sd);
             if (p.attr.grades) Object.keys(p.attr.grades).forEach(k => { if (p.attr[k] !== undefined) p.attr.grades[k] = String(p.attr[k]); });
         });
+        // v394: checking hold (big-hit bonus only adds) and faceoff hold for centres (centres' level, all explicit ratings shift)
+        if (skateTarget) {
+            const dc = attrAvg('check') - skateTarget.check;
+            if (Math.abs(dc) >= 0.05) Object.values(playerStats).forEach(p => { if (p.pos === 'G' || !p.attr) return; const cur = parseInt(p.attr.check); if (!isNaN(cur)) p.attr.check = Math.max(20, Math.min(99, cur - stochShift(dc))); });
+            const fcN = coreNames.filter(n => playerStats[n]?.pos === 'C');
+            if (skateTarget.fo && fcN.length) {
+                const df = avg(fcN.map(n => faceoffRating(n))) - skateTarget.fo;
+                if (Math.abs(df) >= 0.05) Object.values(playerStats).forEach(p => { const cur = parseInt(p.attr?.fo); if (cur > 0) p.attr.fo = Math.max(20, Math.min(99, cur - stochShift(df))); });
+            }
+            Object.values(playerStats).forEach(p => { if (p.attr?.grades) Object.keys(p.attr.grades).forEach(k => { if (p.attr[k] !== undefined) p.attr.grades[k] = String(p.attr[k]); }); });
+        }
         clearWpCache();
         Object.values(playerStats).forEach(p => { if (p.pos !== 'G' && p.attr) p.attr.ovr = getPlayerWeightedStats(p.name).ovr; });
     }
