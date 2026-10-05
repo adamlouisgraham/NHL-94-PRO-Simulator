@@ -520,7 +520,7 @@ function getCaptainChemModifier(teamNrm) {
     }
     return mod;
 }
-let league = []; let rosters = {}; let playerStats = {}; let tradeLog = []; let hallOfFame = []; let leagueHistory = []; let retiredPlayers = []; let calendar = []; let realDatesMap = []; let gameMilestones = []; let monthSnapshot = {}; let pendingTrades = []; let playoffBracket = { round: 1, series: [] }; let teams = {}; let selectedTeam = null;
+let league = []; let rosters = {}; let playerStats = {}; let tradeLog = []; let hallOfFame = []; let leagueHistory = []; let retiredPlayers = []; let awardHistory = []; /* v398: permanent award history (trophies used to vanish with retired players) */ let calendar = []; let realDatesMap = []; let gameMilestones = []; let monthSnapshot = {}; let pendingTrades = []; let playoffBracket = { round: 1, series: [] }; let teams = {}; let selectedTeam = null;
 let customDuos = []; // user-defined chemistry pairs, supplements the hardcoded dynamicDuos
 // Checks that swapping outA(from teamA)<->outB(from teamB) leaves both post-trade rosters with a goalie and a center
 
@@ -684,7 +684,7 @@ function buildSavePayload() {
         meta: { version: CURRENT_SAVE_SCHEMA_VERSION, savedAt: new Date().toISOString(), label: 'EASN Dynasty Save' },
         data: {
             league, rosters, playerStats, tradeLog: savedTradeLog, hallOfFame, leagueHistory: savedLeagueHistory,
-            retiredPlayers, calendar: lightweightCalendar, currentDay, currentSeason,
+            retiredPlayers, awardHistory, calendar: lightweightCalendar, currentDay, currentSeason,
             isPlayoffs, isASG, currentCupChamp, playoffBracket: lightweightBracket, awardConfig, 
             monthSnapshot, pendingTrades, realDatesMap, customDuos, autoDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, teamAssistants, _awardsPending, asgDoneThisSeason, selectedTeam
         }
@@ -717,6 +717,8 @@ function applyLoadedSave(data) {
     hallOfFame = Array.isArray(data.hallOfFame) ? data.hallOfFame : []; 
     leagueHistory = Array.isArray(data.leagueHistory) ? data.leagueHistory : []; 
     retiredPlayers = Array.isArray(data.retiredPlayers) ? data.retiredPlayers : []; 
+    // v398: older saves have no awardHistory - rebuild what's still on active players
+    awardHistory = Array.isArray(data.awardHistory) ? data.awardHistory : Object.values(playerStats).flatMap(p => (p.trophies || []).map(t => ({ year: t.year, name: t.name, player: p.name, team: p.teamCode || '', pos: p.pos || '' })));
     calendar = Array.isArray(data.calendar) ? data.calendar : []; 
     currentDay = Number.isInteger(data.currentDay) ? data.currentDay : parseInt(data.currentDay, 10) || 0; 
     currentSeason = Number.isInteger(data.currentSeason) ? data.currentSeason : parseInt(data.currentSeason, 10) || 1; 
@@ -1542,7 +1544,7 @@ async function startNewGame(useCustomRoster = false) {
     currentDay = 0; currentSeason = 1; isPlayoffs = false; isASG = false; asgDoneThisSeason = false;
     isSimulating = false; isSimSeason = false; isTurboMode = false; currentCupChamp = "";
     playoffBracket = { round: 1, series: [] }; tradeLog = []; hallOfFame = []; autoDuos = []; seasonLines = {}; leagueHistory = [];
-    retiredPlayers = []; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
+    retiredPlayers = []; awardHistory = []; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
     monthSnapshot = {}; activeIdx = null; statMode = 'season'; activeSubInfo = null;
         // Clear cached CSV data if not using custom roster — force fresh fetch from Google Sheets
     if (!useCustomRoster) { customTeamData = null; customPlayerData = null; }
@@ -7277,7 +7279,7 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         // Position modifier  -  centers are primary distributors, D penalized ~20%
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
-        weight *= isD ? 0.80 * (isEliteOffD(name) ? 1.06 : 1) : (pos === 'C') ? 1.15 : 1.0;
+        weight *= isD ? 0.74 * (isEliteOffD(name) ? 1.04 : 1) : (pos === 'C') ? 1.15 : 1.0; // v398: D assists 0.80 -> 0.74, elite boost 1.06 -> 1.04 (late-dynasty D topped 100+ pts)
 
         // Hot/cold streak modifier
         // [FIX] ps.isHot/isCold were never set — read the actual streak fields
@@ -10128,7 +10130,7 @@ function toggleBox(el) {
 
 function clearArchives() { 
     if(confirm("Delete past History & HOF?")) { 
-        leagueHistory = []; hallOfFame = []; retiredPlayers = []; 
+        leagueHistory = []; hallOfFame = []; retiredPlayers = []; awardHistory = []; 
         localStorage.removeItem(HISTORY_STORAGE_KEY); localStorage.removeItem(HOF_STORAGE_KEY); localStorage.removeItem(RETIRED_STORAGE_KEY); 
         renderLeagueHistory(); renderHallOfFame(); renderRetiredPlayers(); 
     } 
@@ -10375,6 +10377,7 @@ function awardTrophy(pName, year, tName) {
     if (!playerStats[pName].trophies) playerStats[pName].trophies = [];
     playerStats[pName].trophies.push({ year, name: tName });
     playerStats[pName].career.awards = (playerStats[pName].career.awards || 0) + 1;
+    awardHistory.push({ year, name: tName, player: pName, team: playerStats[pName].teamCode || '', pos: playerStats[pName].pos || '' }); // v398
 }
 
 function runEndOfSeasonAwards() {
@@ -11424,7 +11427,7 @@ window._setLineMatch = v => { coachAdj.lineMatch = v; saveGame(); openCoachingPa
 
 function showGMReportCard() {
     const totalGames = league[0]?.season?.gp || 0;
-    if (totalGames < 10) return;
+    if (totalGames < 10) { alert(`GM Report Card is available after 10 games (${totalGames} played so far).`); return; } // v398: used to do nothing
 
     const sorted = [...league].sort((a, b) => b.season.pts - a.season.pts);
     const topTeam = sorted[0];
@@ -11772,6 +11775,17 @@ function openAllTimeRecords() {
     retiredPlayers.forEach(r => { ext[r.name + ' (RET)'] = { gwg: r.gwg || 0, fow: r.fow || 0, foa: r.foa || 0 }; });
     const ex = p => ext[p.name] || { gwg: 0, fow: 0, foa: 0 };
     if (document.getElementById('allTimeGwg')) rLb('allTimeGwg', [...sk].sort((a,b)=>ex(b).gwg-ex(a).gwg), p=>ex(p).gwg);
+    // v398: award history by season (kept after players retire)
+    const ah = document.getElementById('allTimeAwards');
+    if (ah) {
+        const yrs = [...new Set(awardHistory.map(a => a.year))].sort((a, b) => b - a);
+        ah.innerHTML = yrs.length ? yrs.map(y => {
+            const lbl = `${1992 + y}-${String((1993 + y) % 100).padStart(2, '0')}`;
+            const list = awardHistory.filter(a => a.year === y).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+            return `<div style="margin-bottom:8px;"><div style="color:var(--gold-leaf);font-size:7px;margin-bottom:3px;">${lbl}</div>` +
+                list.map(a => `<div style="font-size:7px;display:flex;justify-content:space-between;"><span style="color:#888;">${a.name}</span><span>${a.player} <span style="color:#666">(${a.team})</span></span></div>`).join('') + `</div>`;
+        }).join('') : '<div style="font-size:7px;color:#666;">No awards handed out yet.</div>';
+    }
     if (document.getElementById('allTimeFo')) rLb('allTimeFo', [...sk].filter(p=>ex(p).foa>=1000).sort((a,b)=>ex(b).fow/ex(b).foa-ex(a).fow/ex(a).foa), p=>(100*ex(p).fow/ex(p).foa).toFixed(1)+'%');
     
     document.getElementById('allTimeOverlay').style.display = 'flex';
