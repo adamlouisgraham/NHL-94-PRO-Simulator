@@ -2433,7 +2433,11 @@ function getLiveIceOvr(pName) {
         const lineIdx = tObj.chem.lastUnit.f.findIndex(l => l.some(x => x.name === pName));
         if (lineIdx !== -1) { 
             chemVal = tObj.chem.f[lineIdx] || 0; 
-            if (tObj.chem.fYears && tObj.chem.fYears[lineIdx] >= 2) isTelepathic = true; 
+            // v402: telepathic only for real linemates - the line must hold 2+ members of the same Dynamic Duo
+            if (tObj.chem.fYears && tObj.chem.fYears[lineIdx] >= 2) {
+                const ln = (tObj.chem.lastUnit.f[lineIdx] || []).filter(Boolean).map(x => x.name);
+                isTelepathic = getAllDuos().some(d => d.filter(n => ln.includes(n)).length >= 2);
+            } 
         } 
         else { 
             const pairIdx = tObj.chem.lastUnit.d.findIndex(l => l.some(x => x.name === pName)); 
@@ -6790,8 +6794,32 @@ function simGame(idx) {
             tObj.chem.lastUnit.f.forEach((line, i) => {
                 const lineNames = line.filter(p=>p).map(p=>p.name);
                 const lineScored = tkGoalParticipants.some(goalSet => lineNames.filter(n => goalSet.has(n)).length >= 2);
-                tObj.chem.f[i] = Math.max(0, Math.min(15, (tObj.chem.f[i]||0) + (lineScored ? 1 : -0.75)));
+                // v402: chemistry is harder to build and quicker to lose (+0.6 / -1.0, was +1 / -0.75) - nearly every
+                // team's top lines were sitting on the chemistry bonus
+                tObj.chem.f[i] = Math.max(0, Math.min(15, (tObj.chem.f[i]||0) + (lineScored ? 0.6 : -1.0)));
+                // v402: coach line juggling - a line that goes 5 straight games without a goal gets broken up
+                if (!tObj.chem.cold) tObj.chem.cold = [0,0,0,0];
+                tObj.chem.cold[i] = lineScored ? 0 : (tObj.chem.cold[i] || 0) + 1;
             });
+            if (!isPlayoffs && seasonLines[tk] && !customLines[tk]) {
+                const base = seasonLines[tk].f, duoSetJ = new Set(getAllDuos().flat());
+                const isEnfJ = n => (PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || '') === 'ENFORCER F';
+                const movable = n => n && !duoSetJ.has(n) && !isEnfJ(n) && getPlayerPosition({ name: n, pos: playerStats[n]?.pos }) !== 'C';
+                const ovrJ = n => getPlayerWeightedStats(n)?.ovr || 0;
+                for (let i = 0; i < Math.min(3, base.length); i++) {
+                    if ((tObj.chem.cold[i] || 0) < 5) continue;
+                    const out = (base[i] || []).filter(movable).sort((a, b) => ovrJ(a) - ovrJ(b))[0];
+                    const others = base.map((l, j) => j === i ? [] : (l || []).filter(movable).map(n => [n, j])).flat();
+                    const below = others.filter(([, j]) => j === i + 1).sort((a, b) => ovrJ(b[0]) - ovrJ(a[0]))[0];
+                    const pick = below || others[Math.floor(Math.random() * others.length)];
+                    if (!out || !pick) continue;
+                    const [inn, j] = pick;
+                    base[i][base[i].indexOf(out)] = inn; base[j][base[j].indexOf(inn)] = out;
+                    tObj.chem.cold[i] = 0; tObj.chem.cold[j] = 0;
+                    if (awardConfig.headlines) tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `LINE SHAKE-UP: ${tObj.code} - ${inn} moves up to line ${i+1}, ${out} drops to line ${j+1}.` });
+                    clearWpCache();
+                }
+            }
             tObj.chem.lastUnit.d.forEach((pair, i) => {
                 const pairNames = pair.filter(p=>p).map(p=>p.name);
                 // Only 2 members per pair (vs. 3 on a forward line), and D already take a 20%
