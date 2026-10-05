@@ -358,7 +358,8 @@ const getArch = (pName) => getPlayerWeightedStats(pName).tag || 'Unknown';
 let customLines = JSON.parse(localStorage.getItem('nhl94_customLines')) || {};
 
 
-let awardConfig = { streaks: true, chemistry: false, rivalries: true, aging: false, draft: false, retirements: false, headlines: true, milestones: true, injuries: true, legacy_schedule: true, trades: false, tradeBlock: false };
+// v400: every league feature on by default (progression, draft, retirements, trades and trade block were off)
+let awardConfig = { streaks: true, chemistry: true, rivalries: true, aging: true, draft: true, retirements: true, headlines: true, milestones: true, injuries: true, legacy_schedule: true, trades: true, tradeBlock: false }; // tradeBlock = approve-every-AI-trade mode; off so AI trades happen on their own
 // v215: tracks which awardConfig keys the user explicitly toggled on the start screen
 // before loading a dynasty — see toggleAwardConfig() and loadGame().
 let _preloadToggledSettings = new Set();
@@ -7998,6 +7999,9 @@ function processOffseasonGrowth() {
             // stagnant baseline - performance alone decides up or down (-2..+2)
             oChg = Math.max(-2, Math.min(2, pr(2)));
             dChg = Math.max(-2, Math.min(1, pr(1)));
+            // v399: stars 32+ (80+ OVR) lose a step every year on top of performance - the 1993-94 stars kept their
+            // ratings into their mid-30s and drove 100-pt seasons 15 -> ~30 late in dynasties
+            if (p.age >= 32 && (getPlayerWeightedStats(p.name)?.baseOvr || 0) >= 80) oChg -= 1;
             pChg = oChg < 0 ? -1 : 0;
         } else {
             // 36+: always declining; a strong season only slows it (never a gain)
