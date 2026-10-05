@@ -2442,9 +2442,11 @@ function getLiveIceOvr(pName) {
         // Chemistry boosts off/def/pass stats, then feeds into OVR formula
         // rather than a flat OVR add — so stars benefit more than grinders
         if (chemVal >= 5) {
-            const offBoost  = chemVal >= 10 && isTelepathic ? 6 : chemVal >= 10 ? 4 : 2;
-            const defBoost  = chemVal >= 10 && isTelepathic ? 4 : chemVal >= 10 ? 2 : 1;
-            const passBoost = chemVal >= 10 && isTelepathic ? 5 : chemVal >= 10 ? 3 : 2;
+            // v397: telepathic cap - lines together for a decade all carried +6/+5/+4 and veterans' scoring ballooned
+            // (100-pt seasons 15 -> 35); telepathic now only adds +1 over normal high chemistry (max +4/+3/+3)
+            const offBoost  = chemVal >= 10 && isTelepathic ? 4 : chemVal >= 10 ? 3 : 2;
+            const defBoost  = chemVal >= 10 && isTelepathic ? 3 : chemVal >= 10 ? 2 : 1;
+            const passBoost = chemVal >= 10 && isTelepathic ? 3 : chemVal >= 10 ? 3 : 2;
             const isD = p?.pos === 'D';
             // Use the same weights as the OVR formula
             const ovrDelta = isD
@@ -3758,7 +3760,7 @@ function applySeasonLines(tk) {
             // v372: in the playoffs unprotected goons sit entirely (keep = 0); regular season keeps one.
             // v375: ...and in ~35% of regular-season games the coach dresses his second tough guy (opponent then
             // matches) - the duo goons who used to dress in pairs retire and fights faded 0.80 -> 0.62/game
-            const keep = isPlayoffs ? 0 : (Math.random() < 0.35 ? 2 : 1);
+            const keep = isPlayoffs ? 0 : (Math.random() < 0.42 ? 2 : 1); // v396: 0.35 -> 0.42 (fights dipped 0.84 -> 0.76 late)
             if (keep === 2 && dressedEnf().length === 1) {
                 const benchEnf = bench.filter(isEnfF)[0];
                 const l4 = lines[lines.length - 1] || [];
@@ -10784,8 +10786,9 @@ function getConnSmytheScore(p) {
             const solid  = sGP >= 10 && (isGoalie ? svp >= 0.895 : p.pos === 'D' ? ptsPG >= 0.45 : ptsPG >= 0.65);
             // v363: was 'strong -> never until 41, solid -> never through 37' - players 36+ went 15 -> 105 in 10 years
             // v365: from 36 even strong producers can go (36+ count climbed to ~60 as the 93-94 stars aged together)
-            if (strong) retireP = p.age >= 38 ? retireP * 0.6 : p.age >= 36 ? retireP * 0.3 : 0;
-            else if (solid) retireP *= p.age >= 36 ? 0.75 : 0.5;
+            // v396: from 36 production barely protects (36+ reached 46 players by year 10 vs ~25-30 real)
+            if (strong) retireP = p.age >= 38 ? retireP * 0.8 : p.age >= 36 ? retireP * 0.6 : 0;
+            else if (solid) retireP *= p.age >= 36 ? 0.9 : 0.5;
             else if (sGP < 10 && curOvr >= 85) retireP *= 0.4; // star who lost the year to injury - usually comes back
             const retires = roll < retireP;
             if (retires && !meetsCareerBar) {
