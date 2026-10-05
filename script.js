@@ -7879,22 +7879,10 @@ function _doRoundAdvance(turbo = false) {
 
 function processOffseasonGrowth() {
     let logs = [];
-    // v380: dressed-core skating levels before this offseason's changes (target for the skating hold below)
-    let skateTarget = null;
-    if (awardConfig.aging) {
-        const o0 = n => getPlayerWeightedStats(n)?.baseOvr || 0;
-        const core0 = league.map(t => { const r = rosters[t.nrm] || [];
-            return [...r.filter(p => p.pos !== 'G' && p.pos !== 'D').map(p => p.name).sort((a, b) => o0(b) - o0(a)).slice(0, 12),
-                    ...r.filter(p => p.pos === 'D').map(p => p.name).sort((a, b) => o0(b) - o0(a)).slice(0, 6)]; }).flat();
-        const a0 = k => { const v = core0.map(n => parseInt(playerStats[n]?.attr?.[k]) || 0); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : 0; };
-        skateTarget = { speed: a0('speed'), agil: a0('agil'), endur: a0('endur'), rough: a0('rough'), check: a0('check') };
-        // v394: centres' faceoff level before this offseason
-        const fc0 = core0.filter(n => playerStats[n]?.pos === 'C').map(n => faceoffRating(n));
-        skateTarget.fo = fc0.length ? fc0.reduce((x, y) => x + y, 0) / fc0.length : 0;
-        // v393: league clutch average before this offseason (target for the clutch hold)
-        const cl0 = Object.values(playerStats).map(p => parseInt(p.attr?.clutch)).filter(v => v > 0);
-        skateTarget.clutch = cl0.length ? cl0.reduce((x, y) => x + y, 0) / cl0.length : 65;
-    }
+    // v395: FIXED opening-day targets for the skating / toughness / clutch / faceoff holds (dressed core and league
+    // levels from the 1993-94 sheet). Holding to last offseason's level let small leaks build up over a dynasty
+    // (10 yrs: speed 63.1 -> 60.4, agility 65.6 -> 61.6, endurance 69.5 -> 63.3, centres' faceoffs 66.1 -> 61.3).
+    const skateTarget = awardConfig.aging ? { speed: 63.1, agil: 65.6, endur: 69.5, rough: 53.9, check: 56.4, fo: 66.1, clutch: 64.9 } : null;
     // v352: performance-driven development. perf (-1..+1) = how last season's PER-GAME production compared
     // with players of the same position and rating. Skaters: goals, assists, +/-, shots, hits and blocks per
     // game, each scored against a league fit on OVR (F and D separately) in residual-SD units and weighted by
