@@ -2024,9 +2024,9 @@ function getPlayerWeightedStats(pName) {
     // HOT/COLD streaks modify the player's own OVR — macro > micro; both can stack with dailySwing
     const ps = playerStats[pName];
     if (ps) {
-        if (ps.macro_streak === 'HOT')       finalOvr = Math.round(finalOvr * 1.025);
+        if (ps.macro_streak === 'HOT')       finalOvr = Math.round(finalOvr * 1.05); // v403: 1.025 -> 1.05
         else if (ps.micro_streak === 'HOT')  finalOvr += 5;
-        if (ps.macro_streak === 'COLD')      finalOvr = Math.round(finalOvr * 0.975);
+        if (ps.macro_streak === 'COLD')      finalOvr = Math.round(finalOvr * 0.95); // v403: 0.975 -> 0.95
         else if (ps.micro_streak === 'COLD') finalOvr -= 5;
         // dailySwing: pre-game per-player variance (±8% of ovr, set by applyDailyRandomSwing)
         if (ps.dailySwing) finalOvr = Math.round(finalOvr * (1 + ps.dailySwing));
@@ -3619,15 +3619,26 @@ function faceoffRating(name) {
     const a = ps.attr || {};
     return (parseInt(a.pass) || 70) * 0.40 + (parseInt(a.def) || 70) * 0.30 + (parseInt(a.off) || 70) * 0.30;
 }
-let leagueOvrTarget = null; // v363: league average rating held through the offseason (set on first offseason)
+let leagueOvrTarget = null;
+// v403: hidden season form - each player's finishing/playmaking runs a little hot or cold for a whole season
+// (sd ~6%, capped +-12%), re-rolled every season, so career years and off years happen
+function seasonForm(name) {
+    const ps = playerStats[name]; if (!ps) return 0;
+    if (ps.formSeason !== currentSeason) {
+        const z = (Math.random() + Math.random() + Math.random() - 1.5) / 0.5; // ~N(0,1)
+        ps.form = Math.max(-0.12, Math.min(0.12, z * 0.06)); ps.formSeason = currentSeason;
+    }
+    return ps.form || 0;
+} // v363: league average rating held through the offseason (set on first offseason)
 let deadlineDeals = [], deadlineDealsSeason = -1; // v317: this season's buyer/seller deals, for the deadline wrap-up
 // v301: scoring-distribution dials. LINE_FINISH = per-shot finish multiplier for F lines [L1, L2, L3, L4];
 // FWD_FINISH offsets them to hold league scoring; PP1_SHARE = share of power plays run by PP unit 1.
-let LINE_FINISH = [1.02, 0.98, 0.40, 0.92], FWD_FINISH = 1.18, PP1_SHARE = 0.55;
+// v404: smooth slope (line 3 was 0.40 - less than half line 4's rate - so third-liners almost never scored)
+let LINE_FINISH = [1.04, 1.00, 0.92, 0.85], FWD_FINISH = 1.18, PP1_SHARE = 0.55;
 // v307: SHOT_BASE = even-strength shot lambda per team; FINISH_BASE = per-shot goal multiplier (sets league save %)
 // v335: elite offensive defencemen get a slight boost to goals and assists (ES + PP)
 const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D') return false; const tg = PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || ''; return (parseInt(ps.attr?.off) || 0) >= 78 || ['FRANCHISE D','PRO OFFENSIVE D','BOOMER','QUARTERBACK','OFFENSIVE D'].includes(tg); };
-let SHOT_BASE = 24, FINISH_BASE = 1.22; // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
+let SHOT_BASE = 24, FINISH_BASE = 1.04; // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.75;
 // v347: playoff hockey is tighter - real 1993-94 playoffs scored ~9% under the regular season; the sim was scoring ~4% MORE
@@ -3789,6 +3800,19 @@ function applySeasonLines(tk) {
                 lines.forEach(l => { const k = l.indexOf(out); if (k >= 0) l[k] = sub; });
                 bench.splice(bench.indexOf(sub), 1); bench.push(out);
             });
+        }
+        // v403: a cold (macro) non-duo forward on the top two lines swaps down a line with the best non-cold
+        // non-duo forward there until he warms up (regular season)
+        if (!isD && !isPlayoffs) {
+            const duoC = new Set(getAllDuos().flat());
+            const coldN = n => playerStats[n]?.macro_streak === 'COLD';
+            for (let i = 0; i < Math.min(2, lines.length - 1); i++) {
+                const c = (lines[i] || []).find(n => n && coldN(n) && !duoC.has(n) && !isEnfF(n));
+                if (!c) continue;
+                const up = (lines[i + 1] || []).filter(n => n && !coldN(n) && !duoC.has(n) && !isEnfF(n) && pos(n) === pos(c)).sort((a, b) => ovr(b) - ovr(a))[0];
+                if (!up) continue;
+                lines[i][lines[i].indexOf(c)] = up; lines[i + 1][lines[i + 1].indexOf(up)] = c;
+            }
         }
         // v358: rotate a better extra in. If the best healthy extra out-rates the weakest rotatable regular on the
         // bottom two lines (bottom pair for D) - never a Dynamic Duo member or forward enforcer, so duos and the
@@ -4028,6 +4052,40 @@ function getPairOvr(pair) {
     return Math.round(total / pair.length);
 }
 
+// v407 scoring v2: one offensive "scoring weight" per player (no tags), and a line's strength
+// is just the average of its players' weights. Line share of goals then comes from the players,
+// not from fixed line-slot multipliers.
+let SCORING_V2 = true;
+function scoringWeight(name) {
+    const a = playerStats[name]?.attr || {};
+    const n = v => parseInt(v) || gradeToNum(v) || 65;
+    return n(a.off) * 0.55 + n(a.shotAcc) * 0.10 + n(a.shotPwr) * 0.15 + n(a.pass) * 0.10 + n(a.speed) * 0.10; // v413: acc 0.20 -> 0.10
+}
+function lineScoringStrength(line) {
+    if (!line || !line.length) return 60;
+    return line.reduce((s, p) => s + scoringWeight(p.name), 0) / line.length;
+}
+// v409: tags are small nudges in v2 — keep 35% of each old tag multiplier (1.24 -> 1.08, 0.88 -> 0.96)
+const TAG_SHOT_ZONE = { // v410 [close/slot, medium/circles, far/point] lean per tag
+    'SPEEDSTER': [8, 0, -4], 'POWER FORWARD': [8, 0, -4], 'POWER SNIPER': [6, 3, -4], 'GRINDER': [7, -2, -2],
+    'PEST': [4, 0, -2], 'ENFORCER F': [5, -3, 0], 'DANGLER': [6, 2, -4], 'SUPERSTAR': [4, 4, -3],
+    'PRO SNIPER': [2, 8, -2], 'SNIPER': [0, 8, -2], 'PRO PLAYMAKER': [-2, 4, 2], 'PLAYMAKER': [-2, 3, 2],
+    'TWO-WAY STAR F': [3, 2, -2], 'TWO-WAY FWD': [1, 2, 0], 'OFFENSIVE FORWARD': [2, 4, -2], 'OFFENSIVE FWD': [2, 4, -2],
+    'DEFENSIVE FWD': [-3, 0, 5], 'DEFENSIVE FORWARD': [-3, 0, 5], 'IRONMAN': [0, 2, 0],
+    'QUARTERBACK': [-2, 0, 8], 'OFFENSIVE D': [5, 3, -4], 'PRO OFFENSIVE D': [6, 4, -5], 'FRANCHISE D': [4, 4, -3],
+    'TWO-WAY STAR D': [3, 2, -2], 'TWO-WAY D': [0, 2, 0], 'STAY-AT-HOME': [-4, -3, 10], 'SHUTDOWN': [-4, -3, 10],
+    'BOOMER': [3, 4, 12], 'PUCK RUSHER': [7, 3, -6], 'INTIMIDATOR': [-3, -2, 9],
+    'PRO DEFENSIVE D': [-3, -2, 8], 'DEFENSIVE SPECIALIST': [-3, -2, 8], 'ENFORCER D': [-2, -3, 8],
+};
+const PP_SHOT_ROLE = { 'SUPERSTAR': 1.35, 'PRO SNIPER': 1.32, 'POWER SNIPER': 1.31, 'SNIPER': 1.30, 'BOOMER': 1.42, 'FRANCHISE D': 1.30,
+    'PRO OFFENSIVE D': 1.26, 'QUARTERBACK': 1.20, 'POWER FORWARD': 1.20, 'SPEEDSTER': 1.16, 'DANGLER': 1.12, 'TWO-WAY STAR F': 1.15,
+    'OFFENSIVE D': 1.15, 'PUCK RUSHER': 1.10, 'PRO PLAYMAKER': 0.85, 'PLAYMAKER': 0.85, 'GRINDER': 0.60, 'ENFORCER F': 0.60 }; // v415 (nudged x0.35 in v2)
+function tagNudge(m) { return SCORING_V2 ? 1 + ((m || 1) - 1) * 0.35 : (m || 1); }
+function lineFormOf(line) {
+    if (!line || !line.length) return 0;
+    return line.reduce((s, p) => s + seasonForm(p.name), 0) / line.length;
+}
+
 function calculateDynamicIceTime(struct) {
     if (!struct || !struct.f || !struct.d) {
         return { forwardTimes: [15, 15, 15, 15], defenseTimes: [20, 20, 20] };
@@ -4093,6 +4151,14 @@ function calculateDynamicIceTime(struct) {
         fShares[1] = avg234; fShares[2] = avg234; fShares[3] = avg234;
     }
 
+    // v407 scoring v2: minutes follow line quality + how the line is going this season (coach trust),
+    // with only a mild depth-chart lean. Replaces the fixed 19/16.5/14/10.5 ladder + closeness rules.
+    if (SCORING_V2 && struct.f.length >= 4) {
+        const strs = struct.f.slice(0, 4).map(lineScoringStrength);
+        const mean = strs.reduce((a, b) => a + b, 0) / strs.length;
+        const slot = [16.8, 15.6, 14.4, 13.2];
+        fShares = strs.map((v, i) => Math.max(9, Math.min(21, slot[i] + (v - mean) * 0.40 + lineFormOf(struct.f[i]) * 18)));
+    }
     // Scale Forward Shares to exactly fit 180 total skater minutes
     // (Each line has 3 players, so total share sum = (fShares[0]*3) + (fShares[1]*3) + ...)
     let sumFShares = (fShares[0] * 3) + (fShares[1] * 3) + (fShares[2] * 3) + (fShares[3] * 3);
@@ -4101,14 +4167,15 @@ function calculateDynamicIceTime(struct) {
     let finalForwardLineMins = fShares.map(share => share * scaleF);
 
     // Apply strict clamping boundaries to safeguard requested ranges
-    finalForwardLineMins[0] = Math.max(15, Math.min(21, finalForwardLineMins[0]));
+    if (SCORING_V2) { /* v407: shares already clamped 9-21 */ }
+    else { finalForwardLineMins[0] = Math.max(15, Math.min(21, finalForwardLineMins[0]));
     if (bottomThreeSplit) {
         for (let i = 1; i <= 3; i++) finalForwardLineMins[i] = Math.max(10, Math.min(18, finalForwardLineMins[i]));
     } else {
         finalForwardLineMins[1] = Math.max(13, Math.min(19, finalForwardLineMins[1]));
         finalForwardLineMins[2] = Math.max(11, Math.min(16, finalForwardLineMins[2]));
         finalForwardLineMins[3] = Math.max(8,  Math.min(12, finalForwardLineMins[3]));
-    }
+    } }
 
     // Normalize again if clamping caused a slight mathematical offset from 180
     let clampedSumF = (finalForwardLineMins[0]*3) + (finalForwardLineMins[1]*3) + (finalForwardLineMins[2]*3) + (finalForwardLineMins[3]*3);
@@ -5163,7 +5230,7 @@ function simGame(idx) {
             if (isHome) { hShots++; aSACount++; } else { aShots++; hSACount++; }
 
             const tag       = PLAYER_TAG_OVERRIDES[shooter.name] || getPlayerWeightedStats(shooter.name)?.tag;
-            const sniperMod = getEliteShooterMod(tag);
+            const sniperMod = tagNudge(getEliteShooterMod(tag)); // v409 v2: tag = small nudge
             // v151: accMod wires shooter's shotAcc attribute into conversion probability.
             // Centered at 70; elite sniper (90 acc) → ×1.06; poor finisher (50 acc) → ×0.94.
             // chaosMod noise halved (0.04) since accMod now provides structured per-shot variance.
@@ -5172,7 +5239,7 @@ function simGame(idx) {
             // v160: aggr penalises accuracy — aggressive shooters rush shots, fire off-balance.
             // aggr 90 → accMod ×0.97; aggr 50 → accMod ×1.01 (composed finishers slightly cleaner)
             const aggrAccPen  = Math.max(0.94, Math.min(1.02, 1.0 - (shooterAggr - 60) * 0.0015));
-            const accMod      = Math.max(0.88, Math.min(1.12, 1.0 + (shooterAcc - 70) * 0.003)) * aggrAccPen;
+            const accMod      = (SCORING_V2 ? 1 : Math.max(0.88, Math.min(1.12, 1.0 + (shooterAcc - 70) * 0.003))) * aggrAccPen; // v413 v2: accuracy acts through shooter pick + corner aim only
             // v160: opposing team rough raises chaos — dirty physical play creates screens,
             // deflections, and loose pucks near the crease. rough 85 → +1.5% chaos; rough 50 → −0.9%
             const oppRough    = isHome ? aTeamRough : hTeamRough;
@@ -5319,20 +5386,32 @@ function simGame(idx) {
             const passCloseBonus = Math.max(0, (avgLinePass - 70) * 0.15);
             // v168: SPEEDSTER attacks the net on rushes; POWER FORWARD/POWER SNIPER park in the slot
             const tagCloseBonus = (tag === 'SPEEDSTER') ? 8 : (tag === 'POWER FORWARD' || tag === 'POWER SNIPER') ? 6 : 0;
-            const dCloseBonus  = Math.max(0, (shooterSpd-70)*0.20 + (shooterHnk-70)*0.25 + passCloseBonus) + tagCloseBonus;
+            const dCloseBonus  = Math.max(0, (shooterSpd-70)*0.20 + (shooterHnk-70)*0.25 + passCloseBonus) + (SCORING_V2 ? 0 : tagCloseBonus); // v410: tag lean moved to TAG_SHOT_ZONE
             const dFarBonus    = isDefPos ? Math.max(0, (shooterPwr-70)*0.25) : 0;
-            const dw0=dBase[0]+dCloseBonus, dw1=dBase[1], dw2=dBase[2]+dFarBonus;
+            // v410: every tag has a shot-location lean [close, medium, far] (weight points added to the zone roll).
+            // Location is where tag identity now lives — it changes HOW a player scores without stacking finish multipliers.
+            const _tz = TAG_SHOT_ZONE[tag] || [0, 0, 0];
+            const dw0=Math.max(2,dBase[0]+dCloseBonus+_tz[0]), dw1=Math.max(2,dBase[1]+_tz[1]), dw2=Math.max(2,dBase[2]+dFarBonus+_tz[2]);
             const distRoll     = Math.random() * (dw0+dw1+dw2);
             const distZone     = distRoll < dw0 ? 0 : distRoll < dw0+dw1 ? 1 : 2; // 0=close,1=med,2=far
             const distMod      = [1.20, 1.00, 0.75][distZone];
 
             // v286: depth lines finish a bit more, top line a bit less (3rd/4th lines were ~10% under real share)
             const atkFLine  = isHome ? hFLine : aFLine;
-            const depthLineMod = LINE_FINISH[Math.min(3, atkFLine)] ?? 1.0;
+            // v407 scoring v2: no fixed line-slot multiplier — the line's own strength vs the team's other lines
+            const atkStruct = isHome ? hStruct : aStruct;
+            const depthLineMod = !SCORING_V2 ? (LINE_FINISH[Math.min(3, atkFLine)] ?? 1.0) : (() => {
+                const ls = (atkStruct?.f || []).slice(0, 4).map(lineScoringStrength);
+                const mean = ls.length ? ls.reduce((a, b) => a + b, 0) / ls.length : 65;
+                const mine = ls[Math.min(ls.length - 1, atkFLine)] || mean;
+                return Math.max(0.85, Math.min(1.15, Math.pow(mine / mean, 1.0)));
+            })();
             // v287: D were converting ~9% (real ~5%): point shots finish less; forwards up slightly to hold league scoring
             const posFinMod = isDefPos ? 0.66 * (isEliteOffD(shooter.name) ? 1.05 : 1) : FWD_FINISH;
-            const prob      = FINISH_BASE*((isPlayoffs&&!isASG)?PLAYOFF_FINISH:1)*posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002*poEdge)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod*chemDuoMod
-                * (isClutch && !isASG ? Math.max(0.85, Math.min(1.15, 1 + ((parseInt(playerStats[shooter.name]?.attr?.clutch) || 65) - 65) * 0.004 - ((parseInt(playerStats[defGNm]?.attr?.clutch) || 65) - 65) * 0.003)) : 1); // v381 clutch; v143: 0.094→0.086→0.079; v174: 0.0888; v181: 0.0930; v182: 0.0918→0.0906 target 7.0 GPG
+            const prob      = FINISH_BASE*((isPlayoffs&&!isASG)?PLAYOFF_FINISH:1)*posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002*poEdge)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod
+                * Math.max(0.85, Math.min(1.15, chemDuoMod // v407: chemistry + season form + clutch = one situational term, capped ±15%
+                * (isASG ? 1 : 1 + seasonForm(shooter.name)) // v403 season form
+                * (isClutch && !isASG ? Math.max(0.85, Math.min(1.15, 1 + ((parseInt(playerStats[shooter.name]?.attr?.clutch) || 65) - 65) * 0.004 - ((parseInt(playerStats[defGNm]?.attr?.clutch) || 65) - 65) * 0.003)) : 1))); // v381 clutch; v143: 0.094→0.086→0.079; v174: 0.0888; v181: 0.0930; v182: 0.0918→0.0906 target 7.0 GPG
 
             if (Math.random() < Math.max(0.015, Math.min(0.26, prob * finishDamp(shooter.name)))) {
                 if (isHome) { hG++; trk(aG_name,'ga',1); } else { aG++; trk(hG_name,'ga',1); }
@@ -5466,7 +5545,8 @@ function simGame(idx) {
             // v324: PP1 = top 4 forwards by OVR + the most offensive D; PP2 = next 4 forwards by offense +
             // the next most offensive D (was: top 5 skaters by offense, which often put 2 D on PP1 and
             // pushed a top-4 forward down to PP2)
-            const ppOvr = p => getPlayerWeightedStats(p.name)?.ovr || 0;
+            // v403: a cold player drops down the PP1 pecking order, a hot one moves up
+            const ppOvr = p => (getPlayerWeightedStats(p.name)?.ovr || 0) - (playerStats[p.name]?.macro_streak === 'COLD' ? 10 : 0) + (playerStats[p.name]?.macro_streak === 'HOT' ? 3 : 0);
             const buildPPUnit = (exclude, first) => {
                 const pool = ppAvail.filter(p => !exclude.has(p.name));
                 const fwd  = pool.filter(p => p.pos !== 'D').sort((a,b) => first ? ppOvr(b)-ppOvr(a) : ppOff(b)-ppOff(a)).slice(0, 4);
@@ -6804,10 +6884,13 @@ function simGame(idx) {
             if (!isPlayoffs && seasonLines[tk] && !customLines[tk]) {
                 const base = seasonLines[tk].f, duoSetJ = new Set(getAllDuos().flat());
                 const isEnfJ = n => (PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || '') === 'ENFORCER F';
-                const movable = n => n && !duoSetJ.has(n) && !isEnfJ(n) && getPlayerPosition({ name: n, pos: playerStats[n]?.pos }) !== 'C';
+                const movableBase = n => n && !isEnfJ(n) && getPlayerPosition({ name: n, pos: playerStats[n]?.pos }) !== 'C';
                 const ovrJ = n => getPlayerWeightedStats(n)?.ovr || 0;
                 for (let i = 0; i < Math.min(3, base.length); i++) {
-                    if ((tObj.chem.cold[i] || 0) < 5) continue;
+                    // v403: 4 cold games triggers a shake-up (was 5); after 7 even a Dynamic Duo can be split
+                    const coldG = tObj.chem.cold[i] || 0;
+                    if (coldG < 4) continue;
+                    const movable = n => movableBase(n) && (coldG >= 7 || !duoSetJ.has(n));
                     const out = (base[i] || []).filter(movable).sort((a, b) => ovrJ(a) - ovrJ(b))[0];
                     const others = base.map((l, j) => j === i ? [] : (l || []).filter(movable).map(n => [n, j])).flat();
                     const below = others.filter(([, j]) => j === i + 1).sort((a, b) => ovrJ(b[0]) - ovrJ(a[0]))[0];
@@ -6908,7 +6991,7 @@ function selectShooter(unit, context = 'ES') {
         let weight = (off * 0.30) + (pwr * 0.25) + (acc * 0.45);
 
         // Archetype multiplier
-        weight *= (arch.shotRate || 1.0);
+        weight *= tagNudge(arch.shotRate || 1.0); // v409 v2: tag = small nudge
 
         // Goal already decided (PP/SH/delayed/EN pick): steer credit away from shooters past the %-ceiling
         if (context !== 'ES' && context !== 'CLUTCH') weight *= finishDamp(name);
@@ -6968,6 +7051,22 @@ function selectShooter(unit, context = 'ES') {
             weight *= Math.max(1.0, 1.0 + ppgBoost + gwgBoost + offBoost + moraleBoost + clutchTagBoost);
         }
 
+        // v415 scoring v2: who shoots = ratings + ONE tag nudge (above) + one PP role nudge + one position
+        // factor + one capped streak term. Skips the stacked per-tag accuracy/power gates and the full-size
+        // PP table below (Boomer x1.42, Pro Off D x1.26 ...), which gave 68-offence D 30-goal seasons.
+        if (SCORING_V2) {
+            // v416: stars through ratings - shooter weight ~ (rating/70)^3 instead of linear (was flat after tag gates went)
+            weight *= Math.pow(Math.max(30, (off * 0.30) + (pwr * 0.25) + (acc * 0.45)) / 70, 1.5); // v417: 2 -> 1.5 (top scorers 140-155)
+            if (context === 'PP') weight *= tagNudge(PP_SHOT_ROLE[tag] || 1);
+            const pos5 = ps.pos || 'D', isD5 = (pos5 === 'D' || pos5 === 'LD' || pos5 === 'RD');
+            weight *= isD5 ? (context === 'PP' ? 0.88 : 0.78) : (pos5 === 'LW' || pos5 === 'RW') ? 1.10 : (pos5 === 'C') ? 0.95 : 1.0;
+            const hot5 = ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT', cold5 = ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD';
+            weight *= hot5 ? 1.08 : cold5 ? 0.92 : 1;
+            const g5 = ps[_ssK]?.g || 0, gpg5 = g5 / Math.max(ps[_ssK]?.gp || 1, 1);
+            if (gpg5 > 0.55) weight *= Math.max(0.60, Math.sqrt(0.55 / gpg5));
+            if (teamGFTotal > 20 && g5 / teamGFTotal > 0.26) weight *= Math.max(0.62, 1.0 - (g5 / teamGFTotal - 0.26) * 1.3);
+            return Math.max(1, weight);
+        }
         // PP context: power play is a set play — elite finishers dominate the shot even more
         // Offensive D (BOOMER/QB) also elevated — they run the point on the PP
         if (context === 'PP') {
@@ -7216,6 +7315,23 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         // Base weight from attributes
         let weight = (pass * 0.45) + (off * 0.30) + (stick * 0.25);
 
+        // v409 scoring v2: ONE playmaking weight — ratings, one small tag nudge, one position factor,
+        // one capped situational term (form + streak). Replaces the stacked per-tag passing gates.
+        if (SCORING_V2) {
+            const pos2 = ps.pos || 'D', isD2 = (pos2 === 'D' || pos2 === 'LD' || pos2 === 'RD');
+            let w = 100 * Math.pow(Math.max(30, weight) / 70, 2.5);
+            w *= tagNudge(arch.assistRate || 1.0);
+            w *= isD2 ? 0.70 : (pos2 === 'C' ? 1.12 : 1.0);
+            if (isD2 && off < 70) w *= Math.max(0.5, 1 - (70 - off) * 0.025); // v417: low-offence D rarely in on goals (52-off prospect had 89 pts)
+            const hot = ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT' || ps.streakType === 'hot';
+            const cold = ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD' || ps.streakType === 'cold';
+            w *= Math.max(0.85, Math.min(1.15, (1 + seasonForm(name)) * (hot ? 1.06 : cold ? 0.94 : 1)));
+            const k2 = (typeof isPlayoffs !== 'undefined' && isPlayoffs) ? 'playoff' : 'season';
+            const aPG2 = (ps[k2]?.a || 0) / Math.max(ps[k2]?.gp || 1, 1);
+            if (aPG2 > 0.65) w *= Math.max(0.38, 0.65 / aPG2);
+            return Math.max(1, w);
+        }
+
         // Archetype modifier
         weight *= (arch.assistRate || 1.0);
 
@@ -7308,7 +7424,7 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
         // Position modifier  -  centers are primary distributors, D penalized ~20%
         const pos = ps.pos || 'D';
         const isD = (pos === 'D' || pos === 'LD' || pos === 'RD');
-        weight *= isD ? 0.74 * (isEliteOffD(name) ? 1.04 : 1) : (pos === 'C') ? 1.15 : 1.0; // v398: D assists 0.80 -> 0.74, elite boost 1.06 -> 1.04 (late-dynasty D topped 100+ pts)
+        weight *= (isD ? 0.74 * (isEliteOffD(name) ? 1.04 : 1) : (pos === 'C') ? 1.15 : 1.0) * (1 + seasonForm(name)); // v403 form // v398: D assists 0.80 -> 0.74, elite boost 1.06 -> 1.04 (late-dynasty D topped 100+ pts)
 
         // Hot/cold streak modifier
         // [FIX] ps.isHot/isCold were never set — read the actual streak fields
@@ -8050,9 +8166,10 @@ function processOffseasonGrowth() {
             // frozen at whatever the CSV import set it to for their entire career — a
             // 40-year-old performed identically to their 22-year-old self, while every
             // skater around them aged normally. Apply the same oChg every skater gets.
-            p.attr.ovr = Math.max(20, Math.min(99, (parseInt(p.attr.ovr) || parseInt(p.attr.gDef) || 70) + oChg));
+            const gO417 = oChg / 2, gOc = Math.trunc(gO417) + (Math.random() < Math.abs(gO417 % 1) ? Math.sign(gO417) : 0); // v417: goalie swings halved
+            p.attr.ovr = Math.max(20, Math.min(99, (parseInt(p.attr.ovr) || parseInt(p.attr.gDef) || 70) + gOc));
             // v379: a strong/weak save-% year (vs goalies within +-10 OVR) moves glove and stick hands; 6+ shutouts +1 OVR
-            const gStep = perf > 0.4 ? 1 : perf < -0.4 ? -1 : 0;
+            const gStep = (perf > 0.4 ? 1 : perf < -0.4 ? -1 : 0) * (Math.random() < 0.5 ? 1 : 0); // v417 halved
             if (gStep) ['gloveL', 'gloveR', 'stickL', 'stickR'].forEach(k => { const cur = parseInt(p.attr[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur + gStep)); });
             if ((p.season?.so || 0) >= 6) p.attr.ovr = Math.min(99, (parseInt(p.attr.ovr) || 70) + 1);
             // v381: goalie clutch - 3rd-period/OT goals allowed in close games (vs league) + playoff save % vs his
@@ -8068,6 +8185,15 @@ function processOffseasonGrowth() {
             // v275: develop/decline the whole skill set (OVR is built from shooting, passing, speed etc.,
             // so moving only off/def left prospects stuck and veterans' skills frozen)
             const bump = (k, d) => { const cur = parseInt(p.attr[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur + d)); };
+            // v414: young D (<=27) offence growth capped - +1 per skill per summer, and no growth past 85
+            // (Franchise D like Boucher/Pronger were gaining every year and reaching 100+ pts with 30+ goals)
+            const _yd = (p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD') && p.age <= 27;
+            const _ydKeys = ['off', 'shotAcc', 'shotPwr', 'pass', 'stkHnd'];
+            const _ydPre = _yd ? Object.fromEntries(_ydKeys.map(k => [k, parseInt(p.attr[k])])) : null;
+            // v417: 31-35 can no longer GAIN skill (a big year only slows decline) - Khristich 80->88 at 29-34;
+            // D with 80+ defence gain at most +1 defence a summer (Kasparaitis 88->93)
+            const _vetPre = (p.age >= 31 && p.age <= 35) ? Object.fromEntries(['off','def','shotAcc','shotPwr','pass','stkHnd','check'].map(k => [k, parseInt(p.attr[k])])) : null;
+            const _isD417 = (p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD'), _def417 = parseInt(p.attr.def);
             bump('off', oChg); bump('def', dChg);
             ['shotAcc', 'shotPwr', 'pass', 'stkHnd'].forEach(k => bump(k, oChg));
             bump('check', dChg);
@@ -8135,6 +8261,10 @@ function processOffseasonGrowth() {
                 const cStep = Math.max(-3, Math.min(3, Math.round(cz * 2) + bonus));
                 if (cStep) p.attr.clutch = Math.max(20, Math.min(99, (parseInt(p.attr.clutch) || 65) + cStep));
             }
+            if (_ydPre) _ydKeys.forEach(k => { const b0 = _ydPre[k], cur = parseInt(p.attr[k]); if (isNaN(b0) || isNaN(cur) || cur <= b0) return;
+                p.attr[k] = Math.min(cur, b0 + 1, Math.max(b0, 85)); }); // v414 young-D offence cap
+            if (_vetPre) Object.entries(_vetPre).forEach(([k, b0]) => { const cur = parseInt(p.attr[k]); if (!isNaN(b0) && cur > b0) p.attr[k] = b0; });
+            if (_isD417 && _def417 >= 80 && parseInt(p.attr.def) > _def417 + 1) p.attr.def = _def417 + 1;
             if (p.attr.grades) Object.keys(p.attr.grades).forEach(k => { if (p.attr[k] !== undefined) p.attr.grades[k] = String(p.attr[k]); });
             delete _wpCache[p.name];
             p.attr.ovr = getPlayerWeightedStats(p.name).ovr;
