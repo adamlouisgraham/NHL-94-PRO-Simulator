@@ -3638,7 +3638,7 @@ let LINE_FINISH = [1.04, 1.00, 0.92, 0.85], FWD_FINISH = 1.18, PP1_SHARE = 0.55;
 // v307: SHOT_BASE = even-strength shot lambda per team; FINISH_BASE = per-shot goal multiplier (sets league save %)
 // v335: elite offensive defencemen get a slight boost to goals and assists (ES + PP)
 const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D') return false; const tg = PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || ''; return (parseInt(ps.attr?.off) || 0) >= 78 || ['FRANCHISE D','PRO OFFENSIVE D','BOOMER','QUARTERBACK','OFFENSIVE D'].includes(tg); };
-let SHOT_BASE = 24, FINISH_BASE = 1.04; // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
+let SHOT_BASE = 24, FINISH_BASE = 1.02; // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.75;
 // v347: playoff hockey is tighter - real 1993-94 playoffs scored ~9% under the regular season; the sim was scoring ~4% MORE
@@ -4056,6 +4056,7 @@ function getPairOvr(pair) {
 // is just the average of its players' weights. Line share of goals then comes from the players,
 // not from fixed line-slot multipliers.
 let SCORING_V2 = true;
+let OVR_HOLD = false; // v420: league-wide overall-rating hold (skaters' core + starting goalies) removed
 function scoringWeight(name) {
     const a = playerStats[name]?.attr || {};
     const n = v => parseInt(v) || gradeToNum(v) || 65;
@@ -7063,7 +7064,7 @@ function selectShooter(unit, context = 'ES') {
             const hot5 = ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT', cold5 = ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD';
             weight *= hot5 ? 1.08 : cold5 ? 0.92 : 1;
             const g5 = ps[_ssK]?.g || 0, gpg5 = g5 / Math.max(ps[_ssK]?.gp || 1, 1);
-            if (gpg5 > 0.55) weight *= Math.max(0.60, Math.sqrt(0.55 / gpg5));
+            if (gpg5 > 0.50) weight *= Math.max(0.55, Math.sqrt(0.50 / gpg5)); // v418: brake from 0.55 -> 0.50 G/GP
             if (teamGFTotal > 20 && g5 / teamGFTotal > 0.26) weight *= Math.max(0.62, 1.0 - (g5 / teamGFTotal - 0.26) * 1.3);
             return Math.max(1, weight);
         }
@@ -7321,7 +7322,7 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
             const pos2 = ps.pos || 'D', isD2 = (pos2 === 'D' || pos2 === 'LD' || pos2 === 'RD');
             let w = 100 * Math.pow(Math.max(30, weight) / 70, 2.5);
             w *= tagNudge(arch.assistRate || 1.0);
-            w *= isD2 ? 0.70 : (pos2 === 'C' ? 1.12 : 1.0);
+            w *= isD2 ? 0.66 : (pos2 === 'C' ? 1.12 : 1.0); // v418: D 0.70 -> 0.66
             if (isD2 && off < 70) w *= Math.max(0.5, 1 - (70 - off) * 0.025); // v417: low-offence D rarely in on goals (52-off prospect had 89 pts)
             const hot = ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT' || ps.streakType === 'hot';
             const cold = ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD' || ps.streakType === 'cold';
@@ -8166,12 +8167,14 @@ function processOffseasonGrowth() {
             // frozen at whatever the CSV import set it to for their entire career — a
             // 40-year-old performed identically to their 22-year-old self, while every
             // skater around them aged normally. Apply the same oChg every skater gets.
-            const gO417 = oChg / 2, gOc = Math.trunc(gO417) + (Math.random() < Math.abs(gO417 % 1) ? Math.sign(gO417) : 0); // v417: goalie swings halved
+            const gO417 = p.age <= 25 ? oChg + (Math.random() < 0.5 ? 1 : 0) : oChg / 2; let gOc = // v421: young goalies develop at full rate (+~0.5 extra); swings halved only 26+
+                Math.trunc(gO417) + (Math.random() < Math.abs(gO417 % 1) ? Math.sign(gO417) : 0); // v417: goalie swings halved
+            if ((p.age >= 31 && p.age <= 35) || (parseInt(p.attr.ovr) || 0) >= 90) gOc = Math.min(0, gOc); // v418: 31-35 and 90+ goalies don't gain (Potvin 86->94)
             p.attr.ovr = Math.max(20, Math.min(99, (parseInt(p.attr.ovr) || parseInt(p.attr.gDef) || 70) + gOc));
             // v379: a strong/weak save-% year (vs goalies within +-10 OVR) moves glove and stick hands; 6+ shutouts +1 OVR
             const gStep = (perf > 0.4 ? 1 : perf < -0.4 ? -1 : 0) * (Math.random() < 0.5 ? 1 : 0); // v417 halved
             if (gStep) ['gloveL', 'gloveR', 'stickL', 'stickR'].forEach(k => { const cur = parseInt(p.attr[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur + gStep)); });
-            if ((p.season?.so || 0) >= 6) p.attr.ovr = Math.min(99, (parseInt(p.attr.ovr) || 70) + 1);
+            if ((p.season?.so || 0) >= 6 && p.age <= 30 && (parseInt(p.attr.ovr) || 0) < 90) p.attr.ovr = Math.min(99, (parseInt(p.attr.ovr) || 70) + 1); // v418: shutout bump only young & <90
             // v381: goalie clutch - 3rd-period/OT goals allowed in close games (vs league) + playoff save % vs his
             // regular season; moves proportionally, up or down
             { const gs0 = p.season || {}, po = p.playoff || {}; let cz = 0;
@@ -8294,9 +8297,9 @@ function processOffseasonGrowth() {
         // turned a 0.3-0.5/yr drift into 0 every year, so over 10 years agility fell 5.7, endurance 5.4, etc.
         const stochShift = (d) => Math.floor(d) + (Math.random() < d - Math.floor(d) ? 1 : 0);
         const shiftSk = avg(core) - leagueOvrTarget.core, shiftG = avg(startG) - leagueOvrTarget.g;
-        Object.values(playerStats).forEach(p => {
+        if (OVR_HOLD) Object.values(playerStats).forEach(p => { // v420: overall-OVR hold off by default (user) - progression/aging alone set ratings
             const bump = (k, d) => { const cur = parseInt(p.attr?.[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur - d)); };
-            if (p.pos === 'G') { if (Math.abs(shiftG) >= 0.05) { const st = stochShift(shiftG); bump('ovr', st); bump('gDef', st); } return; }
+            if (p.pos === 'G') { if (Math.abs(shiftG) >= 0.05) { const st = stochShift(shiftG); if (st < 0 && (p.age >= 31 || (parseInt(p.attr?.ovr) || 0) >= 88)) return; bump('ovr', st); bump('gDef', st); } return; } // v419: the hold no longer lifts 31+ or 88+ goalies (Roy 91->98, Potvin 86->98)
             if (Math.abs(shiftSk) < 0.05) return;
             const st = stochShift(shiftSk);
             ['off', 'def', 'shotAcc', 'shotPwr', 'pass', 'stkHnd', 'check'].forEach(k => bump(k, st)); // v380: skating has its own hold
@@ -11060,8 +11063,8 @@ function makeProspect(t, pos, pickNo) {
     const v = (adj = 0) => Math.max(25, Math.min(99, base + adj + rnd(-6, 6)));
     let attr;
     if (pos === 'G') {
-        const ovr = v();
-        attr = { clutch: rnd(55, 75), ovr, gDef: v(2), agil: v(), speed: v(), stkHnd: v(-3), stickL: v(), stickR: v(), gloveL: v(), gloveR: v(), pass: v(-5), off: v(-5), weight: rnd(170, 210) };
+        const ovr = v(8); // v421: goalie prospects start ~8 higher - starters were retiring faster than replacements developed (starting G 78 -> 73)
+        attr = { clutch: rnd(55, 75), ovr, gDef: v(10), agil: v(), speed: v(), stkHnd: v(-3), stickL: v(), stickR: v(), gloveL: v(), gloveR: v(), pass: v(-5), off: v(-5), weight: rnd(170, 210) };
     } else {
         const isD = pos === 'D';
         attr = { off: v(isD ? -5 : 3), def: v(isD ? 5 : -3), shotAcc: v(isD ? -4 : 2), shotPwr: v(isD ? 2 : 0), pass: v(), stkHnd: v(isD ? -3 : 1),
