@@ -8049,10 +8049,16 @@ function pg2CumDecline(g, age) {
     for (let a = st[0][0]; a <= age; a++) { let r = 0; st.forEach(([from, rate]) => { if (a >= from) r = rate; }); s += r; }
     return s;
 }
-function pg2Headroom(p) { // starting PEAK above today's rating for players who arrive without one
+function pg2Headroom(p) { // v431: room scales down for players who are already good (an 86 at 22 got +9 -> Potvin 98)
+    const h = pg2HeadroomRaw(p);
+    if (String(p.name).startsWith('Prospect ')) return h;
+    const o = getPlayerWeightedStats(p.name)?.baseOvr || 60;
+    return h * Math.max(0.25, Math.min(1, (94 - o) / 20));
+}
+function pg2HeadroomRaw(p) { // starting PEAK above today's rating for players who arrive without one
     const a = p.age, rnd = () => Math.random() + Math.random() - 1; // ~triangular -1..1
     if (String(p.name).startsWith('Prospect ')) {
-        const c = { Franchise: 85, 'Top 6': 75, Depth: 66, Bust: 57 }[p.potential] || 63; // v428: lower (prospects pushed core 63.7 -> 66.4)
+        const c = ({ Franchise: 85, 'Top 6': 75, Depth: 66, Bust: 57 }[p.potential] || 63) + (p.pos === 'G' ? 8 : 0); // v428: lower (prospects pushed core 63.7 -> 66.4); v432 goalies +8 (starters need ~80)
         return c + rnd() * 4 - (getPlayerWeightedStats(p.name)?.baseOvr || 50);
     }
     if (p.pos === 'G') { if (a <= 23) return 9 + rnd() * 4; if (a <= 26) return 5 + rnd() * 3; if (a <= 28) return 2 + rnd() * 2; return 0; } // v428: goalies develop later
@@ -8133,12 +8139,16 @@ function processOffseasonGrowthV2() {
     const lgSv = sumOf(gl, p => p.season.sv) / Math.max(1, sumOf(gl, p => p.season.sa));
     const lgGaa = sumOf(gl, p => p.season.sa - p.season.sv) / Math.max(1, sumOf(gl, p => p.season.gp));
     const lgSo = sumOf(gl, p => p.season.so || 0) / Math.max(1, sumOf(gl, p => p.season.gp));
+    const gFit = (() => { const r = gl.filter(q => (q.season.gp || 0) >= 15).map(q => [ovrOf(q.name), q.season.sv / q.season.sa]); const n = r.length; if (n < 8) return null;
+        let sx = 0, sy = 0, sxx = 0, sxy = 0; r.forEach(([x, y]) => { sx += x; sy += y; sxx += x * x; sxy += x * y; });
+        const b = (n * sxy - sx * sy) / Math.max(1e-9, n * sxx - sx * sx); return { a: (sy - b * sx) / n, b }; })();
     const gradeGoalie = p => {
         const st = p.season || {}; if ((st.gp || 0) < 15 || !(st.sa > 0)) return null;
         const sv = st.sv / st.sa, gaa = (st.sa - st.sv) / st.gp;
         // v427: 85+ goalies judged against goalies within +-5 OVR (Roy maxed the grade every year at .911-.919)
-        const go = ovrOf(p.name), gp5 = go >= 85 ? gl.filter(q => q !== p && (q.season.gp || 0) >= 15 && Math.abs(ovrOf(q.name) - go) <= 5) : [];
-        const refSv = gp5.length >= 4 ? sumOf(gp5, q => q.season.sv) / Math.max(1, sumOf(gp5, q => q.season.sa)) : lgSv;
+        // v430: expected sv% from a fit on goalie OVR (elite goalies must beat what their rating already gives them -
+        // Potvin 86 -> 98 on a self-feeding loop: rating -> sv% -> grade -> peak -> rating)
+        const go = ovrOf(p.name), refSv = gFit ? gFit.a + gFit.b * go : lgSv;
         const zSv = (sv - refSv) / 0.010;
         const mates = gl.filter(q => q !== p && q.teamCode === p.teamCode && (q.season.gp || 0) >= 10);
         const zTeam = mates.length ? (sv - sumOf(mates, q => q.season.sv) / Math.max(1, sumOf(mates, q => q.season.sa))) / 0.012 : zSv;
@@ -8158,7 +8168,8 @@ function processOffseasonGrowthV2() {
         // ---- performance moves the peak; breakouts / early declines ----
         let dPeak = Math.max(-2, Math.min(2, grade * 0.9));
         if (p.age >= 32 && dPeak > 0) dPeak = Math.min(1, dPeak * 0.5);
-        if (p.peak >= 90 && dPeak > 0) dPeak *= 0.5; // v425: elite ceilings rise slowly (Roy 91 -> 96 peak in 3 years)
+        if (p.peak >= 90 && dPeak > 0) dPeak *= 0.5;
+        if (p.pos === 'G' && p.peak >= 92 && dPeak > 0) dPeak = Math.min(0.5, dPeak); // v430: elite goalie ceilings creep at most +0.5/yr // v425: elite ceilings rise slowly (Roy 91 -> 96 peak in 3 years)
         trace(p, 'peak', Math.round(dPeak * 10) / 10, 'grade');
         if (p.age <= 25 && Math.random() < 0.05) { const b = 3 + Math.floor(Math.random() * 3); dPeak += b; trace(p, 'peak', b, 'breakout'); if (awardConfig.headlines) logs.push(` BREAKOUT: ${p.name} (${p.teamCode}) took a big step this summer!`); }
         else if (p.age >= 27 && Math.random() < 0.04) { const b = 2 + Math.floor(Math.random() * 3); dPeak -= b; trace(p, 'peak', -b, 'early decline'); if (awardConfig.headlines && Math.random() < 0.4) logs.push(` FATHER TIME: ${p.name} (${p.teamCode}) lost a step over the summer.`); }
