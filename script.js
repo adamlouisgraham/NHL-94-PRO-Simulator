@@ -4056,6 +4056,7 @@ function getPairOvr(pair) {
 // is just the average of its players' weights. Line share of goals then comes from the players,
 // not from fixed line-slot multipliers.
 let SCORING_V2 = true;
+let PROG_TRACE = null; // v422: set to [] to log every offseason rating change with its cause
 let OVR_HOLD = false; // v420: league-wide overall-rating hold (skaters' core + starting goalies) removed
 function scoringWeight(name) {
     const a = playerStats[name]?.attr || {};
@@ -7329,7 +7330,7 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
             w *= Math.max(0.85, Math.min(1.15, (1 + seasonForm(name)) * (hot ? 1.06 : cold ? 0.94 : 1)));
             const k2 = (typeof isPlayoffs !== 'undefined' && isPlayoffs) ? 'playoff' : 'season';
             const aPG2 = (ps[k2]?.a || 0) / Math.max(ps[k2]?.gp || 1, 1);
-            if (aPG2 > 0.65) w *= Math.max(0.38, 0.65 / aPG2);
+            if (aPG2 > 0.60) w *= Math.max(0.38, 0.60 / aPG2); // v422: 0.65 -> 0.60
             return Math.max(1, w);
         }
 
@@ -8027,7 +8028,175 @@ function _doRoundAdvance(turbo = false) {
     genPlayoffSlate(turbo);
 }
 
+// ============================================================================================
+// v424 PROGRESSION V2 - one model replaces the stacked tweaks, caps and league-wide holds.
+//  * every player has a hidden PEAK (potential OVR). Each summer each attribute GROUP moves part of the
+//    way toward  peak - (that group's age decline so far).  Physical skills peak/decline first, shooting
+//    skills next, hockey IQ last - a 34-year-old is slower but still smart.
+//  * one season GRADE (-2..+2): every stat is judged per game against what players of the same OVR produce,
+//    weighted by the player's role (tag). The grade moves PEAK (+-2), plus a few role nudges.
+//  * goalies: own curve (peak 28-32); grade = sv% vs league and vs team, shutouts, GAA, playoff sv%.
+//  * small noise, ~5% breakouts (young), ~4% early declines (27+). No league holds.
+// ============================================================================================
+let PROGRESSION_V2 = true;
+const PG2_GROUPS = { phys: ['speed', 'agil', 'endur', 'check'], skill: ['shotAcc', 'shotPwr', 'stkHnd'], iq: ['off', 'def', 'pass', 'clutch', 'fo'] };
+// yearly decline rates by age once past the group's peak window: [fromAge, rate] steps
+const PG2_DECLINE = { phys: [[28, 0.9], [31, 1.7], [34, 2.6]], skill: [[30, 0.8], [33, 1.7], [35, 2.6]], iq: [[31, 0.55], [33, 1.2], [35, 2.0]], g: [[33, 1.0], [35, 1.6], [37, 2.6]] }; // v427: ~30% steeper; v428 goalies back to 33 // v425: steeper (30-35 were barely declining)
+// share of OVR each group carries (F / D) - used so a new player's peak puts his OVR target exactly at today's rating
+const PG2_OVRW = { F: { phys: 0.12, skill: 0.33, iq: 0.55 }, D: { phys: 0.28, skill: 0.05, iq: 0.67 } };
+function pg2CumDecline(g, age) {
+    let s = 0; const st = PG2_DECLINE[g];
+    for (let a = st[0][0]; a <= age; a++) { let r = 0; st.forEach(([from, rate]) => { if (a >= from) r = rate; }); s += r; }
+    return s;
+}
+function pg2Headroom(p) { // starting PEAK above today's rating for players who arrive without one
+    const a = p.age, rnd = () => Math.random() + Math.random() - 1; // ~triangular -1..1
+    if (String(p.name).startsWith('Prospect ')) {
+        const c = { Franchise: 85, 'Top 6': 75, Depth: 66, Bust: 57 }[p.potential] || 63; // v428: lower (prospects pushed core 63.7 -> 66.4)
+        return c + rnd() * 4 - (getPlayerWeightedStats(p.name)?.baseOvr || 50);
+    }
+    if (p.pos === 'G') { if (a <= 23) return 9 + rnd() * 4; if (a <= 26) return 5 + rnd() * 3; if (a <= 28) return 2 + rnd() * 2; return 0; } // v428: goalies develop later
+    if (a <= 21) return 7 + rnd() * 4; if (a <= 23) return 3.5 + rnd() * 3; if (a <= 25) return 2 + rnd() * 2; if (a <= 27) return 0.5 + rnd() * 1; return 0; // v426: 22-27 smaller // v425: smaller (core OVR rose 0.5/yr)
+}
+function pg2Stoch(d) { return Math.floor(d) + (Math.random() < d - Math.floor(d) ? 1 : 0); }
+function pg2Rate(age, up) { // share of the gap closed this summer
+    if (!up) return age >= 34 ? 0.7 : 0.5;
+    return age <= 21 ? 0.25 : age <= 24 ? 0.15 : age <= 27 ? 0.12 : 0.12; // v426: 22-27 slower
+}
+// role weights for the season grade (pim is a penalty weight)
+function pg2Weights(p, tag) {
+    const isD = p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD', isC = p.pos === 'C';
+    if (isD) {
+        const w = { pts: 0.25, pm: 0.15, blk: 0.15, hits: 0.10, toi: 0.10, sh: 0.10, pp: 0.08, pim: 0.07 };
+        if (['QUARTERBACK', 'OFFENSIVE D', 'PRO OFFENSIVE D', 'FRANCHISE D', 'BOOMER', 'PUCK RUSHER'].includes(tag)) Object.assign(w, { pts: 0.35, pp: 0.15, blk: 0.08, hits: 0.05 });
+        if (['SHUTDOWN', 'STAY-AT-HOME', 'PRO DEFENSIVE D', 'DEFENSIVE SPECIALIST'].includes(tag)) Object.assign(w, { pts: 0.10, pp: 0.03, blk: 0.22, pm: 0.20, sh: 0.15 });
+        if (['ENFORCER D', 'INTIMIDATOR'].includes(tag)) Object.assign(w, { pts: 0.08, hits: 0.25, blk: 0.15, pim: 0 });
+        return w;
+    }
+    const w = { g: 0.20, a: 0.20, pm: 0.10, pp: 0.08, sh: 0.07, cl: 0.07, shp: 0.06, hits: 0.07, blk: 0.05, fo: isC ? 0.10 : 0, pim: 0.05 };
+    if (['SUPERSTAR', 'PRO SNIPER', 'SNIPER', 'POWER SNIPER', 'PRO PLAYMAKER', 'PLAYMAKER', 'DANGLER', 'OFFENSIVE FORWARD', 'OFFENSIVE FWD'].includes(tag)) Object.assign(w, { g: 0.25, a: 0.25, hits: 0.03, blk: 0.02 });
+    if (['TWO-WAY STAR F', 'TWO-WAY FWD', 'DEFENSIVE FWD', 'DEFENSIVE FORWARD', 'DEFENSIVE SPECIALIST'].includes(tag)) Object.assign(w, { g: 0.12, a: 0.13, pm: 0.18, sh: 0.15, blk: 0.10, fo: isC ? 0.14 : 0 });
+    if (['GRINDER', 'PEST', 'POWER FORWARD'].includes(tag)) Object.assign(w, { g: 0.14, a: 0.12, hits: 0.20, blk: 0.10, pim: 0.02 });
+    if (['ENFORCER F'].includes(tag)) Object.assign(w, { g: 0.06, a: 0.06, pm: 0.06, hits: 0.30, fights: 0.20, pim: 0 });
+    if (!isC) { const spare = w.fo || 0; w.fo = 0; w.g += spare / 2; w.a += spare / 2; }
+    return w;
+}
+function processOffseasonGrowthV2() {
+    const logs = [], trace = (p, k, d, c) => { if (PROG_TRACE && d) PROG_TRACE.push([p.name, p.age, p.pos, k, d, c]); };
+    const tagOf = n => PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || '-';
+    const isDp = p => p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD';
+    const ovrOf = n => getPlayerWeightedStats(n)?.baseOvr || 0;
+    // ---- per-game stat lines + linear fits on OVR (by F/D) for "expected" ----
+    const line = st => { const gp = st.gp || 0; if (!gp) return null;
+        return { g: st.g / gp, a: st.a / gp, pts: (st.g + st.a) / gp, pm: (st.pm || 0) / gp, pp: ((st.ppg || 0) + (st.ppa || 0)) / gp, sh: (st.shg || 0) / gp,
+                 cl: ((st.clutchG || 0) + (st.gwg || 0)) / gp, hits: (st.hits || 0) / gp, blk: (st.blk || 0) / gp, toi: (st.toi || 0) / gp,
+                 pim: Math.max(0, (st.pim || 0) - 5 * (st.fights || 0)) / gp, fights: (st.fights || 0) / gp }; };
+    const sk = Object.values(playerStats).filter(p => p.pos !== 'G' && p.attr && (p.season?.gp || 0) >= 20);
+    const fits = {};
+    ['F', 'D'].forEach(G => {
+        const rows = sk.filter(p => (isDp(p) ? 'D' : 'F') === G).map(p => ({ x: ovrOf(p.name), y: line(p.season) }));
+        fits[G] = {};
+        ['g', 'a', 'pts', 'pm', 'pp', 'sh', 'cl', 'hits', 'blk', 'toi', 'pim', 'fights'].forEach(k => {
+            const n = rows.length; if (n < 10) return; let sx = 0, sy = 0, sxx = 0, sxy = 0;
+            rows.forEach(r => { sx += r.x; sy += r.y[k]; sxx += r.x * r.x; sxy += r.x * r.y[k]; });
+            const b = (n * sxy - sx * sy) / Math.max(1e-9, n * sxx - sx * sx), a = (sy - b * sx) / n;
+            const sd = Math.sqrt(rows.reduce((q, r) => q + Math.pow(r.y[k] - (a + b * r.x), 2), 0) / n) || 1;
+            fits[G][k] = { a, b, sd };
+        });
+    });
+    const shots = sk.reduce((q, p) => q + (p.season.s || 0), 0), lgSh = shots ? sk.reduce((q, p) => q + p.season.g, 0) / shots : 0.1;
+    const z = (G, k, v, x) => { const f = fits[G][k]; return f ? Math.max(-2.5, Math.min(2.5, (v - (f.a + f.b * x)) / f.sd)) : 0; };
+    const gradeSkater = p => {
+        const st = p.season || {}; if ((st.gp || 0) < 20) return null;
+        const G = isDp(p) ? 'D' : 'F', x = ovrOf(p.name), L = line(st), w = pg2Weights(p, tagOf(p.name)), zs = {};
+        ['g', 'a', 'pts', 'pm', 'pp', 'sh', 'cl', 'hits', 'blk', 'toi', 'fights'].forEach(k => zs[k] = z(G, k, L[k], x));
+        zs.pim = -z(G, 'pim', L.pim, x);
+        // v426: 85+ players are judged against their own rating range (+-5) - the straight-line fit over-predicts at
+        // the very top (Lemieux 102 pts at 92 OVR graded -1.6)
+        if (x >= 85) {
+            const peers = sk.filter(q => q !== p && (isDp(q) ? 'D' : 'F') === G && Math.abs(ovrOf(q.name) - x) <= 5);
+            if (peers.length >= 6) ['g', 'a', 'pts', 'pm', 'pp', 'sh', 'cl', 'hits', 'blk', 'toi', 'fights', 'pim'].forEach(k => {
+                const v = peers.map(q => line(q.season)[k]), m = v.reduce((a, b) => a + b, 0) / v.length;
+                const sd = Math.max(Math.sqrt(v.reduce((a, b) => a + (b - m) * (b - m), 0) / v.length), (fits[G][k]?.sd || 1) * 0.5);
+                const zz = Math.max(-2.5, Math.min(2.5, (L[k] - m) / sd)); zs[k] = k === 'pim' ? -zz : zz; });
+        }
+        zs.shp = (st.s || 0) >= 30 ? Math.max(-2, Math.min(2, ((st.g / st.s) - lgSh) / 0.04 * (st.s / (st.s + 100)))) : 0;
+        zs.fo = (st.foa || 0) >= 300 ? Math.max(-2.5, Math.min(2.5, (st.fow / st.foa - 0.5) / 0.04)) : 0;
+        let sum = 0, wt = 0; Object.entries(w).forEach(([k, v]) => { if (v) { sum += v * (zs[k] || 0); wt += v; } });
+        const po = p.playoff || {}; let g = sum / Math.max(0.5, wt) / 0.6;
+        if ((po.gp || 0) >= 4) { const r = ((st.g + st.a) / st.gp) || 0, q = ((po.g + po.a) / po.gp) || 0; if (r > 0.2) g += 0.25 * Math.max(-1, Math.min(1, (q - r) / r)); }
+        return { grade: Math.max(-2, Math.min(2, g)) * (st.gp / (st.gp + 10)), zs };
+    };
+    // goalies
+    const gl = Object.values(playerStats).filter(p => p.pos === 'G' && (p.season?.sa || 0) > 0);
+    const sumOf = (a, f) => a.reduce((q, x) => q + f(x), 0);
+    const lgSv = sumOf(gl, p => p.season.sv) / Math.max(1, sumOf(gl, p => p.season.sa));
+    const lgGaa = sumOf(gl, p => p.season.sa - p.season.sv) / Math.max(1, sumOf(gl, p => p.season.gp));
+    const lgSo = sumOf(gl, p => p.season.so || 0) / Math.max(1, sumOf(gl, p => p.season.gp));
+    const gradeGoalie = p => {
+        const st = p.season || {}; if ((st.gp || 0) < 15 || !(st.sa > 0)) return null;
+        const sv = st.sv / st.sa, gaa = (st.sa - st.sv) / st.gp;
+        // v427: 85+ goalies judged against goalies within +-5 OVR (Roy maxed the grade every year at .911-.919)
+        const go = ovrOf(p.name), gp5 = go >= 85 ? gl.filter(q => q !== p && (q.season.gp || 0) >= 15 && Math.abs(ovrOf(q.name) - go) <= 5) : [];
+        const refSv = gp5.length >= 4 ? sumOf(gp5, q => q.season.sv) / Math.max(1, sumOf(gp5, q => q.season.sa)) : lgSv;
+        const zSv = (sv - refSv) / 0.010;
+        const mates = gl.filter(q => q !== p && q.teamCode === p.teamCode && (q.season.gp || 0) >= 10);
+        const zTeam = mates.length ? (sv - sumOf(mates, q => q.season.sv) / Math.max(1, sumOf(mates, q => q.season.sa))) / 0.012 : zSv;
+        const zSo = ((st.so || 0) / st.gp - lgSo) / 0.05, zGaa = (lgGaa - gaa) / 0.35;
+        const po = p.playoff || {}; const zPo = (po.gp || 0) >= 4 && po.sa > 0 ? ((po.sv / po.sa) - sv) / 0.012 : 0;
+        const c = v => Math.max(-2.5, Math.min(2.5, v));
+        const g = (0.50 * c(zSv) + 0.15 * c(zTeam) + 0.15 * c(zSo) + 0.10 * c(zGaa) + 0.10 * c(zPo)) / 0.7;
+        return { grade: Math.max(-2, Math.min(2, g)) * (st.gp / (st.gp + 8)), zs: { sv: zSv, so: zSo } };
+    };
+    Object.values(playerStats).forEach(p => {
+        const res = p.pos === 'G' ? gradeGoalie(p) : (p.attr ? gradeSkater(p) : null);
+        p.age++;
+        if (!awardConfig.aging || !p.attr) return;
+        const grade = res ? res.grade : 0; p.lastGrade = +grade.toFixed(2);
+        const now = ovrOf(p.name);
+        if (p.peak === undefined) { const W = PG2_OVRW[isDp(p) ? 'D' : 'F']; p.peak = Math.round((now + pg2Headroom({ ...p, age: p.age - 1 }) + (p.pos === 'G' ? pg2CumDecline('g', p.age - 1) : ['phys', 'skill', 'iq'].reduce((q, g2) => q + W[g2] * pg2CumDecline(g2, p.age - 1), 0))) * 10) / 10; }
+        // ---- performance moves the peak; breakouts / early declines ----
+        let dPeak = Math.max(-2, Math.min(2, grade * 0.9));
+        if (p.age >= 32 && dPeak > 0) dPeak = Math.min(1, dPeak * 0.5);
+        if (p.peak >= 90 && dPeak > 0) dPeak *= 0.5; // v425: elite ceilings rise slowly (Roy 91 -> 96 peak in 3 years)
+        trace(p, 'peak', Math.round(dPeak * 10) / 10, 'grade');
+        if (p.age <= 25 && Math.random() < 0.05) { const b = 3 + Math.floor(Math.random() * 3); dPeak += b; trace(p, 'peak', b, 'breakout'); if (awardConfig.headlines) logs.push(` BREAKOUT: ${p.name} (${p.teamCode}) took a big step this summer!`); }
+        else if (p.age >= 27 && Math.random() < 0.04) { const b = 2 + Math.floor(Math.random() * 3); dPeak -= b; trace(p, 'peak', -b, 'early decline'); if (awardConfig.headlines && Math.random() < 0.4) logs.push(` FATHER TIME: ${p.name} (${p.teamCode}) lost a step over the summer.`); }
+        p.peak = Math.max(30, Math.min(99, p.peak + dPeak));
+        const set = (k, d, cause) => { if (!d) return; const cur = parseInt(p.attr[k]); if (isNaN(cur)) return; let nv = Math.max(20, Math.min(99, cur + d));
+            if (d > 0 && isDp(p) && ['off', 'shotAcc', 'shotPwr', 'pass', 'stkHnd'].includes(k)) nv = Math.min(nv, Math.max(cur, 90)); /* v428: D offence skills don't grow past 90 (Ozolinsh 127 pts) */ if (nv !== cur) { p.attr[k] = nv; trace(p, k, nv - cur, cause); } };
+        if (p.pos === 'G') {
+            const target = p.peak - pg2CumDecline('g', p.age), gap = target - now;
+            const gRate = gap > 0 ? (p.age <= 27 ? 0.30 : 0.18) : pg2Rate(p.age, false); // v428: young goalies close the gap faster
+            const step = pg2Stoch(Math.max(-3, Math.min(4, gap * gRate))) + (Math.random() < 0.3 ? (Math.random() < 0.5 ? 1 : -1) : 0);
+            set('ovr', step, 'curve'); set('gDef', step, 'curve');
+            if (res && res.zs.sv > 1.2) ['gloveL', 'gloveR', 'stickL', 'stickR'].forEach(k => set(k, Math.random() < 0.5 ? 1 : 0, 'grade: sv%'));
+            if (res && res.zs.sv < -1.2) ['gloveL', 'gloveR', 'stickL', 'stickR'].forEach(k => set(k, Math.random() < 0.5 ? -1 : 0, 'grade: sv%'));
+            if (p.age >= 33) ['pass', 'stkHnd'].forEach(k => set(k, -1, 'age'));
+        } else {
+            Object.entries(PG2_GROUPS).forEach(([g2, keys]) => {
+                const target = p.peak - pg2CumDecline(g2, p.age), gap = target - now;
+                const base = gap * pg2Rate(p.age, gap > 0);
+                keys.forEach(k => set(k, pg2Stoch(Math.max(-4, Math.min(4, base))) + (Math.random() < 0.15 ? (Math.random() < 0.5 ? 1 : -1) : 0), 'curve ' + g2));
+            });
+            // role nudges from the grade's parts (gains only through age 33)
+            const zs = res ? res.zs : {}, up = p.age <= 33;
+            if ((p.season?.foa || 0) >= 300) set('fo', zs.fo >= 1.2 && up ? 1 : zs.fo <= -1.2 ? -1 : 0, 'grade: faceoffs');
+            set('check', zs.hits >= 1.5 && up ? 1 : 0, 'grade: hits');
+            set('clutch', zs.cl >= 1.2 && up ? 1 : zs.cl <= -1.2 ? -1 : 0, 'grade: clutch');
+            if (p.age <= 25 && ((p.season?.pim || 0) / Math.max(1, p.season?.gp || 1) >= 1.8 || (p.season?.fights || 0) >= 10)) set('rough', 1, 'PIM/fights');
+            if (p.age >= 33) set('aggr', -1, 'age');
+            if (p.attr.grades) Object.keys(p.attr.grades).forEach(k => { if (p.attr[k] !== undefined) p.attr.grades[k] = String(p.attr[k]); });
+        }
+        delete _wpCache[p.name];
+        if (p.pos !== 'G') p.attr.ovr = getPlayerWeightedStats(p.name).ovr;
+    });
+    if (logs.length > 0 && awardConfig.headlines) logs.sort(() => 0.5 - Math.random()).slice(0, 5).forEach(msg => tradeLog.unshift({ day: 'OFFSEASON', details: msg }));
+    clearWpCache();
+}
+
 function processOffseasonGrowth() {
+    if (PROGRESSION_V2) return processOffseasonGrowthV2();
     let logs = [];
     // v395: FIXED opening-day targets for the skating / toughness / clutch / faceoff holds (dressed core and league
     // levels from the 1993-94 sheet). Holding to last offseason's level let small leaks build up over a dynasty
@@ -8147,11 +8316,12 @@ function processOffseasonGrowth() {
             // v399: stars 32+ (80+ OVR) lose a step every year on top of performance - the 1993-94 stars kept their
             // ratings into their mid-30s and drove 100-pt seasons 15 -> ~30 late in dynasties
             if (p.age >= 32 && (getPlayerWeightedStats(p.name)?.baseOvr || 0) >= 80) oChg -= 1;
+            else if (p.age >= 33 && (p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD')) oChg -= 1; // v422: D 33+ lose a step of offence (Bourque 116 at 34)
             pChg = oChg < 0 ? -1 : 0;
         } else {
             // 36+: always declining; a strong season only slows it (never a gain)
-            const baseO = p.age <= 39 ? -(2 + Math.floor(r * 2)) : -(3 + Math.floor(r * 2));
-            const baseD = p.age <= 39 ? -(1 + Math.floor(r * 2)) : -(2 + Math.floor(r * 2));
+            const baseO = p.age <= 38 ? -(1 + Math.floor(r * 2)) : -(2 + Math.floor(r * 2)); // v423: softer 36-38 fade (was -2..-3)
+            const baseD = p.age <= 38 ? -(0 + Math.floor(r * 2)) : -(1 + Math.floor(r * 2));
             const slow = Math.max(0, Math.round(perf * 2));
             oChg = Math.min(-1, baseO + slow); dChg = Math.min(0, baseD + slow);
             pChg = -(2 + Math.floor(r * 1.5)) + Math.min(1, slow);
@@ -8170,11 +8340,11 @@ function processOffseasonGrowth() {
             const gO417 = p.age <= 25 ? oChg + (Math.random() < 0.5 ? 1 : 0) : oChg / 2; let gOc = // v421: young goalies develop at full rate (+~0.5 extra); swings halved only 26+
                 Math.trunc(gO417) + (Math.random() < Math.abs(gO417 % 1) ? Math.sign(gO417) : 0); // v417: goalie swings halved
             if ((p.age >= 31 && p.age <= 35) || (parseInt(p.attr.ovr) || 0) >= 90) gOc = Math.min(0, gOc); // v418: 31-35 and 90+ goalies don't gain (Potvin 86->94)
-            p.attr.ovr = Math.max(20, Math.min(99, (parseInt(p.attr.ovr) || parseInt(p.attr.gDef) || 70) + gOc));
+            { const g0 = parseInt(p.attr.ovr) || parseInt(p.attr.gDef) || 70; p.attr.ovr = Math.max(20, Math.min(99, g0 + gOc)); if (PROG_TRACE && p.attr.ovr !== g0) PROG_TRACE.push([p.name, p.age, 'G', 'ovr', p.attr.ovr - g0, 'age/perf']); }
             // v379: a strong/weak save-% year (vs goalies within +-10 OVR) moves glove and stick hands; 6+ shutouts +1 OVR
             const gStep = (perf > 0.4 ? 1 : perf < -0.4 ? -1 : 0) * (Math.random() < 0.5 ? 1 : 0); // v417 halved
             if (gStep) ['gloveL', 'gloveR', 'stickL', 'stickR'].forEach(k => { const cur = parseInt(p.attr[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur + gStep)); });
-            if ((p.season?.so || 0) >= 6 && p.age <= 30 && (parseInt(p.attr.ovr) || 0) < 90) p.attr.ovr = Math.min(99, (parseInt(p.attr.ovr) || 70) + 1); // v418: shutout bump only young & <90
+            if ((p.season?.so || 0) >= 6 && p.age <= 30 && (parseInt(p.attr.ovr) || 0) < 90) { p.attr.ovr = Math.min(99, (parseInt(p.attr.ovr) || 70) + 1); if (PROG_TRACE) PROG_TRACE.push([p.name, p.age, 'G', 'ovr', 1, 'shutouts']); } // v418: shutout bump only young & <90
             // v381: goalie clutch - 3rd-period/OT goals allowed in close games (vs league) + playoff save % vs his
             // regular season; moves proportionally, up or down
             { const gs0 = p.season || {}, po = p.playoff || {}; let cz = 0;
@@ -8187,7 +8357,8 @@ function processOffseasonGrowth() {
         else {
             // v275: develop/decline the whole skill set (OVR is built from shooting, passing, speed etc.,
             // so moving only off/def left prospects stuck and veterans' skills frozen)
-            const bump = (k, d) => { const cur = parseInt(p.attr[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur + d)); };
+            let _cz = 'age/perf';
+            const bump = (k, d) => { const cur = parseInt(p.attr[k]); if (!isNaN(cur)) { p.attr[k] = Math.max(20, Math.min(99, cur + d)); if (PROG_TRACE && p.attr[k] !== cur) PROG_TRACE.push([p.name, p.age, p.pos, k, p.attr[k] - cur, _cz]); } };
             // v414: young D (<=27) offence growth capped - +1 per skill per summer, and no growth past 85
             // (Franchise D like Boucher/Pronger were gaining every year and reaching 100+ pts with 30+ goals)
             const _yd = (p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD') && p.age <= 27;
@@ -8201,27 +8372,27 @@ function processOffseasonGrowth() {
             ['shotAcc', 'shotPwr', 'pass', 'stkHnd'].forEach(k => bump(k, oChg));
             bump('check', dChg);
             const phys = p.age <= 24 ? (oChg > 0 ? 1 : 0) : p.age >= 36 ? -Math.max(1, Math.round(-oChg / 2)) : p.age >= 31 ? (oChg < 0 ? -1 : 0) : 0;
-            ['speed', 'agil', 'endur'].forEach(k => bump(k, phys));
+            _cz = 'phys/age'; ['speed', 'agil', 'endur'].forEach(k => bump(k, phys));
             // v377: skating, endurance and agility respond to the season too
             const st = p.season || {};
-            if (p.age <= 25 && perf > 0.3) bump('speed', 1);                       // breakout year -> a step quicker
+            _cz = 'breakout speed'; if (p.age <= 25 && perf > 0.3) bump('speed', 1);                       // breakout year -> a step quicker
             const toi = (st.gp || 0) >= 20 ? (st.toi || 0) / st.gp : null;         // minutes per game
             if (toi !== null) {
                 const heavy = p.pos === 'D' ? 22 : 18, light = p.pos === 'D' ? 14 : 10;
-                if (toi >= heavy && p.age <= 33) bump('endur', 1);                  // big minutes build the engine
+                _cz = 'TOI endurance'; if (toi >= heavy && p.age <= 33) bump('endur', 1);                  // big minutes build the engine
                 else if (toi < light) bump('endur', -1);                            // a spare part loses his legs
             }
             const inj = p.injGamesSeason || 0;
-            if (inj >= 30) bump('agil', -2); else if (inj >= 15) bump('agil', -1);  // long injury years cost agility
+            _cz = 'injury agility'; if (inj >= 30) bump('agil', -2); else if (inj >= 15) bump('agil', -1);  // long injury years cost agility
             // v378: checking follows hits per game (vs position average), shot accuracy follows shooting %
             const b = base378[p.pos === 'D' ? 'D' : 'F'];
             if ((st.gp || 0) >= 20 && b && b.hpg > 0) {
                 const hr = ((st.hits || 0) / st.gp) / b.hpg;
-                if (hr >= 1.5 && p.age <= 33) bump('check', 1); else if (hr <= 0.5) bump('check', -1);
+                _cz = 'hits->check'; if (hr >= 1.5 && p.age <= 33) bump('check', 1); else if (hr <= 0.5) bump('check', -1);
             }
             if ((st.s || 0) >= 50 && b && b.sh > 0) {
                 const sh = (st.g || 0) / st.s;
-                if (sh >= b.sh + 0.035) bump('shotAcc', 1); else if (sh <= b.sh - 0.035) bump('shotAcc', -1);
+                _cz = 'SH%->shotAcc'; if (sh >= b.sh + 0.035) bump('shotAcc', 1); else if (sh <= b.sh - 0.035) bump('shotAcc', -1);
             }
             // v379: specific stats -> specific skills, judged per game against the same-position fit on OVR (in SD units)
             if ((st.gp || 0) >= 20) {
@@ -8229,9 +8400,9 @@ function processOffseasonGrowth() {
                 const z = k => { const f = fits[G]?.[k]; return f ? ((st[k] || 0) / st.gp - (f.a + f.b * xo)) / f.sd : 0; };
                 const step = v => v >= 1 ? 1 : v <= -1 ? -1 : 0;
                 const zg = step(z('g')), za = step(z('a')), zb = step(z('blk'));
-                if (zg) { bump('off', zg); bump('shotPwr', zg); }        // goals -> scoring instinct + shot
-                if (za) { bump('pass', za); bump('stkHnd', za); }        // assists -> vision + hands
-                if (zb > 0 || (zb < 0 && p.pos === 'D')) bump('def', zb); // shot blocking -> reading the play
+                _cz = 'goals/gm->off,pwr'; if (zg) { bump('off', zg); bump('shotPwr', zg); }        // goals -> scoring instinct + shot
+                _cz = 'assists/gm->pass,hands'; if (za) { bump('pass', za); bump('stkHnd', za); }        // assists -> vision + hands
+                _cz = 'blocks->def'; if (zb > 0 || (zb < 0 && p.pos === 'D')) bump('def', zb); // shot blocking -> reading the play
             }
             // v379: toughness is no longer frozen - a young player who lives in the box toughens up; veterans mellow
             // v384: faceoff % moves the faceoff rating proportionally (55% -> +2, 45% -> -2, max +-3)
@@ -8240,17 +8411,17 @@ function processOffseasonGrowth() {
                 if (step) p.attr.fo = Math.max(20, Math.min(99, Math.round(faceoffRating(p.name)) + step));
             }
             const pimPg = (st.gp || 0) >= 20 ? (st.pim || 0) / st.gp : 0;
-            if (p.age <= 25 && (pimPg >= 1.8 || (st.fights || 0) >= 10)) bump('rough', 1);
-            if (p.age >= 33) bump('aggr', -1);
+            _cz = 'PIM->rough'; if (p.age <= 25 && (pimPg >= 1.8 || (st.fights || 0) >= 10)) bump('rough', 1);
+            _cz = 'age->aggr'; if (p.age >= 33) bump('aggr', -1);
             if ((st.gp || 0) >= 20) {
                 const L = lg381[p.pos === 'D' ? 'D' : 'F'];
                 // v381: power-play production -> offensive awareness (goals) / passing (assists)
                 const ppPg = ((st.ppg || 0) + (st.ppa || 0)) / st.gp;
-                if (L.pp > 0 && ppPg >= L.pp * 2) { if ((st.ppg || 0) >= (st.ppa || 0)) bump('off', 1); else bump('pass', 1); }
+                _cz = 'PP pts->off/pass'; if (L.pp > 0 && ppPg >= L.pp * 2) { if ((st.ppg || 0) >= (st.ppa || 0)) bump('off', 1); else bump('pass', 1); }
                 // v381: shorthanded goals / plus-minus -> defensive awareness
-                if ((st.shg || 0) >= 2) bump('def', 1);
+                _cz = 'SHG->def'; if ((st.shg || 0) >= 2) bump('def', 1);
                 const pmPg = (st.pm || 0) / st.gp;
-                if (pmPg >= 0.3 && p.age <= 33) bump('def', 1); else if (pmPg <= -0.3) bump('def', -1);
+                _cz = '+/- ->def'; if (pmPg >= 0.3 && p.age <= 33) bump('def', 1); else if (pmPg <= -0.3) bump('def', -1);
                 // v381: clutch - tying/go-ahead 3rd-period/OT goals + GWGs per game vs position average, plus playoff
                 // production vs regular season; moves proportionally, up or down
                 const cPg = ((st.clutchG || 0) + (st.gwg || 0)) / st.gp;
@@ -8264,10 +8435,12 @@ function processOffseasonGrowth() {
                 const cStep = Math.max(-3, Math.min(3, Math.round(cz * 2) + bonus));
                 if (cStep) p.attr.clutch = Math.max(20, Math.min(99, (parseInt(p.attr.clutch) || 65) + cStep));
             }
+            _cz = 'CAP'; const _capPre = PROG_TRACE ? JSON.stringify(p.attr) : null;
             if (_ydPre) _ydKeys.forEach(k => { const b0 = _ydPre[k], cur = parseInt(p.attr[k]); if (isNaN(b0) || isNaN(cur) || cur <= b0) return;
-                p.attr[k] = Math.min(cur, b0 + 1, Math.max(b0, 85)); }); // v414 young-D offence cap
+                p.attr[k] = Math.min(cur, b0 + 2, Math.max(b0, 85)); }); // v414 young-D offence cap; v423 +1 -> +2 (cap removed ~40% of young D growth)
             if (_vetPre) Object.entries(_vetPre).forEach(([k, b0]) => { const cur = parseInt(p.attr[k]); if (!isNaN(b0) && cur > b0) p.attr[k] = b0; });
             if (_isD417 && _def417 >= 80 && parseInt(p.attr.def) > _def417 + 1) p.attr.def = _def417 + 1;
+            if (_capPre) { const a0 = JSON.parse(_capPre); Object.keys(a0).forEach(k => { const d = parseInt(p.attr[k]) - parseInt(a0[k]); if (d && !isNaN(d)) PROG_TRACE.push([p.name, p.age, p.pos, k, d, (_vetPre && p.age >= 31 && p.age <= 35) ? 'CAP vet 31-35' : _yd ? 'CAP young D off' : 'CAP D def 80+']); }); }
             if (p.attr.grades) Object.keys(p.attr.grades).forEach(k => { if (p.attr[k] !== undefined) p.attr.grades[k] = String(p.attr[k]); });
             delete _wpCache[p.name];
             p.attr.ovr = getPlayerWeightedStats(p.name).ovr;
@@ -8305,6 +8478,12 @@ function processOffseasonGrowth() {
             ['off', 'def', 'shotAcc', 'shotPwr', 'pass', 'stkHnd', 'check'].forEach(k => bump(k, st)); // v380: skating has its own hold
             if (p.attr?.grades) Object.keys(p.attr.grades).forEach(k => { if (p.attr[k] !== undefined) p.attr.grades[k] = String(p.attr[k]); });
         });
+        // v422: goalie-only backstop - with the overall hold off, keep the average starting goalie from sliding
+        // below 78 by lifting only goalies 30 and under rated under 88 (starting G drifted 79 -> 76.8 late)
+        if (!OVR_HOLD) { const gd = avg(startG) - 78;
+            if (gd < -0.05) Object.values(playerStats).forEach(p => { if (p.pos !== 'G' || p.age > 30 || (parseInt(p.attr?.ovr) || 0) >= 88) return;
+                const st = stochShift(-gd); if (st <= 0) return; ['ovr', 'gDef'].forEach(k => { const cur = parseInt(p.attr[k]); if (!isNaN(cur)) p.attr[k] = Math.min(99, cur + st); });
+                if (PROG_TRACE) PROG_TRACE.push([p.name, p.age, 'G', 'ovr', st, 'G backstop']); }); }
         clearWpCache();
         // v374: hold the offence/defence BALANCE too. The overall hold kept OVR flat while performance progression
         // pushed offensive skills up and defensive skills down (core off 66 -> 68, F def 62 -> 59), so shooting %
@@ -8320,9 +8499,14 @@ function processOffseasonGrowth() {
         // v393: endurance joins the skating hold, and the shift is applied with stochastic rounding - a drift of
         // ~0.4/yr rounded to 0 every year, so agility (65.6 -> 63.9) and endurance (69.5 -> 68.1) slid anyway
         // v394: roughness and checking get their own hold too (young-PIM / big-hit bonuses only pushed them up)
+        // v423: measured on the 30-and-under core against the opening 30-and-under level and applied to 30-and-under only -
+        // the all-ages version handed every veteran back ~+0.9 agility/+0.8 endurance a year, cancelling their aging
+        const youngCore = coreNames.filter(n => (playerStats[n]?.age || 0) <= 30);
+        const yAvg = k => avg(youngCore.map(n => parseInt(playerStats[n]?.attr?.[k]) || 0));
+        const SKATE_YOUNG = { speed: 63.87, agil: 65.54, endur: 69.12, rough: 54.44 };
         if (skateTarget) ['speed', 'agil', 'endur', 'rough'].forEach(k => {
-            const d = attrAvg(k) - skateTarget[k];
-            if (Math.abs(d) >= 0.05) Object.values(playerStats).forEach(p => { if (p.pos === 'G' || !p.attr) return; const cur = parseInt(p.attr[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur - stochShift(d))); });
+            const d = yAvg(k) - SKATE_YOUNG[k];
+            if (Math.abs(d) >= 0.05) Object.values(playerStats).forEach(p => { if (p.pos === 'G' || !p.attr || p.age > 30) return; const cur = parseInt(p.attr[k]); if (!isNaN(cur)) p.attr[k] = Math.max(20, Math.min(99, cur - stochShift(d))); });
         });
         // v393: clutch hold - keep the league clutch average where it was before the offseason (assist bonuses only
         // add, so it crept 64.9 -> 66.7 in four years); players still move relative to each other
