@@ -2697,6 +2697,9 @@ function getAllDuos() { return [...dynamicDuos, ...customDuos, ...autoDuos]; }
 // and all D pairs) who each played 40+ games and aren't already in a duo become a duo for next season.
 let autoDuos = [];
 function formAutoDuos() {
+    // v437: auto duos break up once the players drift 8+ OVR apart (one declined or one developed past the other)
+    { const o = n => getPlayerWeightedStats(n)?.baseOvr || 0;
+      autoDuos = autoDuos.filter(d => { const v = d.filter(n => playerStats[n]).map(o); return v.length >= 2 && Math.max(...v) - Math.min(...v) < 8; }); }
     const inDuo = new Set(getAllDuos().flat());
     league.forEach(t => {
         const base = seasonLines[t.nrm];
@@ -2705,6 +2708,7 @@ function formAutoDuos() {
         [...base.f.slice(0, 3), ...base.d].forEach(line => {
             const mates = line.filter(n => onTeam.has(n) && !inDuo.has(n) && (playerStats[n]?.season?.gp || 0) >= 40);
             if (mates.length < 2) return;
+            { const v = mates.map(n => getPlayerWeightedStats(n)?.baseOvr || 0); if (Math.max(...v) - Math.min(...v) >= 6) return; } // v437: only similar-level linemates bond
             autoDuos.push(mates);
             mates.forEach(n => inDuo.add(n));
             tradeLog.unshift({ day: 'POST', details: `NEW DUO: ${mates.join(' / ')} (${t.code}) — chemistry built over the season.` });
@@ -3351,6 +3355,10 @@ const buildRosterStructure = (tk, ignoreHealth = false) => {
         mateList.forEach(mateName => {
             const mate = dPool.find(x => x.name === mateName && !dUsed.has(x.name));
             if (!mate) return;
+            // v437: a duo partner only follows onto a pair if he's within 5 OVR of the best D still available -
+            // auto duos locked 56-OVR partners onto top pairs for years (Krupp beside Yushkevich, 26 min)
+            const nextBest = dPool.find(x => !dUsed.has(x.name) && x.name !== mate.name);
+            if (nextBest && getOvr(mate) < getOvr(nextBest) - 5 && !dynamicDuos.some(d => d.includes(mateName) && d.includes(player.name))) return;
             if (pair.length < 2) {
                 pair.push(mate);
                 dUsed.add(mate.name);
@@ -3383,16 +3391,15 @@ const buildRosterStructure = (tk, ignoreHealth = false) => {
         let p2Anchor = getNextAvailable();
         draftD(p2Anchor, 1); //  FIX
         
-        // If Pair 2 ALSO didn't find a synergy partner, finish Pair 2 with the next highest OVR
-        if (dPairs[1].length === 1) {
-            let p2Filler = getNextAvailable();
-            draftD(p2Filler, 1); //  FIX
-        }
-        
-        // Now return to Pair 1 and finish it with the highest remaining OVR (usually the 4th best)
+        // v440: pairs are 1+3 / 2+4 (was 1+4 / 2+3 - the top pair's 26 minutes went to the 4th-best D, often 53-58 OVR).
+        // Pair 1 takes the next best (usually the 3rd), then Pair 2 is finished with the following one.
         if (dPairs[0].length === 1) {
             let p1Filler = getNextAvailable();
-            draftD(p1Filler, 0); //  FIX
+            draftD(p1Filler, 0);
+        }
+        if (dPairs[1].length === 1) {
+            let p2Filler = getNextAvailable();
+            draftD(p2Filler, 1);
         }
     } else {
         // If Pair 1 DID find a synergy and filled up, just build Pair 2 normally
@@ -3468,14 +3475,16 @@ const buildRosterStructure = (tk, ignoreHealth = false) => {
                 let cand = otherPair[k];
                 let candOff = getOff(cand) > getDef(cand);
                 if (bothOff && !candOff) { // pair has two offensive, cand is defensive
-                    let victim = [pair[0], pair[1]].sort((a,b) => getDef(b)-getDef(a))[0]; // least defensive of pair
+                    let victim = [pair[0], pair[1]].sort((a,b) => getDef(a)-getDef(b))[0]; // least defensive of pair (v435: sort was reversed)
+                    if (getOvr(cand) < getOvr(victim) - 4) continue; // v435: never drop a much better D for balance (52-OVR stay-at-homes were playing 26 min)
                     let vi = pair.indexOf(victim);
                     pair[vi] = cand;
                     otherPair[k] = victim;
                     break;
                 }
                 if (bothDef && candOff) { // pair has two defensive, cand is offensive
-                    let victim = [pair[0], pair[1]].sort((a,b) => getOff(b)-getOff(a))[0]; // least offensive of pair
+                    let victim = [pair[0], pair[1]].sort((a,b) => getOff(a)-getOff(b))[0]; // least offensive of pair (v435: sort was reversed)
+                    if (getOvr(cand) < getOvr(victim) - 4) continue; // v435: rating gap guard
                     let vi = pair.indexOf(victim);
                     pair[vi] = cand;
                     otherPair[k] = victim;
@@ -3526,7 +3535,10 @@ const buildRosterStructure = (tk, ignoreHealth = false) => {
 
     // Re-sort D-pairs: rank by best individual defenseman OVR, not pair average.
     // A 90+60 pair beats a 78+78 pair because the elite D deserves top minutes.
-    const pairBest = (pair) => Math.max(...pair.map(p => getOvr(p)));
+    // v439: a pair held together by a Dynamic Duo is ranked by its AVERAGE - the duo stays together but a weak
+    // partner drops the pair down the depth chart (Stevens 84 + Daneyko 60 played 26 min over 69/67 D)
+    const isDuoPair = (pair) => pair.length === 2 && getAllDuos().some(d => d.includes(pair[0].name) && d.includes(pair[1].name));
+    const pairBest = (pair) => !pair.length ? 0 : isDuoPair(pair) ? pair.reduce((q, p) => q + getOvr(p), 0) / pair.length : Math.max(...pair.map(p => getOvr(p)));
     dPairs.sort((a, b) => pairBest(b) - pairBest(a));
 
     // ==========================================
@@ -3895,7 +3907,10 @@ function getSpecialTeamsUnit(tk, type, unitNum, isEN = false) {
         let allDefense = uniqByName(struct.d.flat());
 
         pkForwards.sort((a, b) => (playerStats[b.name]?.attr?.def || 0) - (playerStats[a.name]?.attr?.def || 0));
-        allDefense.sort((a, b) => (playerStats[b.name]?.attr?.def || 0) - (playerStats[a.name]?.attr?.def || 0));
+        // v437: PK D = defensive skill blended with overall rating (defence alone sent 56-OVR stay-at-homes to PK1,
+        // giving them 25-26 min while 69-72 OVR D played 21)
+        const pkD = p => { const a = playerStats[p.name]?.attr || {}; return ((parseInt(a.def) || 50) * 0.7 + (gradeToNum(a.check) || 50) * 0.3) * 0.6 + (getPlayerWeightedStats(p.name)?.ovr || 50) * 0.4; };
+        allDefense.sort((a, b) => pkD(b) - pkD(a));
 
         if (unitNum === 1) {
             let fPool = pkForwards.slice(0, 2);
@@ -5396,7 +5411,8 @@ function simGame(idx) {
             const dw0=Math.max(2,dBase[0]+dCloseBonus+_tz[0]), dw1=Math.max(2,dBase[1]+_tz[1]), dw2=Math.max(2,dBase[2]+dFarBonus+_tz[2]);
             const distRoll     = Math.random() * (dw0+dw1+dw2);
             const distZone     = distRoll < dw0 ? 0 : distRoll < dw0+dw1 ? 1 : 2; // 0=close,1=med,2=far
-            const distMod      = [1.20, 1.00, 0.75][distZone];
+            // v434: very elite shot power (90+) makes the point shot a real threat (MacInnis/Iafrate 99): far zone 0.75 -> up to 0.93
+            const distMod      = distZone === 2 && shooterPwr >= 90 ? 0.75 + (shooterPwr - 89) * 0.018 : [1.20, 1.00, 0.75][distZone];
 
             // v286: depth lines finish a bit more, top line a bit less (3rd/4th lines were ~10% under real share)
             const atkFLine  = isHome ? hFLine : aFLine;
@@ -5409,7 +5425,7 @@ function simGame(idx) {
                 return Math.max(0.85, Math.min(1.15, Math.pow(mine / mean, 1.0)));
             })();
             // v287: D were converting ~9% (real ~5%): point shots finish less; forwards up slightly to hold league scoring
-            const posFinMod = isDefPos ? 0.66 * (isEliteOffD(shooter.name) ? 1.05 : 1) : FWD_FINISH;
+            const posFinMod = isDefPos ? 0.55 * (isEliteOffD(shooter.name) ? 1.05 : 1) : FWD_FINISH; // v434: D 0.66 -> 0.55 (D shot 7.6%, real ~5.5%)
             const prob      = FINISH_BASE*((isPlayoffs&&!isASG)?PLAYOFF_FINISH:1)*posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002*poEdge)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod
                 * Math.max(0.85, Math.min(1.15, chemDuoMod // v407: chemistry + season form + clutch = one situational term, capped ±15%
                 * (isASG ? 1 : 1 + seasonForm(shooter.name)) // v403 season form
@@ -5552,7 +5568,10 @@ function simGame(idx) {
             const buildPPUnit = (exclude, first) => {
                 const pool = ppAvail.filter(p => !exclude.has(p.name));
                 const fwd  = pool.filter(p => p.pos !== 'D').sort((a,b) => first ? ppOvr(b)-ppOvr(a) : ppOff(b)-ppOff(a)).slice(0, 4);
-                const dman = pool.filter(p => p.pos === 'D').sort((a,b) => ppOff(b)-ppOff(a)).slice(0, 1);
+                // v435: PP point man = best OFFENSIVE skills (offence, passing, shot power), never overall rating -
+                // a high-OVR stay-at-home D doesn't take PP time from a better puck-mover
+                const ppDOff = p => { const a = playerStats[p.name]?.attr || {}; const n = v => parseInt(v) || gradeToNum(v) || 50; return n(a.off) * 0.5 + n(a.pass) * 0.3 + n(a.shotPwr) * 0.2; };
+                const dman = pool.filter(p => p.pos === 'D').sort((a,b) => ppDOff(b)-ppDOff(a)).slice(0, 1);
                 return [...fwd, ...dman];
             };
             const pp2Names   = advTeamObj2?.specialTeams?.pp2 || [];
@@ -5610,7 +5629,7 @@ function simGame(idx) {
                 if (Math.random() < delRate) {
                     const delSh = selectShooter(ppUnit, 'GOAL');
                     const delGNm = advTeam.nrm===g.h.nrm ? aG_name : hG_name;
-                    const delEv = processSingleGoal(advTeam.nrm, advTeam.code, delSh, ppUnit, timeStr, period, minute, sec);
+                    const delEv = pgPPGoal(advTeam.nrm, advTeam.code, delSh, ppUnit, timeStr, period, minute, sec);
                     if (delEv) {
                         if(advTeam.nrm===g.h.nrm){hG++;hShots++;}else{aG++;aShots++;}
                         delEv.tm=advTeam.code; delEv.cl=teamColors[advTeam.nrm]?.[0]||'#fff';
@@ -5634,7 +5653,7 @@ function simGame(idx) {
 
             if (!ppCancelled && ppRoll < ppConvRate && ppUnit.length > 0) {
                 const ppShooter = selectShooter(ppUnit, 'PP');
-                const ppEv = processSingleGoal(advTeam.nrm, advTeam.code, ppShooter, ppUnit, timeStr, period, minute, sec);
+                const ppEv = pgPPGoal(advTeam.nrm, advTeam.code, ppShooter, ppUnit, timeStr, period, minute, sec);
                 if (ppEv) {
                     ppEv.isPP=true; ppEv.tm=advTeam.code; ppEv.cl=teamColors[advTeam.nrm]?.[0]||'#FFD700';
                     ppEv.txt=buildGoalText(ppEv.scorer, ppEv.pAssist, ppEv.sAssist, null, true, false, false, 0, 0, 0);
@@ -5736,7 +5755,7 @@ function simGame(idx) {
                 const ppConvRate2 = ppConvBase * (isDoubleMajor ? 0.50 : 0.60);
                 if (ppRoll2 < ppConvRate2) {
                     const ppSh2 = selectShooter(ppUnit, 'PP');
-                    const ppEv2 = processSingleGoal(advTeam.nrm, advTeam.code, ppSh2, ppUnit, timeStr, period, minute, sec);
+                    const ppEv2 = pgPPGoal(advTeam.nrm, advTeam.code, ppSh2, ppUnit, timeStr, period, minute, sec);
                     if (ppEv2) {
                         ppEv2.isPP=true; ppEv2.tm=advTeam.code; ppEv2.cl=teamColors[advTeam.nrm]?.[0]||'#FFD700';
                         ppEv2.txt=buildGoalText(ppEv2.scorer,ppEv2.pAssist,ppEv2.sAssist,null,true,false,false,0,0,0);
@@ -6022,7 +6041,7 @@ function simGame(idx) {
                         const ppConvR = getSpecialTeamsChance(advObj.nrm, penObj.nrm);
                         if (Math.random() < ppConvR) {
                             const ppSh2 = selectShooter(ppPool, 'PP');
-                            const ppEv2 = processSingleGoal(advObj.nrm, advObj.code, ppSh2, ppPool, timeStr, period, minute, sec);
+                            const ppEv2 = pgPPGoal(advObj.nrm, advObj.code, ppSh2, ppPool, timeStr, period, minute, sec);
                             if (ppEv2) {
                                 ppEv2.isPP=true; ppEv2.tm=advObj.code; ppEv2.cl=teamColors[advObj.nrm]?.[0]||'#FFD700';
                                 ppEv2.txt=buildGoalText(ppEv2.scorer,ppEv2.pAssist,ppEv2.sAssist,null,true,false,false,0,0,0);
@@ -7289,6 +7308,8 @@ function selectShooter(unit, context = 'ES') {
     return unit[unit.length - 1];
 }
 
+let _goalCtx = ''; // v434: 'PP' while a power-play goal's assists are handed out
+function pgPPGoal(...a) { _goalCtx = 'PP'; try { return processSingleGoal(...a); } finally { _goalCtx = ''; } }
 function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr, period, minute, sec) {
     // --- Normalize inputs ---
     // scorerName and onIcePlayers may be objects {name,pos,...} or strings  -  normalize all to name strings
@@ -7323,7 +7344,7 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
             const pos2 = ps.pos || 'D', isD2 = (pos2 === 'D' || pos2 === 'LD' || pos2 === 'RD');
             let w = 100 * Math.pow(Math.max(30, weight) / 70, 2.5);
             w *= tagNudge(arch.assistRate || 1.0);
-            w *= isD2 ? 0.66 : (pos2 === 'C' ? 1.12 : 1.0); // v418: D 0.70 -> 0.66
+            w *= isD2 ? (_goalCtx === 'PP' ? 1.0 : 0.60) : (pos2 === 'C' ? 1.12 : 1.0); // v418: D 0.70 -> 0.66; v434 PP 1.00 / ES 0.60 (D had only 15.5% of PP points)
             if (isD2 && off < 70) w *= Math.max(0.5, 1 - (70 - off) * 0.025); // v417: low-offence D rarely in on goals (52-off prospect had 89 pts)
             const hot = ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT' || ps.streakType === 'hot';
             const cold = ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD' || ps.streakType === 'cold';
@@ -12614,6 +12635,21 @@ function pcSwitchTab(pName, tab) {
     if (st) st.innerHTML = pcBuildStats(pName, tab);
 }
 
+// v433: progression v2 on the card - CEILING label (players 25 and under, from the hidden peak) and last summer's
+// season GRADE (-2..+2) that moved it
+function pcCeilingBadge(p) {
+    let out = '';
+    if (p.peak !== undefined && p.age <= 25) {
+        const g = p.pos === 'G', pk = p.peak;
+        const [lab, col] = pk >= (g ? 92 : 88) ? ['ELITE', '#ffd700'] : pk >= (g ? 85 : 78) ? ['TOP 6', '#4fc3f7'] : pk >= (g ? 76 : 68) ? ['DEPTH', '#aaa'] : ['BUST', '#e57373'];
+        out += `<span title="Projected ceiling" style="font-size:6px;color:${col};border:1px solid ${col};padding:1px 3px;">CEIL ${g && lab === 'TOP 6' ? 'STARTER' : lab}</span>`;
+    }
+    if (p.lastGrade !== undefined && p.lastGrade !== 0) {
+        const gr = p.lastGrade, col = gr >= 0.5 ? '#66bb6a' : gr <= -0.5 ? '#ef5350' : '#999';
+        out += `<span title="Last season's development grade (-2 to +2)" style="font-size:6px;color:${col};">GR ${gr > 0 ? '+' : ''}${gr.toFixed(1)}</span>`;
+    }
+    return out;
+}
 function showPlayerCard(pName) {
     if(!playerStats[pName]) return;
     const p = playerStats[pName];
@@ -12660,7 +12696,7 @@ function showPlayerCard(pName) {
     <span>AGE <b style="color:#ccc">${p.age}</b></span>
     <span>OVR <b style="color:${ovrCol}">${ovr}</b></span>
     <span style="color:#555;font-size:6px;flex:1;text-align:center;">${tag}</span>
-    ${stBadge}${fatBadge}
+    ${pcCeilingBadge(p)}${stBadge}${fatBadge}
   </div>
   <div style="background:#0a0a0a;padding:2px 8px 4px;">${buildStatusBadges(pName)}</div>
   <div style="display:flex;gap:2px;padding:5px 6px;background:#0e0e0e;">
