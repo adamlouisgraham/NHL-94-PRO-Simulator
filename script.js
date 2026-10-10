@@ -3649,7 +3649,7 @@ let LINE_FINISH = [1.04, 1.00, 0.92, 0.85], FWD_FINISH = 1.18, PP1_SHARE = 0.55;
 // v307: SHOT_BASE = even-strength shot lambda per team; FINISH_BASE = per-shot goal multiplier (sets league save %)
 // v335: elite offensive defencemen get a slight boost to goals and assists (ES + PP)
 const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D') return false; const tg = PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || ''; return (parseInt(ps.attr?.off) || 0) >= 78 || ['FRANCHISE D','PRO OFFENSIVE D','BOOMER','QUARTERBACK','OFFENSIVE D'].includes(tg); };
-let SHOT_BASE = 24, FINISH_BASE = 1.02; // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
+let SHOT_BASE = 24, FINISH_BASE = 1.08; // v445: 1.085 -> 1.08 (3 of 10 seasons over 7.5558); v444: 1.07 -> 1.085; v443: 1.04 -> 1.07; v442: 1.02 -> 1.04 (GPG sat 7.1-7.2 with v2 goalies) // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.75;
 // v347: playoff hockey is tighter - real 1993-94 playoffs scored ~9% under the regular season; the sim was scoring ~4% MORE
@@ -8085,7 +8085,7 @@ function pg2HeadroomRaw(p) { // starting PEAK above today's rating for players w
 function pg2Stoch(d) { return Math.floor(d) + (Math.random() < d - Math.floor(d) ? 1 : 0); }
 function pg2Rate(age, up) { // share of the gap closed this summer
     if (!up) return age >= 34 ? 0.7 : 0.5;
-    return age <= 21 ? 0.25 : age <= 24 ? 0.15 : age <= 27 ? 0.12 : 0.12; // v426: 22-27 slower
+    return age <= 21 ? 0.25 : age <= 24 ? 0.15 : age <= 27 ? 0.10 : 0.08; // v426: 22-27 slower; v442 25-27 0.12 -> 0.10, 28+ 0.08 (core +0.13/yr)
 }
 // role weights for the season grade (pim is a penalty weight)
 function pg2Weights(p, tag) {
