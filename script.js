@@ -8057,6 +8057,7 @@ function _doRoundAdvance(turbo = false) {
 //  * goalies: own curve (peak 28-32); grade = sv% vs league and vs team, shutouts, GAA, playoff sv%.
 //  * small noise, ~5% breakouts (young), ~4% early declines (27+). No league holds.
 // ============================================================================================
+let summerReport = null; // v450
 const PG2_GROUPS = { phys: ['speed', 'agil', 'endur', 'check'], skill: ['shotAcc', 'shotPwr', 'stkHnd'], iq: ['off', 'def', 'pass', 'clutch', 'fo'] };
 // yearly decline rates by age once past the group's peak window: [fromAge, rate] steps
 const PG2_DECLINE = { phys: [[28, 0.9], [31, 1.7], [34, 2.6]], skill: [[30, 0.8], [33, 1.7], [35, 2.6]], iq: [[31, 0.55], [33, 1.2], [35, 2.0]], g: [[34, 1.0], [36, 1.6], [38, 2.6]] }; // v447 goalies decline from 34 // v427: ~30% steeper; v428 goalies back to 33 // v425: steeper (30-35 were barely declining)
@@ -8176,6 +8177,7 @@ function processOffseasonGrowthV2() {
         const g = (0.50 * c(zSv) + 0.15 * c(zTeam) + 0.15 * c(zSo) + 0.10 * c(zGaa) + 0.10 * c(zPo)) / 0.7;
         return { grade: Math.max(-2, Math.min(2, g)) * (st.gp / (st.gp + 8)), zs: { sv: zSv, so: zSo } };
     };
+    const moves450 = []; // v450: summer rating moves, for headlines and the risers/fallers report
     Object.values(playerStats).forEach(p => {
         const res = p.pos === 'G' ? gradeGoalie(p) : (p.attr ? gradeSkater(p) : null);
         p.age++;
@@ -8219,8 +8221,25 @@ function processOffseasonGrowthV2() {
         }
         delete _wpCache[p.name];
         if (p.pos !== 'G') p.attr.ovr = getPlayerWeightedStats(p.name).ovr;
+        if (p.teamCode) moves450.push({ p, d: ovrOf(p.name) - now, grade, before: now });
     });
-    if (logs.length > 0 && awardConfig.headlines) logs.sort(() => 0.5 - Math.random()).slice(0, 5).forEach(msg => tradeLog.unshift({ day: 'OFFSEASON', details: msg }));
+    // v450: development headlines from the season grade and the summer's rating move
+    if (awardConfig.headlines) {
+        const tag = m => `${m.p.name} (${m.p.teamCode}, ${m.p.age})`;
+        moves450.filter(m => m.p.age <= 25 && m.grade >= 1.3 && m.d >= 2 && m.before + m.d >= 60).sort((a, b) => b.d - a.d).slice(0, 2)
+            .forEach(m => logs.push(` BREAKOUT SEASON: ${tag(m)} took off - now rated ${m.before + m.d} (+${m.d}).`));
+        moves450.filter(m => m.p.age <= 24 && m.grade <= -1.0 && m.p.peak !== undefined && m.p.peak < 68 && m.before < 62).sort((a, b) => a.grade - b.grade).slice(0, 1)
+            .forEach(m => logs.push(` STALLED: ${tag(m)} hasn't developed - scouts now project him as a depth player at best.`));
+        moves450.filter(m => m.p.age >= 30 && m.d <= -3 && m.before >= 75).sort((a, b) => a.d - b.d).slice(0, 2)
+            .forEach(m => logs.push(` LOST A STEP: ${tag(m)} slipped to ${m.before + m.d} (${m.d}) over the summer.`));
+    }
+    if (logs.length > 0 && awardConfig.headlines) logs.sort(() => 0.5 - Math.random()).slice(0, 6).forEach(msg => tradeLog.unshift({ day: 'OFFSEASON', details: msg }));
+    // v450: summer risers / fallers report (top 5 each among rostered players)
+    { const fmt = m => `${m.p.name} ${m.p.teamCode} ${m.d > 0 ? '+' : ''}${m.d} (${m.before + m.d})`;
+      const up = moves450.filter(m => m.d > 0 && m.before + m.d >= 60).sort((a, b) => b.d - a.d || b.before - a.before).slice(0, 5);
+      const dn = moves450.filter(m => m.d < 0 && m.before >= 60).sort((a, b) => a.d - b.d || b.before - a.before).slice(0, 5);
+      summerReport = { season: currentSeason, risers: up.map(fmt), fallers: dn.map(fmt) };
+      if (awardConfig.headlines && (up.length || dn.length)) tradeLog.unshift({ day: 'OFFSEASON', details: `SUMMER REPORT - Risers: ${summerReport.risers.join(', ') || 'none'} | Fallers: ${summerReport.fallers.join(', ') || 'none'}` }); }
     clearWpCache();
 }
 
@@ -10932,6 +10951,15 @@ function getConnSmytheScore(p) {
     if(awardConfig.draft) {
         const picks = runRealisticDraft();
         res += `<p style='font-size:7px; color:var(--neon-cyan);'>Draft Completed: ${picks} prospects selected (2 rounds).</p>`;
+        // v450: first round with each pick's projected ceiling
+        if (lastDraft?.picks?.length) {
+            const ceil = d => { const g = d.pos === 'G'; const m = { Franchise: ['ELITE', '#ffd700'], 'Top 6': [g ? 'STARTER' : 'TOP 6', '#4fc3f7'], Depth: ['DEPTH', '#aaa'], Bust: ['BUST', '#e57373'] }[d.potential] || ['?', '#666']; return `<span style="color:${m[1]}">${m[0]}</span>`; };
+            const lot = lastDraft.lotteryWinner && lastDraft.lotteryWinner !== lastDraft.worstTeam ? ` - LOTTERY: ${lastDraft.lotteryWinner} jumps to #1` : '';
+            res += `<h3 style='margin-top:10px; color:var(--silver-light);'>FIRST ROUND${lot}</h3><div style='font-size:7px; color:#ccc; columns:2; column-gap:14px;'>` +
+                lastDraft.picks.filter(d => d.round === 1).map(d => `<div>#${d.pick} ${d.team} - ${d.pos} ${d.name} ${ceil(d)}</div>`).join('') + `</div>`;
+            const el = lastDraft.picks.filter(d => d.potential === 'Franchise');
+            if (el.length && awardConfig.headlines) tradeLog.unshift({ day: 'DRAFT', details: `DRAFT: ${el.length} elite-ceiling prospect${el.length > 1 ? 's' : ''} taken - ${el.map(d => `#${d.pick} ${d.team} ${d.pos}`).join(', ')}` });
+        }
         // v363: teams short of tough guys sign a young enforcer (the 1993-94 goons retired and the draft never
         // replaced them: by year 10 every team had <2 forward enforcers and fights fell 0.81 -> 0.26/game)
         let enfSigned = 0;
@@ -11015,6 +11043,7 @@ function makeProspect(t, pos, pickNo, boost = 0) {
     return name;
 }
 
+let lastDraft = null; // v450: last draft's picks, for the results screen
 function runRealisticDraft() {
     const order = [...league].sort((a, b) => a.season.pts - b.season.pts);
     // v446: weighted lottery among the 5 worst teams for the first round, and the top 3 picks draw from the top of the
@@ -11022,6 +11051,7 @@ function runRealisticDraft() {
     const lot = order.slice(0, 5), w = [30, 24, 19, 15, 12], r1 = [];
     while (lot.length) { let x = Math.random() * w.slice(0, lot.length).reduce((a, b) => a + b, 0), i = 0; while ((x -= w[i]) > 0 && i < lot.length - 1) i++; r1.push(lot.splice(i, 1)[0]); w.splice(i, 1); }
     const round1 = [...r1, ...order.slice(5)];
+    lastDraft = { season: currentSeason, lotteryWinner: r1[0]?.code, worstTeam: order[0]?.code, picks: [] }; // v450
     let pick = 0;
     for (let round = 1; round <= 2; round++) {
         (round === 1 ? round1 : order).forEach(t => {
@@ -11034,7 +11064,8 @@ function runRealisticDraft() {
                 : (nG < 4 && Math.random() < 0.06) ? 'G'   // never stockpile more than 4 goalies
                 : Math.random() < 0.33 ? 'D'
                 : ['C', 'LW', 'RW'][Math.floor(Math.random() * 3)];
-            makeProspect(t, pos, pick, round === 1 && pick <= 3 ? 0.5 : round === 1 && pick <= 5 ? 0.3 : 0); // v446: top lottery picks
+            const _pn = makeProspect(t, pos, pick, round === 1 && pick <= 3 ? 0.5 : round === 1 && pick <= 5 ? 0.3 : 0); // v446: top lottery picks
+            lastDraft.picks.push({ pick, round, team: t.code, name: _pn, pos, potential: playerStats[_pn]?.potential }); // v450
         });
     }
     clearWpCache();
