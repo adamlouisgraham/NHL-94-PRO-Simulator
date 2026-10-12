@@ -3651,9 +3651,9 @@ let LINE_FINISH = [1.04, 1.00, 0.92, 0.85], FWD_FINISH = 1.18, PP1_SHARE = 0.55;
 const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D') return false; const tg = PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || ''; return (parseInt(ps.attr?.off) || 0) >= 78 || ['FRANCHISE D','PRO OFFENSIVE D','BOOMER','QUARTERBACK','OFFENSIVE D'].includes(tg); };
 let SHOT_BASE = 24, FINISH_BASE = 1.065; // v449: 1.08 -> 1.065 (6 of 15 seasons over 7.5558 with more parity); v445: 1.085 -> 1.08 (3 of 10 seasons over 7.5558); v444: 1.07 -> 1.085; v443: 1.04 -> 1.07; v442: 1.02 -> 1.04 (GPG sat 7.1-7.2 with v2 goalies) // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
-let PLAYOFF_EDGE = 1.75;
+let PLAYOFF_EDGE = 1.5; // v452: 1.75 -> 1.5 (series ran short)
 // v347: playoff hockey is tighter - real 1993-94 playoffs scored ~9% under the regular season; the sim was scoring ~4% MORE
-let PLAYOFF_FINISH = 0.88;
+let PLAYOFF_FINISH = 0.93; // v452: 0.88 -> 0.93 (playoffs scored 1.1 under the regular season)
 // v309: PEN_BASE = minor-penalty lambda per game (1993-94 had ~5 PP chances/team/game); PP_CONV scales PP conversion
 let PEN_BASE = 9.6, PP_CONV = 1.05;
 // v344: PIM where the discipline damper kicks in - enforcers keep 175 so goons still reach 300+;
