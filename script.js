@@ -685,7 +685,7 @@ function buildSavePayload() {
         meta: { version: CURRENT_SAVE_SCHEMA_VERSION, savedAt: new Date().toISOString(), label: 'EASN Dynasty Save' },
         data: {
             league, rosters, playerStats, tradeLog: savedTradeLog, hallOfFame, leagueHistory: savedLeagueHistory,
-            retiredPlayers, awardHistory, calendar: lightweightCalendar, currentDay, currentSeason,
+            retiredPlayers, awardHistory, simRecords, calendar: lightweightCalendar, currentDay, currentSeason,
             isPlayoffs, isASG, currentCupChamp, playoffBracket: lightweightBracket, awardConfig, 
             monthSnapshot, pendingTrades, realDatesMap, customDuos, autoDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, teamAssistants, _awardsPending, asgDoneThisSeason, selectedTeam
         }
@@ -719,6 +719,7 @@ function applyLoadedSave(data) {
     leagueHistory = Array.isArray(data.leagueHistory) ? data.leagueHistory : []; 
     retiredPlayers = Array.isArray(data.retiredPlayers) ? data.retiredPlayers : []; 
     // v398: older saves have no awardHistory - rebuild what's still on active players
+    simRecords = data.simRecords && typeof data.simRecords === 'object' ? data.simRecords : null; // v454
     awardHistory = Array.isArray(data.awardHistory) ? data.awardHistory : Object.values(playerStats).flatMap(p => (p.trophies || []).map(t => ({ year: t.year, name: t.name, player: p.name, team: p.teamCode || '', pos: p.pos || '' })));
     calendar = Array.isArray(data.calendar) ? data.calendar : []; 
     currentDay = Number.isInteger(data.currentDay) ? data.currentDay : parseInt(data.currentDay, 10) || 0; 
@@ -1545,7 +1546,7 @@ async function startNewGame(useCustomRoster = false) {
     currentDay = 0; currentSeason = 1; isPlayoffs = false; isASG = false; asgDoneThisSeason = false;
     isSimulating = false; isSimSeason = false; isTurboMode = false; currentCupChamp = "";
     playoffBracket = { round: 1, series: [] }; tradeLog = []; hallOfFame = []; autoDuos = []; seasonLines = {}; leagueHistory = [];
-    retiredPlayers = []; awardHistory = []; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
+    retiredPlayers = []; awardHistory = []; simRecords = null; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
     monthSnapshot = {}; activeIdx = null; statMode = 'season'; activeSubInfo = null;
         // Clear cached CSV data if not using custom roster — force fresh fetch from Google Sheets
     if (!useCustomRoster) { customTeamData = null; customPlayerData = null; }
@@ -7983,6 +7984,17 @@ function _doRoundAdvance(turbo = false) {
     const w = playoffBracket.series.map(s => s.hW === 4 ? s.h : s.a);
     // Save completed round to history before clearing
     if (!playoffBracket.history) playoffBracket.history = [];
+    // v453: series results in the news - clinches, sweeps, Game 7s and upsets (by regular-season points)
+    if (awardConfig.headlines) {
+        const rl = ['first round', 'second round', 'conference final', 'Stanley Cup Final'][playoffBracket.round - 1] || 'playoffs';
+        playoffBracket.series.forEach(s => {
+            const hw = s.hW === 4, W = hw ? s.h : s.a, L = hw ? s.a : s.h, wW = hw ? s.hW : s.aW, lW = hw ? s.aW : s.hW, n = wW + lW;
+            const up = ((L.season?.pts || 0) - (W.season?.pts || 0)) >= 8;
+            const how = lW === 0 ? 'sweep' : n === 7 ? 'win Game 7 to eliminate' : 'eliminate';
+            const msg = lW === 0 ? `${W.name} sweep ${L.name} in the ${rl}` : `${W.name} ${how} ${L.name} ${wW}-${lW} in the ${rl}`;
+            tradeLog.unshift({ day: 'PLAYOFFS', details: `${up ? 'UPSET! ' : 'SERIES: '}${msg}${up ? ` (${W.season?.pts || 0} pts vs ${L.season?.pts || 0})` : ''}` });
+        });
+    }
     playoffBracket.history.push({
         round: playoffBracket.round,
         label: ['CONF QUARTERFINALS', 'CONF SEMIFINALS', 'CONF FINALS', 'STANLEY CUP FINAL'][playoffBracket.round - 1] || `ROUND ${playoffBracket.round}`,
@@ -8329,6 +8341,15 @@ async function beginNewYear() {
     processOffseasonGrowth();
     try { runRebuildTrades(_prevPts); } catch (e) { console.warn('rebuild trades', e); }
     assignTeamCaptains();
+    // v453: season preview - contenders by dressed-core rating, players to watch (young, high ceiling)
+    if (awardConfig.headlines) try {
+        clearWpCache(); const o = n => getPlayerWeightedStats(n)?.baseOvr || 0;
+        const rate = t => { const r = rosters[t.nrm] || []; const F = r.filter(p => p.pos !== 'G' && p.pos !== 'D').map(p => o(p.name)).sort((a, b) => b - a).slice(0, 12), D = r.filter(p => p.pos === 'D').map(p => o(p.name)).sort((a, b) => b - a).slice(0, 6), G = Math.max(0, ...r.filter(p => p.pos === 'G').map(p => o(p.name)));
+            return ([...F, ...D].reduce((a, b) => a + b, 0) / Math.max(1, F.length + D.length)) * 0.8 + G * 0.2; };
+        const fav = league.map(t => ({ t, v: rate(t) })).sort((a, b) => b.v - a.v);
+        const watch = Object.values(playerStats).filter(p => p.teamCode && p.age <= 23 && p.peak !== undefined && p.pos !== 'G').sort((a, b) => b.peak - a.peak).slice(0, 3);
+        tradeLog.unshift({ day: 'PRESEASON', details: `SEASON PREVIEW: Contenders - ${fav.slice(0, 3).map(x => x.t.name).join(', ')}. Long shots - ${fav.slice(-2).map(x => x.t.name).join(', ')}.${watch.length ? ` Players to watch: ${watch.map(p => `${p.name} (${p.teamCode}, ${p.age})`).join(', ')}.` : ''}` });
+    } catch (e) { console.warn('season preview', e); }
 
     // Capture preseason OVR baseline for GM Report Card grading.
     // Uses baseOvr (not .ovr) so leftover fatigue/morale from the prior season doesn't contaminate the baseline.
@@ -10482,6 +10503,39 @@ const buildRosterHTML = (tk, confName, color) => {
     document.getElementById('awardWinnerContent').innerHTML = h; document.getElementById('awardOverlay').style.display = 'flex';
 }
 
+// v454: record alerts. Single-season records are tracked from the start of the dynasty (the opening season sets the
+// marks); career leaders are checked across active and retired players, with a headline when the leader changes.
+let simRecords = null;
+function checkRecordAlerts() {
+    const act = Object.values(playerStats).filter(p => p.teamCode);
+    const sk = act.filter(p => p.pos !== 'G'), gl = act.filter(p => p.pos === 'G');
+    const isD = p => p.pos === 'D' || p.pos === 'LD' || p.pos === 'RD';
+    const cats = {
+        g: ['goals', sk, p => p.season.g || 0], a: ['assists', sk, p => p.season.a || 0], pts: ['points', sk, p => (p.season.g || 0) + (p.season.a || 0)],
+        dpts: ['points by a defenceman', sk.filter(isD), p => (p.season.g || 0) + (p.season.a || 0)], pim: ['penalty minutes', sk, p => p.season.pim || 0],
+        w: ['wins by a goalie', gl, p => p.season.w || 0], so: ['shutouts', gl, p => p.season.so || 0] };
+    const first = !simRecords; if (first) simRecords = { season: {}, career: {} };
+    Object.entries(cats).forEach(([k, [label, pool, f]]) => {
+        const best = pool.slice().sort((x, y) => f(y) - f(x))[0]; if (!best) return; const v = f(best), rec = simRecords.season[k];
+        if (!rec || v > rec.v) {
+            if (rec && awardConfig.headlines) tradeLog.unshift({ day: 'POST', details: `NEW RECORD: ${best.name} (${best.teamCode}) sets a single-season record with ${v} ${label} (old mark: ${rec.v}, ${rec.name}).` });
+            simRecords.season[k] = { v, name: best.name, year: currentSeason };
+        }
+    });
+    const car = (p, k) => (p.career?.[k] || 0) + (p.season?.[k] || 0);
+    const ret = (retiredPlayers || []);
+    [['g', 'career goals'], ['a', 'career assists'], ['pts', 'career points']].forEach(([k, label]) => {
+        const val = p => k === 'pts' ? car(p, 'g') + car(p, 'a') : car(p, k);
+        const rv = r => k === 'pts' ? (r.pts || 0) : (r[k] || 0);
+        const a = sk.map(p => ({ name: p.name, v: val(p), team: p.teamCode })).sort((x, y) => y.v - x.v)[0];
+        const r = ret.filter(x => x.pos !== 'G').map(x => ({ name: x.name, v: rv(x) })).sort((x, y) => y.v - x.v)[0];
+        const lead = (!r || (a && a.v > r.v)) ? a : r; if (!lead) return;
+        const prev = simRecords.career[k];
+        if (prev && prev.name !== lead.name && lead.v > prev.v && awardConfig.headlines)
+            tradeLog.unshift({ day: 'POST', details: `ALL-TIME: ${lead.name} passes ${prev.name} for the most ${label} (${lead.v.toLocaleString()}).` });
+        simRecords.career[k] = { name: lead.name, v: lead.v };
+    });
+}
 function awardTrophy(pName, year, tName) {
     if (!playerStats[pName]) return;
     if (!playerStats[pName].trophies) playerStats[pName].trophies = [];
@@ -10787,6 +10841,7 @@ function getConnSmytheScore(p) {
         if (smytheSorted.length > 0) {
             const winner = smytheSorted[0];
             awardTrophy(winner.name, currentSeason, "Conn Smythe");
+            if (awardConfig.headlines) tradeLog.unshift({ day: 'PLAYOFFS', details: `CONN SMYTHE: ${winner.name} (${winner.teamCode}) named playoff MVP - ${winner.pos === 'G' ? `${winner.playoff?.w || 0} wins, ${winner.playoff?.so || 0} shutouts` : `${winner.playoff?.g || 0} goals, ${(winner.playoff?.g || 0) + (winner.playoff?.a || 0)} points`}` }); // v453
             runnersUp["Conn Smythe"] = smytheSorted.slice(1, 4).map(p => `${p.name} (${Math.round(getConnSmytheScore(p))} pts)`).join(', ');
             const csW = winner; winnerStats["Conn Smythe"] = csW.pos === 'G'
                 ? `${csW.playoff?.w||0}W  ${csW.playoff?.so||0}SO`
@@ -10865,6 +10920,7 @@ function getConnSmytheScore(p) {
     res += awardCard('THE ESPO — CLUTCH PERFORMER', 'Most Game-Winning Goals (Phil Esposito)', 'The Espo', ORNG);
     
     formAutoDuos(); // v302: before retirements/draft change rosters
+    try { checkRecordAlerts(); } catch (e) { console.warn('record alerts', e); } // v454
     if(awardConfig.retirements) { 
         let ind = []; 
         Object.values(playerStats).forEach(p => { 
@@ -10941,7 +10997,12 @@ function getConnSmytheScore(p) {
                 const tkObj = league.find(t=>t.name===p.team); const tk = tkObj ? tkObj.nrm : null; 
                 if(tk && rosters[tk]) rosters[tk] = rosters[tk].filter(r => r.name !== p.name);
                 delete playerStats[p.name];
-                tradeLog.unshift({ day: 'POST', details: hofWorthy ? `RETIRED: Legend ${p.name} inducted into the Hall of Fame.` : `RETIRED: ${p.name} (${p.teamCode || p.team}) hangs up the skates at ${p.age}.` });
+                // v454: retirement news carries the career line; Hall of Fame inductions get their own headline
+                const _fmt = v => Number(v || 0).toLocaleString();
+                const _line = isGoalie ? `${_fmt(hofCarGP)} GP, ${_fmt(hofCarW)} wins, ${_fmt(hofCarSO)} shutouts` : `${_fmt(hofCarGP)} GP, ${_fmt(carG)} goals, ${_fmt(carPts)} points`;
+                const _cups = (p.trophies || []).length ? `, ${(p.trophies || []).length} trophies` : '';
+                tradeLog.unshift({ day: 'POST', details: `RETIRED: ${p.name} (${p.teamCode || p.team}) retires at ${p.age} - ${_line}${_cups}.` });
+                if (hofWorthy) tradeLog.unshift({ day: 'POST', details: `HALL OF FAME: ${p.name} is inducted - ${_line}${(p.asgAppearances || 0) ? `, ${p.asgAppearances} All-Star games` : ''}.` });
             } 
         }); 
         res += "<h3 style='margin-top:15px; color:var(--silver-light);'>HALL OF FAME:</h3><p style='font-size:7px; color:#888;'>" + (ind.join(', ') || 'None') + "</p>";
