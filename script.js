@@ -3649,7 +3649,7 @@ let LINE_FINISH = [1.04, 1.00, 0.92, 0.85], FWD_FINISH = 1.18, PP1_SHARE = 0.55;
 // v307: SHOT_BASE = even-strength shot lambda per team; FINISH_BASE = per-shot goal multiplier (sets league save %)
 // v335: elite offensive defencemen get a slight boost to goals and assists (ES + PP)
 const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D') return false; const tg = PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || ''; return (parseInt(ps.attr?.off) || 0) >= 78 || ['FRANCHISE D','PRO OFFENSIVE D','BOOMER','QUARTERBACK','OFFENSIVE D'].includes(tg); };
-let SHOT_BASE = 24, FINISH_BASE = 1.08; // v445: 1.085 -> 1.08 (3 of 10 seasons over 7.5558); v444: 1.07 -> 1.085; v443: 1.04 -> 1.07; v442: 1.02 -> 1.04 (GPG sat 7.1-7.2 with v2 goalies) // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
+let SHOT_BASE = 24, FINISH_BASE = 1.065; // v449: 1.08 -> 1.065 (6 of 15 seasons over 7.5558 with more parity); v445: 1.085 -> 1.08 (3 of 10 seasons over 7.5558); v444: 1.07 -> 1.085; v443: 1.04 -> 1.07; v442: 1.02 -> 1.04 (GPG sat 7.1-7.2 with v2 goalies) // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.75;
 // v347: playoff hockey is tighter - real 1993-94 playoffs scored ~9% under the regular season; the sim was scoring ~4% MORE
@@ -8059,7 +8059,7 @@ function _doRoundAdvance(turbo = false) {
 // ============================================================================================
 const PG2_GROUPS = { phys: ['speed', 'agil', 'endur', 'check'], skill: ['shotAcc', 'shotPwr', 'stkHnd'], iq: ['off', 'def', 'pass', 'clutch', 'fo'] };
 // yearly decline rates by age once past the group's peak window: [fromAge, rate] steps
-const PG2_DECLINE = { phys: [[28, 0.9], [31, 1.7], [34, 2.6]], skill: [[30, 0.8], [33, 1.7], [35, 2.6]], iq: [[31, 0.55], [33, 1.2], [35, 2.0]], g: [[33, 1.0], [35, 1.6], [37, 2.6]] }; // v427: ~30% steeper; v428 goalies back to 33 // v425: steeper (30-35 were barely declining)
+const PG2_DECLINE = { phys: [[28, 0.9], [31, 1.7], [34, 2.6]], skill: [[30, 0.8], [33, 1.7], [35, 2.6]], iq: [[31, 0.55], [33, 1.2], [35, 2.0]], g: [[34, 1.0], [36, 1.6], [38, 2.6]] }; // v447 goalies decline from 34 // v427: ~30% steeper; v428 goalies back to 33 // v425: steeper (30-35 were barely declining)
 // share of OVR each group carries (F / D) - used so a new player's peak puts his OVR target exactly at today's rating
 const PG2_OVRW = { F: { phys: 0.12, skill: 0.33, iq: 0.55 }, D: { phys: 0.28, skill: 0.05, iq: 0.67 } };
 function pg2CumDecline(g, age) {
@@ -8076,7 +8076,7 @@ function pg2Headroom(p) { // v431: room scales down for players who are already 
 function pg2HeadroomRaw(p) { // starting PEAK above today's rating for players who arrive without one
     const a = p.age, rnd = () => Math.random() + Math.random() - 1; // ~triangular -1..1
     if (String(p.name).startsWith('Prospect ')) {
-        const c = ({ Franchise: 85, 'Top 6': 75, Depth: 66, Bust: 57 }[p.potential] || 63) + (p.pos === 'G' ? 8 : 0); // v428: lower (prospects pushed core 63.7 -> 66.4); v432 goalies +8 (starters need ~80)
+        const c = ({ Franchise: 84, 'Top 6': 71, Depth: 62, Bust: 54 }[p.potential] || 60) /* v446: lower again - after 10 drafts prospects filled the league (depth OVR 52 -> 60, 12 of top-20 scorers) */ + (p.pos === 'G' ? 8 : 0); // v449 back to +8 (starters rose to 82 with the goalie market); v447 goalies +10 (starters still slid 79 -> 76 after year 10) // v428: lower (prospects pushed core 63.7 -> 66.4); v432 goalies +8 (starters need ~80)
         return c + rnd() * 4 - (getPlayerWeightedStats(p.name)?.baseOvr || 50);
     }
     if (p.pos === 'G') { if (a <= 23) return 9 + rnd() * 4; if (a <= 26) return 5 + rnd() * 3; if (a <= 28) return 2 + rnd() * 2; return 0; } // v428: goalies develop later
@@ -8228,7 +8228,59 @@ function processOffseasonGrowthV2() {
 // progression v2 (processOffseasonGrowthV2) is the only model
 function processOffseasonGrowth() { return processOffseasonGrowthV2(); }
 
+// v448: off-season rebuild market. A team that finished under 60 points trades its two best prospects (23 and under)
+// for a prime player (25-29, 72+ OVR) a strong team can spare (not its best two at that position group). A team whose
+// starting goalie is under 74 trades a prospect for an established goalie (75+) from a team carrying two good ones.
+function aiMovePlayers(fromKey, toKey, names) {
+    const to = league.find(t => t.nrm === toKey);
+    names.forEach(n => { const i = (rosters[fromKey] || []).findIndex(p => p.name === n); if (i === -1 || !to) return;
+        rosters[toKey].push(rosters[fromKey].splice(i, 1)[0]); const ps = playerStats[n];
+        if (ps) { ps.team = to.name; ps.teamCode = to.code; if (ps.pos === 'G') { ps.lastStart = -1; ps.goalieDays = 0; } } });
+}
+function runRebuildTrades(prevPts) {
+    if (!awardConfig.trades) return;
+    const o = n => getPlayerWeightedStats(n)?.baseOvr || 0, age = n => playerStats[n]?.age || 0;
+    const grp = n => tradePosGroup(n), byKey = k => league.find(t => t.nrm === k);
+    const strong = league.filter(t => (prevPts[t.nrm] || 0) >= 90).map(t => t.nrm);
+    const used = new Set();
+    league.filter(t => (prevPts[t.nrm] || 0) < 60).forEach(t => {
+        const W = t.nrm, ro = rosters[W] || [];
+        // --- skater: two best prospects for one prime player
+        const pros = ro.filter(p => p.pos !== 'G' && age(p.name) <= 23 && !used.has(p.name)).sort((a, b) => ((playerStats[b.name]?.peak || o(b.name)) - (playerStats[a.name]?.peak || o(a.name)))).slice(0, 2);
+        if (pros.length === 2) {
+            let best = null;
+            strong.forEach(S => {
+                const sr = rosters[S] || [];
+                ['F', 'D'].forEach(G => {
+                    const pool = sr.filter(p => p.pos !== 'G' && grp(p.name) === G).sort((a, b) => o(b.name) - o(a.name));
+                    pool.slice(2).forEach(p => { if (used.has(p.name)) return; const a = age(p.name), v = o(p.name);
+                        if (a >= 25 && a <= 29 && v >= 72 && (!best || v > best.v)) best = { S, name: p.name, v }; });
+                });
+            });
+            if (best) {
+                aiMovePlayers(best.S, W, [best.name]); aiMovePlayers(W, best.S, pros.map(p => p.name));
+                [best.name, ...pros.map(p => p.name)].forEach(n => used.add(n));
+                tradeLog.unshift({ day: 'OFFSEASON', details: `REBUILD TRADE: ${t.name} acquire ${best.name} (age ${age(best.name)}, ${best.v} OVR) from ${byKey(best.S)?.name} for prospects ${pros.map(p => p.name).join(' + ')}` });
+            }
+        }
+    });
+    // --- goalie market: any team whose best goalie is under 74
+    league.forEach(t => {
+        const W = t.nrm, myG = (rosters[W] || []).filter(p => p.pos === 'G').sort((a, b) => o(b.name) - o(a.name));
+        if (!myG.length || o(myG[0].name) >= 72) return; // v449: 74 -> 72
+        let best = null;
+        league.forEach(S => { if (S.nrm === W) return; const gs = (rosters[S.nrm] || []).filter(p => p.pos === 'G').sort((a, b) => o(b.name) - o(a.name));
+            if (gs.length >= 2 && o(gs[1].name) >= 75 && !used.has(gs[1].name) && (!best || o(gs[1].name) > best.v)) best = { S: S.nrm, name: gs[1].name, v: o(gs[1].name) }; });
+        const pro = (rosters[W] || []).filter(p => p.pos !== 'G' && age(p.name) <= 23 && !used.has(p.name)).sort((a, b) => o(b.name) - o(a.name))[0];
+        if (best && pro) {
+            aiMovePlayers(best.S, W, [best.name]); aiMovePlayers(W, best.S, [pro.name]); used.add(best.name); used.add(pro.name);
+            tradeLog.unshift({ day: 'OFFSEASON', details: `GOALIE TRADE: ${t.name} acquire G ${best.name} (${best.v} OVR) from ${byKey(best.S)?.name} for ${pro.name}` });
+        }
+    });
+    if (used.size) { assignTeamCaptains(); pruneCustomDuos(); clearWpCache(); }
+}
 async function beginNewYear() {
+    const _prevPts = Object.fromEntries(league.map(t => [t.nrm, t.season?.pts || 0])); // v448: for the rebuild market
     if (_awardsPending) { alert('Reveal the award winners before starting the next season — history would snapshot as zeroed standings otherwise.'); return; }
     clearWpCache();
     currentSeason++; isPlayoffs = false; asgDoneThisSeason = false; currentCupChamp = "";
@@ -8256,6 +8308,7 @@ async function beginNewYear() {
     });
 
     processOffseasonGrowth();
+    try { runRebuildTrades(_prevPts); } catch (e) { console.warn('rebuild trades', e); }
     assignTeamCaptains();
 
     // Capture preseason OVR baseline for GM Report Card grading.
@@ -10925,10 +10978,10 @@ function getConnSmytheScore(p) {
 // 18-year-old rated in the 40s-50s with EVERY skill set (the old ROOKIE-##### had only off/def, so
 // speed/shooting/passing defaulted to 70 and they arrived as instant top-six forwards), and grows
 // by potential through processOffseasonGrowth.
-function makeProspect(t, pos, pickNo) {
+function makeProspect(t, pos, pickNo, boost = 0) {
     const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
-    const potRoll = Math.random();
-    const potential = potRoll < 0.06 ? 'Franchise' : potRoll < 0.28 ? 'Top 6' : potRoll < 0.70 ? 'Depth' : 'Bust';
+    const potRoll = Math.random() * (1 - boost); // v446: lottery picks roll from the top of the range
+    const potential = potRoll < 0.06 ? 'Franchise' : potRoll < 0.21 ? 'Top 6' : potRoll < 0.70 ? 'Depth' : 'Bust'; // v446: Top 6 22% -> 15%
     const base = { Franchise: 55, 'Top 6': 50, Depth: 46, Bust: 42 }[potential] + rnd(-3, 3);
     const yy = String((1993 + currentSeason) % 100).padStart(2, '0');
     let name, n = pickNo;
@@ -10964,9 +11017,14 @@ function makeProspect(t, pos, pickNo) {
 
 function runRealisticDraft() {
     const order = [...league].sort((a, b) => a.season.pts - b.season.pts);
+    // v446: weighted lottery among the 5 worst teams for the first round, and the top 3 picks draw from the top of the
+    // potential range (SJS/NJD/BOS sat at 36-73 points for 15 years - ordinary picks couldn't lift them)
+    const lot = order.slice(0, 5), w = [30, 24, 19, 15, 12], r1 = [];
+    while (lot.length) { let x = Math.random() * w.slice(0, lot.length).reduce((a, b) => a + b, 0), i = 0; while ((x -= w[i]) > 0 && i < lot.length - 1) i++; r1.push(lot.splice(i, 1)[0]); w.splice(i, 1); }
+    const round1 = [...r1, ...order.slice(5)];
     let pick = 0;
     for (let round = 1; round <= 2; round++) {
-        order.forEach(t => {
+        (round === 1 ? round1 : order).forEach(t => {
             pick++;
             const ro = rosters[t.nrm] || [];
             const nG = ro.filter(p => p.pos === 'G').length;
@@ -10976,7 +11034,7 @@ function runRealisticDraft() {
                 : (nG < 4 && Math.random() < 0.06) ? 'G'   // never stockpile more than 4 goalies
                 : Math.random() < 0.33 ? 'D'
                 : ['C', 'LW', 'RW'][Math.floor(Math.random() * 3)];
-            makeProspect(t, pos, pick);
+            makeProspect(t, pos, pick, round === 1 && pick <= 3 ? 0.5 : round === 1 && pick <= 5 ? 0.3 : 0); // v446: top lottery picks
         });
     }
     clearWpCache();
@@ -12645,7 +12703,9 @@ function processDailyUpdates() {
                     const buyerSkaters = rosters[buyerKey].filter(p => p.pos !== 'G');
                     if (sellerSkaters.length && buyerSkaters.length) {
                         // Seller moves its oldest, highest-OVR veteran for a future
-                        const veteran = [...sellerSkaters].sort((p1, p2) => {
+                        // v448: sellers only move players 30+ - their 24-29 core stays (bad teams sold everyone and ended up
+                        // with 22-29 prospects and no prime players, never recovering)
+                        const veteran = [...sellerSkaters].filter(p => (playerStats[p.name]?.age || 0) >= 30).sort((p1, p2) => {
                             const age1 = playerStats[p1.name]?.age || 25, age2 = playerStats[p2.name]?.age || 25;
                             return (age2 * 2 + getPlayerWeightedStats(p2.name).ovr) - (age1 * 2 + getPlayerWeightedStats(p1.name).ovr);
                         })[0];
@@ -12665,7 +12725,7 @@ function processDailyUpdates() {
                             const tObj = k => league.find(t => t.nrm === k) || { name: k, season: {} };
                             const rec = t => `${t.season.w || 0}-${t.season.l || 0}-${t.season.t || 0}`;
                             const bT = tObj(buyerKey), sT = tObj(sellerKey), vPs = playerStats[veteran.name] || {}, pPs = playerStats[prospect.name] || {};
-                            dealTag = `DEADLINE DEAL: Contender ${bT.name} (${rec(bT)}) acquire veteran ${vPs.pos || ''} ${veteran.name} (age ${vPs.age || '?'}) from seller ${sT.name} (${rec(sT)}) for ${pPs.pos || ''} ${prospect.name} (age ${pPs.age || '?'})`;
+                            dealTag = `DEADLINE DEAL: Contender ${bT.name} (${rec(bT)}) acquire ${(vPs.age || 0) >= 28 ? 'veteran' : 'young'} ${vPs.pos || ''} ${veteran.name} (age ${vPs.age || '?'}) from seller ${sT.name} (${rec(sT)}) for ${pPs.pos || ''} ${prospect.name} (age ${pPs.age || '?'})`;
                             deadlineDeals.push({ buyer: bT.name, seller: sT.name });
                         }
                     }
