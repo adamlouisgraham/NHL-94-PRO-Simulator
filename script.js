@@ -685,7 +685,7 @@ function buildSavePayload() {
         meta: { version: CURRENT_SAVE_SCHEMA_VERSION, savedAt: new Date().toISOString(), label: 'EASN Dynasty Save' },
         data: {
             league, rosters, playerStats, tradeLog: savedTradeLog, hallOfFame, leagueHistory: savedLeagueHistory,
-            retiredPlayers, awardHistory, simRecords, calendar: lightweightCalendar, currentDay, currentSeason,
+            retiredPlayers, awardHistory, simRecords, leagueChronicle, calendar: lightweightCalendar, currentDay, currentSeason,
             isPlayoffs, isASG, currentCupChamp, playoffBracket: lightweightBracket, awardConfig, 
             monthSnapshot, pendingTrades, realDatesMap, customDuos, autoDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, teamAssistants, _awardsPending, asgDoneThisSeason, selectedTeam
         }
@@ -720,6 +720,7 @@ function applyLoadedSave(data) {
     retiredPlayers = Array.isArray(data.retiredPlayers) ? data.retiredPlayers : []; 
     // v398: older saves have no awardHistory - rebuild what's still on active players
     simRecords = data.simRecords && typeof data.simRecords === 'object' ? data.simRecords : null; // v454
+    leagueChronicle = Array.isArray(data.leagueChronicle) ? data.leagueChronicle : []; // v455
     awardHistory = Array.isArray(data.awardHistory) ? data.awardHistory : Object.values(playerStats).flatMap(p => (p.trophies || []).map(t => ({ year: t.year, name: t.name, player: p.name, team: p.teamCode || '', pos: p.pos || '' })));
     calendar = Array.isArray(data.calendar) ? data.calendar : []; 
     currentDay = Number.isInteger(data.currentDay) ? data.currentDay : parseInt(data.currentDay, 10) || 0; 
@@ -1546,7 +1547,7 @@ async function startNewGame(useCustomRoster = false) {
     currentDay = 0; currentSeason = 1; isPlayoffs = false; isASG = false; asgDoneThisSeason = false;
     isSimulating = false; isSimSeason = false; isTurboMode = false; currentCupChamp = "";
     playoffBracket = { round: 1, series: [] }; tradeLog = []; hallOfFame = []; autoDuos = []; seasonLines = {}; leagueHistory = [];
-    retiredPlayers = []; awardHistory = []; simRecords = null; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
+    retiredPlayers = []; awardHistory = []; simRecords = null; leagueChronicle = []; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
     monthSnapshot = {}; activeIdx = null; statMode = 'season'; activeSubInfo = null;
         // Clear cached CSV data if not using custom roster — force fresh fetch from Google Sheets
     if (!useCustomRoster) { customTeamData = null; customPlayerData = null; }
@@ -5977,8 +5978,10 @@ function simGame(idx) {
                 const getWgtNum = (n) => { const ps2=playerStats[n]; return ps2?.weight || ps2?.attr?.weight || 195; };
                 const hFW = fightWt(hF.name) * (1.0 + (getWgtNum(hF.name) - 195) * 0.0015);
                 const aFW = fightWt(aF.name) * (1.0 + (getWgtNum(aF.name) - 195) * 0.0015);
-                if (Math.random() < hFW / (hFW + aFW + 0.001)) hMomentum = Math.min(hMomentum + 5, 14);
+                const _hWonFight = Math.random() < hFW / (hFW + aFW + 0.001);
+                if (_hWonFight) hMomentum = Math.min(hMomentum + 5, 14);
                 else aMomentum = Math.min(aMomentum + 5, 14);
+                { const fw = _hWonFight ? hF : aF; if (!isASG && playerStats[fw.name]) playerStats[fw.name][k].fightW = (playerStats[fw.name][k].fightW || 0) + 1; } // v457: fight wins
                 // v171: track fights in player stats
                 if (!isASG) [hF, aF].forEach(f => { if (playerStats[f.name]) playerStats[f.name][k].fights = (playerStats[f.name][k].fights || 0) + 1; });
                 [hF,aF].forEach(fighter => {
@@ -8095,6 +8098,47 @@ function pg2HeadroomRaw(p) { // starting PEAK above today's rating for players w
     if (p.pos === 'G') { if (a <= 23) return 9 + rnd() * 4; if (a <= 26) return 5 + rnd() * 3; if (a <= 28) return 2 + rnd() * 2; return 0; } // v428: goalies develop later
     if (a <= 21) return 7 + rnd() * 4; if (a <= 23) return 3.5 + rnd() * 3; if (a <= 25) return 2 + rnd() * 2; if (a <= 27) return 0.5 + rnd() * 1; return 0; // v426: 22-27 smaller // v425: smaller (core OVR rose 0.5/yr)
 }
+// v459: real-world potential for known players (how their careers actually went). Young players (27 and under)
+// develop toward it; for veterans it is the label only. Everyone else gets a grade from his hidden peak.
+const POT_GRADES = ['F', 'D-', 'D', 'D+', 'C-', 'C', 'C+', 'B-', 'B', 'B+', 'A-', 'A', 'A+'];
+const POT_PEAK = { 'A+': 92, 'A': 88, 'A-': 85, 'B+': 82, 'B': 79, 'B-': 76, 'C+': 73, 'C': 70, 'C-': 67, 'D+': 63, 'D': 59, 'D-': 55, 'F': 50 };
+const POTENTIAL_OVERRIDES = {
+    'Wayne Gretzky': 'A+', 'Mario Lemieux': 'A+', 'Mark Messier': 'A+', 'Steve Yzerman': 'A+', 'Ray Bourque': 'A+', 'Chris Chelios': 'A+', 'Paul Coffey': 'A',
+    'Brett Hull': 'A', 'Jari Kurri': 'A', 'Ron Francis': 'A', 'Doug Gilmour': 'A', 'Pat LaFontaine': 'A', 'Brian Leetch': 'A', 'Al MacInnis': 'A', 'Scott Stevens': 'A',
+    'Adam Oates': 'A-', 'Dale Hawerchuk': 'A-', 'Cam Neely': 'A-', 'Luc Robitaille': 'A', 'Joe Mullen': 'A-', 'Larry Murphy': 'A-', 'Phil Housley': 'A-',
+    'Jaromir Jagr': 'A+', 'Joe Sakic': 'A+', 'Sergei Fedorov': 'A+', 'Nicklas Lidstrom': 'A+', 'Eric Lindros': 'A', 'Alexander Mogilny': 'A', 'Teemu Selanne': 'A',
+    'Pavel Bure': 'A', 'Mike Modano': 'A', 'Mats Sundin': 'A', 'Brendan Shanahan': 'A', 'Paul Kariya': 'A', 'Chris Pronger': 'A', 'Scott Niedermayer': 'A',
+    'Jeremy Roenick': 'A-', 'Keith Tkachuk': 'A-', 'Pierre Turgeon': 'A-', 'Mark Recchi': 'A-', 'Sergei Zubov': 'A-', 'Rob Blake': 'A-', 'Alexei Kovalev': 'A-',
+    'Markus Naslund': 'A-', 'Peter Bondra': 'B+', 'Alexei Zhamnov': 'B+', 'Alexei Yashin': 'B+', 'Tony Amonte': 'B+', 'Doug Weight': 'B+', 'Rod BrindAmour': 'B+',
+    'Bill Guerin': 'B+', 'Roman Hamrlik': 'B+', 'Sandis Ozolinsh': 'B+', 'Al Iafrate': 'B+', 'Eric Desjardins': 'B+', 'Trevor Linden': 'B+', 'Mike Gartner': 'A-',
+    'Mikael Renberg': 'B', 'Jason Arnott': 'B', 'Martin Straka': 'B', 'Rob Niedermayer': 'B', 'Mike Ricci': 'B', 'Darius Kasparaitis': 'B', 'Viktor Kozlov': 'B-',
+    'Bryan Smolinski': 'B-', 'Philippe Boucher': 'B-', 'Chris Gratton': 'C+', 'Alexandre Daigle': 'C', 'Alexander Daigle': 'C', 'Bryan Berard': 'B-',
+    'Patrick Roy': 'A+', 'Dominik Hasek': 'A+', 'Martin Brodeur': 'A+', 'Ed Belfour': 'A', 'Curtis Joseph': 'A-', 'Mike Richter': 'A-', 'John Vanbiesbrouck': 'B+',
+    'Felix Potvin': 'B', 'Chris Osgood': 'B', 'Jocelyn Thibault': 'B-', 'Grant Fuhr': 'A-', 'Bill Ranford': 'B+', 'Kirk McLean': 'B', 'Sean Burke': 'B', 'Arturs Irbe': 'B-' };
+function potentialGradeOf(p) { return p.potGrade || '?'; }
+// v460: a player's TRUE potential is rolled once, one step either side of his listed grade with equal odds
+// (A+ -> A or A+ 50/50; B+ -> B, B+ or A- 1/3 each; F -> F or D- 50/50)
+function rollPotentialStep(grade) { const i = POT_GRADES.indexOf(grade); if (i < 0) return grade;
+    const opts = [i - 1, i, i + 1].filter(x => x >= 0 && x < POT_GRADES.length); return POT_GRADES[opts[Math.floor(Math.random() * opts.length)]]; }
+// console: potentials()  /  potentials('PIT')  /  potentials('Lindros')  - a scout's range, one letter either side
+function potentials(filter) {
+    const f = String(filter || '').toLowerCase();
+    // before the first summer nobody has a grade yet - estimate it the same way the offseason will
+    const gradeNow = p => { if (p.potGrade) return p.potGrade; if (p.potOv) return p.potOv; if (POTENTIAL_OVERRIDES[p.name]) return (p.potOv = rollPotentialStep(POTENTIAL_OVERRIDES[p.name]));
+        const pk = (p.peak !== undefined ? p.peak : (getPlayerWeightedStats(p.name)?.baseOvr || 50) + pg2Headroom(p)) - (p.pos === 'G' ? 8 : 0);
+        const cut = [[90, 'A+'], [87, 'A'], [84, 'A-'], [81, 'B+'], [78, 'B'], [75, 'B-'], [72, 'C+'], [69, 'C'], [66, 'C-'], [62, 'D+'], [58, 'D'], [54, 'D-']];
+        return p.potGradeEst || (p.potGradeEst = (cut.find(([v]) => pk >= v) || [0, 'F'])[1]); };
+    const rows = Object.values(playerStats).filter(p => p.teamCode && (!f || p.teamCode.toLowerCase() === f || p.name.toLowerCase().includes(f)))
+        .map(p => { const i = POT_GRADES.indexOf(gradeNow(p)); const lo = POT_GRADES[Math.max(0, i - 1)], hi = POT_GRADES[Math.min(POT_GRADES.length - 1, i + 1)];
+            return { player: p.name, team: p.teamCode, pos: p.pos, age: p.age, ovr: getPlayerWeightedStats(p.name)?.baseOvr, potential: lo === hi ? lo : `${lo} to ${hi}`, _i: i }; })
+        .sort((a, b) => b._i - a._i || b.ovr - a.ovr).map(({ _i, ...r }) => r);
+    console.table(rows.slice(0, f ? 200 : 60)); return `${rows.length} players${f ? '' : ' (top 60 shown - pass a team code or name to filter)'}`;
+}
+if (typeof window !== 'undefined') window.potentials = potentials;
+// v462: the potential grade drives development - how fast he closes on his peak, and how gracefully he ages
+const POT_GROW = { 'A+': 1.25, 'A': 1.15, 'A-': 1.10, 'F': 0.90 }; // v464: centred on the typical player - B+ to D- develop on the calibrated curve (core sank 63.7 -> 61.8)
+const POT_AGE = { 'A+': 0.80, 'A': 0.85, 'A-': 0.90, 'F': 1.05 };
+function pg2GradeMult(p, up) { const g = p.potGrade || 'B'; return up ? (POT_GROW[g] || 1) : (POT_AGE[g] || 1); }
 function pg2Stoch(d) { return Math.floor(d) + (Math.random() < d - Math.floor(d) ? 1 : 0); }
 function pg2Rate(age, up) { // share of the gap closed this summer
     if (!up) return age >= 34 ? 0.7 : 0.5;
@@ -8197,6 +8241,9 @@ function processOffseasonGrowthV2() {
         const grade = res ? res.grade : 0; p.lastGrade = +grade.toFixed(2);
         const now = ovrOf(p.name);
         if (p.peak === undefined) { const W = PG2_OVRW[isDp(p) ? 'D' : 'F']; p.peak = Math.round((now + pg2Headroom({ ...p, age: p.age - 1 }) + (p.pos === 'G' ? pg2CumDecline('g', p.age - 1) : ['phys', 'skill', 'iq'].reduce((q, g2) => q + W[g2] * pg2CumDecline(g2, p.age - 1), 0))) * 10) / 10; }
+        { const ov0 = POTENTIAL_OVERRIDES[p.name]; if (ov0 && !p.potOvApplied) { const ov = p.potOv || rollPotentialStep(ov0); p.potOv = ov; p.potOvApplied = true; // v459; v460 rolled ±1 step
+            if (p.age <= 28) p.peak = Math.max(now, POT_PEAK[ov] + (p.pos === 'G' ? 8 : 0) + (p.age >= 26 ? -1 : 0)); } } /* v463: grade sets the peak but never below today's rating - no hard caps; the grade (rolled ±1) drives his pace */
+        if (!p.potOv && !p.potRolled) { p.potRolled = true; p.peak += [-3, 0, 3][Math.floor(Math.random() * 3)]; } // v460: ±1 grade step
         // ---- performance moves the peak; breakouts / early declines ----
         let dPeak = Math.max(-2, Math.min(2, grade * 0.9));
         if (p.age >= 32 && dPeak > 0) dPeak = Math.min(1, dPeak * 0.5);
@@ -8206,29 +8253,84 @@ function processOffseasonGrowthV2() {
         if (p.age <= 25 && Math.random() < 0.05) { const b = 3 + Math.floor(Math.random() * 3); dPeak += b; trace(p, 'peak', b, 'breakout'); if (awardConfig.headlines) logs.push(` BREAKOUT: ${p.name} (${p.teamCode}) took a big step this summer!`); }
         else if (p.age >= 27 && Math.random() < 0.04) { const b = 2 + Math.floor(Math.random() * 3); dPeak -= b; trace(p, 'peak', -b, 'early decline'); if (awardConfig.headlines && Math.random() < 0.4) logs.push(` FATHER TIME: ${p.name} (${p.teamCode}) lost a step over the summer.`); }
         p.peak = Math.max(30, Math.min(99, p.peak + dPeak));
+        // v458: hidden potential grade (A+ .. F) from the peak, and a hidden limit on every attribute set once per player:
+        // peak + a random -9..+9 per skill (some skills can go well past his overall ceiling, others top out early)
+        { const pk = p.peak - (p.pos === 'G' ? 8 : 0), cut = [[90, 'A+'], [87, 'A'], [84, 'A-'], [81, 'B+'], [78, 'B'], [75, 'B-'], [72, 'C+'], [69, 'C'], [66, 'C-'], [62, 'D+'], [58, 'D'], [54, 'D-']];
+          p.potGrade = p.potOv || (cut.find(([v]) => pk >= v) || [0, 'F'])[1];
+          if (!p.attrCap) { p.attrCap = {}; const ks = p.pos === 'G' ? ['ovr', 'gDef', 'gloveL', 'gloveR', 'stickL', 'stickR', 'agil', 'speed', 'pass', 'stkHnd', 'clutch'] : [...Object.values(PG2_GROUPS).flat(), 'rough', 'aggr'];
+              ks.forEach(k => { const cur = parseInt(p.attr[k]) || 0, tri = (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+                  p.attrCap[k] = Math.max(cur, Math.min(99, Math.round(p.peak + 3 + tri * 9))); }); } }
         const set = (k, d, cause) => { if (!d) return; const cur = parseInt(p.attr[k]); if (isNaN(cur)) return; let nv = Math.max(20, Math.min(99, cur + d));
-            if (d > 0 && isDp(p) && ['off', 'shotAcc', 'shotPwr', 'pass', 'stkHnd'].includes(k)) nv = Math.min(nv, Math.max(cur, 90)); /* v428: D offence skills don't grow past 90 (Ozolinsh 127 pts) */ if (nv !== cur) { p.attr[k] = nv; trace(p, k, nv - cur, cause); } };
+            if (d > 0 && isDp(p) && ['off', 'shotAcc', 'shotPwr', 'pass', 'stkHnd'].includes(k)) nv = Math.min(nv, Math.max(cur, 86)); /* v428: D offence skills don't grow past 90 (Ozolinsh 127 pts); v458 90 -> 86 (D reached 104-111 pts) */
+            if (d > 0 && p.attrCap && p.attrCap[k]) nv = Math.min(nv, Math.max(cur, p.attrCap[k])); /* v458: each attribute's own hidden limit */ if (nv !== cur) { p.attr[k] = nv; trace(p, k, nv - cur, cause); } };
         if (p.pos === 'G') {
             const target = p.peak - pg2CumDecline('g', p.age), gap = target - now;
-            const gRate = gap > 0 ? (p.age <= 27 ? 0.30 : 0.18) : pg2Rate(p.age, false); // v428: young goalies close the gap faster
+            const gRate = (gap > 0 ? (p.age <= 27 ? 0.30 : 0.18) : pg2Rate(p.age, false)) * pg2GradeMult(p, gap > 0); // v428: young goalies close the gap faster; v462 grade-driven pace
             const step = pg2Stoch(Math.max(-3, Math.min(4, gap * gRate))) + (Math.random() < 0.3 ? (Math.random() < 0.5 ? 1 : -1) : 0);
             set('ovr', step, 'curve'); set('gDef', step, 'curve');
+            // v457: glove/stick hands develop independently (own lean + noise), injuries cost agility
+            if (!p.devLean) { p.devLean = {}; ['gloveL', 'gloveR', 'stickL', 'stickR', 'agil'].forEach(k => p.devLean[k] = (Math.random() + Math.random() - 1) * 1.0); }
+            const gStep458 = p.age < 33 ? Math.max(0, step) : step; // v458: hands/speed only decline from 33
+            ['gloveL', 'gloveR', 'stickL', 'stickR'].forEach(k => set(k, pg2Stoch(gStep458 * 0.6 + (p.devLean[k] || 0) * 0.5) + (Math.random() < 0.25 ? (p.age < 33 ? 1 : (Math.random() < 0.5 ? 1 : -1)) : 0), 'dev hands'));
+            { const inj = (p.injuryHistory || []).filter(h => h.season === currentSeason - 1), gOut = inj.reduce((q, h) => q + (h.gamesOut || 0), 0);
+              if (gOut >= 15) set('agil', -pg2Stoch((gOut >= 30 ? 2 : 1) * (p.age >= 32 ? 1.5 : p.age <= 25 ? 0.5 : 1) * 0.5), 'injury'); } // v458: halved for goalies
             if (res && res.zs.sv > 1.2) ['gloveL', 'gloveR', 'stickL', 'stickR'].forEach(k => set(k, Math.random() < 0.5 ? 1 : 0, 'grade: sv%'));
             if (res && res.zs.sv < -1.2) ['gloveL', 'gloveR', 'stickL', 'stickR'].forEach(k => set(k, Math.random() < 0.5 ? -1 : 0, 'grade: sv%'));
             if (p.age >= 33) ['pass', 'stkHnd'].forEach(k => set(k, -1, 'age'));
+            // v457: goalie speed follows his curve; puck handling grows to 28 with his own lean; clutch from big games
+            if (p.devLean.speed === undefined) ['speed', 'pass', 'stkHnd'].forEach(k => p.devLean[k] = (Math.random() + Math.random() - 1) * 0.8);
+            set('speed', pg2Stoch(gStep458 * 0.6 + p.devLean.speed * 0.4) + (Math.random() < 0.2 ? (p.age < 33 ? 1 : (Math.random() < 0.5 ? 1 : -1)) : 0), 'dev speed');
+            if (p.age <= 28) ['pass', 'stkHnd'].forEach(k => set(k, pg2Stoch(0.3 + p.devLean[k] * 0.5), 'dev puck'));
+            { const st = p.season || {}, po = p.playoff || {}; let cz = 0;
+              if ((po.gp || 0) >= 4 && po.sa > 0 && st.sa > 0) cz += ((po.sv / po.sa) - (st.sv / st.sa)) / 0.012;
+              if ((st.closeGP || 0) >= 10) { const lgC = gl.filter(q => (q.season.closeGP || 0) >= 10); const lr = lgC.reduce((q, g2) => q + (g2.season.clutchGA || 0), 0) / Math.max(1, lgC.reduce((q, g2) => q + g2.season.closeGP, 0));
+                  if (lr > 0) cz += (lr - (st.clutchGA || 0) / st.closeGP) / lr; }
+              const cs = Math.max(-2, Math.min(2, Math.round(cz))); if (cs) set('clutch', cs, 'big games'); }
         } else {
+            // v457: independent attribute development. Each attribute = group trend (age curve, unchanged on average)
+            // + the player's own lean on that skill (balanced within the group, so some rise while others fall)
+            // + what he actually did (each stat feeds only its own skills) + noise. Injuries cost skating.
+            if (!p.devLean) { p.devLean = {}; Object.values(PG2_GROUPS).flat().forEach(k => p.devLean[k] = (Math.random() + Math.random() - 1) * 1.1); }
+            const zs = res ? res.zs : {}, up = p.age <= 33, cl = (v, m) => Math.max(-m, Math.min(m, v || 0));
+            const statNudge = {
+                shotAcc: cl((zs.shp || 0) * 0.4 + (zs.g || 0) * 0.2, 0.8), shotPwr: cl((zs.g || 0) * 0.3, 0.8),
+                pass: cl((zs.a || 0) * 0.4, 0.8), stkHnd: cl((zs.a || 0) * 0.2 + (zs.g || 0) * 0.1, 0.8),
+                off: cl(((zs.g || 0) + (zs.a || 0)) * 0.12, 0.6), def: cl((zs.blk || 0) * 0.2 + (zs.pm || 0) * 0.2, 0.8),
+                check: cl((zs.hits || 0) * 0.3, 0.8), endur: cl((zs.toi || 0) * 0.3, 0.8), speed: cl((zs.sh || 0) * 0.3, 0.6),
+                fo: (p.season?.foa || 0) >= 300 ? cl((zs.fo || 0) * 0.4, 1) : 0, clutch: cl((zs.cl || 0) * 0.4, 1) };
             Object.entries(PG2_GROUPS).forEach(([g2, keys]) => {
                 const target = p.peak - pg2CumDecline(g2, p.age), gap = target - now;
-                const base = gap * pg2Rate(p.age, gap > 0);
-                keys.forEach(k => set(k, pg2Stoch(Math.max(-4, Math.min(4, base))) + (Math.random() < 0.15 ? (Math.random() < 0.5 ? 1 : -1) : 0), 'curve ' + g2));
+                const base = Math.max(-4, Math.min(4, gap * pg2Rate(p.age, gap > 0) * pg2GradeMult(p, gap > 0))); // v462: grade-driven pace
+                const leanAvg = keys.reduce((q, k) => q + (p.devLean[k] || 0), 0) / keys.length;
+                keys.forEach(k => {
+                    let sn = statNudge[k] || 0; if (sn > 0 && !up) sn = 0;
+                    const d = base + ((p.devLean[k] || 0) - leanAvg) * 0.8 + sn;
+                    set(k, pg2Stoch(d) + (Math.random() < 0.30 ? (Math.random() < 0.5 ? 1 : -1) : 0), 'dev ' + g2);
+                });
             });
-            // role nudges from the grade's parts (gains only through age 33)
-            const zs = res ? res.zs : {}, up = p.age <= 33;
-            if ((p.season?.foa || 0) >= 300) set('fo', zs.fo >= 1.2 && up ? 1 : zs.fo <= -1.2 ? -1 : 0, 'grade: faceoffs');
-            set('check', zs.hits >= 1.5 && up ? 1 : 0, 'grade: hits');
-            set('clutch', zs.cl >= 1.2 && up ? 1 : zs.cl <= -1.2 ? -1 : 0, 'grade: clutch');
-            if (p.age <= 25 && ((p.season?.pim || 0) / Math.max(1, p.season?.gp || 1) >= 1.8 || (p.season?.fights || 0) >= 10)) set('rough', 1, 'PIM/fights');
-            if (p.age >= 33) set('aggr', -1, 'age');
+            // v457: injuries cost skating - by severity, scaled by age (young bodies bounce back, older ones don't)
+            { const inj = (p.injuryHistory || []).filter(h => h.season === currentSeason - 1);
+              const ageM = p.age <= 24 ? 0.4 : p.age <= 29 ? 0.8 : p.age <= 33 ? 1.2 : 1.6;
+              let sp = 0, ag = 0, en = 0;
+              inj.forEach(h => { const g = h.gamesOut || h.daysMissed || 0;
+                  if (g >= 30) { sp += 1.0; ag += 1.5; en += 1.0; } else if (g >= 15) { sp += 0.5; ag += 1.0; en += 0.5; } else if (g >= 8) { ag += 0.5; } });
+              if (inj.length >= 3) en += 0.7; // banged up all year
+              if (sp || ag || en) { set('speed', -pg2Stoch(sp * ageM), 'injury'); set('agil', -pg2Stoch(ag * ageM), 'injury'); set('endur', -pg2Stoch(en * ageM), 'injury'); } }
+            // v457: toughness and size move both ways - from penalties, hits, fights won/lost, and age
+            { const st = p.season || {}, gp = st.gp || 0, pimPg = gp ? (st.pim || 0) / gp : 0, fts = st.fights || 0, fw = st.fightW || 0;
+              if (gp >= 20) {
+                  if (p.age <= 30 && (pimPg >= 1.6 || fts >= 8)) set('rough', 1, 'PIM/fights');
+                  if (fw >= 3 && fw >= fts * 0.6) set('rough', 1, 'fights won');
+                  else if (fts >= 5 && fw <= fts * 0.3) set('rough', -1, 'fights lost');
+                  if (pimPg < 0.3 && Math.random() < 0.5) set('rough', -1, 'clean season');
+                  if (p.age <= 31 && (pimPg >= 1.5 || (zs.hits || 0) >= 1.2 || fts >= 8)) set('aggr', 1, 'physical play');
+                  else if (pimPg < 0.3 && Math.random() < 0.5) set('aggr', -1, 'clean season');
+              }
+              if (p.age >= 32 && Math.random() < 0.5) set('rough', -1, 'age');
+              if (p.age >= 33) set('aggr', -1, 'age');
+              const w0 = parseInt(p.weight) || 0;
+              if (w0) { let dw = p.age <= 27 ? Math.floor(Math.random() * 4) + ((zs.hits || 0) >= 1 ? 1 : 0) : p.age >= 33 ? (Math.random() < 0.5 ? 1 : -1) : 0;
+                  if (dw) { p.weight = Math.max(150, Math.min(260, w0 + dw)); if (PROG_TRACE) PROG_TRACE.push([p.name, p.age, p.pos, 'weight', dw, 'age/role']); } } }
             if (p.attr.grades) Object.keys(p.attr.grades).forEach(k => { if (p.attr[k] !== undefined) p.attr.grades[k] = String(p.attr[k]); });
         }
         delete _wpCache[p.name];
@@ -8312,6 +8414,7 @@ function runRebuildTrades(prevPts) {
 }
 async function beginNewYear() {
     const _prevPts = Object.fromEntries(league.map(t => [t.nrm, t.season?.pts || 0])); // v448: for the rebuild market
+    try { archiveChronicle(); } catch (e) { console.warn('chronicle', e); } // v455
     if (_awardsPending) { alert('Reveal the award winners before starting the next season — history would snapshot as zeroed standings otherwise.'); return; }
     clearWpCache();
     currentSeason++; isPlayoffs = false; asgDoneThisSeason = false; currentCupChamp = "";
@@ -8540,7 +8643,7 @@ function advanceCalendar() {
     currentDay++;
     // v279: the news log grows ~35 entries/day (6,000+ a season). Saves already keep only the newest
     // 1,500; trim in memory too so long sessions don't keep re-rendering and holding thousands.
-    if (tradeLog.length > 2000) tradeLog.length = 1500;
+    if (tradeLog.length > 2000) { try { archiveChronicle(); } catch (e) {} tradeLog.length = 1500; } // v455: archive landmark news before trimming
 
     if (currentDay === Math.floor(calendar.length / 2) && !isPlayoffs && !isASG && !asgDoneThisSeason && awardConfig.streaks) { asgDoneThisSeason = true; initAllStarGame(); return false; }
     if (isASG && calendar[currentDay] && !calendar[currentDay].some(g => g.isASG_game)) {
@@ -10506,6 +10609,17 @@ const buildRosterHTML = (tk, confName, color) => {
 // v454: record alerts. Single-season records are tracked from the start of the dynasty (the opening season sets the
 // marks); career leaders are checked across active and retired players, with a headline when the leader changes.
 let simRecords = null;
+// v455: league chronicle - important headlines copied out of the news log (which is capped at 1500 entries) so
+// records, Hall of Fame inductions, Cup Finals, Conn Smythes, big upsets and landmark milestones are never lost
+let leagueChronicle = [];
+const CHRONICLE_RE = /^(NEW RECORD|ALL-TIME|HALL OF FAME|CONN SMYTHE|(UPSET!|SERIES:) .*(Stanley Cup Final|conference final))|MILESTONE: .*(500 Career Goals|600 Career Goals|700 Career Goals|800 Career Goals|1000 Career Points|1500 Career Points|2000 Career Points|300 Career Wins|400 Career Wins)/; // v456: trimmed (hit the cap by year 10)
+function archiveChronicle() {
+    (tradeLog || []).slice().reverse().forEach(e => {
+        if (!e || e._arch || !CHRONICLE_RE.test(e.details || '')) return;
+        e._arch = true; leagueChronicle.unshift({ season: currentSeason, text: String(e.details).trim() });
+    });
+    if (leagueChronicle.length > 1000) leagueChronicle.length = 1000;
+}
 function checkRecordAlerts() {
     const act = Object.values(playerStats).filter(p => p.teamCode);
     const sk = act.filter(p => p.pos !== 'G'), gl = act.filter(p => p.pos === 'G');
@@ -10938,14 +11052,14 @@ function getConnSmytheScore(p) {
             // so depth players never left and the league aged ~0.7 yrs a season). Weak veterans go sooner,
             // stars hang on a bit longer. Only career-bar players are inducted into the Hall of Fame.
             const curOvr = getPlayerWeightedStats(p.name)?.ovr || 60;
-            const ageP = p.age >= 39 ? 0.90 : p.age === 38 ? 0.70 : p.age === 37 ? 0.75 : p.age === 36 ? 0.63 : /* v388: 36 0.55 -> 0.63; v373: 0.45/0.65 -> 0.55/0.75 (36+ still 30-42 by year 10 vs ~25-30 real) */ /* v364: 36-37 were 0.32/0.50 (league carried ~2x real 36-37 year olds) */ p.age === 35 ? 0.20 : p.age === 34 ? 0.12 : p.age === 33 ? 0.06 : 0;
+            const ageP = p.age >= 38 ? 0.90 : p.age === 37 ? 0.85 : p.age === 36 ? 0.70 : /* v456: 36 0.63->0.70, 37 0.75->0.85, 38 0.70->0.90 (careers ran to 1,800 GP) */ /* v388: 36 0.55 -> 0.63; v373: 0.45/0.65 -> 0.55/0.75 (36+ still 30-42 by year 10 vs ~25-30 real) */ /* v364: 36-37 were 0.32/0.50 (league carried ~2x real 36-37 year olds) */ p.age === 35 ? 0.20 : p.age === 34 ? 0.12 : p.age === 33 ? 0.06 : 0;
             let retireP = ageP;
             if (p.age >= 31 && curOvr < 50) retireP += 0.15;          // fringe veteran can't find a job
             // v302: players still performing at an elite level hang on much longer (graded by rating and
             // this season's production). Removed the old extra 5% retire roll for 90+ stars past 33.
-            if      (curOvr >= 90) retireP *= 0.25;
-            else if (curOvr >= 85) retireP *= 0.40;
-            else if (curOvr >= 80) retireP *= 0.65;
+            // v456: rating protection only before 36 (elite 36-40 year olds were retiring ~9%/yr)
+            if (p.age < 36) { if (curOvr >= 90) retireP *= 0.25; else if (curOvr >= 85) retireP *= 0.40; else if (curOvr >= 80) retireP *= 0.65; }
+            else if (curOvr >= 85) retireP *= 0.75;
             const sGP = p.season.gp || 0, sPPG = sGP >= 40 ? ((p.season.g || 0) + (p.season.a || 0)) / sGP : 0;
             // v357: still producing = not retiring. Judged per game (10+ GP, so an injury-shortened year still
             // counts). Strong production -> stays (only 41+ can still go, at a reduced rate); solid -> stays through 37.
@@ -10956,7 +11070,7 @@ function getConnSmytheScore(p) {
             // v363: was 'strong -> never until 41, solid -> never through 37' - players 36+ went 15 -> 105 in 10 years
             // v365: from 36 even strong producers can go (36+ count climbed to ~60 as the 93-94 stars aged together)
             // v396: from 36 production barely protects (36+ reached 46 players by year 10 vs ~25-30 real)
-            if (strong) retireP = p.age >= 38 ? retireP * 0.8 : p.age >= 36 ? retireP * 0.6 : 0;
+            if (strong) retireP = p.age >= 37 ? retireP : p.age >= 36 ? retireP * 0.7 : 0; // v456: production protection ends at 37
             else if (solid) retireP *= p.age >= 36 ? 0.9 : 0.5;
             else if (sGP < 10 && curOvr >= 85) retireP *= 0.4; // star who lost the year to injury - usually comes back
             const retires = roll < retireP;
@@ -11313,6 +11427,12 @@ function renderLeagueHistory() {
     let h = `<tr><th>YR</th><th>PRESIDENTS' TROPHY</th><th>STANLEY CUP CHAMPION</th></tr>`;
     if (leagueHistory.length) h += `<tr><td colspan="3" style="color:#444;font-size:5px;text-align:center;padding:2px;letter-spacing:.06em;">CLICK ANY ROW — FULL STANDINGS SNAPSHOT</td></tr>`;
     leagueHistory.forEach(s => { h += `<tr style="cursor:pointer;" title="Click to view full ${s.year} standings" onclick="showHistoricalStandings(${s.year})"><td class="archive-hl">${s.year}</td><td>${s.presidents}</td><td style="color:var(--ea-yellow);">${s.cup}</td></tr>`; });
+    // v455: league chronicle - the season's landmark headlines, newest first
+    try { archiveChronicle(); } catch (e) {}
+    if (leagueChronicle.length) {
+        h += `<tr><th colspan="3" style="padding-top:10px;">LEAGUE CHRONICLE</th></tr>`;
+        leagueChronicle.slice(0, 200).forEach(c => { h += `<tr><td class="archive-hl">${c.season}</td><td colspan="2" style="font-size:6px;text-align:left;">${c.text.replace(/</g, '&lt;')}</td></tr>`; });
+    }
     el.innerHTML = h;
 }
 
