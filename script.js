@@ -5887,8 +5887,9 @@ function simGame(idx) {
                         const isEliteScorer = ['SUPERSTAR','PRO SNIPER','SNIPER','POWER SNIPER'].includes(victimTag);
                         const teamHasEnforcer = isEliteScorer && (rosters[victimTeam]||[]).some(p=>['ENFORCER F','ENFORCER D'].includes(getPlayerWeightedStats(p.name)?.tag||''));
                         if (teamHasEnforcer) injChance *= 0.85;
+                        injChance *= injAgeMult(victim.name); // v469
                         if (Math.random() < injChance) {
-                            const _r=Math.random(); const injDays = withLongTermChance(_r<0.60?1+Math.floor(Math.random()*2):_r<0.90?3+Math.floor(Math.random()*3):6+Math.floor(Math.random()*4)); // hit: 60%:1-2g, 30%:3-5g, 10%:6-9g
+                            const _r=Math.random(); const injDays = injAgeDays(victim.name, withLongTermChance(_r<0.60?1+Math.floor(Math.random()*2):_r<0.90?3+Math.floor(Math.random()*3):6+Math.floor(Math.random()*4))); /* v469 age */ // hit: 60%:1-2g, 30%:3-5g, 10%:6-9g
                             if (!vPs.injury) vPs.injury = {daysRemaining:0,type:''};
                             vPs.injury.daysRemaining = injDays; vPs.injury.severity = injDays; vPs.injury.source = 'hit';
                             vPs.injury.type = injDays>=15?'Hit — long-term':injDays>=10?'Hit — week-to-week':injDays>=5?'Hit — short-term':'Hit — day-to-day';
@@ -5939,9 +5940,9 @@ function simGame(idx) {
             trk(bPicked.name, 'blk', 1);
             // v359: blocking a shot can hurt - ~0.4% of blocks cost 1-5 games (defencemen block most shots)
             const bps = playerStats[bPicked.name];
-            if (!isPlayoffs && awardConfig.injuries && bps && !(bps.injury?.daysRemaining > 0) && Math.random() < 0.006) { // v370: 0.004 -> 0.006
+            if (!isPlayoffs && awardConfig.injuries && bps && !(bps.injury?.daysRemaining > 0) && Math.random() < 0.005 * injAgeMult(bPicked.name)) { // v370: 0.004 -> 0.006; v469 0.005 (D share), age
                 const bTk = ev.side === 'h' ? g.h.nrm : g.a.nrm;
-                const bDays = 1 + Math.floor(Math.random() * 8); // v370: 1-5 -> 1-8 games
+                const bDays = injAgeDays(bPicked.name, 1 + Math.floor(Math.random() * 8)); // v370: 1-5 -> 1-8 games; v469 age
                 bps.injury = { severity: bDays, daysRemaining: bDays, source: 'blocked-shot' };
                 autoPlaceOnIR(bPicked.name, bTk, bDays);
                 tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `[INJ] BLOCKED SHOT: ${bPicked.name} (${bTk.toUpperCase()}) - out ${bDays} game${bDays > 1 ? 's' : ''}.` });
@@ -13158,6 +13159,10 @@ function hasSpareGoalie(tk) {
 // v283: season-altering injuries. Every injury table topped out around 9-15 games, so nobody ever
 // missed a month (broken bones, knee and shoulder surgery, concussions). About 10% of injuries that
 // are already 5+ games become a 15-45 game long-term injury: roughly a dozen a season league-wide.
+// v469: age and injuries - from 29 a player gets hurt ~4% more often per year (33 -> +20%, 36 -> +32%), and from 32 he
+// takes ~25% longer to heal
+function injAgeMult(name) { const a = playerStats[name]?.age || 25; return a > 28 ? 1 + 0.04 * (a - 28) : 1; }
+function injAgeDays(name, days) { const a = playerStats[name]?.age || 25; return days > 0 && a >= 32 ? Math.max(days + 1, Math.round(days * 1.25)) : days; }
 function withLongTermChance(days) {
     return (days >= 5 && Math.random() < 0.10) ? 15 + Math.floor(Math.random() * 31) : days;
 }
@@ -13209,7 +13214,7 @@ function rollInGameInjuries(homeCode, awayCode) {
             const avgToi = (sst.gp || 0) >= 3 ? (sst.toi || 0) / sst.gp : (p.pos === 'D' ? 19 : 14);
             const toiMult = Math.max(0.65, Math.min(1.35, avgToi / 16));
             // v370: defencemen get hurt more (blocking shots, taking the hits behind the net) - x1.25
-            const injChance = (SKATER_CHANCE + fatigueCont + endurProt + agilProt + checkBonus) * toiMult * (p.pos === 'D' ? 1.25 : 1);
+            const injChance = (SKATER_CHANCE + fatigueCont + endurProt + agilProt + checkBonus) * toiMult * (p.pos === 'D' ? 1.15 : 1) * injAgeMult(p.name); // v469: D 1.25 -> 1.15 (D were ~40% more than F, target 30-35%), age
             if (Math.random() < Math.max(0.0005, injChance)) {
                 const rawRoll = Math.random();
                 // v158: endur shifts toward less severe; high fatigue shifts toward more severe
@@ -13241,6 +13246,7 @@ function rollInGameInjuries(homeCode, awayCode) {
                 days = withLongTermChance(days);
                 // v370: a defenceman's 5+ game injury has an extra 12% chance to become long-term (15-45 games)
                 if (p.pos === 'D' && days >= 5 && days < 15 && Math.random() < 0.12) days = 15 + Math.floor(Math.random() * 31);
+                days = injAgeDays(p.name, days); // v469
                 if (days > 0) { ps.injury = { severity: days, daysRemaining: days, source: 'in-game-skater' }; autoPlaceOnIR(p.name, tk, days); }
                 else ps.shakenUpToday = true; // exempt from a second independent injury roll later this game
                 const label = days === 0 ? 'shaken up — playing through' : `out ${days} game${days > 1 ? 's' : ''}`;
@@ -13324,7 +13330,7 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
         // (5 PIM) is a genuinely more injury-prone event than an ordinary 2-min minor and should
         // carry noticeably more risk, not the same fixed bump.
         const physicalBonus = stats.pim >= 5 ? 0.006 : stats.pim >= 2 ? 0.002 : 0;
-        const chance = Math.max(0.0005, BASE_CHANCE + fatigueCont2 + endurProt2 + agilProt2 + physicalBonus);
+        const chance = Math.max(0.0005, BASE_CHANCE + fatigueCont2 + endurProt2 + agilProt2 + physicalBonus) * injAgeMult(pName); // v469 age
 
         if (Math.random() < chance) {
             const rawRoll = Math.random();
@@ -13352,6 +13358,7 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
                 label = `${days}-game injury`;
             }
 
+            if (ps.pos !== 'G') { const d0 = days; days = injAgeDays(pName, days); if (days !== d0) label = `${days}-game injury`; } // v469 age
             const teamCode = (rosters[homeCode] || []).find(p => p.name === pName) ? homeCode : awayCode;
             if (days > 1) {
                 if (ps.pos !== 'D' && ps.pos !== 'G' && !hasSpareForward(teamCode)) { days = 1; label = '1-game injury'; }
