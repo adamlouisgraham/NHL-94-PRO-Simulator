@@ -7346,7 +7346,7 @@ function processSingleGoal(teamName, teamCode, scorerName, onIcePlayers, timeStr
             const pos2 = ps.pos || 'D', isD2 = (pos2 === 'D' || pos2 === 'LD' || pos2 === 'RD');
             let w = 100 * Math.pow(Math.max(30, weight) / 70, 2.5);
             w *= tagNudge(arch.assistRate || 1.0);
-            w *= isD2 ? (_goalCtx === 'PP' ? 1.0 : 0.60) : (pos2 === 'C' ? 1.12 : 1.0); // v418: D 0.70 -> 0.66; v434 PP 1.00 / ES 0.60 (D had only 15.5% of PP points)
+            w *= isD2 ? (_goalCtx === 'PP' ? 0.94 : 0.56) : (pos2 === 'C' ? 1.12 : 1.0); /* v467: D assists trimmed (ES 0.60 -> 0.56, PP 1.0 -> 0.94) */ // v418: D 0.70 -> 0.66; v434 PP 1.00 / ES 0.60 (D had only 15.5% of PP points)
             if (isD2 && off < 70) w *= Math.max(0.5, 1 - (70 - off) * 0.025); // v417: low-offence D rarely in on goals (52-off prospect had 89 pts)
             const hot = ps.macro_streak === 'HOT' || ps.micro_streak === 'HOT' || ps.streakType === 'hot';
             const cold = ps.macro_streak === 'COLD' || ps.micro_streak === 'COLD' || ps.streakType === 'cold';
@@ -8468,6 +8468,7 @@ async function beginNewYear() {
         // stale day number from last season) — same bug class as currentCupChamp/pendingTrades.
         p.lastPlayedDay = undefined;
         if (p.onIR) p.irDay = 0;
+        p.injGamesSeason = 0; // v466: goalies never reset this (only the skater branch did) - their 'games lost' piled up across seasons
 
         // Safety net: Give existing players the careerPlayoff tracker if they don't have it yet
         if (!p.careerPlayoff) {
@@ -13164,7 +13165,7 @@ function withLongTermChance(days) {
 function rollInGameInjuries(homeCode, awayCode) {
     if (!awardConfig.injuries) return;
     const SKATER_CHANCE = 0.00260; // v350: 0.00236 -> 0.00260 (+10%, more short-term injuries)
-    const GOALIE_CHANCE = 0.0029; // v362: 0.0016 -> 0.0029 (~0.5 -> ~0.9 goalie injuries per team per season)
+    const GOALIE_CHANCE = 0.0044; // v468: 0.0029 -> 0.0044 (goalie games lost ~7 -> target 10-20 a team); v362: 0.0016 -> 0.0029 (~0.5 -> ~0.9 goalie injuries per team per season)
 
     [homeCode, awayCode].forEach(tk => {
         if (!rosters[tk]) return;
@@ -13268,13 +13269,13 @@ function rollInGameInjuries(homeCode, awayCode) {
                 let days;
                 if (hasThirdGoalie) {
                     const gr = Math.random();
-                    if (gr < 0.50) days = Math.floor(Math.random() * 3) + 5;   // 50%: 5–7 games
-                    else days = Math.floor(Math.random() * 2) + 8;              // 50%: 8–9 games
+                    if (gr < 0.50) days = Math.floor(Math.random() * 4) + 6;   // v467: 6-9 games (was 5-7)
+                    else days = Math.floor(Math.random() * 5) + 10;             // v467: 10-14 games (was 8-9)
                 } else {
                     const gr2 = Math.random();
-                    days = gr2 < 0.30 ? 0 : Math.floor(Math.random() * 3) + 1;  // 30%: shaken up (0g) | 70%: 1-3 games
+                    days = gr2 < 0.15 ? 0 : Math.floor(Math.random() * 5) + 2;  // v467: 15% shaken up | 85%: 2-6 games (was 30% / 1-3) - goalies lost ~5-10 games a team, target 10-20
                 }
-                if (hasThirdGoalie) days = withLongTermChance(days);
+                if (hasThirdGoalie) days = Math.min(25, withLongTermChance(days)); // v465: goalie injuries capped at 25 games
                 ps.injury = { severity: days, daysRemaining: days, initialDays: days, source: 'in-game-goalie' };
                 autoPlaceOnIR(p.name, tk, days);
                 if (!backupG) ps.playingHurt = true; // stays in net but at reduced effectiveness
@@ -13357,13 +13358,15 @@ function triggerGameInjuries(matchStats, homeCode, awayCode) {
                 else if (ps.pos === 'D' && !hasSpareDefenseman(teamCode)) { days = 1; label = '1-game injury'; }
                 // v192: goalie post-game duration no longer capped by roster depth
             }
+            // v465: goalies - post-game injuries capped at one per team per season and at 25 games
+            if (days > 0 && ps.pos === 'G') { const tObj = league.find(t => t.code === teamCode || t.nrm === teamCode); if (tObj) { tObj.season.gPostInj = (tObj.season.gPostInj || 0) + 1; if (tObj.season.gPostInj > 1) days = 0; } }
             const note = days === 0
                 ? `[INJ] INJURY NOTE: ${pName} (${teamCode.toUpperCase()}) was shaken up  -  out for a period.`
                 : `[INJ] INJURY: ${pName} (${teamCode.toUpperCase()})  -  ${label}, out ${days} game${days > 1 ? 's' : ''}.`;
 
             // v188: max is now 9 games — confirm dialog no longer needed
 
-            if (days > 0) { days = withLongTermChance(days); ps.injury = { severity: days, daysRemaining: days, source: 'post-game' }; autoPlaceOnIR(pName, teamCode, days); }
+            if (days > 0) { days = withLongTermChance(days); if (ps.pos === 'G') days = Math.min(25, days); ps.injury = { severity: days, daysRemaining: days, source: 'post-game' }; autoPlaceOnIR(pName, teamCode, days); }
             tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: note });
             if (days > 0 && isTeamCaptain(pName)) {
                 tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `⚠ CAPTAIN DOWN: ${pName} (${teamCode.toUpperCase()}) — ${label}. Leadership void in the locker room.` });
