@@ -12568,6 +12568,10 @@ function pcSwitchTab(pName, tab) {
 // season GRADE (-2..+2) that moved it
 function pcCeilingBadge(p) {
     let out = '';
+    // v470: the player's rolled potential grade (A+ .. F) on every card
+    { const g = p.potGrade || p.potOv || POTENTIAL_OVERRIDES[p.name] && (p.potOv = rollPotentialStep(POTENTIAL_OVERRIDES[p.name]));
+      if (g) { const col = g.startsWith('A') ? '#ffd700' : g.startsWith('B') ? '#4fc3f7' : g.startsWith('C') ? '#aaa' : '#e57373';
+          out += `<span title="Potential grade" style="font-size:6px;color:${col};border:1px solid ${col};padding:1px 3px;">POT ${g}</span>`; } }
     if (p.peak !== undefined && p.age <= 25) {
         const g = p.pos === 'G', pk = p.peak;
         const [lab, col] = pk >= (g ? 92 : 88) ? ['ELITE', '#ffd700'] : pk >= (g ? 85 : 78) ? ['TOP 6', '#4fc3f7'] : pk >= (g ? 76 : 68) ? ['DEPTH', '#aaa'] : ['BUST', '#e57373'];
