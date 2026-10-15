@@ -8274,7 +8274,7 @@ function processOffseasonGrowthV2() {
             const gStep458 = p.age < 33 ? Math.max(0, step) : step; // v458: hands/speed only decline from 33
             ['gloveL', 'gloveR', 'stickL', 'stickR'].forEach(k => set(k, pg2Stoch(gStep458 * 0.6 + (p.devLean[k] || 0) * 0.5) + (Math.random() < 0.25 ? (p.age < 33 ? 1 : (Math.random() < 0.5 ? 1 : -1)) : 0), 'dev hands'));
             { const inj = (p.injuryHistory || []).filter(h => h.season === currentSeason - 1), gOut = inj.reduce((q, h) => q + (h.gamesOut || 0), 0);
-              if (gOut >= 15) set('agil', -pg2Stoch((gOut >= 30 ? 2 : 1) * (p.age >= 32 ? 1.5 : p.age <= 25 ? 0.5 : 1) * 0.5), 'injury'); } // v458: halved for goalies
+              if (gOut >= 15 && p.age > 30) set('agil', -pg2Stoch((gOut >= 30 ? 2 : 1) * (p.age >= 32 ? 1.5 : 1) * 0.5), 'injury'); } // v458: halved for goalies; v471 none at 30 and under
             if (res && res.zs.sv > 1.2) ['gloveL', 'gloveR', 'stickL', 'stickR'].forEach(k => set(k, Math.random() < 0.5 ? 1 : 0, 'grade: sv%'));
             if (res && res.zs.sv < -1.2) ['gloveL', 'gloveR', 'stickL', 'stickR'].forEach(k => set(k, Math.random() < 0.5 ? -1 : 0, 'grade: sv%'));
             if (p.age >= 33) ['pass', 'stkHnd'].forEach(k => set(k, -1, 'age'));
@@ -8320,15 +8320,17 @@ function processOffseasonGrowthV2() {
             // v457: toughness and size move both ways - from penalties, hits, fights won/lost, and age
             { const st = p.season || {}, gp = st.gp || 0, pimPg = gp ? (st.pim || 0) / gp : 0, fts = st.fights || 0, fw = st.fightW || 0;
               if (gp >= 20) {
-                  if (p.age <= 30 && (pimPg >= 1.6 || fts >= 8)) set('rough', 1, 'PIM/fights');
-                  if (fw >= 3 && fw >= fts * 0.6) set('rough', 1, 'fights won');
+                  // v471: toughness gains only to 27, need 10+ fights, stop at 90; clean seasons always drop (fights crept 0.76 -> 1.29/game)
+                  const tough = k => (parseInt(p.attr[k]) || 0) < 90;
+                  if (p.age <= 27 && (pimPg >= 1.8 || fts >= 10) && tough('rough')) set('rough', 1, 'PIM/fights');
+                  if (fw >= 3 && fw >= fts * 0.6 && p.age <= 27 && tough('rough')) set('rough', 1, 'fights won');
                   else if (fts >= 5 && fw <= fts * 0.3) set('rough', -1, 'fights lost');
-                  if (pimPg < 0.3 && Math.random() < 0.5) set('rough', -1, 'clean season');
-                  if (p.age <= 31 && (pimPg >= 1.5 || (zs.hits || 0) >= 1.2 || fts >= 8)) set('aggr', 1, 'physical play');
-                  else if (pimPg < 0.3 && Math.random() < 0.5) set('aggr', -1, 'clean season');
+                  if (pimPg < 0.3) set('rough', -1, 'clean season');
+                  if (p.age <= 27 && (pimPg >= 1.5 || (zs.hits || 0) >= 1.2 || fts >= 10) && tough('aggr')) set('aggr', 1, 'physical play');
+                  else if (pimPg < 0.3) set('aggr', -1, 'clean season');
               }
-              if (p.age >= 32 && Math.random() < 0.5) set('rough', -1, 'age');
-              if (p.age >= 33) set('aggr', -1, 'age');
+              if (p.age >= 30 && Math.random() < 0.5) set('rough', -1, 'age'); // v472: 32 -> 30
+              if (p.age >= 31 && (p.age >= 33 || Math.random() < 0.5)) set('aggr', -1, 'age'); // v472: from 31
               const w0 = parseInt(p.weight) || 0;
               if (w0) { let dw = p.age <= 27 ? Math.floor(Math.random() * 4) + ((zs.hits || 0) >= 1 ? 1 : 0) : p.age >= 33 ? (Math.random() < 0.5 ? 1 : -1) : 0;
                   if (dw) { p.weight = Math.max(150, Math.min(260, w0 + dw)); if (PROG_TRACE) PROG_TRACE.push([p.name, p.age, p.pos, 'weight', dw, 'age/role']); } } }
@@ -8401,7 +8403,7 @@ function runRebuildTrades(prevPts) {
     // --- goalie market: any team whose best goalie is under 74
     league.forEach(t => {
         const W = t.nrm, myG = (rosters[W] || []).filter(p => p.pos === 'G').sort((a, b) => o(b.name) - o(a.name));
-        if (!myG.length || o(myG[0].name) >= 72) return; // v449: 74 -> 72
+        if (!myG.length || (o(myG[0].name) >= 72 && !(o(myG[0].name) < 77 && age(myG[0].name) >= 33))) return; // v449: 74 -> 72; v472: also aging starters under 77 (starters slid 80 -> 75 after year 10)
         let best = null;
         league.forEach(S => { if (S.nrm === W) return; const gs = (rosters[S.nrm] || []).filter(p => p.pos === 'G').sort((a, b) => o(b.name) - o(a.name));
             if (gs.length >= 2 && o(gs[1].name) >= 75 && !used.has(gs[1].name) && (!best || o(gs[1].name) > best.v)) best = { S: S.nrm, name: gs[1].name, v: o(gs[1].name) }; });
@@ -11202,7 +11204,7 @@ function makeProspect(t, pos, pickNo, boost = 0) {
                  speed: v(), agil: v(), check: v(isD ? 4 : -2), endur: v(),
                  // v376: toughness independent of skill (35-85) - from the skill base it sat at ~40-55, below the 56/56
                  // fight threshold, so as the 1993-94 grinders retired the league went soft and fights faded
-                 rough: rnd(35, 85), aggr: rnd(35, 85), clutch: rnd(55, 75), fo: pos === 'C' ? rnd(45, 65) : rnd(35, 50), gDef: 70, gOff: 70, handed: Math.random() < 0.6 ? 'L' : 'R' };
+                 rough: rnd(30, 80), aggr: rnd(30, 80), /* v472: 35-85 -> 30-80 (league toughness crept 56 -> 61) */ clutch: rnd(55, 75), fo: pos === 'C' ? rnd(45, 65) : rnd(35, 50), gDef: 70, gOff: 70, handed: Math.random() < 0.6 ? 'L' : 'R' };
     }
     playerStats[name] = {
         name, team: t.name, teamCode: t.code, pos, age: 18, potential,
