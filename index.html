@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
-    <script src="script.js?v=472"></script>
+    <script src="script.js?v=482"></script>
 </head>
 <body>
 
@@ -119,7 +119,7 @@
                         <button onclick="toggleAwardConfig('injuries')" id="btnInjuries" class="award-toggle-btn">INJURIES: ON</button>
                         <button onclick="toggleAwardConfig('legacy_schedule')" id="btnLegacySchedule" class="award-toggle-btn">LEGACY SCHEDULE: ON</button>
                         <button onclick="toggleAwardConfig('trades')" id="btnTrades" class="award-toggle-btn toggle-off">TRADES: OFF</button>
-                        <button onclick="toggleAwardConfig('tradeBlock')" id="btnTradeBlock" class="award-toggle-btn toggle-off">TRADE BLOCK: OFF</button>
+                        <button onclick="toggleAwardConfig('tradeBlock')" id="btnTradeBlock" class="award-toggle-btn">TRADE BLOCK: ON</button>
 
                 </div>
             <div class="schedule-progress-wrapper">
@@ -530,7 +530,7 @@
     <div id="proposalOverlay" class="modal" onclick="this.style.display='none'">
         <div class="modal-card beveled" onclick="event.stopPropagation()" style="padding:20px; max-width:650px;">
             <div class="menu-header" style="color:#00FF00; justify-content:center; background:transparent;">PENDING TRADE PROPOSALS</div>
-            <p style="font-size:8px; color:#aaa; text-align:center;">Review deadline deals proposed by the AI.</p>
+            <p style="font-size:8px; color:#aaa; text-align:center;">Every AI trade waits for you: approve, reject, or edit either side.</p>
             <div id="proposalList" style="margin-top:15px; max-height:400px; overflow-y:auto;"></div>
             <button onclick="document.getElementById('proposalOverlay').style.display='none'" class="btn-cyan" style="width:100%;margin-top:15px;">CLOSE</button>
         </div>

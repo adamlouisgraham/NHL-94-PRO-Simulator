@@ -359,7 +359,7 @@ let customLines = JSON.parse(localStorage.getItem('nhl94_customLines')) || {};
 
 
 // v400: every league feature on by default (progression, draft, retirements, trades and trade block were off)
-let awardConfig = { streaks: true, chemistry: true, rivalries: true, aging: true, draft: true, retirements: true, headlines: true, milestones: true, injuries: true, legacy_schedule: true, trades: true, tradeBlock: false }; // tradeBlock = approve-every-AI-trade mode; off so AI trades happen on their own
+let awardConfig = { streaks: true, chemistry: true, rivalries: true, aging: true, draft: true, retirements: true, headlines: true, milestones: true, injuries: true, legacy_schedule: true, trades: true, tradeBlock: true }; // tradeBlock = approve-every-AI-trade mode; v474: on by default - every AI trade is proposed to the user
 // v215: tracks which awardConfig keys the user explicitly toggled on the start screen
 // before loading a dynasty — see toggleAwardConfig() and loadGame().
 let _preloadToggledSettings = new Set();
@@ -685,7 +685,7 @@ function buildSavePayload() {
         meta: { version: CURRENT_SAVE_SCHEMA_VERSION, savedAt: new Date().toISOString(), label: 'EASN Dynasty Save' },
         data: {
             league, rosters, playerStats, tradeLog: savedTradeLog, hallOfFame, leagueHistory: savedLeagueHistory,
-            retiredPlayers, awardHistory, simRecords, leagueChronicle, calendar: lightweightCalendar, currentDay, currentSeason,
+            retiredPlayers, awardHistory, simRecords, fightGov, draftedReal, tpv474: true, leagueChronicle, calendar: lightweightCalendar, currentDay, currentSeason,
             isPlayoffs, isASG, currentCupChamp, playoffBracket: lightweightBracket, awardConfig, 
             monthSnapshot, pendingTrades, realDatesMap, customDuos, autoDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, teamAssistants, _awardsPending, asgDoneThisSeason, selectedTeam
         }
@@ -720,6 +720,8 @@ function applyLoadedSave(data) {
     retiredPlayers = Array.isArray(data.retiredPlayers) ? data.retiredPlayers : []; 
     // v398: older saves have no awardHistory - rebuild what's still on active players
     simRecords = data.simRecords && typeof data.simRecords === 'object' ? data.simRecords : null; // v454
+    fightGov = typeof data.fightGov === 'number' ? data.fightGov : 1; // v473
+    draftedReal = Array.isArray(data.draftedReal) ? data.draftedReal : []; // v481
     leagueChronicle = Array.isArray(data.leagueChronicle) ? data.leagueChronicle : []; // v455
     awardHistory = Array.isArray(data.awardHistory) ? data.awardHistory : Object.values(playerStats).flatMap(p => (p.trophies || []).map(t => ({ year: t.year, name: t.name, player: p.name, team: p.teamCode || '', pos: p.pos || '' })));
     calendar = Array.isArray(data.calendar) ? data.calendar : []; 
@@ -730,6 +732,8 @@ function applyLoadedSave(data) {
     currentCupChamp = data.currentCupChamp || ""; 
     playoffBracket = typeof data.playoffBracket === 'object' && data.playoffBracket ? data.playoffBracket : { round: 1, series: [] }; 
     awardConfig = typeof data.awardConfig === 'object' && data.awardConfig ? data.awardConfig : awardConfig; 
+    if (!data.tpv474) awardConfig.tradeBlock = true; // v474: older saves switch to approve-every-AI-trade once
+
     monthSnapshot = typeof data.monthSnapshot === 'object' && data.monthSnapshot ? data.monthSnapshot : {};
     pendingTrades = Array.isArray(data.pendingTrades) ? data.pendingTrades : [];
     customDuos = Array.isArray(data.customDuos) ? data.customDuos : [];
@@ -1547,7 +1551,7 @@ async function startNewGame(useCustomRoster = false) {
     currentDay = 0; currentSeason = 1; isPlayoffs = false; isASG = false; asgDoneThisSeason = false;
     isSimulating = false; isSimSeason = false; isTurboMode = false; currentCupChamp = "";
     playoffBracket = { round: 1, series: [] }; tradeLog = []; hallOfFame = []; autoDuos = []; seasonLines = {}; leagueHistory = [];
-    retiredPlayers = []; awardHistory = []; simRecords = null; leagueChronicle = []; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
+    retiredPlayers = []; awardHistory = []; simRecords = null; fightGov = 1; draftedReal = []; leagueChronicle = []; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
     monthSnapshot = {}; activeIdx = null; statMode = 'season'; activeSubInfo = null;
         // Clear cached CSV data if not using custom roster — force fresh fetch from Google Sheets
     if (!useCustomRoster) { customTeamData = null; customPlayerData = null; }
@@ -2695,6 +2699,12 @@ const dynamicDuos = [
 ];
 
 function getAllDuos() { return [...dynamicDuos, ...customDuos, ...autoDuos]; }
+// v475: duos only lock players together on the lines when they're within 7 OVR of each other (the ones still on a
+// team together) - otherwise a 76 winger dragged an 88 star off the top line, or a star sat on a 4th-liner's line
+function getLineDuos() {
+    const o = n => getPlayerWeightedStats(n)?.ovr || 0;
+    return getAllDuos().filter(d => { const v = d.filter(n => playerStats[n]).map(o); return v.length >= 2 && Math.max(...v) - Math.min(...v) < 8; });
+}
 // v302: new duos form over time. At season's end, linemates on the same opening-day line (top 3 F lines
 // and all D pairs) who each played 40+ games and aren't already in a duo become a duo for next season.
 let autoDuos = [];
@@ -3287,7 +3297,7 @@ const buildRosterStructure = (tk, ignoreHealth = false) => {
 
     // FINAL DUO REUNION SWEEP (single pass, pre-filtered to this team's duos only)
     const fNameSet = new Set(fLines.flat().map(p => p.name));
-    const teamFDuos = getAllDuos().filter(g => g.filter(n => fNameSet.has(n)).length >= 2);
+    const teamFDuos = getLineDuos().filter(g => g.filter(n => fNameSet.has(n)).length >= 2);
     for (const group of teamFDuos) {
         const placed = group
             .map(name => ({ name, lineIdx: [0,1,2,3].findIndex(i => fLines[i].some(p => p.name === name)) }))
@@ -3501,7 +3511,7 @@ const buildRosterStructure = (tk, ignoreHealth = false) => {
 
     // FINAL D-PAIR REUNION SWEEP (single pass, pre-filtered to this team's duos only)
     const dNameSet = new Set(dPairs.flat().map(p => p.name));
-    const teamDDuos = getAllDuos().filter(g => g.filter(n => dNameSet.has(n)).length >= 2);
+    const teamDDuos = getLineDuos().filter(g => g.filter(n => dNameSet.has(n)).length >= 2);
     for (const group of teamDDuos) {
         const placed = group
             .map(name => ({ name, pairIdx: [0,1,2].findIndex(i => dPairs[i].some(p => p.name === name)) }))
@@ -3539,7 +3549,7 @@ const buildRosterStructure = (tk, ignoreHealth = false) => {
     // A 90+60 pair beats a 78+78 pair because the elite D deserves top minutes.
     // v439: a pair held together by a Dynamic Duo is ranked by its AVERAGE - the duo stays together but a weak
     // partner drops the pair down the depth chart (Stevens 84 + Daneyko 60 played 26 min over 69/67 D)
-    const isDuoPair = (pair) => pair.length === 2 && getAllDuos().some(d => d.includes(pair[0].name) && d.includes(pair[1].name));
+    const isDuoPair = (pair) => pair.length === 2 && getLineDuos().some(d => d.includes(pair[0].name) && d.includes(pair[1].name));
     const pairBest = (pair) => !pair.length ? 0 : isDuoPair(pair) ? pair.reduce((q, p) => q + getOvr(p), 0) / pair.length : Math.max(...pair.map(p => getOvr(p)));
     dPairs.sort((a, b) => pairBest(b) - pairBest(a));
 
@@ -3647,7 +3657,8 @@ let deadlineDeals = [], deadlineDealsSeason = -1; // v317: this season's buyer/s
 // v301: scoring-distribution dials. LINE_FINISH = per-shot finish multiplier for F lines [L1, L2, L3, L4];
 // FWD_FINISH offsets them to hold league scoring; PP1_SHARE = share of power plays run by PP unit 1.
 // v404: smooth slope (line 3 was 0.40 - less than half line 4's rate - so third-liners almost never scored)
-let LINE_FINISH = [1.04, 1.00, 0.92, 0.85], FWD_FINISH = 1.18, PP1_SHARE = 0.55;
+let LINE_FINISH = [0.99, 1.02, 0.95, 0.85], FWD_FINISH = 1.18, PP1_SHARE = 0.52; // v473: L1 1.04->0.99, L2 1.00->1.02, L3 0.92->0.95, PP1 0.55->0.52 (top scorers ran 129-158, target 120-135)
+let fightGov = 1; // v473: fight-rate governor - eases fights back when a season runs hot (fights crept 0.77 -> 1.17/game)
 // v307: SHOT_BASE = even-strength shot lambda per team; FINISH_BASE = per-shot goal multiplier (sets league save %)
 // v335: elite offensive defencemen get a slight boost to goals and assists (ES + PP)
 const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D') return false; const tg = PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || ''; return (parseInt(ps.attr?.off) || 0) >= 78 || ['FRANCHISE D','PRO OFFENSIVE D','BOOMER','QUARTERBACK','OFFENSIVE D'].includes(tg); };
@@ -3689,8 +3700,8 @@ function applySeasonLines(tk) {
         base = seasonLines[tk] = { season: currentSeason, f: seed.f.map(l => l.map(p => p.name)), d: seed.d.map(l => l.map(p => p.name)) };
         // Opening-day lines honor every Dynamic Duo in full: a duo member left on the bench (e.g. a
         // second enforcer) replaces the weakest non-duo, non-center player on his duo's line.
-        const duoNames = new Set(getAllDuos().flat());
-        getAllDuos().forEach(duo => {
+        const duoNames = new Set(getLineDuos().flat());
+        getLineDuos().forEach(duo => {
             if (!duo.every(n => byName.has(n))) return;
             const group = [...base.f, ...base.d];
             const lineOf = n => group.find(l => l.includes(n));
@@ -3714,6 +3725,29 @@ function applySeasonLines(tk) {
                 line[vi] = n;
             });
         });
+        // v475: depth-chart sanity - a player 6+ OVR better than someone on a higher line (same position) moves up,
+        // unless the higher player sits there with a tight duo partner; enforcers keep their slot
+        {
+            const o = n => getPlayerWeightedStats(n)?.ovr || 0, pz = n => getPlayerPosition(byName.get(n));
+            const isEnfS = n => (PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || '') === 'ENFORCER F';
+            const tight = getLineDuos();
+            const locked = (n, line) => tight.some(d => d.includes(n) && d.some(m => m !== n && line.includes(m)));
+            [base.f, base.d].forEach(L => {
+                for (let pass = 0; pass < 6; pass++) {
+                    let moved = false;
+                    for (let i = 0; i < L.length - 1; i++) for (let j = 0; j < L[i].length; j++) {
+                        const n = L[i][j]; if (!n || isEnfS(n) || locked(n, L[i])) continue;
+                        let best = null;
+                        for (let k = i + 1; k < L.length; k++) L[k].forEach((m, mj) => {
+                            if (!m || isEnfS(m) || locked(m, L[k]) || pz(m) !== pz(n)) return;
+                            if (o(m) - o(n) >= 6 && (!best || o(m) > o(best.m))) best = { m, k, mj };
+                        });
+                        if (best) { L[best.k][best.mj] = n; L[i][j] = best.m; moved = true; }
+                    }
+                    if (!moved) break;
+                }
+            });
+        }
     }
     // v367: every team dresses at least one forward enforcer. The 1993-94 goons dress through their Dynamic
     // Duos; the young enforcers signed in a dynasty aren't in duos and sat (fights fell 0.79 -> 0.52/game).
@@ -3724,7 +3758,7 @@ function applySeasonLines(tk) {
             const tough = n => { const a = playerStats[n]?.attr || {}; return (gradeToNum(a.rough) || 50) + (gradeToNum(a.aggr) || 50); };
             const enf = r.filter(p => !inBase.has(p.name) && getPlayerPosition(p) !== 'G' && getPlayerPosition(p) !== 'D' && isEnfN(p.name))
                 .sort((x, y) => tough(y.name) - tough(x.name))[0];
-            const duoSet = new Set(getAllDuos().flat());
+            const duoSet = new Set(getLineDuos().flat());
             const l4 = base.f[base.f.length - 1] || [];
             const victim = l4.filter(n => !duoSet.has(n) && getPlayerPosition(byName.get(n)) !== 'C')
                 .sort((x, y) => (getPlayerWeightedStats(x).ovr || 0) - (getPlayerWeightedStats(y).ovr || 0))[0]
@@ -3784,7 +3818,7 @@ function applySeasonLines(tk) {
         // Extra unprotected enforcers sit for the best non-enforcer extra; simGame adds one back to match an
         // opponent that dresses two or more.
         if (!isD) {
-            const duoSetE = new Set(getAllDuos().flat());
+            const duoSetE = new Set(getLineDuos().flat());
             const protectedEnf = n => duoSetE.has(n) || ovr(n) >= 55;
             const dressedEnf = () => lines.flat().filter(n => n && isEnfF(n));
             let extraEnf = dressedEnf().filter(n => !protectedEnf(n)).sort((a, b) => ovr(a) - ovr(b));
@@ -3817,7 +3851,7 @@ function applySeasonLines(tk) {
         // v403: a cold (macro) non-duo forward on the top two lines swaps down a line with the best non-cold
         // non-duo forward there until he warms up (regular season)
         if (!isD && !isPlayoffs) {
-            const duoC = new Set(getAllDuos().flat());
+            const duoC = new Set(getLineDuos().flat());
             const coldN = n => playerStats[n]?.macro_streak === 'COLD';
             for (let i = 0; i < Math.min(2, lines.length - 1); i++) {
                 const c = (lines[i] || []).find(n => n && coldN(n) && !duoC.has(n) && !isEnfF(n));
@@ -3832,7 +3866,7 @@ function applySeasonLines(tk) {
         // tough guy stay - he dresses in that player's place for this game: 15% of games + 7% per OVR point of
         // gap (max 70%). Regular season only.
         if (!isPlayoffs && bench.length) {
-            const duoSet = new Set(getAllDuos().flat());
+            const duoSet = new Set(getLineDuos().flat());
             const rows = isD ? [lines.length - 1] : [lines.length - 2, lines.length - 1];
             const slots = [];
             const ex0 = bench.filter(n => !duoSet.has(n))[0];
@@ -4693,7 +4727,7 @@ function simGame(idx) {
     if (!isASG && !isPlayoffs && !customLines[g.h.nrm] && !customLines[g.a.nrm]) { // v372: no goon matching in the playoffs
         const isEnfX = p => (PLAYER_TAG_OVERRIDES[p.name] || getPlayerWeightedStats(p.name)?.tag || '') === 'ENFORCER F';
         const healthy = n => { const ps = playerStats[n]; return ps && !ps.onIR && !(ps.injury?.daysRemaining > 0) && !(ps.suspended?.days > 0); };
-        const duoM = new Set(getAllDuos().flat());
+        const duoM = new Set(getLineDuos().flat());
         const match = (st, tk, oppSt) => {
             const mine = st.f.flat().filter(isEnfX).length, theirs = oppSt.f.flat().filter(isEnfX).length;
             if (theirs < 2 || mine >= 2) return;
@@ -5859,7 +5893,7 @@ function simGame(idx) {
             if (!isASG && fightsThisGame < 3) {
                 const answerSide = ev.side === 'h' ? aOnIce : hOnIce;
                 const enf = answerSide.filter(p => fightTough(p) >= 2.2).sort((x, y) => fightTough(y) - fightTough(x))[0];
-                if (enf && Math.random() < FIGHT_HIT_RESPONSE * (isPlayoffs ? PLAYOFF_FIGHT_MULT : 1)) {
+                if (enf && Math.random() < FIGHT_HIT_RESPONSE * fightGov * (isPlayoffs ? PLAYOFF_FIGHT_MULT : 1)) {
                     const hitterSide = ev.side === 'h' ? hOnIce : aOnIce;
                     const opp = canFightP(hPicked) ? hPicked : hitterSide.filter(p => fightTough(p) > 0).sort((x, y) => fightTough(y) - fightTough(x))[0];
                     if (opp) {
@@ -5967,7 +6001,7 @@ function simGame(idx) {
                 const aFightPool = aOnIce.filter(p => fightTough(p) > 0);
                 if (!hFightPool.length || !aFightPool.length) continue;
                 const hS = Math.max(...hFightPool.map(fightTough)), aS = Math.max(...aFightPool.map(fightTough));
-                if (Math.random() >= FIGHT_RATE * hS * aS * (isPlayoffs ? PLAYOFF_FIGHT_MULT : 1)) continue;   // enforcer vs enforcer ~25%, two average tough guys ~3%
+                if (Math.random() >= FIGHT_RATE * fightGov * hS * aS * (isPlayoffs ? PLAYOFF_FIGHT_MULT : 1)) continue;   // enforcer vs enforcer ~25%, two average tough guys ~3%
                 hF = pickFighter(hFightPool); aF = pickFighter(aFightPool);
             }
             if (hF && aF) { fightsThisGame++; [hF, aF].forEach(f => { foughtThisGame[f.name] = (foughtThisGame[f.name] || 0) + 1; }); }
@@ -6906,7 +6940,7 @@ function simGame(idx) {
                 tObj.chem.cold[i] = lineScored ? 0 : (tObj.chem.cold[i] || 0) + 1;
             });
             if (!isPlayoffs && seasonLines[tk] && !customLines[tk]) {
-                const base = seasonLines[tk].f, duoSetJ = new Set(getAllDuos().flat());
+                const base = seasonLines[tk].f, duoSetJ = new Set(getLineDuos().flat());
                 const isEnfJ = n => (PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || '') === 'ENFORCER F';
                 const movableBase = n => n && !isEnfJ(n) && getPlayerPosition({ name: n, pos: playerStats[n]?.pos }) !== 'C';
                 const ovrJ = n => getPlayerWeightedStats(n)?.ovr || 0;
@@ -6918,7 +6952,7 @@ function simGame(idx) {
                     const out = (base[i] || []).filter(movable).sort((a, b) => ovrJ(a) - ovrJ(b))[0];
                     const others = base.map((l, j) => j === i ? [] : (l || []).filter(movable).map(n => [n, j])).flat();
                     const below = others.filter(([, j]) => j === i + 1).sort((a, b) => ovrJ(b[0]) - ovrJ(a[0]))[0];
-                    const pick = below || others[Math.floor(Math.random() * others.length)];
+                    const pick = below && ovrJ(below[0]) >= ovrJ(out) - 4 ? below : null; // v475: only the next line down, and only a comparable player (a random 4th-liner could jump to the top line)
                     if (!out || !pick) continue;
                     const [inn, j] = pick;
                     base[i][base[i].indexOf(out)] = inn; base[j][base[j].indexOf(inn)] = out;
@@ -8393,7 +8427,10 @@ function runRebuildTrades(prevPts) {
                         if (a >= 25 && a <= 29 && v >= 72 && (!best || v > best.v)) best = { S, name: p.name, v }; });
                 });
             });
-            if (best) {
+            if (best && awardConfig.tradeBlock) { // v474: propose instead of executing
+                queueAiProposal(best.S, W, [best.name], pros.map(p => p.name), `REBUILD TRADE: ${t.name} want ${best.name} (age ${age(best.name)}, ${best.v} OVR) from ${byKey(best.S)?.name} for prospects`);
+                [best.name, ...pros.map(p => p.name)].forEach(n => used.add(n));
+            } else if (best) {
                 aiMovePlayers(best.S, W, [best.name]); aiMovePlayers(W, best.S, pros.map(p => p.name));
                 [best.name, ...pros.map(p => p.name)].forEach(n => used.add(n));
                 tradeLog.unshift({ day: 'OFFSEASON', details: `REBUILD TRADE: ${t.name} acquire ${best.name} (age ${age(best.name)}, ${best.v} OVR) from ${byKey(best.S)?.name} for prospects ${pros.map(p => p.name).join(' + ')}` });
@@ -8408,12 +8445,14 @@ function runRebuildTrades(prevPts) {
         league.forEach(S => { if (S.nrm === W) return; const gs = (rosters[S.nrm] || []).filter(p => p.pos === 'G').sort((a, b) => o(b.name) - o(a.name));
             if (gs.length >= 2 && o(gs[1].name) >= 75 && !used.has(gs[1].name) && (!best || o(gs[1].name) > best.v)) best = { S: S.nrm, name: gs[1].name, v: o(gs[1].name) }; });
         const pro = (rosters[W] || []).filter(p => p.pos !== 'G' && age(p.name) <= 23 && !used.has(p.name)).sort((a, b) => o(b.name) - o(a.name))[0];
-        if (best && pro) {
+        if (best && pro && awardConfig.tradeBlock) { // v474
+            queueAiProposal(best.S, W, [best.name], [pro.name], `GOALIE TRADE: ${t.name} want G ${best.name} (${best.v} OVR) from ${byKey(best.S)?.name}`); used.add(best.name); used.add(pro.name);
+        } else if (best && pro) {
             aiMovePlayers(best.S, W, [best.name]); aiMovePlayers(W, best.S, [pro.name]); used.add(best.name); used.add(pro.name);
             tradeLog.unshift({ day: 'OFFSEASON', details: `GOALIE TRADE: ${t.name} acquire G ${best.name} (${best.v} OVR) from ${byKey(best.S)?.name} for ${pro.name}` });
         }
     });
-    if (used.size) { assignTeamCaptains(); pruneCustomDuos(); clearWpCache(); }
+    if (used.size) { assignTeamCaptains(); pruneCustomDuos(); clearWpCache(); refreshTradeBadge(); }
 }
 async function beginNewYear() {
     const _prevPts = Object.fromEntries(league.map(t => [t.nrm, t.season?.pts || 0])); // v448: for the rebuild market
@@ -8426,6 +8465,11 @@ async function beginNewYear() {
     deadlineCountermove = {};
     pendingTrades = [];
     refreshTradeBadge();
+    try { // v473: fight governor - aim ~0.85 fights/game, adjust from last season's rate
+        const gpAll = league.reduce((a, t) => a + (t.season?.gp || 0), 0) / 2;
+        const fAll = Object.values(playerStats).reduce((a, p) => a + (p.season?.fights || 0), 0) / 2;
+        if (gpAll > 200) { const fpg = fAll / gpAll; fightGov = Math.max(0.4, Math.min(1.3, fightGov * Math.pow(0.85 / Math.max(0.2, fpg), 0.7))); }
+    } catch (e) {}
     league.forEach(t => {
         // [FIX] pka, pkg, sf, sa were missing from this reset — they accumulated across
         // seasons because simGame writes them with (field||0)+1 patterns. ppo/ppg were
@@ -11185,14 +11229,18 @@ function getConnSmytheScore(p) {
 // 18-year-old rated in the 40s-50s with EVERY skill set (the old ROOKIE-##### had only off/def, so
 // speed/shooting/passing defaulted to 70 and they arrived as instant top-six forwards), and grows
 // by potential through processOffseasonGrowth.
-function makeProspect(t, pos, pickNo, boost = 0) {
+function makeProspect(t, pos, pickNo, boost = 0, useReal = false) {
     const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
     const potRoll = Math.random() * (1 - boost); // v446: lottery picks roll from the top of the range
-    const potential = potRoll < 0.06 ? 'Franchise' : potRoll < 0.21 ? 'Top 6' : potRoll < 0.70 ? 'Depth' : 'Bust'; // v446: Top 6 22% -> 15%
-    const base = { Franchise: 55, 'Top 6': 50, Depth: 46, Bust: 42 }[potential] + rnd(-3, 3);
+    let potential = potRoll < 0.06 ? 'Franchise' : potRoll < 0.21 ? 'Top 6' : potRoll < 0.70 ? 'Depth' : 'Bust'; // v446: Top 6 22% -> 15%
+    const real = useReal ? takeRealDraftName(pos) : null; // v476: real 1994/95 draftees
+    if (real) { pos = real[1]; potential = { F: 'Franchise', T: 'Top 6', D: 'Depth', B: 'Bust' }[real[2]]; }
+    const base = { Franchise: 55, 'Top 6': 50, Depth: 46, Bust: 42 }[potential] + rnd(-3, 3)
+        + (real && real[3] ? Math.max(0, Math.min(4, (1993 + currentSeason) - (1900 + real[3]))) * 2 : 0); // v477: older draftees start a little further along
     const yy = String((1993 + currentSeason) % 100).padStart(2, '0');
     let name, n = pickNo;
-    do { name = `Prospect ${pos} ${yy}-${String(n).padStart(2, '0')}`; n += 100; } while (playerStats[name]);
+    if (real) { name = real[0]; draftedReal.push(name); }
+    else do { name = `Prospect ${pos} ${yy}-${String(n).padStart(2, '0')}`; n += 100; } while (playerStats[name]);
     const v = (adj = 0) => Math.max(25, Math.min(99, base + adj + rnd(-6, 6)));
     let attr;
     if (pos === 'G') {
@@ -11207,7 +11255,7 @@ function makeProspect(t, pos, pickNo, boost = 0) {
                  rough: rnd(30, 80), aggr: rnd(30, 80), /* v472: 35-85 -> 30-80 (league toughness crept 56 -> 61) */ clutch: rnd(55, 75), fo: pos === 'C' ? rnd(45, 65) : rnd(35, 50), gDef: 70, gOff: 70, handed: Math.random() < 0.6 ? 'L' : 'R' };
     }
     playerStats[name] = {
-        name, team: t.name, teamCode: t.code, pos, age: 18, potential,
+        name, team: t.name, teamCode: t.code, pos, age: real && real[3] ? Math.max(18, Math.min(22, 18 + (1993 + currentSeason) - (1900 + real[3]))) : 18, potential, // v477: earlier draftees keep their real age
         streakType: 'stable', streakDur: 0, hasScored: false, consPointless: 0, recentPts: [], milestones: [], asgMvp: false,
         morale: 100, suspended: { days: 0, reason: "" }, weight: rnd(175, 215),
         injury: { severity: 0, daysRemaining: 0 }, attr,
@@ -11222,6 +11270,106 @@ function makeProspect(t, pos, pickNo, boost = 0) {
     return name;
 }
 
+// v476: real 1994 / 1995 draft classes - draft picks take the next unused real name at that position (in real draft
+// order), with a ceiling from the player's real career (F franchise, T top 6, D depth, B bust). Out of names -> "Prospect".
+const REAL_DRAFT = {
+    '94': [
+        ['Ed Jovanovski', 'D', 'T'], ['Oleg Tverdovsky', 'D', 'T'], ['Radek Bonk', 'C', 'T'], ['Jason Bonsignore', 'C', 'B'],
+        ['Jeff O\'Neill', 'C', 'T'], ['Ryan Smyth', 'LW', 'T'], ['Jamie Storr', 'G', 'D'], ['Jason Wiemer', 'C', 'D'],
+        ['Brett Lindros', 'RW', 'B'], ['Nolan Baumgartner', 'D', 'B'], ['Jeff Friesen', 'LW', 'T'], ['Wade Belak', 'D', 'D'],
+        ['Ethan Moreau', 'LW', 'D'], ['Mattias Ohlund', 'D', 'T'], ['Alexander Kharlamov', 'C', 'B'], ['Eric Fichaud', 'G', 'B'],
+        ['Wayne Primeau', 'C', 'D'], ['Brad Brown', 'D', 'D'], ['Chris Wells', 'C', 'D'], ['Vadim Sharifijanov', 'RW', 'B'],
+        ['Dan Cloutier', 'G', 'D'], ['Evgeni Ryabchikov', 'G', 'B'], ['Jason Botterill', 'LW', 'B'], ['Stanislav Neckar', 'D', 'D'],
+        ['Dmitri Nabokov', 'C', 'B'], ['Johan Davidsson', 'C', 'D'], ['Deron Quint', 'D', 'D'], ['Ryan Johnson', 'C', 'D'],
+        ['Curtis Brown', 'C', 'D'], ['Jose Theodore', 'G', 'T'], ['Mathieu Dandenault', 'D', 'D'], ['Patrik Elias', 'LW', 'F'],
+        ['Vitali Yachmenev', 'RW', 'D'], ['Fredrik Modin', 'LW', 'T'], ['Sheldon Souray', 'D', 'T'], ['Chris Drury', 'C', 'T'],
+        ['Milan Hejduk', 'RW', 'F'], ['Vaclav Varada', 'RW', 'D'], ['Marty Turco', 'G', 'T'], ['Daniel Alfredsson', 'RW', 'F'],
+        ['Evgeni Nabokov', 'G', 'T'], ['Tim Thomas', 'G', 'T'], ['Johan Hedberg', 'G', 'D'], ['Tomas Vokoun', 'G', 'T'],
+        ['Steve Sullivan', 'C', 'T'], ['Richard Zednik', 'LW', 'D'], ['Sergei Berezin', 'LW', 'T'], ['Tomas Holmstrom', 'LW', 'D'],
+        ['Jason Strudwick', 'D', 'B'], ['Kim Johnsson', 'D', 'T'],
+    ],
+    '95': [
+        ['Bryan Berard', 'D', 'T'], ['Wade Redden', 'D', 'T'], ['Aki Berg', 'D', 'D'], ['Chad Kilger', 'C', 'D'],
+        ['Daymond Langkow', 'C', 'T'], ['Steve Kelly', 'C', 'B'], ['Shane Doan', 'RW', 'T'], ['Terry Ryan', 'LW', 'B'],
+        ['Kyle McLaren', 'D', 'D'], ['Radek Dvorak', 'RW', 'D'], ['Jarome Iginla', 'RW', 'F'], ['Teemu Riihijarvi', 'LW', 'B'],
+        ['Jay McKee', 'D', 'D'], ['Jean-Sebastien Giguere', 'G', 'T'], ['Jeff Ware', 'D', 'B'], ['Martin Biron', 'G', 'T'],
+        ['Brad Church', 'LW', 'B'], ['Petr Sykora', 'C', 'T'], ['Denis Gauthier', 'D', 'D'], ['Sean Brown', 'D', 'D'],
+        ['Brian Boucher', 'G', 'D'], ['Alexei Morozov', 'RW', 'D'], ['Marc Denis', 'G', 'D'], ['Jan Hlavac', 'LW', 'D'],
+        ['Jason Doig', 'D', 'B'], ['Donald MacLean', 'C', 'B'], ['Christian Laflamme', 'D', 'D'], ['Sean Haggerty', 'LW', 'B'],
+        ['Jochen Hecht', 'C', 'D'], ['Petr Buzek', 'D', 'B'], ['Peter Schaefer', 'LW', 'D'], ['Brad Isbister', 'RW', 'D'],
+        ['Tomi Kallio', 'LW', 'D'], ['Sami Kapanen', 'RW', 'T'], ['Marc Savard', 'C', 'F'], ['Daniel Tjarnqvist', 'D', 'D'],
+        ['Miikka Kiprusoff', 'G', 'F'], ['Jan Hrdina', 'C', 'D'], ['Byron Ritchie', 'C', 'B'],
+    ],
+};
+// v477: 1990-93 draftees not in the game - fallback pool once a year's real list runs out at a position (and for drafts
+// after 1995). [name, pos, tier, draft year]; anyone already in playerStats is skipped.
+const REAL_DRAFT_EARLY = [
+    ['Owen Nolan', 'RW', 'T', 90], ['Petr Nedved', 'C', 'T', 90], ['Keith Primeau', 'C', 'T', 90], ['Mike Ricci', 'C', 'T', 90],
+    ['Darryl Sydor', 'D', 'T', 90], ['Derian Hatcher', 'D', 'T', 90], ['Martin Brodeur', 'G', 'F', 90], ['Turner Stevenson', 'RW', 'D', 90],
+    ['Scott Scissons', 'C', 'B', 90], ['Karl Dykhuis', 'D', 'D', 90], ['Bryan Smolinski', 'C', 'D', 90], ['Shawn Antoski', 'LW', 'B', 90],
+    ['Drake Berehowsky', 'D', 'D', 90], ['Trevor Kidd', 'G', 'D', 90], ['Felix Potvin', 'G', 'T', 90], ['Doug Weight', 'C', 'T', 90],
+    ['Sergei Zubov', 'D', 'T', 90], ['Peter Bondra', 'RW', 'T', 90], ['Geoff Sanderson', 'LW', 'T', 90], ['Vyacheslav Kozlov', 'C', 'T', 90],
+    ['Chris Simon', 'LW', 'D', 90], ['Mike Dunham', 'G', 'D', 90], ['Chris Therien', 'D', 'D', 90],
+    ['Pat Falloon', 'RW', 'B', 91], ['Scott Lachance', 'D', 'D', 91], ['Peter Forsberg', 'C', 'F', 91], ['Alek Stojanov', 'RW', 'B', 91],
+    ['Richard Matvichuk', 'D', 'D', 91], ['Patrick Poulin', 'LW', 'D', 91], ['Martin Lapointe', 'RW', 'D', 91], ['Tyler Wright', 'C', 'D', 91],
+    ['Philippe Boucher', 'D', 'D', 91], ['Pat Peake', 'C', 'B', 91], ['Markus Naslund', 'LW', 'F', 91], ['Brent Bilodeau', 'D', 'B', 91],
+    ['Glen Murray', 'RW', 'T', 91], ['Niklas Sundblad', 'RW', 'B', 91], ['Trevor Halverson', 'LW', 'B', 91], ['Dean McAmmond', 'LW', 'D', 91],
+    ['Jason Dawe', 'LW', 'D', 91], ['Ray Whitney', 'LW', 'T', 91], ['Zigmund Palffy', 'RW', 'T', 91], ['Alexei Kovalev', 'RW', 'T', 91],
+    ['Chris Osgood', 'G', 'T', 91], ['Steve Konowalchuk', 'C', 'D', 91], ['Jozef Stumpel', 'C', 'T', 91], ['Sandis Ozolinsh', 'D', 'T', 91],
+    ['Yanic Perreault', 'C', 'D', 91], ['Alexei Zhitnik', 'D', 'D', 91],
+    ['Roman Hamrlik', 'D', 'T', 92], ['Alexei Yashin', 'C', 'T', 92], ['Mike Rathje', 'D', 'D', 92], ['Todd Warriner', 'LW', 'B', 92],
+    ['Darius Kasparaitis', 'D', 'D', 92], ['Cory Stillman', 'C', 'T', 92], ['Robert Petrovicky', 'C', 'B', 92], ['Andrei Nazarov', 'LW', 'B', 92],
+    ['Jason Bowen', 'D', 'B', 92], ['Jason Smith', 'D', 'D', 92], ['David Wilkie', 'D', 'B', 92], ['Curtis Bowen', 'LW', 'B', 92],
+    ['Grant Marshall', 'RW', 'D', 92], ['Valeri Bure', 'RW', 'T', 92], ['Jeff Shantz', 'C', 'D', 92], ['Martin Gendron', 'RW', 'B', 92],
+    ['Sergei Gonchar', 'D', 'T', 92], ['Sergei Krivokrasov', 'RW', 'B', 92], ['Michael Peca', 'C', 'T', 92], ['Nikolai Khabibulin', 'G', 'T', 92],
+    ['Sergei Brylin', 'C', 'D', 92], ['Boris Mironov', 'D', 'D', 92], ['Brent Gretzky', 'C', 'B', 92], ['Andrei Nikolishin', 'C', 'D', 92],
+    ['Jere Lehtinen', 'RW', 'T', 92], ['Manny Fernandez', 'G', 'D', 92],
+    ['Alexandre Daigle', 'C', 'B', 93], ['Chris Pronger', 'D', 'F', 93], ['Chris Gratton', 'C', 'D', 93], ['Paul Kariya', 'LW', 'F', 93],
+    ['Rob Niedermayer', 'C', 'D', 93], ['Viktor Kozlov', 'C', 'T', 93], ['Jason Arnott', 'C', 'T', 93], ['Niklas Sundstrom', 'LW', 'D', 93],
+    ['Todd Harvey', 'RW', 'D', 93], ['Jocelyn Thibault', 'G', 'T', 93], ['Brendan Witt', 'D', 'D', 93], ['Kenny Jonsson', 'D', 'T', 93],
+    ['Adam Deadmarsh', 'RW', 'T', 93], ['Mats Lindgren', 'C', 'D', 93], ['Jason Allison', 'C', 'T', 93], ['Nick Stajduhar', 'D', 'B', 93],
+    ['Eric Daze', 'LW', 'T', 93], ['Saku Koivu', 'C', 'T', 93], ['Jesper Mattsson', 'C', 'B', 93], ['Anders Eriksson', 'D', 'D', 93],
+    ['Jamie Langenbrunner', 'RW', 'T', 93], ['Janne Niinimaa', 'D', 'T', 93], ['Bryan McCabe', 'D', 'T', 93], ['Vaclav Prospal', 'C', 'T', 93],
+    ['Kimmo Timonen', 'D', 'T', 93], ['Brendan Morrison', 'C', 'T', 93], ['Pavol Demitra', 'LW', 'T', 93], ['Patrick Lalime', 'G', 'D', 93],
+    ['Shean Donovan', 'RW', 'D', 93], ['Mike Grier', 'RW', 'D', 93], ['Kevin Weekes', 'G', 'D', 93], ['Jamie Rivers', 'D', 'D', 93],
+];
+const DRAFT_TOP_STARS = ['Paul Kariya', 'Peter Forsberg', 'Zigmund Palffy', 'Saku Koivu', 'Jere Lehtinen', 'Sergei Gonchar', 'Michael Peca',
+    'Nikolai Khabibulin', 'Jason Allison', 'Adam Deadmarsh', 'Viktor Kozlov', 'Eric Daze', 'Pavol Demitra', 'Jamie Langenbrunner', 'Janne Niinimaa',
+    'Kimmo Timonen', 'Bryan McCabe', 'Vaclav Prospal', 'Brendan Morrison', 'Kenny Jonsson', 'Cory Stillman', 'Valeri Bure'];
+// v479: one draft list - the 1990-93 draftees not in the game (future stars first), then the 1994 class, then 1995.
+// Each pick takes the first unused name at the position the team needs (exact position, then same group).
+let draftedReal = []; // v481: real names already used by the draft (saved)
+function realDraftPool() {
+    // v480: future stars first in every list (franchise, then top 6, then depth, then busts; real order within a tier)
+    const byTier = l => l.map((e, i) => [e, i]).sort((x, y) => 'FTDB'.indexOf(x[0][2]) - 'FTDB'.indexOf(y[0][2]) || x[1] - y[1]).map(x => x[0]);
+    const early = [...DRAFT_TOP_STARS.map(n => REAL_DRAFT_EARLY.find(e => e[0] === n)).filter(Boolean), ...byTier(REAL_DRAFT_EARLY.filter(e => !DRAFT_TOP_STARS.includes(e[0])))];
+    return [...early, ...byTier(REAL_DRAFT['94']).map(e => [...e, 94]), ...byTier(REAL_DRAFT['95']).map(e => [...e, 95])];
+}
+function takeRealDraftName(pos) {
+    const grp = q => q === 'G' ? 'G' : q === 'D' ? 'D' : 'F';
+    realDraftPool().forEach(([n]) => { if (playerStats[n] && !draftedReal.includes(n)) draftedReal.push(n); }); // v482: anyone seen on a roster is never drafted later (a cut Jason Bowen was re-drafted)
+    const used = new Set(draftedReal); // v481: a real draftee is only ever drafted once (cut players were re-drafted)
+    const free = realDraftPool().filter(([n]) => !playerStats[n] && !used.has(n));
+    return free.find(e => e[1] === pos) || free.find(e => grp(e[1]) === grp(pos)) || null;
+}
+// v479: draft by need - the position where the team is furthest below the league's average depth chart
+function draftNeedPos(t) {
+    const o = n => getPlayerWeightedStats(n)?.baseOvr || 0;
+    const slots = { C: 4, LW: 4, RW: 4, D: 6, G: 2 };
+    const depth = (key, P) => { const v = (rosters[key] || []).filter(p => p.pos === P).map(p => o(p.name)).sort((a, b) => b - a);
+        const n = slots[P]; let sum = 0; for (let i = 0; i < n; i++) sum += v[i] ?? 40; return sum / n; };
+    const ro = rosters[t.nrm] || [];
+    if (ro.filter(p => p.pos === 'G').length < 3) return 'G';
+    if (ro.filter(p => p.pos === 'D').length < 8) return 'D';
+    let best = 'C', bestGap = -Infinity;
+    Object.keys(slots).forEach(P => {
+        if (P === 'G' && ro.filter(p => p.pos === 'G').length >= 4) return; // never stockpile more than 4 goalies
+        const lg = league.reduce((a, x) => a + depth(x.nrm, P), 0) / league.length;
+        const gap = lg - depth(t.nrm, P) + Math.random() * 2;
+        if (gap > bestGap) { bestGap = gap; best = P; }
+    });
+    return best;
+}
 let lastDraft = null; // v450: last draft's picks, for the results screen
 function runRealisticDraft() {
     const order = [...league].sort((a, b) => a.season.pts - b.season.pts);
@@ -11235,16 +11383,9 @@ function runRealisticDraft() {
     for (let round = 1; round <= 2; round++) {
         (round === 1 ? round1 : order).forEach(t => {
             pick++;
-            const ro = rosters[t.nrm] || [];
-            const nG = ro.filter(p => p.pos === 'G').length;
-            const nD = ro.filter(p => p.pos === 'D').length;
-            const pos = nG < 3 ? 'G'
-                : nD < 8 ? 'D'
-                : (nG < 4 && Math.random() < 0.06) ? 'G'   // never stockpile more than 4 goalies
-                : Math.random() < 0.33 ? 'D'
-                : ['C', 'LW', 'RW'][Math.floor(Math.random() * 3)];
-            const _pn = makeProspect(t, pos, pick, round === 1 && pick <= 3 ? 0.5 : round === 1 && pick <= 5 ? 0.3 : 0); // v446: top lottery picks
-            lastDraft.picks.push({ pick, round, team: t.code, name: _pn, pos, potential: playerStats[_pn]?.potential }); // v450
+            const pos = draftNeedPos(t); // v479: draft by need (was random C/LW/RW/D)
+            const _pn = makeProspect(t, pos, pick, round === 1 && pick <= 3 ? 0.5 : round === 1 && pick <= 5 ? 0.3 : 0, true); // v446: top lottery picks; v476 real names
+            lastDraft.picks.push({ pick, round, team: t.code, name: _pn, pos: playerStats[_pn]?.pos || pos, potential: playerStats[_pn]?.potential }); // v450
         });
     }
     clearWpCache();
@@ -11255,6 +11396,7 @@ function runRealisticDraft() {
 // position group with depth to spare (keep >= 13 F and >= 8 D), never a goalie.
 function trimRostersAfterOffseason() {
     const MAX = 29;
+    const newPick = new Set(lastDraft && lastDraft.season === currentSeason ? lastDraft.picks.map(p => p.name) : []);
     league.forEach(t => {
         const ro = rosters[t.nrm]; if (!ro) return;
         // no team needs more than 4 goalies: release the lowest-rated extras first
@@ -11272,7 +11414,7 @@ function trimRostersAfterOffseason() {
             const isEnfF = p => (getPlayerWeightedStats(p.name)?.tag || '') === 'ENFORCER F';
             const nEnf = ro.filter(isEnfF).length;
             const pool = ro.filter(p => p.pos !== 'G' && ((p.pos === 'D' && nD > 8) || (p.pos !== 'D' && nF > 13)) && !(isEnfF(p) && nEnf <= 2))
-                           .sort((a, b) => (getPlayerWeightedStats(a.name)?.ovr || 0) - (getPlayerWeightedStats(b.name)?.ovr || 0));
+                           .sort((a, b) => (newPick.has(a.name) - newPick.has(b.name)) || (getPlayerWeightedStats(a.name)?.ovr || 0) - (getPlayerWeightedStats(b.name)?.ovr || 0)); // v481: this year's picks are cut last
             const cut = pool[0]; if (!cut) break;
             ro.splice(ro.findIndex(p => p.name === cut.name), 1);
             delete playerStats[cut.name];
@@ -11363,61 +11505,84 @@ function executeTrade() {
     updateUI(); renderTradeLog(); saveGame();
 }
 
+// v474: every AI trade is a proposal - the user can approve, reject or edit it (add/remove players on either side)
+const tpArr = x => Array.isArray(x) ? x : (x ? [x] : []);
+function queueAiProposal(fromKey, toKey, fromNames, toNames, tag) {
+    const tn = k => league.find(t => t.nrm === k)?.name || k;
+    pendingTrades.push({ id: Date.now() + Math.random(), t1: fromKey, t2: toKey, t1Name: tn(fromKey), t2Name: tn(toKey), p1: fromNames.slice(), p2: toNames.slice(), tag, day: 0 });
+    tradeLog.unshift({ day: 'OFFSEASON', details: `TRADE OFFER: ${tag} - pending approval.` });
+}
+let _tpEdit = null; // { id, p1:Set, p2:Set } while a proposal is being edited
+function tpSide(t, side) {
+    const key = side === 1 ? t.t1 : t.t2, sel = _tpEdit && _tpEdit.id === t.id ? _tpEdit['p' + side] : null;
+    const names = sel ? [...sel] : tpArr(side === 1 ? t.p1 : t.p2);
+    const tv = names.reduce((a, n) => a + (getTradeValue(n) || 0), 0);
+    const esc = v => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    let h = `<div style="color:#aaa;">${(side === 1 ? t.t1Name : t.t2Name).toUpperCase()} SEND${sel ? ' (TICK PLAYERS)' : 'S'}:</div>`;
+    if (sel) {
+        const ro = (rosters[key] || []).slice().sort((x, y) => (getPlayerWeightedStats(y.name)?.baseOvr || 0) - (getPlayerWeightedStats(x.name)?.baseOvr || 0));
+        h += `<div style="max-height:220px; overflow-y:auto; margin-top:5px;">` + ro.map(p => { const n = p.name, ps = playerStats[n] || {};
+            return `<label style="display:block; color:${sel.has(n) ? '#0f0' : '#ccc'}; cursor:pointer; margin:2px 0;"><input type="checkbox" ${sel.has(n) ? 'checked' : ''} data-n="${esc(n)}" onchange="tpToggle(${side}, this.dataset.n)"> ${ps.pos || ''} ${esc(n)} - OVR ${getPlayerWeightedStats(n)?.baseOvr ?? '?'}, AGE ${ps.age ?? '?'}, TV ${getTradeValue(n)}</label>`; }).join('') + `</div>`;
+    } else h += names.map(n => { const ps = playerStats[n] || {}; return `<div style="color:#fff; margin-top:5px;">${ps.pos || ''} ${esc(n)} (OVR: ${getPlayerWeightedStats(n)?.baseOvr ?? '?'}, AGE: ${ps.age ?? '?'}, TV: ${getTradeValue(n)})</div>`; }).join('') || '<div style="color:#888; margin-top:5px;">nothing</div>';
+    return { h, tv };
+}
 function openProposalsModal() {
     let h = '';
     if (pendingTrades.length === 0) h = '<div style="color:#888; text-align:center;">No pending proposals.</div>';
     else {
         pendingTrades.forEach((t, i) => {
+            const A = tpSide(t, 1), B = tpSide(t, 2), gap = A.tv - B.tv, editing = _tpEdit && _tpEdit.id === t.id;
+            const fair = Math.abs(gap) <= 6 ? ['#00FF00', 'FAIR'] : Math.abs(gap) <= 15 ? ['var(--ea-yellow)', 'UNEVEN'] : ['var(--line-red)', 'LOPSIDED'];
             h += `
-            <div style="background:#000; border:2px solid #333; padding:10px; margin-bottom:10px;">
-                <div style="color:var(--ea-yellow); font-size:8px; margin-bottom:10px; text-align:center;">PROPOSAL #${i+1}</div>
-                <div style="display:flex; justify-content:space-between; font-size:8px; margin-bottom:15px;">
-                    <div style="text-align:left; width:45%;">
-                        <div style="color:#aaa;">${t.t1Name.toUpperCase()} SENDS:</div>
-                        <div style="color:#fff; margin-top:5px;">${t.p1} (OVR: ${getPlayerWeightedStats(t.p1).baseOvr}, AGE: ${playerStats[t.p1].age})</div>
-                    </div>
-                    <div style="color:var(--neon-cyan); margin-top:10px;">< SWAP ></div>
-                    <div style="text-align:right; width:45%;">
-                        <div style="color:#aaa;">${t.t2Name.toUpperCase()} SENDS:</div>
-                        <div style="color:#fff; margin-top:5px;">${t.p2} (OVR: ${getPlayerWeightedStats(t.p2).baseOvr}, AGE: ${playerStats[t.p2].age})</div>
-                    </div>
+            <div style="background:#000; border:2px solid ${editing ? 'var(--neon-cyan)' : '#333'}; padding:10px; margin-bottom:10px;">
+                <div style="color:var(--ea-yellow); font-size:8px; margin-bottom:6px; text-align:center;">PROPOSAL #${i + 1}${t.edited ? ' (REVISED)' : ''}</div>
+                ${t.tag ? `<div style="color:#888; font-size:7px; margin-bottom:8px; text-align:center;">${String(t.tag).replace(/</g, '&lt;')}</div>` : ''}
+                <div style="display:flex; justify-content:space-between; font-size:8px; margin-bottom:10px; gap:8px;">
+                    <div style="text-align:left; width:46%;">${A.h}</div>
+                    <div style="color:var(--neon-cyan); margin-top:10px;">&lt; SWAP &gt;</div>
+                    <div style="text-align:right; width:46%;">${B.h}</div>
                 </div>
+                <div style="font-size:8px; text-align:center; margin-bottom:10px;">TRADE VALUE ${A.tv} vs ${B.tv} - <span style="color:${fair[0]};">${fair[1]}${gap ? ` (${gap > 0 ? t.t2Name : t.t1Name} +${Math.abs(gap)})` : ''}</span></div>
                 <div style="display:flex; gap:5px;">
-                    <button onclick="approveProposal(${t.id})" style="flex:1; border-color:#00FF00; color:#00FF00;">APPROVE</button>
-                    <button onclick="rejectProposal(${t.id})" style="flex:1; border-color:var(--line-red); color:var(--line-red);">REJECT</button>
+                    ${editing
+                        ? `<button onclick="tpSaveEdit()" style="flex:1; border-color:#00FF00; color:#00FF00;">SAVE CHANGES</button><button onclick="_tpEdit=null; openProposalsModal()" style="flex:1;">CANCEL</button>`
+                        : `<button onclick="approveProposal(${t.id})" style="flex:1; border-color:#00FF00; color:#00FF00;">APPROVE</button>
+                    <button onclick="tpStartEdit(${t.id})" style="flex:1; border-color:var(--neon-cyan); color:var(--neon-cyan);">EDIT</button>
+                    <button onclick="rejectProposal(${t.id})" style="flex:1; border-color:var(--line-red); color:var(--line-red);">REJECT</button>`}
                 </div>
             </div>`;
         });
     }
     document.getElementById('proposalList').innerHTML = h; document.getElementById('proposalOverlay').style.display = 'flex';
 }
-
+function tpStartEdit(id) { const t = pendingTrades.find(x => x.id === id); if (!t) return; _tpEdit = { id, p1: new Set(tpArr(t.p1)), p2: new Set(tpArr(t.p2)) }; openProposalsModal(); }
+function tpToggle(side, n) { if (!_tpEdit) return; const s2 = _tpEdit['p' + side]; s2.has(n) ? s2.delete(n) : s2.add(n); openProposalsModal(); }
+function tpSaveEdit() {
+    const t = _tpEdit && pendingTrades.find(x => x.id === _tpEdit.id); if (!t) { _tpEdit = null; return; }
+    if (!_tpEdit.p1.size || !_tpEdit.p2.size) { alert('Each team has to send at least one player.'); return; }
+    t.p1 = [..._tpEdit.p1]; t.p2 = [..._tpEdit.p2]; t.edited = true; t.day = Math.max(t.day || 0, currentDay); _tpEdit = null;
+    openProposalsModal(); saveGame();
+}
 function approveProposal(id) {
     let t = pendingTrades.find(x => x.id === id); if (!t) return;
-    const i1 = rosters[t.t1].findIndex(p => p.name === t.p1); const i2 = rosters[t.t2].findIndex(p => p.name === t.p2);
-
-    if (i1 !== -1 && i2 !== -1 && !tradeKeepsRostersViable(t.t1, rosters[t.t1][i1], t.t2, rosters[t.t2][i2])) {
-        alert('This trade would leave a team without a goalie or center and cannot be approved. Reject it instead.');
-        return;
+    const on = (key, n) => (rosters[key] || []).some(p => p.name === n);
+    const p1 = tpArr(t.p1), p2 = tpArr(t.p2);
+    if (!p1.length || !p2.length || !p1.every(n => on(t.t1, n)) || !p2.every(n => on(t.t2, n))) {
+        alert('A player in this deal is no longer on that team. Edit or reject it.'); return;
     }
-
-    if (i1 !== -1 && i2 !== -1) {
-        rosters[t.t2].push(rosters[t.t1].splice(i1, 1)[0]); rosters[t.t1].push(rosters[t.t2].splice(i2, 1)[0]);
-        const t2lg = league.find(l=>l.nrm===t.t2); const t1lg = league.find(l=>l.nrm===t.t1);
-        if (playerStats[t.p1]) { playerStats[t.p1].team = t.t2Name; if (t2lg) playerStats[t.p1].teamCode = t2lg.code; if (playerStats[t.p1].pos === 'G') { playerStats[t.p1].lastStart = -1; playerStats[t.p1].goalieDays = 0; if (playerStats[t.p1].season) playerStats[t.p1].season.consStarts = 0; if (playerStats[t.p1].playoff) playerStats[t.p1].playoff.consStarts = 0; } }
-        if (playerStats[t.p2]) { playerStats[t.p2].team = t.t1Name; if (t1lg) playerStats[t.p2].teamCode = t1lg.code; if (playerStats[t.p2].pos === 'G') { playerStats[t.p2].lastStart = -1; playerStats[t.p2].goalieDays = 0; if (playerStats[t.p2].season) playerStats[t.p2].season.consStarts = 0; if (playerStats[t.p2].playoff) playerStats[t.p2].playoff.consStarts = 0; } }
-        
-        let t1o = league.find(l=>l.nrm===t.t1); if(t1o) t1o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
-        let t2o = league.find(l=>l.nrm===t.t2); if(t2o) t2o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
-        assignTeamCaptains();
-        clearWpCache();
-        pruneCustomDuos();
-        tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: ` BLOCKBUSTER: ${t.p1} traded to ${t.t2Name} for ${t.p2}!` }); // v248: day-format fix, see IR ACTIVATE above
+    const post = (key, out, inn) => (rosters[key] || []).map(p => p.name).filter(n => !out.includes(n)).concat(inn);
+    const ok = names => names.some(n => playerStats[n]?.pos === 'G') && names.some(n => playerStats[n]?.pos === 'C') && names.length >= 15;
+    if (!ok(post(t.t1, p1, p2)) || !ok(post(t.t2, p2, p1))) {
+        alert('This trade would leave a team without a goalie or center, or under 15 players. Edit or reject it.'); return;
     }
+    aiMovePlayers(t.t1, t.t2, p1); aiMovePlayers(t.t2, t.t1, p2);
+    [t.t1, t.t2].forEach(k => { const o2 = league.find(l => l.nrm === k); if (o2) o2.chem = { f: [0,0,0,0], d: [0,0,0], lastUnit: null, fYears: o2.chem?.fYears || [0,0,0,0], dYears: o2.chem?.dYears || [0,0,0], fRoster: o2.chem?.fRoster || [null,null,null,null], dRoster: o2.chem?.dRoster || [null,null,null] }; });
+    assignTeamCaptains(); clearWpCache(); pruneCustomDuos();
+    tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `TRADE${t.edited ? ' (revised)' : ''}: ${t.t1Name} send ${p1.join(', ')} to ${t.t2Name} for ${p2.join(', ')}` });
     pendingTrades = pendingTrades.filter(x => x.id !== id); openProposalsModal(); updateUI(); refreshTradeBadge(); saveGame();
 }
 
-function rejectProposal(id) { pendingTrades = pendingTrades.filter(x => x.id !== id); openProposalsModal(); updateUI(); refreshTradeBadge(); saveGame(); }
+function rejectProposal(id) { if (_tpEdit && _tpEdit.id === id) _tpEdit = null; pendingTrades = pendingTrades.filter(x => x.id !== id); openProposalsModal(); updateUI(); refreshTradeBadge(); saveGame(); }
 
 function renderTradeLog() {
     let el = document.getElementById('tradeLogTable'); if (!el) return;
@@ -12814,7 +12979,7 @@ function processDailyUpdates() {
         const expired = pendingTrades.filter(t => t.day == null || (currentDay - t.day) >= TRADE_EXPIRE_DAYS);
         if (expired.length > 0) {
             expired.forEach(t => {
-                tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `TRADE EXPIRED: ${t.t1.toUpperCase()} ↔ ${t.t2.toUpperCase()} offer (${t.p1} / ${t.p2}) went unanswered and has been withdrawn.` });
+                tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `TRADE EXPIRED: ${t.t1.toUpperCase()} ↔ ${t.t2.toUpperCase()} offer (${tpArr(t.p1).join(', ')} / ${tpArr(t.p2).join(', ')}) went unanswered and has been withdrawn.` });
             });
             pendingTrades = pendingTrades.filter(t => t.day != null && (currentDay - t.day) < TRADE_EXPIRE_DAYS);
             refreshTradeBadge();
@@ -12986,7 +13151,7 @@ function processDailyUpdates() {
             if (awardConfig.tradeBlock) {
                 // Queue for user approval — do NOT touch rosters or playerStats yet;
                 // approveProposal() will execute the swap if accepted, rejectProposal() discards it cleanly
-                pendingTrades.push({ id: Date.now() + Math.random(), t1: teamA, t2: teamB, t1Name: _teamAObj?.name || teamA, t2Name: _teamBObj?.name || teamB, p1: playerA.name, p2: playerB.name, day: currentDay });
+                pendingTrades.push({ id: Date.now() + Math.random(), t1: teamA, t2: teamB, t1Name: _teamAObj?.name || teamA, t2Name: _teamBObj?.name || teamB, p1: [playerA.name], p2: [playerB.name], tag: dealTag, day: currentDay });
                 tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `TRADE OFFER: ${teamA.toUpperCase()} ↔ ${teamB.toUpperCase()} — pending approval.` });
                 refreshTradeBadge();
             } else {
