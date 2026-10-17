@@ -8268,6 +8268,7 @@ function processOffseasonGrowthV2() {
         const g = (0.50 * c(zSv) + 0.15 * c(zTeam) + 0.15 * c(zSo) + 0.10 * c(zGaa) + 0.10 * c(zPo)) / 0.7;
         return { grade: Math.max(-2, Math.min(2, g)) * (st.gp / (st.gp + 8)), zs: { sv: zSv, so: zSo } };
     };
+    const gTop5 = new Set(gl.filter(q => (q.season.gp || 0) >= 30).sort((a, b) => b.season.sv / b.season.sa - a.season.sv / a.season.sa).slice(0, 5).map(q => q.name)); // v484
     const moves450 = []; // v450: summer rating moves, for headlines and the risers/fallers report
     Object.values(playerStats).forEach(p => {
         const res = p.pos === 'G' ? gradeGoalie(p) : (p.attr ? gradeSkater(p) : null);
@@ -8300,9 +8301,27 @@ function processOffseasonGrowthV2() {
             if (d > 0 && p.attrCap && p.attrCap[k]) nv = Math.min(nv, Math.max(cur, p.attrCap[k])); /* v458: each attribute's own hidden limit */ if (nv !== cur) { p.attr[k] = nv; trace(p, k, nv - cur, cause); } };
         if (p.pos === 'G') {
             const target = p.peak - pg2CumDecline('g', p.age), gap = target - now;
-            const gRate = (gap > 0 ? (p.age <= 27 ? 0.30 : 0.18) : pg2Rate(p.age, false)) * pg2GradeMult(p, gap > 0); // v428: young goalies close the gap faster; v462 grade-driven pace
+            // v484: save % gates growth - full pace only when beating the sv% his rating predicts, half pace around it (or under
+            // 15 GP), none below it; 90+ goalies only climb with a top-5 sv% (Richter 84 -> 94 on .895-.905)
+            const zs = res ? res.zs.sv : null;
+            let perf = zs === null ? 0.5 : zs > 0.5 ? 1 : zs >= -0.5 ? 0.5 : 0;
+            if (now >= 90 && !gTop5.has(p.name)) perf = 0;
+            const gRate = (gap > 0 ? (p.age <= 27 ? 0.30 : 0.18) * perf : pg2Rate(p.age, false)) * pg2GradeMult(p, gap > 0); // v428: young goalies close the gap faster; v462 grade-driven pace
             const step = pg2Stoch(Math.max(-3, Math.min(4, gap * gRate))) + (Math.random() < 0.3 ? (Math.random() < 0.5 ? 1 : -1) : 0);
             set('ovr', step, 'curve'); set('gDef', step, 'curve');
+            // v485: the season itself moves a goalie's ratings (they sat within +-2 over four seasons). 25+ GP: save % vs the
+            // sv% his rating predicts gives -2..+2 to overall/positioning/hands; shutouts add to clutch, positioning and hands,
+            // a starter with none loses clutch. 90+ goalies only gain with a top-5 sv%.
+            { const sg = p.season || {};
+              if (res && (sg.gp || 0) >= 15) { // v486: 25 -> 15 GP so backups move too
+                  const z = res.zs.sv; let ps = z > 1.5 ? 2 : z > 0.5 ? 1 : z < -1.5 ? -2 : z < -0.5 ? -1 : 0;
+                  if (ps > 0 && now >= 90 && !gTop5.has(p.name)) ps = 0;
+                  if (ps) { set('ovr', ps, 'season sv%'); set('gDef', ps, 'season sv%'); ['gloveL', 'gloveR', 'stickL', 'stickR'].forEach(k => set(k, Math.random() < 0.6 ? ps : Math.sign(ps), 'season sv%')); }
+                  const so = sg.so || 0, soRate = so / sg.gp;
+                  if (so >= 4) { /* v486: tiers fit this league (leaders 5-7, median 1) - was 8+/5+ */ set('clutch', 2, 'shutouts'); set('gDef', 1, 'shutouts'); set(['gloveL', 'gloveR', 'stickL', 'stickR'][Math.floor(Math.random() * 4)], 1, 'shutouts'); if (now < 90 || gTop5.has(p.name)) set('ovr', 1, 'shutouts'); }
+                  else if (so >= 2) set('clutch', 1, 'shutouts');
+                  else if (so === 0 && sg.gp >= 40) set('clutch', -1, 'no shutouts');
+              } }
             // v457: glove/stick hands develop independently (own lean + noise), injuries cost agility
             if (!p.devLean) { p.devLean = {}; ['gloveL', 'gloveR', 'stickL', 'stickR', 'agil'].forEach(k => p.devLean[k] = (Math.random() + Math.random() - 1) * 1.0); }
             const gStep458 = p.age < 33 ? Math.max(0, step) : step; // v458: hands/speed only decline from 33
@@ -11300,6 +11319,39 @@ const REAL_DRAFT = {
         ['Tomi Kallio', 'LW', 'D'], ['Sami Kapanen', 'RW', 'T'], ['Marc Savard', 'C', 'F'], ['Daniel Tjarnqvist', 'D', 'D'],
         ['Miikka Kiprusoff', 'G', 'F'], ['Jan Hrdina', 'C', 'D'], ['Byron Ritchie', 'C', 'B'],
     ],
+    '96': [
+        ['Chris Phillips', 'D', 'T'], ['Andrei Zyuzin', 'D', 'D'], ['Jean-Pierre Dumont', 'RW', 'T'], ['Alexandre Volchkov', 'RW', 'B'],
+        ['Erik Rasmussen', 'C', 'D'], ['Johnathan Aitken', 'D', 'B'], ['Ruslan Salei', 'D', 'D'], ['Derek Morris', 'D', 'T'],
+        ['Dainius Zubrus', 'RW', 'T'], ['Marco Sturm', 'LW', 'T'], ['Josh Holden', 'C', 'B'], ['Jaroslav Svejkovsky', 'RW', 'B'],
+        ['Daniel Briere', 'C', 'T'], ['Richard Jackman', 'D', 'B'], ['Boyd Devereaux', 'C', 'D'], ['Matt Higgins', 'C', 'B'],
+        ['Matt Cullen', 'C', 'D'], ['Steve Begin', 'C', 'D'], ['Jan Bulis', 'C', 'D'], ['Mathieu Garon', 'G', 'D'],
+        ['Zdeno Chara', 'D', 'F'], ['Josh Green', 'LW', 'D'], ['Mark Parrish', 'RW', 'T'], ['Tom Poti', 'D', 'T'],
+        ['Sami Salo', 'D', 'T'], ['Pavel Kubina', 'D', 'T'], ['Tomas Kaberle', 'D', 'T'], ['Craig Hillier', 'G', 'B'],
+    ],
+    '97': [
+        ['Joe Thornton', 'C', 'F'], ['Patrick Marleau', 'C', 'F'], ['Olli Jokinen', 'C', 'T'], ['Roberto Luongo', 'G', 'F'],
+        ['Eric Brewer', 'D', 'T'], ['Daniel Tkaczuk', 'C', 'B'], ['Paul Mara', 'D', 'D'], ['Sergei Samsonov', 'LW', 'T'],
+        ['Brad Ference', 'D', 'D'], ['Marian Hossa', 'RW', 'F'], ['Daniel Cleary', 'RW', 'D'], ['Jason Ward', 'RW', 'D'],
+        ['Scott Hannan', 'D', 'T'], ['Brenden Morrow', 'LW', 'T'], ['Kristian Huselius', 'LW', 'T'], ['Kyle Calder', 'LW', 'T'],
+        ['Mike York', 'C', 'T'], ['Brian Campbell', 'D', 'T'],
+    ],
+    '98': [
+        ['Vincent Lecavalier', 'C', 'F'], ['David Legwand', 'C', 'T'], ['Brad Stuart', 'D', 'T'], ['Bryan Allen', 'D', 'D'],
+        ['Vitaly Vishnevski', 'D', 'D'], ['Rico Fata', 'RW', 'B'], ['Manny Malhotra', 'C', 'D'], ['Mark Bell', 'C', 'D'],
+        ['Nikolai Antropov', 'C', 'T'], ['Michael Rupp', 'LW', 'D'], ['Alex Tanguay', 'LW', 'T'], ['Robyn Regehr', 'D', 'T'],
+        ['Simon Gagne', 'LW', 'T'], ['Mathieu Biron', 'D', 'B'], ['Jiri Fischer', 'D', 'D'], ['Scott Gomez', 'C', 'T'],
+        ['Jonathan Cheechoo', 'RW', 'T'], ['Mike Fisher', 'C', 'T'], ['Brad Richards', 'C', 'F'], ['Shawn Horcoff', 'C', 'T'],
+        ['Erik Cole', 'LW', 'T'], ['Francois Beauchemin', 'D', 'D'], ['Brian Gionta', 'RW', 'T'], ['Andrew Raycroft', 'G', 'D'],
+        ['Mike Ribeiro', 'C', 'T'], ['Pavel Datsyuk', 'C', 'F'],
+    ],
+    '99': [
+        ['Patrik Stefan', 'C', 'B'], ['Daniel Sedin', 'LW', 'F'], ['Henrik Sedin', 'C', 'F'], ['Pavel Brendl', 'RW', 'B'],
+        ['Tim Connolly', 'C', 'T'], ['Brian Finley', 'G', 'B'], ['Kris Beech', 'C', 'B'], ['Taylor Pyatt', 'LW', 'D'],
+        ['Jamie Lundmark', 'C', 'B'], ['Branislav Mezei', 'D', 'B'], ['Oleg Saprykin', 'LW', 'D'], ['Barret Jackman', 'D', 'T'],
+        ['Nick Boynton', 'D', 'T'], ['Martin Havlat', 'RW', 'T'], ['Jordan Leopold', 'D', 'T'], ['Mike Comrie', 'C', 'T'],
+        ['Ryan Malone', 'LW', 'T'], ['Ryan Miller', 'G', 'F'], ['Martin Erat', 'LW', 'T'], ['Henrik Zetterberg', 'C', 'F'],
+        ['Radim Vrbata', 'RW', 'T'],
+    ],
 };
 // v477: 1990-93 draftees not in the game - fallback pool once a year's real list runs out at a position (and for drafts
 // after 1995). [name, pos, tier, draft year]; anyone already in playerStats is skipped.
@@ -11343,7 +11395,7 @@ function realDraftPool() {
     // v480: future stars first in every list (franchise, then top 6, then depth, then busts; real order within a tier)
     const byTier = l => l.map((e, i) => [e, i]).sort((x, y) => 'FTDB'.indexOf(x[0][2]) - 'FTDB'.indexOf(y[0][2]) || x[1] - y[1]).map(x => x[0]);
     const early = [...DRAFT_TOP_STARS.map(n => REAL_DRAFT_EARLY.find(e => e[0] === n)).filter(Boolean), ...byTier(REAL_DRAFT_EARLY.filter(e => !DRAFT_TOP_STARS.includes(e[0])))];
-    return [...early, ...byTier(REAL_DRAFT['94']).map(e => [...e, 94]), ...byTier(REAL_DRAFT['95']).map(e => [...e, 95])];
+    return [...early, ...['94', '95', '96', '97', '98', '99'].flatMap(y => byTier(REAL_DRAFT[y] || []).map(e => [...e, +y]))]; // v483: + 1996-99 classes
 }
 function takeRealDraftName(pos) {
     const grp = q => q === 'G' ? 'G' : q === 'D' ? 'D' : 'F';
