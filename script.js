@@ -3662,7 +3662,7 @@ let fightGov = 1; // v473: fight-rate governor - eases fights back when a season
 // v307: SHOT_BASE = even-strength shot lambda per team; FINISH_BASE = per-shot goal multiplier (sets league save %)
 // v335: elite offensive defencemen get a slight boost to goals and assists (ES + PP)
 const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D') return false; const tg = PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || ''; return (parseInt(ps.attr?.off) || 0) >= 78 || ['FRANCHISE D','PRO OFFENSIVE D','BOOMER','QUARTERBACK','OFFENSIVE D'].includes(tg); };
-let SHOT_BASE = 24, FINISH_BASE = 1.065; // v449: 1.08 -> 1.065 (6 of 15 seasons over 7.5558 with more parity); v445: 1.085 -> 1.08 (3 of 10 seasons over 7.5558); v444: 1.07 -> 1.085; v443: 1.04 -> 1.07; v442: 1.02 -> 1.04 (GPG sat 7.1-7.2 with v2 goalies) // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
+let SHOT_BASE = 24, FINISH_BASE = 1.058; // v488: 1.065 -> 1.058 (4 of 5 seasons 7.55-7.68 with performance-driven goalies); v449: 1.08 -> 1.065 (6 of 15 seasons over 7.5558 with more parity); v445: 1.085 -> 1.08 (3 of 10 seasons over 7.5558); v444: 1.07 -> 1.085; v443: 1.04 -> 1.07; v442: 1.02 -> 1.04 (GPG sat 7.1-7.2 with v2 goalies) // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.5; // v452: 1.75 -> 1.5 (series ran short)
 // v347: playoff hockey is tighter - real 1993-94 playoffs scored ~9% under the regular season; the sim was scoring ~4% MORE
