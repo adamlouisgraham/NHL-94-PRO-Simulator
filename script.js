@@ -8306,6 +8306,7 @@ function processOffseasonGrowthV2() {
             const zs = res ? res.zs.sv : null;
             let perf = zs === null ? 0.5 : zs > 0.5 ? 1 : zs >= -0.5 ? 0.5 : 0;
             if (now >= 90 && !gTop5.has(p.name)) perf = 0;
+            if (p.age <= 25) perf = Math.max(perf, 0.5); // v489: young goalies always develop at least at half pace (starters slid 80 -> 71.5 by year 13)
             const gRate = (gap > 0 ? (p.age <= 27 ? 0.30 : 0.18) * perf : pg2Rate(p.age, false)) * pg2GradeMult(p, gap > 0); // v428: young goalies close the gap faster; v462 grade-driven pace
             const step = pg2Stoch(Math.max(-3, Math.min(4, gap * gRate))) + (Math.random() < 0.3 ? (Math.random() < 0.5 ? 1 : -1) : 0);
             set('ovr', step, 'curve'); set('gDef', step, 'curve');
@@ -8316,6 +8317,7 @@ function processOffseasonGrowthV2() {
               if (res && (sg.gp || 0) >= 15) { // v486: 25 -> 15 GP so backups move too
                   const z = res.zs.sv; let ps = z > 1.5 ? 2 : z > 0.5 ? 1 : z < -1.5 ? -2 : z < -0.5 ? -1 : 0;
                   if (ps > 0 && now >= 90 && !gTop5.has(p.name)) ps = 0;
+                  if (ps < 0 && p.age <= 25) ps = 0; // v489: no performance drop for goalies 25 and under
                   if (ps) { set('ovr', ps, 'season sv%'); set('gDef', ps, 'season sv%'); ['gloveL', 'gloveR', 'stickL', 'stickR'].forEach(k => set(k, Math.random() < 0.6 ? ps : Math.sign(ps), 'season sv%')); }
                   const so = sg.so || 0, soRate = so / sg.gp;
                   if (so >= 4) { /* v486: tiers fit this league (leaders 5-7, median 1) - was 8+/5+ */ set('clutch', 2, 'shutouts'); set('gDef', 1, 'shutouts'); set(['gloveL', 'gloveR', 'stickL', 'stickR'][Math.floor(Math.random() * 4)], 1, 'shutouts'); if (now < 90 || gTop5.has(p.name)) set('ovr', 1, 'shutouts'); }
