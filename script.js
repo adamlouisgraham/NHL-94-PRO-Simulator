@@ -685,7 +685,7 @@ function buildSavePayload() {
         meta: { version: CURRENT_SAVE_SCHEMA_VERSION, savedAt: new Date().toISOString(), label: 'EASN Dynasty Save' },
         data: {
             league, rosters, playerStats, tradeLog: savedTradeLog, hallOfFame, leagueHistory: savedLeagueHistory,
-            retiredPlayers, awardHistory, simRecords, fightGov, draftedReal, tpv474: true, leagueChronicle, calendar: lightweightCalendar, currentDay, currentSeason,
+            retiredPlayers, awardHistory, simRecords, fightGov, draftedReal, freeAgents, tpv474: true, leagueChronicle, calendar: lightweightCalendar, currentDay, currentSeason,
             isPlayoffs, isASG, currentCupChamp, playoffBracket: lightweightBracket, awardConfig, 
             monthSnapshot, pendingTrades, realDatesMap, customDuos, autoDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, teamAssistants, _awardsPending, asgDoneThisSeason, selectedTeam
         }
@@ -722,6 +722,7 @@ function applyLoadedSave(data) {
     simRecords = data.simRecords && typeof data.simRecords === 'object' ? data.simRecords : null; // v454
     fightGov = typeof data.fightGov === 'number' ? data.fightGov : 1; // v473
     draftedReal = Array.isArray(data.draftedReal) ? data.draftedReal : []; // v481
+    freeAgents = Array.isArray(data.freeAgents) ? data.freeAgents.filter(n => playerStats[n]) : []; // v491
     leagueChronicle = Array.isArray(data.leagueChronicle) ? data.leagueChronicle : []; // v455
     awardHistory = Array.isArray(data.awardHistory) ? data.awardHistory : Object.values(playerStats).flatMap(p => (p.trophies || []).map(t => ({ year: t.year, name: t.name, player: p.name, team: p.teamCode || '', pos: p.pos || '' })));
     calendar = Array.isArray(data.calendar) ? data.calendar : []; 
@@ -1551,7 +1552,7 @@ async function startNewGame(useCustomRoster = false) {
     currentDay = 0; currentSeason = 1; isPlayoffs = false; isASG = false; asgDoneThisSeason = false;
     isSimulating = false; isSimSeason = false; isTurboMode = false; currentCupChamp = "";
     playoffBracket = { round: 1, series: [] }; tradeLog = []; hallOfFame = []; autoDuos = []; seasonLines = {}; leagueHistory = [];
-    retiredPlayers = []; awardHistory = []; simRecords = null; fightGov = 1; draftedReal = []; leagueChronicle = []; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
+    retiredPlayers = []; awardHistory = []; simRecords = null; fightGov = 1; draftedReal = []; freeAgents = []; leagueChronicle = []; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
     monthSnapshot = {}; activeIdx = null; statMode = 'season'; activeSubInfo = null;
         // Clear cached CSV data if not using custom roster — force fresh fetch from Google Sheets
     if (!useCustomRoster) { customTeamData = null; customPlayerData = null; }
@@ -8127,7 +8128,7 @@ function pg2Headroom(p) { // v431: room scales down for players who are already 
 function pg2HeadroomRaw(p) { // starting PEAK above today's rating for players who arrive without one
     const a = p.age, rnd = () => Math.random() + Math.random() - 1; // ~triangular -1..1
     if (String(p.name).startsWith('Prospect ')) {
-        const c = ({ Franchise: 84, 'Top 6': 71, Depth: 62, Bust: 54 }[p.potential] || 60) /* v446: lower again - after 10 drafts prospects filled the league (depth OVR 52 -> 60, 12 of top-20 scorers) */ + (p.pos === 'G' ? 8 : 0); // v449 back to +8 (starters rose to 82 with the goalie market); v447 goalies +10 (starters still slid 79 -> 76 after year 10) // v428: lower (prospects pushed core 63.7 -> 66.4); v432 goalies +8 (starters need ~80)
+        const c = ({ Franchise: 85, 'Top 6': 73, Depth: 63, Bust: 54 }[p.potential] || 60) /* v490: 84/71/62 -> 85/73/63 (core slid 63.7 -> 61.5 over 15 years) */ /* v446: lower again - after 10 drafts prospects filled the league (depth OVR 52 -> 60, 12 of top-20 scorers) */ + (p.pos === 'G' ? 10 : 0) /* v490: G +8 -> +10 (late starter slide) */; // v449 back to +8 (starters rose to 82 with the goalie market); v447 goalies +10 (starters still slid 79 -> 76 after year 10) // v428: lower (prospects pushed core 63.7 -> 66.4); v432 goalies +8 (starters need ~80)
         return c + rnd() * 4 - (getPlayerWeightedStats(p.name)?.baseOvr || 50);
     }
     if (p.pos === 'G') { if (a <= 23) return 9 + rnd() * 4; if (a <= 26) return 5 + rnd() * 3; if (a <= 28) return 2 + rnd() * 2; return 0; } // v428: goalies develop later
@@ -8241,6 +8242,14 @@ function processOffseasonGrowthV2() {
         let sum = 0, wt = 0; Object.entries(w).forEach(([k, v]) => { if (v) { sum += v * (zs[k] || 0); wt += v; } });
         const po = p.playoff || {}; let g = sum / Math.max(0.5, wt) / 0.6;
         if ((po.gp || 0) >= 4) { const r = ((st.g + st.a) / st.gp) || 0, q = ((po.g + po.a) / po.gp) || 0; if (r > 0.2) g += 0.25 * Math.max(-1, Math.min(1, (q - r) / r)); }
+        // v491: compared with his own previous seasons (up to 3 with 20+ GP): points/game, and hits/blocks for role players
+        { const prev = (p.statHist || []).filter(h => h.gp >= 20).slice(-3);
+          if (prev.length) {
+              const avg = k => prev.reduce((a, h) => a + (h[k] || 0), 0) / prev.length, cur = { ppg: (st.g + st.a) / st.gp, hpg: ((st.hits || 0) + (st.blk || 0)) / st.gp };
+              const off = (w.pts || 0) + (w.g || 0) + (w.a || 0) >= 0.3;
+              const dP = (cur.ppg - avg('ppg')) / Math.max(0.12, avg('ppg') * 0.25), dH = (cur.hpg - avg('hpg')) / Math.max(0.3, avg('hpg') * 0.3);
+              const yoy = Math.max(-2, Math.min(2, off ? dP : 0.5 * dP + 0.5 * dH));
+              g = g * 0.75 + yoy * 0.25; zs.yoy = yoy; } }
         return { grade: Math.max(-2, Math.min(2, g)) * (st.gp / (st.gp + 10)), zs };
     };
     // goalies
@@ -8263,15 +8272,22 @@ function processOffseasonGrowthV2() {
         const mates = gl.filter(q => q !== p && q.teamCode === p.teamCode && (q.season.gp || 0) >= 10);
         const zTeam = mates.length ? (sv - sumOf(mates, q => q.season.sv) / Math.max(1, sumOf(mates, q => q.season.sa))) / 0.012 : zSv;
         const zSo = ((st.so || 0) / st.gp - lgSo) / 0.05, zGaa = (lgGaa - gaa) / 0.35;
+        // v491: compared with his own previous seasons (up to 3 with 15+ GP)
+        const prevG = (p.statHist || []).filter(h => h.gp >= 15 && h.sv).slice(-3);
+        const zYoy = prevG.length ? Math.max(-2, Math.min(2, (sv - prevG.reduce((a, h) => a + h.sv, 0) / prevG.length) / 0.008)) : 0;
         const po = p.playoff || {}; const zPo = (po.gp || 0) >= 4 && po.sa > 0 ? ((po.sv / po.sa) - sv) / 0.012 : 0;
         const c = v => Math.max(-2.5, Math.min(2.5, v));
-        const g = (0.50 * c(zSv) + 0.15 * c(zTeam) + 0.15 * c(zSo) + 0.10 * c(zGaa) + 0.10 * c(zPo)) / 0.7;
+        let g = (0.50 * c(zSv) + 0.15 * c(zTeam) + 0.15 * c(zSo) + 0.10 * c(zGaa) + 0.10 * c(zPo)) / 0.7;
+        if (prevG.length) g = g * 0.75 + zYoy * 0.25; // v491
         return { grade: Math.max(-2, Math.min(2, g)) * (st.gp / (st.gp + 8)), zs: { sv: zSv, so: zSo } };
     };
     const gTop5 = new Set(gl.filter(q => (q.season.gp || 0) >= 30).sort((a, b) => b.season.sv / b.season.sa - a.season.sv / a.season.sa).slice(0, 5).map(q => q.name)); // v484
     const moves450 = []; // v450: summer rating moves, for headlines and the risers/fallers report
     Object.values(playerStats).forEach(p => {
         const res = p.pos === 'G' ? gradeGoalie(p) : (p.attr ? gradeSkater(p) : null);
+        { const st = p.season || {}; if ((st.gp || 0) > 0) { // v491: keep the last 4 seasons for year-over-year comparison
+            p.statHist = [...(p.statHist || []), { yr: currentSeason, gp: st.gp, ppg: ((st.g || 0) + (st.a || 0)) / st.gp, hpg: ((st.hits || 0) + (st.blk || 0)) / st.gp,
+                sv: p.pos === 'G' && st.sa ? st.sv / st.sa : 0 }].slice(-4); } }
         p.age++;
         if (!awardConfig.aging || !p.attr) return;
         const grade = res ? res.grade : 0; p.lastGrade = +grade.toFixed(2);
@@ -11227,17 +11243,43 @@ function getConnSmytheScore(p) {
     if (awardConfig.draft) trimRostersAfterOffseason();
     // v303: refill short rosters to 28 with extra prospects (retirements were outpacing the 2-round draft)
     if (awardConfig.draft) {
-        let extra = 0;
+        let extra = 0, faSigned = 0;
+        expireFreeAgents(); // v491
         league.forEach(t => {
-            const ro = rosters[t.nrm] || [];
+            const ro = rosters[t.nrm] = rosters[t.nrm] || [];
             while (ro.length < 28) {
                 const nG = ro.filter(p => p.pos === 'G').length, nD = ro.filter(p => p.pos === 'D').length;
                 const nF = ro.length - nG - nD;
                 const pos = nG < 3 ? 'G' : nD < 9 ? 'D' : nF < 15 ? ['C', 'LW', 'RW'][Math.floor(Math.random() * 3)] : (Math.random() < 0.35 ? 'D' : 'C');
+                if (signFreeAgent(t, pos)) { faSigned++; continue; } // v491: free agents first
                 makeProspect(t, pos, 200 + (++extra));
             }
         });
-        if (extra) { clearWpCache(); res += `<p style='font-size:7px; color:var(--neon-cyan);'>Free-agent call-ups: ${extra} young players signed to fill rosters to 28.</p>`; }
+        // v491: upgrades - a team signs a free agent 3+ OVR better than its weakest player in that group (F/D/G) and releases
+        // that player in his place (at most 2 per team; this year's picks and a team's last two enforcers are kept)
+        { const o = n => getPlayerWeightedStats(n)?.baseOvr || 0, grp = q => q === 'G' ? 'G' : q === 'D' ? 'D' : 'F';
+          const picksNow = new Set(lastDraft && lastDraft.season === currentSeason ? lastDraft.picks.map(x => x.name) : []);
+          const isEnfF = n => (getPlayerWeightedStats(n)?.tag || '') === 'ENFORCER F';
+          [...league].sort(() => Math.random() - 0.5).forEach(t => {
+              for (let k = 0; k < 2; k++) {
+                  freeAgents = freeAgents.filter(n => playerStats[n] && !playerStats[n].teamCode);
+                  const ro = rosters[t.nrm] || []; let best = null;
+                  ['F', 'D', 'G'].forEach(G => {
+                      const nEnf = ro.filter(r => isEnfF(r.name)).length;
+                      const worst = ro.filter(r => grp(r.pos) === G && !picksNow.has(r.name) && !(isEnfF(r.name) && nEnf <= 2)).sort((x, y) => o(x.name) - o(y.name))[0];
+                      const fa = freeAgents.filter(n => grp(playerStats[n].pos) === G && playerStats[n].lastTeam !== t.code).sort((x, y) => o(y) - o(x))[0];
+                      if (worst && fa && o(fa) - o(worst.name) >= 3 && (!best || o(fa) - o(worst.name) > best.gain)) best = { worst: worst.name, fa, gain: o(fa) - o(worst.name), pos: playerStats[fa].pos };
+                  });
+                  if (!best) break;
+                  ro.splice(ro.findIndex(r => r.name === best.worst), 1); releaseToFreeAgency(best.worst, t, '');
+                  playerStats[best.worst].lastTeam = t.code;
+                  const before = freeAgents.length; freeAgents = freeAgents.filter(n => n !== best.fa); freeAgents.unshift(best.fa);
+                  if (signFreeAgent(t, best.pos)) faSigned++;
+              }
+          }); }
+        if (faSigned) res += `<p style='font-size:7px; color:var(--neon-cyan);'>Free agency: ${faSigned} released players signed by new teams (${freeAgents.length} still unsigned).</p>`; // v491
+        if (extra || faSigned) clearWpCache();
+        if (extra) res += `<p style='font-size:7px; color:var(--neon-cyan);'>Free-agent call-ups: ${extra} young players signed to fill rosters to 28.</p>`;
     }
 
     document.getElementById('awardWinnerContent').innerHTML = res; 
@@ -11354,6 +11396,35 @@ const REAL_DRAFT = {
         ['Ryan Malone', 'LW', 'T'], ['Ryan Miller', 'G', 'F'], ['Martin Erat', 'LW', 'T'], ['Henrik Zetterberg', 'C', 'F'],
         ['Radim Vrbata', 'RW', 'T'],
     ],
+    '00': [
+        ['Rick DiPietro', 'G', 'T'], ['Dany Heatley', 'RW', 'F'], ['Marian Gaborik', 'RW', 'F'], ['Rostislav Klesla', 'D', 'D'],
+        ['Raffi Torres', 'LW', 'D'], ['Scott Hartnell', 'LW', 'T'], ['Lars Jonsson', 'D', 'B'], ['Nikita Alexeev', 'RW', 'B'],
+        ['Brent Krahn', 'G', 'B'], ['Ron Hainsey', 'D', 'D'], ['Alexander Frolov', 'LW', 'T'], ['Steve Ott', 'C', 'D'],
+        ['Justin Williams', 'RW', 'T'], ['Niklas Kronwall', 'D', 'T'], ['Brad Boyes', 'C', 'T'], ['Antoine Vermette', 'C', 'D'],
+        ['Paul Martin', 'D', 'T'], ['Lubomir Visnovsky', 'D', 'T'], ['Dominic Moore', 'C', 'D'], ['Henrik Lundqvist', 'G', 'F'],
+    ],
+    '01': [
+        ['Ilya Kovalchuk', 'LW', 'F'], ['Jason Spezza', 'C', 'F'], ['Alexander Svitov', 'C', 'B'], ['Stephen Weiss', 'C', 'T'],
+        ['Stanislav Chistov', 'RW', 'B'], ['Mikko Koivu', 'C', 'T'], ['Pascal Leclaire', 'G', 'D'], ['Dan Hamhuis', 'D', 'T'],
+        ['Ales Hemsky', 'RW', 'T'], ['Chuck Kobasew', 'RW', 'D'], ['Jeff Woywitka', 'D', 'B'], ['Tuomo Ruutu', 'LW', 'D'],
+        ['Fedor Tyutin', 'D', 'D'], ['Jason Pominville', 'RW', 'T'], ['Derek Roy', 'C', 'T'], ['Mike Cammalleri', 'LW', 'T'],
+        ['Tomas Plekanec', 'C', 'T'], ['Patrick Sharp', 'C', 'T'], ['Marek Svatos', 'RW', 'D'],
+    ],
+    '02': [
+        ['Rick Nash', 'LW', 'F'], ['Kari Lehtonen', 'G', 'T'], ['Jay Bouwmeester', 'D', 'T'], ['Joni Pitkanen', 'D', 'T'],
+        ['Ryan Whitney', 'D', 'T'], ['Scottie Upshall', 'RW', 'D'], ['Pierre-Marc Bouchard', 'C', 'T'], ['Petr Taticek', 'C', 'B'],
+        ['Eric Nystrom', 'LW', 'D'], ['Keith Ballard', 'D', 'D'], ['Alexander Steen', 'LW', 'T'], ['Joffrey Lupul', 'RW', 'T'],
+        ['Cam Ward', 'G', 'T'], ['Duncan Keith', 'D', 'F'], ['Jarret Stoll', 'C', 'D'], ['Jiri Hudler', 'C', 'T'],
+        ['Matt Stajan', 'C', 'T'], ['Valtteri Filppula', 'C', 'T'],
+    ],
+    '03': [
+        ['Marc-Andre Fleury', 'G', 'F'], ['Eric Staal', 'C', 'F'], ['Nathan Horton', 'C', 'T'], ['Nikolai Zherdev', 'RW', 'D'],
+        ['Thomas Vanek', 'LW', 'T'], ['Milan Michalek', 'LW', 'T'], ['Ryan Suter', 'D', 'T'], ['Braydon Coburn', 'D', 'D'],
+        ['Dion Phaneuf', 'D', 'T'], ['Andrei Kostitsyn', 'RW', 'D'], ['Jeff Carter', 'C', 'T'], ['Hugh Jessiman', 'RW', 'B'],
+        ['Dustin Brown', 'RW', 'T'], ['Brent Seabrook', 'D', 'T'], ['Zach Parise', 'LW', 'F'], ['Ryan Getzlaf', 'C', 'F'],
+        ['Ryan Kesler', 'C', 'T'], ['Mike Richards', 'C', 'T'], ['Corey Perry', 'RW', 'F'], ['Jimmy Howard', 'G', 'T'],
+        ['Patrice Bergeron', 'C', 'F'], ['Shea Weber', 'D', 'F'], ['Joe Pavelski', 'C', 'T'], ['Dustin Byfuglien', 'D', 'T'],
+    ],
 };
 // v477: 1990-93 draftees not in the game - fallback pool once a year's real list runs out at a position (and for drafts
 // after 1995). [name, pos, tier, draft year]; anyone already in playerStats is skipped.
@@ -11397,7 +11468,7 @@ function realDraftPool() {
     // v480: future stars first in every list (franchise, then top 6, then depth, then busts; real order within a tier)
     const byTier = l => l.map((e, i) => [e, i]).sort((x, y) => 'FTDB'.indexOf(x[0][2]) - 'FTDB'.indexOf(y[0][2]) || x[1] - y[1]).map(x => x[0]);
     const early = [...DRAFT_TOP_STARS.map(n => REAL_DRAFT_EARLY.find(e => e[0] === n)).filter(Boolean), ...byTier(REAL_DRAFT_EARLY.filter(e => !DRAFT_TOP_STARS.includes(e[0])))];
-    return [...early, ...['94', '95', '96', '97', '98', '99'].flatMap(y => byTier(REAL_DRAFT[y] || []).map(e => [...e, +y]))]; // v483: + 1996-99 classes
+    return [...early, ...['94', '95', '96', '97', '98', '99', '00', '01', '02', '03'].flatMap(y => byTier(REAL_DRAFT[y] || []).map(e => [...e, +y < 50 ? 100 + +y : +y]))]; // v483: + 1996-99 classes; v490 + 2000-03 (year 100+ = 2000s)
 }
 function takeRealDraftName(pos) {
     const grp = q => q === 'G' ? 'G' : q === 'D' ? 'D' : 'F';
@@ -11414,6 +11485,9 @@ function draftNeedPos(t) {
         const n = slots[P]; let sum = 0; for (let i = 0; i < n; i++) sum += v[i] ?? 40; return sum / n; };
     const ro = rosters[t.nrm] || [];
     if (ro.filter(p => p.pos === 'G').length < 3) return 'G';
+    { // v490: a team whose starter is 32+ drafts his successor unless it already has a goalie 25 or under rated 65+
+      const gs = ro.filter(p => p.pos === 'G').sort((a, b) => o(b.name) - o(a.name));
+      if (gs.length < 4 && gs[0] && (playerStats[gs[0].name]?.age || 0) >= 32 && !gs.some(p => (playerStats[p.name]?.age || 99) <= 25 && o(p.name) >= 65)) return 'G'; }
     if (ro.filter(p => p.pos === 'D').length < 8) return 'D';
     let best = 'C', bestGap = -Infinity;
     Object.keys(slots).forEach(P => {
@@ -11446,6 +11520,41 @@ function runRealisticDraft() {
     return pick;
 }
 
+// v491: free agency - players cut in the offseason go to a free-agent pool instead of vanishing. Teams short of
+// players sign the best free agent at the position they need (before calling up a new prospect). Unsigned free agents
+// who are 34+ or have sat two summers retire.
+let freeAgents = [];
+function releaseToFreeAgency(name, t, posTag) {
+    const ps = playerStats[name]; if (!ps) return;
+    ps.team = 'Free Agent'; ps.teamCode = ''; ps.faSince = currentSeason; ps.lastTeam = t.code;
+    if (!freeAgents.includes(name)) freeAgents.push(name);
+    if (awardConfig.headlines) tradeLog.unshift({ day: 'OFFSEASON', details: `RELEASED: ${t.code} releases ${posTag}${name} to free agency.` });
+}
+function signFreeAgent(t, pos) {
+    const grp = q => q === 'G' ? 'G' : q === 'D' ? 'D' : 'F';
+    freeAgents = freeAgents.filter(n => playerStats[n] && !playerStats[n].teamCode);
+    const o = n => getPlayerWeightedStats(n)?.baseOvr || 0;
+    const pick = freeAgents.filter(n => playerStats[n].lastTeam !== t.code && (playerStats[n].pos === pos || grp(playerStats[n].pos) === grp(pos)))
+        .sort((a, b) => (playerStats[b].pos === pos) - (playerStats[a].pos === pos) || o(b) - o(a))[0];
+    if (!pick) return null;
+    const ps = playerStats[pick];
+    ps.team = t.name; ps.teamCode = t.code; delete ps.faSince; if (ps.pos === 'G') { ps.lastStart = -1; ps.goalieDays = 0; }
+    rosters[t.nrm] = rosters[t.nrm] || []; rosters[t.nrm].push({ name: pick, pos: ps.pos });
+    freeAgents = freeAgents.filter(n => n !== pick);
+    if (awardConfig.headlines) tradeLog.unshift({ day: 'OFFSEASON', details: `FREE AGENT SIGNING: ${t.code} sign ${ps.pos} ${pick} (age ${ps.age}, ${o(pick)} OVR)${ps.lastTeam ? ` - released by ${ps.lastTeam}` : ''}.` });
+    return pick;
+}
+function expireFreeAgents() {
+    freeAgents = freeAgents.filter(n => {
+        const ps = playerStats[n]; if (!ps || ps.teamCode) return false;
+        if (ps.age >= 34 || currentSeason - (ps.faSince || currentSeason) >= 2) {
+            retiredPlayers.unshift({ year: currentSeason, name: n, pos: ps.pos, team: ps.lastTeam || 'FA', age: ps.age, asgApp: ps.asgAppearances || 0,
+                gp: ps.career?.gp || 0, g: ps.career?.g || 0, a: ps.career?.a || 0, pts: (ps.career?.g || 0) + (ps.career?.a || 0), w: ps.career?.w || 0 });
+            delete playerStats[n]; return false;
+        }
+        return true;
+    });
+}
 // Roster cap after retirements + draft: release the lowest-rated skaters over 29, only from a
 // position group with depth to spare (keep >= 13 F and >= 8 D), never a goalie.
 function trimRostersAfterOffseason() {
@@ -11458,8 +11567,7 @@ function trimRostersAfterOffseason() {
         while (gs.length > 4) {
             const cut = gs.shift();
             ro.splice(ro.findIndex(p => p.name === cut.name), 1);
-            delete playerStats[cut.name];
-            if (awardConfig.headlines) tradeLog.unshift({ day: 'OFFSEASON', details: `RELEASED: ${t.code} releases G ${cut.name}.` });
+            releaseToFreeAgency(cut.name, t, 'G ');
         }
         while (ro.length > MAX) {
             const nF = ro.filter(p => p.pos !== 'G' && p.pos !== 'D').length;
@@ -11471,8 +11579,7 @@ function trimRostersAfterOffseason() {
                            .sort((a, b) => (newPick.has(a.name) - newPick.has(b.name)) || (getPlayerWeightedStats(a.name)?.ovr || 0) - (getPlayerWeightedStats(b.name)?.ovr || 0)); // v481: this year's picks are cut last
             const cut = pool[0]; if (!cut) break;
             ro.splice(ro.findIndex(p => p.name === cut.name), 1);
-            delete playerStats[cut.name];
-            if (awardConfig.headlines) tradeLog.unshift({ day: 'OFFSEASON', details: `RELEASED: ${t.code} releases ${cut.name}.` });
+            releaseToFreeAgency(cut.name, t, '');
         }
     });
     clearWpCache();
