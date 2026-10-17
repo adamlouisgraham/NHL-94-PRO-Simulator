@@ -685,7 +685,7 @@ function buildSavePayload() {
         meta: { version: CURRENT_SAVE_SCHEMA_VERSION, savedAt: new Date().toISOString(), label: 'EASN Dynasty Save' },
         data: {
             league, rosters, playerStats, tradeLog: savedTradeLog, hallOfFame, leagueHistory: savedLeagueHistory,
-            retiredPlayers, awardHistory, simRecords, fightGov, draftedReal, freeAgents, tpv474: true, leagueChronicle, calendar: lightweightCalendar, currentDay, currentSeason,
+            retiredPlayers, awardHistory, simRecords, fightGov, finishAdj, draftedReal, freeAgents, tpv474: true, leagueChronicle, calendar: lightweightCalendar, currentDay, currentSeason,
             isPlayoffs, isASG, currentCupChamp, playoffBracket: lightweightBracket, awardConfig, 
             monthSnapshot, pendingTrades, realDatesMap, customDuos, autoDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, teamAssistants, _awardsPending, asgDoneThisSeason, selectedTeam
         }
@@ -721,6 +721,7 @@ function applyLoadedSave(data) {
     // v398: older saves have no awardHistory - rebuild what's still on active players
     simRecords = data.simRecords && typeof data.simRecords === 'object' ? data.simRecords : null; // v454
     fightGov = typeof data.fightGov === 'number' ? data.fightGov : 1; // v473
+    finishAdj = typeof data.finishAdj === 'number' ? data.finishAdj : 1; // v492
     draftedReal = Array.isArray(data.draftedReal) ? data.draftedReal : []; // v481
     freeAgents = Array.isArray(data.freeAgents) ? data.freeAgents.filter(n => playerStats[n]) : []; // v491
     leagueChronicle = Array.isArray(data.leagueChronicle) ? data.leagueChronicle : []; // v455
@@ -1552,7 +1553,7 @@ async function startNewGame(useCustomRoster = false) {
     currentDay = 0; currentSeason = 1; isPlayoffs = false; isASG = false; asgDoneThisSeason = false;
     isSimulating = false; isSimSeason = false; isTurboMode = false; currentCupChamp = "";
     playoffBracket = { round: 1, series: [] }; tradeLog = []; hallOfFame = []; autoDuos = []; seasonLines = {}; leagueHistory = [];
-    retiredPlayers = []; awardHistory = []; simRecords = null; fightGov = 1; draftedReal = []; freeAgents = []; leagueChronicle = []; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
+    retiredPlayers = []; awardHistory = []; simRecords = null; fightGov = 1; finishAdj = 1; draftedReal = []; freeAgents = []; leagueChronicle = []; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
     monthSnapshot = {}; activeIdx = null; statMode = 'season'; activeSubInfo = null;
         // Clear cached CSV data if not using custom roster — force fresh fetch from Google Sheets
     if (!useCustomRoster) { customTeamData = null; customPlayerData = null; }
@@ -2556,9 +2557,9 @@ function getPlayerFatigueAmount(pName) {
 // Forces the auto-coach to draft these players onto the same line if both are healthy
 const dynamicDuos = [
     // ANA
-    ['Rod BrindAmour', 'Mark Recchi', 'Jason Dawe'],
+    ['Rod BrindAmour', 'Dixon Ward', 'Jason Dawe'],
     ['Joe Sacco', 'Ulf Dahlen', 'Ted Donato'],
-    ['Martin Rucinsky', 'Rob Niedermayer', 'Troy Loney'],
+    ['Martin Rucinsky', 'Rob Niedermayer', 'Craig Simpson'],
     ['Kevin Hatcher', 'Bill Houlder'],
     ['Steve Konroyd', 'Sean Hill'],
 
@@ -2600,13 +2601,13 @@ const dynamicDuos = [
     ['Murray Craven', 'Brian Propp', 'Scott Mellanby'],
     // LAK
     ['Pierre Turgeon', 'Luc Robitaille', 'Sylvain Turgeon'],
-    ['Denis Savard', 'Tony Granato', 'Dixon Ward'],
-    ['Shawn McEachern', 'Kyosti Karjalainen', 'Craig Simpson'],
+    ['Denis Savard', 'Tony Granato', 'Mark Recchi'],
+    ['Shawn McEachern', 'Kyosti Karjalainen'],
     // MIN
     ['Mike Modano', 'Kevin Stevens', 'Trent Klatt'],
     ['Pelle Eklund', 'Brian Bellows', 'Paul DiPietro'],
     ['Neal Broten', 'Paul Broten', 'Mike McPhee'],
-    ['Shane Churla', 'Mike Craig', 'Dean Evason'],
+    ['Mike Craig', 'Dean Evason'],
     // MTL
     ['Bernie Nicholls', 'Stephane Richer', 'Gilbert Dionne'],
     ['Vincent Damphousse', 'Stephan Lebeau', 'Russ Courtnall'],
@@ -2628,22 +2629,22 @@ const dynamicDuos = [
     ['Sergei Nemchinov', 'Steve Larmer', 'Alexei Kovalev'],
     ['Mark Messier', 'Adam Graves', 'Brent Fedyk'],
     ['Craig MacTavish', 'Ed Olczyk', 'Stephane Matteau'],
-    ['Mike Hudson', 'Andy Brickley', 'Nick Kypreos'],
+    ['Mike Hudson', 'Nick Kypreos'],
     // OTT
     ['Paul Ranheim', 'Alexander Daigle', 'Michal Pivonka'],
     ['Alexei Yashin', 'Owen Nolan', 'Oleg Petrov'],
     ['Shaun VanAllen', 'Wayne Presley', 'Sergio Momesso'],
-    ['Jamie Baker', 'David Archibald', 'Matthew Barnaby'],
+    ['Jamie Baker', 'Matthew Barnaby'],
     // PHI
     ['Eric Lindros', 'Robert Lang', 'John Leclair'],
     ['Robert Reichel', 'Josef Beranek', 'Pat Falloon'],
     ['Shjon Podein', 'Randy Wood', 'Kevin Dineen'],
-    ['Mike Stapleton', 'Iain Fraser', 'Dave Brown'],
+    ['Iain Fraser', 'Dave Brown'],
     // PIT
     ['Mario Lemieux', 'Rick Tocchet', 'Zdeno Ciger'],
     ['Martin Straka', 'Markus Naslund', 'Jaromir Jagr'],
     ['Bryan Trottier', 'Garry Valk', 'Phil Bourque'],
-    ['Jiri Hrdina', 'Mike Donnelly', 'Jim McKenzie'],
+    ['Jiri Hrdina', 'Mike Donnelly'],
     ['Darius Kasparaitis', 'Mike Ramsey'],
     ['Kjell Samuelsson', 'Scott Niedermayer'],
     // QUE
@@ -2656,7 +2657,7 @@ const dynamicDuos = [
     ['Igor Larionov', 'Sergei Makarov', 'Valeri Kamensky'],
     ['John Cullen', 'Rob Gaudreau', 'Vitali Prokhorov'],
     ['Kelly Kisio', 'Bob Errey', 'Ray Whitney'],
-    ['Brian Lawton', 'Wes Walz', 'Jeff Odgers'],
+    ['Wes Walz', 'Jeff Odgers'],
     ['Sandis Ozolinsh', 'Mike Rathje'],
     // STL
     ['Craig Janney', 'Brett Hull', 'Terry Yake'],
@@ -3663,6 +3664,7 @@ let fightGov = 1; // v473: fight-rate governor - eases fights back when a season
 // v307: SHOT_BASE = even-strength shot lambda per team; FINISH_BASE = per-shot goal multiplier (sets league save %)
 // v335: elite offensive defencemen get a slight boost to goals and assists (ES + PP)
 const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D') return false; const tg = PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || ''; return (parseInt(ps.attr?.off) || 0) >= 78 || ['FRANCHISE D','PRO OFFENSIVE D','BOOMER','QUARTERBACK','OFFENSIVE D'].includes(tg); };
+let finishAdj = 1; // v492: scoring safety net - eases finishing when league sv% falls below .887 (saved)
 let SHOT_BASE = 24, FINISH_BASE = 1.058; // v488: 1.065 -> 1.058 (4 of 5 seasons 7.55-7.68 with performance-driven goalies); v449: 1.08 -> 1.065 (6 of 15 seasons over 7.5558 with more parity); v445: 1.085 -> 1.08 (3 of 10 seasons over 7.5558); v444: 1.07 -> 1.085; v443: 1.04 -> 1.07; v442: 1.02 -> 1.04 (GPG sat 7.1-7.2 with v2 goalies) // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.5; // v452: 1.75 -> 1.5 (series ran short)
@@ -5461,7 +5463,7 @@ function simGame(idx) {
             })();
             // v287: D were converting ~9% (real ~5%): point shots finish less; forwards up slightly to hold league scoring
             const posFinMod = isDefPos ? 0.55 * (isEliteOffD(shooter.name) ? 1.05 : 1) : FWD_FINISH; // v434: D 0.66 -> 0.55 (D shot 7.6%, real ~5.5%)
-            const prob      = FINISH_BASE*((isPlayoffs&&!isASG)?PLAYOFF_FINISH:1)*posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002*poEdge)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod
+            const prob      = FINISH_BASE*finishAdj*((isPlayoffs&&!isASG)?PLAYOFF_FINISH:1)*posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002*poEdge)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod
                 * Math.max(0.85, Math.min(1.15, chemDuoMod // v407: chemistry + season form + clutch = one situational term, capped ±15%
                 * (isASG ? 1 : 1 + seasonForm(shooter.name)) // v403 season form
                 * (isClutch && !isASG ? Math.max(0.85, Math.min(1.15, 1 + ((parseInt(playerStats[shooter.name]?.attr?.clutch) || 65) - 65) * 0.004 - ((parseInt(playerStats[defGNm]?.attr?.clutch) || 65) - 65) * 0.003)) : 1))); // v381 clutch; v143: 0.094→0.086→0.079; v174: 0.0888; v181: 0.0930; v182: 0.0918→0.0906 target 7.0 GPG
@@ -8323,7 +8325,7 @@ function processOffseasonGrowthV2() {
             let perf = zs === null ? 0.5 : zs > 0.5 ? 1 : zs >= -0.5 ? 0.5 : 0;
             if (now >= 90 && !gTop5.has(p.name)) perf = 0;
             if (p.age <= 25) perf = Math.max(perf, 0.5); // v489: young goalies always develop at least at half pace (starters slid 80 -> 71.5 by year 13)
-            const gRate = (gap > 0 ? (p.age <= 27 ? 0.30 : 0.18) * perf : pg2Rate(p.age, false)) * pg2GradeMult(p, gap > 0); // v428: young goalies close the gap faster; v462 grade-driven pace
+            const gRate = (gap > 0 ? (p.age <= 27 ? (p.age >= 22 && gap >= 8 ? 0.40 : 0.30) : 0.18) * perf : pg2Rate(p.age, false) * (p.age >= 30 && p.age <= 34 && grade >= 0.3 ? 0.6 : 1)) * pg2GradeMult(p, gap > 0); /* v492: high-ceiling 22-27 goalies 0.30 -> 0.40; good 30-34 seasons slow the decline */ // v428: young goalies close the gap faster; v462 grade-driven pace
             const step = pg2Stoch(Math.max(-3, Math.min(4, gap * gRate))) + (Math.random() < 0.3 ? (Math.random() < 0.5 ? 1 : -1) : 0);
             set('ovr', step, 'curve'); set('gDef', step, 'curve');
             // v485: the season itself moves a goalie's ratings (they sat within +-2 over four seasons). 25+ GP: save % vs the
@@ -8372,7 +8374,7 @@ function processOffseasonGrowthV2() {
                 fo: (p.season?.foa || 0) >= 300 ? cl((zs.fo || 0) * 0.4, 1) : 0, clutch: cl((zs.cl || 0) * 0.4, 1) };
             Object.entries(PG2_GROUPS).forEach(([g2, keys]) => {
                 const target = p.peak - pg2CumDecline(g2, p.age), gap = target - now;
-                const base = Math.max(-4, Math.min(4, gap * pg2Rate(p.age, gap > 0) * pg2GradeMult(p, gap > 0))); // v462: grade-driven pace
+                const base = Math.max(-4, Math.min(4, gap * pg2Rate(p.age, gap > 0) * pg2GradeMult(p, gap > 0) * (gap < 0 && p.age >= 30 && p.age <= 34 && grade >= 0.3 ? 0.6 : 1))); // v462: grade-driven pace; v492 good 30-34 seasons slow the decline
                 const leanAvg = keys.reduce((q, k) => q + (p.devLean[k] || 0), 0) / keys.length;
                 keys.forEach(k => {
                     let sn = statNudge[k] || 0; if (sn > 0 && !up) sn = 0;
@@ -8502,6 +8504,12 @@ async function beginNewYear() {
     deadlineCountermove = {};
     pendingTrades = [];
     refreshTradeBadge();
+    try { // v492: scoring safety net from last season's league save %
+        const gs = Object.values(playerStats).filter(p => p.pos === 'G' && p.teamCode && (p.season?.sa || 0) > 0);
+        const sa = gs.reduce((a, p) => a + p.season.sa, 0);
+        if (sa > 5000) { const sv = gs.reduce((a, p) => a + p.season.sv, 0) / sa;
+            if (sv < 0.887) finishAdj = Math.max(0.95, finishAdj * 0.985); else if (sv > 0.891) finishAdj = Math.min(1, finishAdj * 1.01); }
+    } catch (e) {}
     try { // v473: fight governor - aim ~0.85 fights/game, adjust from last season's rate
         const gpAll = league.reduce((a, t) => a + (t.season?.gp || 0), 0) / 2;
         const fAll = Object.values(playerStats).reduce((a, p) => a + (p.season?.fights || 0), 0) / 2;
@@ -9682,6 +9690,51 @@ function saveRosterChecklist() {
     document.getElementById('gpChecklistOverlay').style.display = 'none';
 }
 
+// v493: IMPORT GAME FILE - reads a box-score CSV made by tools/xls2csv.py from an NHL 94 Stat Extractor .xls and fills
+// the editor (score, skater G/A/S/PIM, PP/SH goals, goalie shots against, dressed roster). Review, then FINALIZE.
+function importBoxScoreFile() {
+    if (!advBoxScoreTemp || !advBoxScoreTemp.away) return alert('Open the box score editor for a game first.');
+    let inp = document.getElementById('boxScoreFileInput');
+    if (!inp) { inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.csv'; inp.id = 'boxScoreFileInput'; inp.style.display = 'none'; document.body.appendChild(inp); }
+    inp.value = '';
+    inp.onchange = () => { const f = inp.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => applyBoxScoreCSV(String(rd.result)); rd.readAsText(f); };
+    inp.click();
+}
+function applyBoxScoreCSV(text) {
+    const g = getGameAt(currentDay, activeIdx); if (!g) return alert('No game selected.');
+    const lines = text.split(/\r?\n/).filter(l => l.trim()).map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')));
+    const H = lines[0].map(h => h.toUpperCase()), col = k => H.indexOf(k);
+    if (col('ROW') < 0 || col('NAME') < 0) return alert('Not a box-score CSV (expected ROW,TEAM,NAME,... from tools/xls2csv.py).');
+    const v = (r, k) => r[col(k)] ?? '', n = (r, k) => parseInt(v(r, k)) || 0;
+    const sideOf = code => code === g.a.code ? 'away' : code === g.h.code ? 'home' : null;
+    const norm = s => s.toLowerCase().replace(/[^a-z ]/g, '').trim();
+    const match = (side, name) => { const ro = advBoxScoreTemp[side].roster; const nn = norm(name);
+        let p = ro.find(x => norm(x.name) === nn); if (p) return p.name;
+        const last = nn.split(' ').pop(); const c = ro.filter(x => norm(x.name).split(' ').pop() === last); return c.length === 1 ? c[0].name : null; };
+    const miss = [], teams = new Set();
+    ['away', 'home'].forEach(s => { advBoxScoreTemp[s].entries = []; });
+    const dressed = { away: [], home: [] };
+    lines.slice(1).filter(r => v(r, 'ROW').toUpperCase() === 'P').forEach(r => {
+        const side = sideOf(v(r, 'TEAM').toUpperCase()); teams.add(v(r, 'TEAM'));
+        if (!side) return;
+        const nm = match(side, v(r, 'NAME')); if (!nm) { miss.push(`${v(r, 'TEAM')} ${v(r, 'NAME')}`); return; }
+        dressed[side].push(nm);
+        if (v(r, 'POS').toUpperCase() === 'G') { if (n(r, 'SHA') > 0 || !advBoxScoreTemp[side].entries.some(e => e.isGoalie)) {
+            advBoxScoreTemp[side].entries = advBoxScoreTemp[side].entries.filter(e => !e.isGoalie || e.sa > n(r, 'SHA'));
+            if (!advBoxScoreTemp[side].entries.some(e => e.isGoalie)) advBoxScoreTemp[side].entries.push({ name: nm, isGoalie: true, sa: n(r, 'SHA') }); } }
+        else advBoxScoreTemp[side].entries.push({ name: nm, isGoalie: false, g: n(r, 'G'), a: n(r, 'A'), pm: 0, pim: n(r, 'PIM'), s: n(r, 'SOG'), ppg: 0, shg: 0 });
+    });
+    lines.slice(1).filter(r => v(r, 'ROW').toUpperCase() === 'GOAL').forEach(r => {
+        const side = sideOf(v(r, 'TEAM').toUpperCase()); if (!side) return; const nm = match(side, v(r, 'NAME'));
+        const e = advBoxScoreTemp[side].entries.find(x => x.name === nm && !x.isGoalie); if (!e) return; const t = v(r, 'TYPE').toUpperCase();
+        if (/PP/.test(t) && e.ppg < e.g) e.ppg++; else if (/SH/.test(t) && e.shg < e.g) e.shg++; });
+    if (![...teams].some(t => sideOf(t.toUpperCase()))) return alert(`This file is for ${[...teams].join(' vs ')}, but the selected game is ${g.a.code} at ${g.h.code}.`);
+    ['away', 'home'].forEach(s => { if (dressed[s].length) advBoxScoreTemp[s].dressed = [...new Set([...dressed[s], ...advBoxScoreTemp[s].dressed])]; renderAdvStatList(s); });
+    const goals = s => advBoxScoreTemp[s].entries.reduce((q, e) => q + (e.g || 0), 0);
+    document.getElementById('advAwayScore').value = goals('away'); document.getElementById('advHomeScore').value = goals('home');
+    document.getElementById('advAwayEN').value = 0; document.getElementById('advHomeEN').value = 0;
+    alert(`Imported ${g.a.code} ${goals('away')} - ${g.h.code} ${goals('home')}.` + (miss.length ? `\nNot matched to the roster (enter by hand): ${miss.join(', ')}` : '') + '\nCheck the lines, then FINALIZE GAME.');
+}
 function submitAdvGame() {
     const g = getGameAt(currentDay, activeIdx);
     if (!g) return alert("No valid game found for the selected day/index.");
