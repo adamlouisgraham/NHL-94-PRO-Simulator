@@ -4381,7 +4381,9 @@ function simGame(idx) {
             const ps = playerStats[p.name];
             if (!ps) return;
             if (ps.injury && ps.injury.daysRemaining > 0) {
-                ps.injury.daysRemaining--;
+                // v502: injuries count the team's GAMES - the first game after the injury is missed without
+                // counting down, so "out N games" misses exactly N of his team's games (rest days no longer heal)
+                if (!ps.injury.counting) ps.injury.counting = true; else ps.injury.daysRemaining--;
                 if (ps.injury.daysRemaining === 0) {
                     const sev = ps.injury.severity || 0;
                     if (!ps.injuryHistory) ps.injuryHistory = [];
@@ -13345,7 +13347,7 @@ function processDailyUpdates() {
 
             // [FIX] Rest-day injury healing — fully mirrors the game-start heal() logic
             // so severity resets and injuryHistory is logged even on non-game days
-            if (!playedToday && ps4 && ps4.injury && ps4.injury.daysRemaining > 0) {
+            if (false && !playedToday && ps4 && ps4.injury && ps4.injury.daysRemaining > 0) { // v502: off days no longer heal
                 ps4.injury.daysRemaining--;
                 if (ps4.injury.daysRemaining === 0) {
                     const sev = ps4.injury.severity || 0;
