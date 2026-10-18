@@ -685,7 +685,7 @@ function buildSavePayload() {
         meta: { version: CURRENT_SAVE_SCHEMA_VERSION, savedAt: new Date().toISOString(), label: 'EASN Dynasty Save' },
         data: {
             league, rosters, playerStats, tradeLog: savedTradeLog, hallOfFame, leagueHistory: savedLeagueHistory,
-            retiredPlayers, awardHistory, simRecords, fightGov, finishAdj, draftedReal, freeAgents, tpv474: true, leagueChronicle, calendar: lightweightCalendar, currentDay, currentSeason,
+            retiredPlayers, awardHistory, simRecords, fightGov, finishAdj, draftedReal, freeAgents, draftPicks, tpv474: true, leagueChronicle, calendar: lightweightCalendar, currentDay, currentSeason,
             isPlayoffs, isASG, currentCupChamp, playoffBracket: lightweightBracket, awardConfig, 
             monthSnapshot, pendingTrades, realDatesMap, customDuos, autoDuos, coachAdj, coachTrust, deadlineCountermove, chemScores, preseasonOvrSnapshot, teamCaptains, teamAssistants, _awardsPending, asgDoneThisSeason, selectedTeam
         }
@@ -724,6 +724,7 @@ function applyLoadedSave(data) {
     finishAdj = typeof data.finishAdj === 'number' ? data.finishAdj : 1; // v492
     draftedReal = Array.isArray(data.draftedReal) ? data.draftedReal : []; // v481
     freeAgents = Array.isArray(data.freeAgents) ? data.freeAgents.filter(n => playerStats[n]) : []; // v491
+    draftPicks = data.draftPicks && typeof data.draftPicks === 'object' ? data.draftPicks : {}; // v497
     leagueChronicle = Array.isArray(data.leagueChronicle) ? data.leagueChronicle : []; // v455
     awardHistory = Array.isArray(data.awardHistory) ? data.awardHistory : Object.values(playerStats).flatMap(p => (p.trophies || []).map(t => ({ year: t.year, name: t.name, player: p.name, team: p.teamCode || '', pos: p.pos || '' })));
     calendar = Array.isArray(data.calendar) ? data.calendar : []; 
@@ -1553,7 +1554,7 @@ async function startNewGame(useCustomRoster = false) {
     currentDay = 0; currentSeason = 1; isPlayoffs = false; isASG = false; asgDoneThisSeason = false;
     isSimulating = false; isSimSeason = false; isTurboMode = false; currentCupChamp = "";
     playoffBracket = { round: 1, series: [] }; tradeLog = []; hallOfFame = []; autoDuos = []; seasonLines = {}; leagueHistory = [];
-    retiredPlayers = []; awardHistory = []; simRecords = null; fightGov = 1; finishAdj = 1; draftedReal = []; freeAgents = []; leagueChronicle = []; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
+    retiredPlayers = []; awardHistory = []; simRecords = null; fightGov = 1; finishAdj = 1; draftedReal = []; freeAgents = []; draftPicks = {}; leagueChronicle = []; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
     monthSnapshot = {}; activeIdx = null; statMode = 'season'; activeSubInfo = null;
         // Clear cached CSV data if not using custom roster — force fresh fetch from Google Sheets
     if (!useCustomRoster) { customTeamData = null; customPlayerData = null; }
@@ -11304,7 +11305,7 @@ function getConnSmytheScore(p) {
             const ceil = d => { const g = d.pos === 'G'; const m = { Franchise: ['ELITE', '#ffd700'], 'Top 6': [g ? 'STARTER' : 'TOP 6', '#4fc3f7'], Depth: ['DEPTH', '#aaa'], Bust: ['BUST', '#e57373'] }[d.potential] || ['?', '#666']; return `<span style="color:${m[1]}">${m[0]}</span>`; };
             const lot = lastDraft.lotteryWinner && lastDraft.lotteryWinner !== lastDraft.worstTeam ? ` - LOTTERY: ${lastDraft.lotteryWinner} jumps to #1` : '';
             res += `<h3 style='margin-top:10px; color:var(--silver-light);'>FIRST ROUND${lot}</h3><div style='font-size:7px; color:#ccc; columns:2; column-gap:14px;'>` +
-                lastDraft.picks.filter(d => d.round === 1).map(d => `<div>#${d.pick} ${d.team} - ${d.pos} ${d.name} ${ceil(d)}</div>`).join('') + `</div>`;
+                lastDraft.picks.filter(d => d.round === 1).map(d => `<div>#${d.pick} ${d.team}${d.via ? ` (via ${d.via})` : ''} - ${d.pos} ${d.name} ${ceil(d)}</div>`).join('') + `</div>`;
             const el = lastDraft.picks.filter(d => d.potential === 'Franchise');
             if (el.length && awardConfig.headlines) tradeLog.unshift({ day: 'DRAFT', details: `DRAFT: ${el.length} elite-ceiling prospect${el.length > 1 ? 's' : ''} taken - ${el.map(d => `#${d.pick} ${d.team} ${d.pos}`).join(', ')}` });
         }
@@ -11586,6 +11587,31 @@ function draftNeedPos(t) {
     });
     return best;
 }
+// v497: draft-pick trading. Every team owns its own 1st and 2nd round picks for this season's draft and next season's;
+// a pick is a trade asset "PICK|season|team|round" that moves like a player. The draft is made by whoever owns the pick.
+let draftPicks = {}; // "season|ORIG|round" -> owner team code (saved)
+const isPick = x => typeof x === 'string' && x.startsWith('PICK|');
+function ensurePicks() {
+    [currentSeason, currentSeason + 1].forEach(y => league.forEach(t => [1, 2].forEach(r => { const k = `${y}|${t.code}|${r}`; if (!draftPicks[k]) draftPicks[k] = t.code; })));
+}
+function pickKey(id) { return id.slice(5); }
+function pickOwner(id) { return draftPicks[pickKey(id)] || null; }
+function pickLabel(id) {
+    const [y, orig, r] = pickKey(id).split('|');
+    return `${1993 + (+y)} ${orig} ${r === '1' ? '1st' : '2nd'} round pick`;
+}
+function teamPicks(code) { ensurePicks(); return Object.keys(draftPicks).filter(k => draftPicks[k] === code).sort().map(k => 'PICK|' + k); }
+function pickValue(id) {
+    const [y, orig, r] = pickKey(id).split('|');
+    const order = [...league].sort((a, b) => ((a.season?.pts || 0) / Math.max(1, a.season?.gp || 0)) - ((b.season?.pts || 0) / Math.max(1, b.season?.gp || 0)));
+    const rank = Math.max(0, order.findIndex(t => t.code === orig)), share = 1 - rank / Math.max(1, order.length - 1); // 1 = worst team
+    const thisYear = +y === currentSeason && (league[0]?.season?.gp || 0) >= 10;
+    if (r === '1') return Math.round(thisYear ? 50 + 25 * share : 62);
+    return Math.round(thisYear ? 30 + 10 * share : 35);
+}
+function assetValue(x) { return isPick(x) ? pickValue(x) : getTradeValue(x); }
+function assetLabel(x) { if (isPick(x)) return pickLabel(x); const ps = playerStats[x] || {}; return `${ps.pos || ''} ${x}`; }
+function movePicks(fromCode, toCode, ids) { ids.filter(isPick).forEach(id => { if (pickOwner(id) === fromCode) draftPicks[pickKey(id)] = toCode; }); }
 let lastDraft = null; // v450: last draft's picks, for the results screen
 function runRealisticDraft() {
     const order = [...league].sort((a, b) => a.season.pts - b.season.pts);
@@ -11599,11 +11625,14 @@ function runRealisticDraft() {
     for (let round = 1; round <= 2; round++) {
         (round === 1 ? round1 : order).forEach(t => {
             pick++;
-            const pos = draftNeedPos(t); // v479: draft by need (was random C/LW/RW/D)
-            const _pn = makeProspect(t, pos, pick, round === 1 && pick <= 3 ? 0.5 : round === 1 && pick <= 5 ? 0.3 : 0, true); // v446: top lottery picks; v476 real names
-            lastDraft.picks.push({ pick, round, team: t.code, name: _pn, pos: playerStats[_pn]?.pos || pos, potential: playerStats[_pn]?.potential }); // v450
+            const ownCode = draftPicks[`${currentSeason}|${t.code}|${round}`] || t.code; // v497: traded picks
+            const ow = league.find(x => x.code === ownCode) || t;
+            const pos = draftNeedPos(ow); // v479: draft by need (was random C/LW/RW/D)
+            const _pn = makeProspect(ow, pos, pick, round === 1 && pick <= 3 ? 0.5 : round === 1 && pick <= 5 ? 0.3 : 0, true); // v446: top lottery picks; v476 real names
+            lastDraft.picks.push({ pick, round, team: ow.code, via: ow.code !== t.code ? t.code : '', name: _pn, pos: playerStats[_pn]?.pos || pos, potential: playerStats[_pn]?.potential }); // v450
         });
     }
+    Object.keys(draftPicks).forEach(k => { if (+k.split('|')[0] <= currentSeason) delete draftPicks[k]; }); // v497: used picks
     clearWpCache();
     return pick;
 }
@@ -11690,7 +11719,9 @@ function updateTradeDropdowns() {
     const tl = league.map(t => `<option value="${t.nrm}">${t.name}</option>`).join(''); 
     if(!document.getElementById('tradeTeam1').innerHTML) { document.getElementById('tradeTeam1').innerHTML = tl; document.getElementById('tradeTeam2').innerHTML = tl; } 
     const t1 = document.getElementById('tradeTeam1').value; const t2 = document.getElementById('tradeTeam2').value; 
-    const getOptions = (tk) => rosters[tk] ? '<option value="">-- SELECT --</option>' + rosters[tk].map(p => `<option value="${p.name}">${p.name} (${p.pos}) TV:${getTradeValue(p.name)}</option>`).join('') : '<option value="">-- EMPTY --</option>';
+    const codeOf = tk => league.find(t => t.nrm === tk)?.code;
+    const getOptions = (tk) => rosters[tk] ? '<option value="">-- SELECT --</option>' + rosters[tk].map(p => `<option value="${p.name}">${p.name} (${p.pos}) TV:${getTradeValue(p.name)}</option>`).join('')
+        + `<optgroup label="DRAFT PICKS">` + teamPicks(codeOf(tk)).map(id => `<option value="${id}">${pickLabel(id)} TV:${pickValue(id)}</option>`).join('') + `</optgroup>` : '<option value="">-- EMPTY --</option>'; // v497: draft picks
     for(let i=1; i<=5; i++) { 
         let d1 = document.getElementById(`tradePlayer1_${i}`); if (d1) d1.innerHTML = getOptions(t1); 
         let d2 = document.getElementById(`tradePlayer2_${i}`); if (d2) d2.innerHTML = getOptions(t2); 
@@ -11711,6 +11742,8 @@ function executeTrade() {
     
     if(!s1.length && !s2.length) return alert("Select players to trade.");
     const t1o = league.find(t => t.nrm === t1c); const t2o = league.find(t => t.nrm === t2c);
+    const k1 = s1.filter(isPick), k2 = s2.filter(isPick); // v497: draft picks
+    s1.splice(0, s1.length, ...s1.filter(x => !isPick(x))); s2.splice(0, s2.length, ...s2.filter(x => !isPick(x)));
 
     // Roster viability guard — simulate post-trade rosters and reject if critically short
     const postT1 = rosters[t1c].map(p=>p.name).filter(n=>!s1.includes(n)).concat(s2);
@@ -11722,9 +11755,9 @@ function executeTrade() {
     if (!hasCenter(postT1)) return alert(`TRADE BLOCKED: ${t1o?.code} would have no centre.`);
     if (!hasCenter(postT2)) return alert(`TRADE BLOCKED: ${t2o?.code} would have no centre.`);
 
-    const tv1 = s1.reduce((sum, n) => sum + getTradeValue(n), 0);
-    const tv2 = s2.reduce((sum, n) => sum + getTradeValue(n), 0);
-    if (s1.length && s2.length && Math.abs(tv1 - tv2) > 20) {
+    const tv1 = s1.reduce((sum, n) => sum + getTradeValue(n), 0) + k1.reduce((q, id) => q + pickValue(id), 0);
+    const tv2 = s2.reduce((sum, n) => sum + getTradeValue(n), 0) + k2.reduce((q, id) => q + pickValue(id), 0);
+    if ((s1.length || k1.length) && (s2.length || k2.length) && Math.abs(tv1 - tv2) > 20) {
         const winner = tv1 > tv2 ? t2o?.code : t1o?.code;
         if (!confirm(`UNBALANCED TRADE WARNING\n${t1o?.code} value: ${tv1}  vs  ${t2o?.code} value: ${tv2}\n${winner?.toUpperCase()} wins this deal.\nExecute anyway?`)) return;
     }
@@ -11742,7 +11775,9 @@ function executeTrade() {
     
     if(t1o) t1o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null}; if(t2o) t2o.chem = {f:[0,0,0,0], d:[0,0,0], lastUnit:null};
     
-    tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `TRADE: ${t1o.code} <-> ${t2o.code}` }); // v248: day-format fix, see IR ACTIVATE above
+    movePicks(t1o.code, t2o.code, k1); movePicks(t2o.code, t1o.code, k2); // v497
+    const side = (pl, ks) => [...pl, ...ks.map(pickLabel)].join(', ') || 'nothing';
+    tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `TRADE: ${t1o.code} send ${side(s1, k1)} to ${t2o.code} for ${side(s2, k2)}` }); // v248: day-format fix, see IR ACTIVATE above
     assignTeamCaptains(); // refresh captains — traded captain must not keep modifying old team
     pruneCustomDuos();
     // v147: match approveProposal — flush _wpCache/_structCache so the immediate UI
@@ -11765,14 +11800,18 @@ let _tpEdit = null; // { id, p1:Set, p2:Set } while a proposal is being edited
 function tpSide(t, side) {
     const key = side === 1 ? t.t1 : t.t2, sel = _tpEdit && _tpEdit.id === t.id ? _tpEdit['p' + side] : null;
     const names = sel ? [...sel] : tpArr(side === 1 ? t.p1 : t.p2);
-    const tv = names.reduce((a, n) => a + (getTradeValue(n) || 0), 0);
+    const tv = names.reduce((a, n) => a + (assetValue(n) || 0), 0);
     const esc = v => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     let h = `<div style="color:#aaa;">${(side === 1 ? t.t1Name : t.t2Name).toUpperCase()} SEND${sel ? ' (TICK PLAYERS)' : 'S'}:</div>`;
     if (sel) {
         const ro = (rosters[key] || []).slice().sort((x, y) => (getPlayerWeightedStats(y.name)?.baseOvr || 0) - (getPlayerWeightedStats(x.name)?.baseOvr || 0));
+        const box = (n, txt) => `<label style="display:block; color:${sel.has(n) ? '#0f0' : '#ccc'}; cursor:pointer; margin:2px 0;"><input type="checkbox" ${sel.has(n) ? 'checked' : ''} data-n="${esc(n)}" onchange="tpToggle(${side}, this.dataset.n)"> ${txt}</label>`;
+        const code = side === 1 ? (league.find(x => x.nrm === t.t1)?.code) : (league.find(x => x.nrm === t.t2)?.code);
         h += `<div style="max-height:220px; overflow-y:auto; margin-top:5px;">` + ro.map(p => { const n = p.name, ps = playerStats[n] || {};
-            return `<label style="display:block; color:${sel.has(n) ? '#0f0' : '#ccc'}; cursor:pointer; margin:2px 0;"><input type="checkbox" ${sel.has(n) ? 'checked' : ''} data-n="${esc(n)}" onchange="tpToggle(${side}, this.dataset.n)"> ${ps.pos || ''} ${esc(n)} - OVR ${getPlayerWeightedStats(n)?.baseOvr ?? '?'}, AGE ${ps.age ?? '?'}, TV ${getTradeValue(n)}</label>`; }).join('') + `</div>`;
-    } else h += names.map(n => { const ps = playerStats[n] || {}; return `<div style="color:#fff; margin-top:5px;">${ps.pos || ''} ${esc(n)} (OVR: ${getPlayerWeightedStats(n)?.baseOvr ?? '?'}, AGE: ${ps.age ?? '?'}, TV: ${getTradeValue(n)})</div>`; }).join('') || '<div style="color:#888; margin-top:5px;">nothing</div>';
+            return box(n, `${ps.pos || ''} ${esc(n)} - OVR ${getPlayerWeightedStats(n)?.baseOvr ?? '?'}, AGE ${ps.age ?? '?'}, TV ${getTradeValue(n)}`); }).join('')
+            + `<div style="color:var(--ea-yellow); margin-top:6px;">DRAFT PICKS</div>` + teamPicks(code).map(id => box(id, `${pickLabel(id)} - TV ${pickValue(id)}`)).join('') + `</div>`; // v497
+    } else h += names.map(n => { if (isPick(n)) return `<div style="color:var(--ea-yellow); margin-top:5px;">${pickLabel(n)} (TV: ${pickValue(n)})</div>`;
+        const ps = playerStats[n] || {}; return `<div style="color:#fff; margin-top:5px;">${ps.pos || ''} ${esc(n)} (OVR: ${getPlayerWeightedStats(n)?.baseOvr ?? '?'}, AGE: ${ps.age ?? '?'}, TV: ${getTradeValue(n)})</div>`; }).join('') || '<div style="color:#888; margin-top:5px;">nothing</div>';
     return { h, tv };
 }
 function openProposalsModal() {
@@ -11808,15 +11847,16 @@ function tpStartEdit(id) { const t = pendingTrades.find(x => x.id === id); if (!
 function tpToggle(side, n) { if (!_tpEdit) return; const s2 = _tpEdit['p' + side]; s2.has(n) ? s2.delete(n) : s2.add(n); openProposalsModal(); }
 function tpSaveEdit() {
     const t = _tpEdit && pendingTrades.find(x => x.id === _tpEdit.id); if (!t) { _tpEdit = null; return; }
-    if (!_tpEdit.p1.size || !_tpEdit.p2.size) { alert('Each team has to send at least one player.'); return; }
+    if (!_tpEdit.p1.size || !_tpEdit.p2.size) { alert('Each team has to send at least one player or pick.'); return; }
     t.p1 = [..._tpEdit.p1]; t.p2 = [..._tpEdit.p2]; t.edited = true; t.day = Math.max(t.day || 0, currentDay); _tpEdit = null;
     openProposalsModal(); saveGame();
 }
 function approveProposal(id) {
     let t = pendingTrades.find(x => x.id === id); if (!t) return;
-    const on = (key, n) => (rosters[key] || []).some(p => p.name === n);
-    const p1 = tpArr(t.p1), p2 = tpArr(t.p2);
-    if (!p1.length || !p2.length || !p1.every(n => on(t.t1, n)) || !p2.every(n => on(t.t2, n))) {
+    const code = k => league.find(l => l.nrm === k)?.code;
+    const on = (key, n) => isPick(n) ? pickOwner(n) === code(key) : (rosters[key] || []).some(p => p.name === n); // v497 picks
+    const p1all = tpArr(t.p1), p2all = tpArr(t.p2); const p1 = p1all.filter(n => !isPick(n)), p2 = p2all.filter(n => !isPick(n)), k1 = p1all.filter(isPick), k2 = p2all.filter(isPick);
+    if (!p1all.length || !p2all.length || !p1all.every(n => on(t.t1, n)) || !p2all.every(n => on(t.t2, n))) {
         alert('A player in this deal is no longer on that team. Edit or reject it.'); return;
     }
     const post = (key, out, inn) => (rosters[key] || []).map(p => p.name).filter(n => !out.includes(n)).concat(inn);
@@ -11824,10 +11864,10 @@ function approveProposal(id) {
     if (!ok(post(t.t1, p1, p2)) || !ok(post(t.t2, p2, p1))) {
         alert('This trade would leave a team without a goalie or center, or under 15 players. Edit or reject it.'); return;
     }
-    aiMovePlayers(t.t1, t.t2, p1); aiMovePlayers(t.t2, t.t1, p2);
+    aiMovePlayers(t.t1, t.t2, p1); aiMovePlayers(t.t2, t.t1, p2); movePicks(code(t.t1), code(t.t2), k1); movePicks(code(t.t2), code(t.t1), k2); // v497
     [t.t1, t.t2].forEach(k => { const o2 = league.find(l => l.nrm === k); if (o2) o2.chem = { f: [0,0,0,0], d: [0,0,0], lastUnit: null, fYears: o2.chem?.fYears || [0,0,0,0], dYears: o2.chem?.dYears || [0,0,0], fRoster: o2.chem?.fRoster || [null,null,null,null], dRoster: o2.chem?.dRoster || [null,null,null] }; });
     assignTeamCaptains(); clearWpCache(); pruneCustomDuos();
-    tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `TRADE${t.edited ? ' (revised)' : ''}: ${t.t1Name} send ${p1.join(', ')} to ${t.t2Name} for ${p2.join(', ')}` });
+    tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `TRADE${t.edited ? ' (revised)' : ''}: ${t.t1Name} send ${p1all.map(assetLabel).join(', ')} to ${t.t2Name} for ${p2all.map(assetLabel).join(', ')}` });
     pendingTrades = pendingTrades.filter(x => x.id !== id); openProposalsModal(); updateUI(); refreshTradeBadge(); saveGame();
 }
 
@@ -13228,7 +13268,7 @@ function processDailyUpdates() {
         const expired = pendingTrades.filter(t => t.day == null || (currentDay - t.day) >= TRADE_EXPIRE_DAYS);
         if (expired.length > 0) {
             expired.forEach(t => {
-                tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `TRADE EXPIRED: ${t.t1.toUpperCase()} ↔ ${t.t2.toUpperCase()} offer (${tpArr(t.p1).join(', ')} / ${tpArr(t.p2).join(', ')}) went unanswered and has been withdrawn.` });
+                tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `TRADE EXPIRED: ${t.t1.toUpperCase()} ↔ ${t.t2.toUpperCase()} offer (${tpArr(t.p1).map(assetLabel).join(', ')} / ${tpArr(t.p2).map(assetLabel).join(', ')}) went unanswered and has been withdrawn.` });
             });
             pendingTrades = pendingTrades.filter(t => t.day != null && (currentDay - t.day) < TRADE_EXPIRE_DAYS);
             refreshTradeBadge();
@@ -13400,7 +13440,13 @@ function processDailyUpdates() {
             if (awardConfig.tradeBlock) {
                 // Queue for user approval — do NOT touch rosters or playerStats yet;
                 // approveProposal() will execute the swap if accepted, rejectProposal() discards it cleanly
-                pendingTrades.push({ id: Date.now() + Math.random(), t1: teamA, t2: teamB, t1Name: _teamAObj?.name || teamA, t2Name: _teamBObj?.name || teamB, p1: [playerA.name], p2: [playerB.name], tag: dealTag, day: currentDay });
+                let pA = [playerA.name], pB = [playerB.name];
+                if (/DEADLINE DEAL/.test(dealTag) && Math.random() < 0.5) { // v497: contender pays with its 1st-round pick
+                    ensurePicks(); const buyerIsA = isContenderTeam(teamA), bCode = (buyerIsA ? _teamAObj : _teamBObj)?.code;
+                    const own1 = `PICK|${currentSeason}|${bCode}|1`;
+                    if (pickOwner(own1) === bCode) { if (buyerIsA) pA = [own1]; else pB = [own1]; dealTag = dealTag.replace(/ for [^.]*$/, '') + ` - paying with a 1st-round pick`; }
+                }
+                pendingTrades.push({ id: Date.now() + Math.random(), t1: teamA, t2: teamB, t1Name: _teamAObj?.name || teamA, t2Name: _teamBObj?.name || teamB, p1: pA, p2: pB, tag: dealTag, day: currentDay });
                 tradeLog.unshift({ day: `DAY ${currentDay+1}`, details: `TRADE OFFER: ${teamA.toUpperCase()} ↔ ${teamB.toUpperCase()} — pending approval.` });
                 refreshTradeBadge();
             } else {
