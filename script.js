@@ -9662,11 +9662,25 @@ function renderAdvStatList(side) {
         h += `<div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="color:var(--ea-yellow);">${e.name}</span>`;
         if (e.isGoalie) { h += `<span style="color:#aaa;">SA: ${e.sa}${e.toi ? ` TOI:${Math.round(e.toi)}` : ''}</span>`; }
         else { let sStr = `G:${e.g} A:${e.a} +/-:${e.pm > 0 ? '+'+e.pm : e.pm} PIM:${e.pim} S:${e.s}` + (e.toi ? ` TOI:${Math.round(e.toi)}` : '') + (e.hits ? ` CHK:${e.hits}` : ''); if(e.ppg) sStr += ` PPG`; if(e.shg) sStr += ` SHG`; h += `<span style="color:#aaa;">${sStr}</span>`; }
+        h += `<button onclick="toggleAdvInjury('${side}', '${e.name}')" style="color:${e.injured ? '#FF5555' : '#666'}; border:none; background:transparent; cursor:pointer;" title="Injured in this game - roll how long he is out">[${e.injured ? 'INJURED' : 'INJ?'}]</button>`; // v501
         h += `<button onclick="removeAdvStatLine('${side}', '${e.name}')" style="color:var(--line-red); border:none; background:transparent; cursor:pointer;">[X]</button></div>`;
     });
     document.getElementById(side === 'away' ? 'advAwayList' : 'advHomeList').innerHTML = h;
 }
 
+// v501: injuries from played games - tick INJ on a stat line; FINALIZE rolls the games lost with the sim's in-game injury table
+function toggleAdvInjury(side, pName) { const e = advBoxScoreTemp[side].entries.find(x => x.name === pName); if (e) { e.injured = !e.injured; renderAdvStatList(side); } }
+function rollPlayedInjury(name, tk) {
+    const ps = playerStats[name]; if (!ps) return 0; const a = ps.attr || {};
+    const roll = Math.max(0, Math.min(1, Math.random() - ((parseInt(a.endur) || 70) - 70) * 0.006 - ((gradeToNum(a.rough) || 50) - 50) * 0.004));
+    let days = roll < 0.35 ? 1 : roll < 0.82 ? 2 + Math.floor(Math.random() * 3) : roll < 0.97 ? 5 + Math.floor(Math.random() * 4) : 9 + Math.floor(Math.random() * 7);
+    if (ps.pos === 'G') days = Math.min(25, days);
+    else { days = withLongTermChance(days); if (ps.pos === 'D' && days >= 5 && days < 15 && Math.random() < 0.12) days = 15 + Math.floor(Math.random() * 31); }
+    days = injAgeDays(name, days);
+    ps.injury = { severity: days, daysRemaining: days, source: 'played-game' }; autoPlaceOnIR(name, tk, days);
+    tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `[INJ] IN-GAME: ${name} (${String(tk).toUpperCase()}) - out ${days} game${days > 1 ? 's' : ''}.` });
+    return days;
+}
 function removeAdvStatLine(side, pName) { advBoxScoreTemp[side].entries = advBoxScoreTemp[side].entries.filter(e => e.name !== pName); renderAdvStatList(side); }
 
 let activeChecklistSide = null;
@@ -9862,6 +9876,9 @@ function submitAdvGame() {
         g.h.season.gp++; g.a.season.gp++; g.h.season.gf += hG; g.h.season.ga += aG; g.a.season.gf += aG; g.a.season.ga += hG;
     } else if(g.series) { if(hG > aG) g.series.hW++; else g.series.aW++; }
 
+    { const hurt = []; // v501: injuries ticked in the editor
+      [['away', g.a.nrm], ['home', g.h.nrm]].forEach(([sd, tk]) => advBoxScoreTemp[sd].entries.filter(e => e.injured).forEach(e => hurt.push(`${e.name}: out ${rollPlayedInjury(e.name, tk)} game(s)`)));
+      if (hurt.length) alert('INJURY ROLL\n' + hurt.join('\n')); }
     document.getElementById('advEditorOverlay').style.display = 'none';
     updateUI(); saveGame();
     const jumboAdv = document.getElementById('jumboMessage');
