@@ -8772,7 +8772,7 @@ async function simWeek() {
     isSimulating = true;
     // simDay's finally already repainted, and advanceCalendar repaints after the day rolls
     // over — no third render in between. Turbo skips the pacing sleep entirely.
-    for (let i = 0; i < 7; i++) { if (currentDay >= calendar.length) break; await simDay(false, true); if (!isTurboMode) await sleep(800); else await yieldToRenderer(); let keepGoing = advanceCalendar(); if (!keepGoing) break; }
+    for (let i = 0; i < 7; i++) { if (currentDay >= calendar.length || _offerAlert) break; await simDay(false, true); if (!isTurboMode) await sleep(800); else await yieldToRenderer(); let keepGoing = advanceCalendar(); if (!keepGoing) break; }
     isSimulating = false; updateUI(); saveGame();
 }
 
@@ -8780,7 +8780,7 @@ async function simMonth() {
     if (simLockBusy()) return;
     isSimulating = true;
     for (let i = 0; i < 30; i++) {
-        if (currentDay >= calendar.length) break;
+        if (currentDay >= calendar.length || _offerAlert) break;
         await simDay(false, true);
         if (!isTurboMode) await sleep(800); else await yieldToRenderer();
         let keepGoing = advanceCalendar();
@@ -8810,7 +8810,7 @@ async function simSeason(useTurbo = false) {
     if (btnSim) { btnSim.innerText = 'PAUSE SIM'; btnSim.style.borderColor = '#FF5555'; btnSim.style.color = '#FF5555'; }
     if (btnTurbo) { btnTurbo.innerText = 'PAUSE TURBO'; btnTurbo.style.borderColor = '#FFAA00'; btnTurbo.style.color = '#FFAA00'; }
 
-    while (isSimulating && isSimSeason && currentDay < calendar.length) {
+    while (isSimulating && isSimSeason && currentDay < calendar.length && !_offerAlert) {
         // Turbo deliberately skips full repaints (simDay/advanceCalendar both gate on this);
         // this call used to run unconditionally, so turbo still paid ~108ms/day for a frame
         // nobody saw. The ticker line below plus the periodic yield give turbo its feedback.
@@ -8825,7 +8825,7 @@ async function simSeason(useTurbo = false) {
     isSimulating = false; isSimSeason = false; isTurboMode = false;
     if (btnSim) { btnSim.innerText = 'SIM SEASON'; btnSim.style.borderColor = '#00FFFF'; btnSim.style.color = '#00FFFF'; }
     if (btnTurbo) { btnTurbo.innerText = 'TURBO SIM SEASON'; btnTurbo.style.borderColor = '#FFAA00'; btnTurbo.style.color = '#FFAA00'; }
-    
+    if (_offerAlert) { const tk = document.getElementById('tickerScroll'); if (tk) tk.innerText = `SIMULATION PAUSED AT DAY ${currentDay}: NEW TRADE OFFER.`; }
     updateUI(); saveGame();
     if (currentDay >= calendar.length) { initPlayoffs(); }
 }
@@ -8844,7 +8844,7 @@ async function simRestOfSeason() {
     const btn = document.getElementById('btnSimRest');
     if (btn) { btn.disabled = true; btn.textContent = 'SIMULATING...'; }
     try {
-        while (isSimulating && currentDay < calendar.length) {
+        while (isSimulating && currentDay < calendar.length && !_offerAlert) {
             await simDay(false, true);
             const pct = Math.floor((currentDay / calendar.length) * 100);
             const dayScores = (calendar[currentDay - 1] || []).filter(g => g && g.result).map(g => `${g.a.code} ${g.result.aG}-${g.result.hG} ${g.h.code}`).join('  ');
@@ -13859,7 +13859,11 @@ function checkTradeDeadlineAnnouncements() {
 }
 
 // --- UI RENDERERS ---
+// v496: a new AI trade offer pops up the proposals window; multi-day sims stop on the day it arrives
+let _offerAlert = 0, _lastOfferCount = 0;
 function refreshTradeBadge() {
+    if (pendingTrades.length > _lastOfferCount && awardConfig.tradeBlock) _offerAlert = 1;
+    _lastOfferCount = pendingTrades.length;
     const btn = document.getElementById('btnTrade');
     if (!btn) return;
     const existing = btn.querySelector('.trade-badge');
@@ -13897,6 +13901,7 @@ function getSimDate() {
 }
 
 function updateUI() {
+    if (_offerAlert && !isSimulating && pendingTrades.length && document.getElementById('proposalOverlay')) { _offerAlert = 0; setTimeout(openProposalsModal, 0); } // v496
     if (activeIdx !== null && !getGameAt(currentDay, activeIdx)) activeIdx = null;
 
     if(!isPlayoffs && !isASG && calendar.length > 0 && currentDay >= calendar.length) { 
