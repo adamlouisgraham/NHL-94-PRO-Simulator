@@ -9695,10 +9695,38 @@ function saveRosterChecklist() {
 function importBoxScoreFile() {
     if (!advBoxScoreTemp || !advBoxScoreTemp.away) return alert('Open the box score editor for a game first.');
     let inp = document.getElementById('boxScoreFileInput');
-    if (!inp) { inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.csv'; inp.id = 'boxScoreFileInput'; inp.style.display = 'none'; document.body.appendChild(inp); }
+    if (!inp) { inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xls,.xlsx,.csv'; inp.id = 'boxScoreFileInput'; inp.style.display = 'none'; document.body.appendChild(inp); }
     inp.value = '';
-    inp.onchange = () => { const f = inp.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => applyBoxScoreCSV(String(rd.result)); rd.readAsText(f); };
+    inp.onchange = () => { const f = inp.files[0]; if (!f) return; const rd = new FileReader();
+        if (/\.xlsx?$/i.test(f.name)) { // v494: Stat Extractor .xls read directly (SheetJS)
+            if (typeof XLSX === 'undefined') return alert('The spreadsheet reader did not load (needs internet). Convert with tools/xls2csv.py and import the .csv instead.');
+            rd.onload = () => { const wb = XLSX.read(new Uint8Array(rd.result), { type: 'array' });
+                const grid = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+                applyBoxScoreCSV(extractorGridToCSV(grid)); };
+            rd.readAsArrayBuffer(f);
+        } else { rd.onload = () => applyBoxScoreCSV(String(rd.result)); rd.readAsText(f); } };
     inp.click();
+}
+// v494: NHL 94 Stat Extractor sheet -> import rows. Tables are found by their headings wherever they sit
+// ("NYR Player Stats", "BOS Goalie Stats", "Scoring Summary"), so either extractor layout works.
+function extractorGridToCSV(grid) {
+    const G = grid.map(r => (r || []).map(c => String(c ?? '').trim()));
+    const at = (r, c) => (G[r] && G[r][c]) || '';
+    const out = [['ROW', 'TEAM', 'NAME', 'POS', 'G', 'A', 'SOG', 'PIM', 'SHA', 'GA', 'TYPE']];
+    const num = v => parseInt(v) || 0;
+    G.forEach((row, r) => row.forEach((cell, c) => {
+        const m = cell.match(/^(\S+) (Player|Goalie) Stats$/); if (!m) return;
+        for (let k = r + 2; k < G.length; k++) {
+            const nm = at(k, c); if (!nm || / Stats$/.test(nm) || nm === 'Name') break;
+            if (m[2] === 'Player') out.push(['P', m[1], nm, at(k, c + 2), num(at(k, c + 3)), num(at(k, c + 4)), num(at(k, c + 6)), num(at(k, c + 8)), '', '', '']);
+            else out.push(['P', m[1], nm, 'G', '', num(at(k, c + 8)), '', '', num(at(k, c + 5)), num(at(k, c + 3)), '']);
+        }
+    }));
+    G.forEach((row, r) => row.forEach((cell, c) => {
+        if (cell !== 'Scoring Summary') return;
+        for (let k = r + 2; k < G.length && at(k, c); k++) out.push(['GOAL', at(k, c + 2), at(k, c + 3), '', '', '', '', '', '', '', at(k, c + 6), at(k, c)]);
+    }));
+    return out.map(r => r.join(',')).join('\n');
 }
 function applyBoxScoreCSV(text) {
     const g = getGameAt(currentDay, activeIdx); if (!g) return alert('No game selected.');
@@ -9724,6 +9752,7 @@ function applyBoxScoreCSV(text) {
             if (!advBoxScoreTemp[side].entries.some(e => e.isGoalie)) advBoxScoreTemp[side].entries.push({ name: nm, isGoalie: true, sa: n(r, 'SHA') }); } }
         else advBoxScoreTemp[side].entries.push({ name: nm, isGoalie: false, g: n(r, 'G'), a: n(r, 'A'), pm: 0, pim: n(r, 'PIM'), s: n(r, 'SOG'), ppg: 0, shg: 0 });
     });
+    advBoxScoreTemp.ot = lines.slice(1).some(r => v(r, 'ROW').toUpperCase() === 'GOAL' && parseInt(r[11]) >= 4) ? 1 : 0; // v494: overtime winner
     lines.slice(1).filter(r => v(r, 'ROW').toUpperCase() === 'GOAL').forEach(r => {
         const side = sideOf(v(r, 'TEAM').toUpperCase()); if (!side) return; const nm = match(side, v(r, 'NAME'));
         const e = advBoxScoreTemp[side].entries.find(x => x.name === nm && !x.isGoalie); if (!e) return; const t = v(r, 'TYPE').toUpperCase();
@@ -9733,7 +9762,7 @@ function applyBoxScoreCSV(text) {
     const goals = s => advBoxScoreTemp[s].entries.reduce((q, e) => q + (e.g || 0), 0);
     document.getElementById('advAwayScore').value = goals('away'); document.getElementById('advHomeScore').value = goals('home');
     document.getElementById('advAwayEN').value = 0; document.getElementById('advHomeEN').value = 0;
-    alert(`Imported ${g.a.code} ${goals('away')} - ${g.h.code} ${goals('home')}.` + (miss.length ? `\nNot matched to the roster (enter by hand): ${miss.join(', ')}` : '') + '\nCheck the lines, then FINALIZE GAME.');
+    alert(`Imported ${g.a.code} ${goals('away')} - ${g.h.code} ${goals('home')}${advBoxScoreTemp.ot ? ' (OT)' : ''}.` + (miss.length ? `\nNot matched to the roster (enter by hand): ${miss.join(', ')}` : '') + '\nCheck the lines, then FINALIZE GAME.');
 }
 function submitAdvGame() {
     const g = getGameAt(currentDay, activeIdx);
@@ -9808,7 +9837,7 @@ function submitAdvGame() {
         advBoxScoreTemp.home.dressed.forEach(pN => { if(playerStats[pN]) playerStats[pN][k].gp++; });
     }
     
-    g.result = { hG: hG, aG: aG, ot: 0, boxLog: [], stars: [] }; 
+    g.result = { hG: hG, aG: aG, ot: advBoxScoreTemp.ot || 0, boxLog: [], stars: [] }; advBoxScoreTemp.ot = 0; 
     if(!isPlayoffs && !isASG) {
         if(hG > aG) { g.h.season.w++; g.h.season.pts += 2; g.a.season.l++; g.h.winStreak++; g.h.undefeated++; g.h.loseStreak=0; g.h.winless=0; g.a.loseStreak++; g.a.winless++; g.a.winStreak=0; g.a.undefeated=0; } 
         else if(aG > hG) { g.a.season.w++; g.a.season.pts += 2; g.h.season.l++; g.a.winStreak++; g.a.undefeated++; g.a.loseStreak=0; g.a.winless=0; g.h.loseStreak++; g.h.winless++; g.h.winStreak=0; g.h.undefeated=0; } 

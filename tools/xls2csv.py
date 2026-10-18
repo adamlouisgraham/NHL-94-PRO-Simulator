@@ -22,35 +22,30 @@ def num(v):
 
 
 def convert(src, dst):
-    rows = cells(xlrd.open_workbook(src).sheet_by_index(0))
+    G = cells(xlrd.open_workbook(src).sheet_by_index(0))
+    at = lambda r, c: G[r][c] if r < len(G) and c < len(G[r]) else ''
     out = []
-    team, mode = None, None
-    for r in rows:
-        right = r[9:19] if len(r) >= 19 else []
-        if right and right[0].endswith('Player Stats'):
-            team, mode = right[0].split()[0], 'skater'; continue
-        if right and right[0].endswith('Goalie Stats'):
-            team, mode = right[0].split()[0], 'goalie'; continue
-        if right and right[0] == 'Name':
-            continue
-        if right and right[0] and mode and team:
-            name, pos = right[0], right[2]
-            if mode == 'skater':   # Name JNo Pos G A Pts SOG ChksF PIM TOI
-                out.append(['P', team, name, pos, num(right[3]), num(right[4]), num(right[6]), num(right[8]), '', '', ''])
-            else:                  # Name JNo Pos GA SV SHA GAA SV% A TOI
-                out.append(['P', team, name, 'G', '', num(right[8]), '', '', num(right[5]), num(right[3]), ''])
-    # scoring summary: Period Time Team G A1 A2 Type (columns 1..7)
-    in_goals = False
-    for r in rows:
-        if len(r) > 1 and r[1] == 'Scoring Summary':
-            in_goals = True; continue
-        if len(r) > 1 and r[1] == 'Penalty Summary':
-            break
-        if in_goals and len(r) > 7 and r[1] and r[1] != 'Period' and r[4]:
-            out.append(['GOAL', r[3], r[4], '', '', '', '', '', '', '', r[7]])
+    # tables are found by heading ("NYR Player Stats", "BOS Goalie Stats", "Scoring Summary") wherever they sit
+    for r, row in enumerate(G):
+        for c, cell in enumerate(row):
+            parts = cell.split(' ')
+            if len(parts) == 3 and parts[1] in ('Player', 'Goalie') and parts[2] == 'Stats':
+                team, kind = parts[0], parts[1]
+                k = r + 2
+                while k < len(G) and at(k, c) and not at(k, c).endswith(' Stats') and at(k, c) != 'Name':
+                    if kind == 'Player':   # Name JNo Pos G A Pts SOG ChksF PIM TOI
+                        out.append(['P', team, at(k, c), at(k, c + 2), num(at(k, c + 3)), num(at(k, c + 4)), num(at(k, c + 6)), num(at(k, c + 8)), '', '', '', ''])
+                    else:                  # Name JNo Pos GA SV SHA GAA SV% A TOI
+                        out.append(['P', team, at(k, c), 'G', '', num(at(k, c + 8)), '', '', num(at(k, c + 5)), num(at(k, c + 3)), '', ''])
+                    k += 1
+            if cell == 'Scoring Summary':   # Period Time Team G A1 A2 Type
+                k = r + 2
+                while k < len(G) and at(k, c):
+                    out.append(['GOAL', at(k, c + 2), at(k, c + 3), '', '', '', '', '', '', '', at(k, c + 6), at(k, c)])
+                    k += 1
     with open(dst, 'w', newline='', encoding='utf-8') as f:
         w = csv.writer(f)
-        w.writerow(['ROW', 'TEAM', 'NAME', 'POS', 'G', 'A', 'SOG', 'PIM', 'SHA', 'GA', 'TYPE'])
+        w.writerow(['ROW', 'TEAM', 'NAME', 'POS', 'G', 'A', 'SOG', 'PIM', 'SHA', 'GA', 'TYPE', 'PERIOD'])
         w.writerows(out)
     return len(out)
 
