@@ -9658,8 +9658,8 @@ function renderAdvStatList(side) {
     let h = '';
     advBoxScoreTemp[side].entries.forEach(e => {
         h += `<div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="color:var(--ea-yellow);">${e.name}</span>`;
-        if (e.isGoalie) { h += `<span style="color:#aaa;">SA: ${e.sa}</span>`; }
-        else { let sStr = `G:${e.g} A:${e.a} +/-:${e.pm > 0 ? '+'+e.pm : e.pm} PIM:${e.pim} S:${e.s}`; if(e.ppg) sStr += ` PPG`; if(e.shg) sStr += ` SHG`; h += `<span style="color:#aaa;">${sStr}</span>`; }
+        if (e.isGoalie) { h += `<span style="color:#aaa;">SA: ${e.sa}${e.toi ? ` TOI:${Math.round(e.toi)}` : ''}</span>`; }
+        else { let sStr = `G:${e.g} A:${e.a} +/-:${e.pm > 0 ? '+'+e.pm : e.pm} PIM:${e.pim} S:${e.s}` + (e.toi ? ` TOI:${Math.round(e.toi)}` : '') + (e.hits ? ` CHK:${e.hits}` : ''); if(e.ppg) sStr += ` PPG`; if(e.shg) sStr += ` SHG`; h += `<span style="color:#aaa;">${sStr}</span>`; }
         h += `<button onclick="removeAdvStatLine('${side}', '${e.name}')" style="color:var(--line-red); border:none; background:transparent; cursor:pointer;">[X]</button></div>`;
     });
     document.getElementById(side === 'away' ? 'advAwayList' : 'advHomeList').innerHTML = h;
@@ -9712,14 +9712,14 @@ function importBoxScoreFile() {
 function extractorGridToCSV(grid) {
     const G = grid.map(r => (r || []).map(c => String(c ?? '').trim()));
     const at = (r, c) => (G[r] && G[r][c]) || '';
-    const out = [['ROW', 'TEAM', 'NAME', 'POS', 'G', 'A', 'SOG', 'PIM', 'SHA', 'GA', 'TYPE']];
+    const out = [['ROW', 'TEAM', 'NAME', 'POS', 'G', 'A', 'SOG', 'PIM', 'SHA', 'GA', 'TYPE', 'PERIOD', 'TOI', 'CHK']];
     const num = v => parseInt(v) || 0;
     G.forEach((row, r) => row.forEach((cell, c) => {
         const m = cell.match(/^(\S+) (Player|Goalie) Stats$/); if (!m) return;
         for (let k = r + 2; k < G.length; k++) {
             const nm = at(k, c); if (!nm || / Stats$/.test(nm) || nm === 'Name') break;
-            if (m[2] === 'Player') out.push(['P', m[1], nm, at(k, c + 2), num(at(k, c + 3)), num(at(k, c + 4)), num(at(k, c + 6)), num(at(k, c + 8)), '', '', '']);
-            else out.push(['P', m[1], nm, 'G', '', num(at(k, c + 8)), '', '', num(at(k, c + 5)), num(at(k, c + 3)), '']);
+            if (m[2] === 'Player') out.push(['P', m[1], nm, at(k, c + 2), num(at(k, c + 3)), num(at(k, c + 4)), num(at(k, c + 6)), num(at(k, c + 8)), '', '', '', '', at(k, c + 9), num(at(k, c + 7))]);
+            else out.push(['P', m[1], nm, 'G', '', num(at(k, c + 8)), '', '', num(at(k, c + 5)), num(at(k, c + 3)), '', '', at(k, c + 9), '']);
         }
     }));
     G.forEach((row, r) => row.forEach((cell, c) => {
@@ -9739,6 +9739,10 @@ function applyBoxScoreCSV(text) {
     const match = (side, name) => { const ro = advBoxScoreTemp[side].roster; const nn = norm(name);
         let p = ro.find(x => norm(x.name) === nn); if (p) return p.name;
         const last = nn.split(' ').pop(); const c = ro.filter(x => norm(x.name).split(' ').pop() === last); return c.length === 1 ? c[0].name : null; };
+    const mins = t => { const m = String(t || '').match(/^(\d+):(\d+)$/); return m ? +m[1] + +m[2] / 60 : 0; }; // v495: TOI mm:ss -> minutes
+    const pRows = lines.slice(1).filter(r => v(r, 'ROW').toUpperCase() === 'P');
+    const gMax = Math.max(0, ...pRows.filter(r => v(r, 'POS').toUpperCase() === 'G').map(r => mins(v(r, 'TOI'))));
+    const toiScale = gMax > 0 && gMax < 45 ? 2 : 1; // 10-minute periods -> full-game scale
     const miss = [], teams = new Set();
     ['away', 'home'].forEach(s => { advBoxScoreTemp[s].entries = []; });
     const dressed = { away: [], home: [] };
@@ -9749,8 +9753,8 @@ function applyBoxScoreCSV(text) {
         dressed[side].push(nm);
         if (v(r, 'POS').toUpperCase() === 'G') { if (n(r, 'SHA') > 0 || !advBoxScoreTemp[side].entries.some(e => e.isGoalie)) {
             advBoxScoreTemp[side].entries = advBoxScoreTemp[side].entries.filter(e => !e.isGoalie || e.sa > n(r, 'SHA'));
-            if (!advBoxScoreTemp[side].entries.some(e => e.isGoalie)) advBoxScoreTemp[side].entries.push({ name: nm, isGoalie: true, sa: n(r, 'SHA') }); } }
-        else advBoxScoreTemp[side].entries.push({ name: nm, isGoalie: false, g: n(r, 'G'), a: n(r, 'A'), pm: 0, pim: n(r, 'PIM'), s: n(r, 'SOG'), ppg: 0, shg: 0 });
+            if (!advBoxScoreTemp[side].entries.some(e => e.isGoalie)) advBoxScoreTemp[side].entries.push({ name: nm, isGoalie: true, sa: n(r, 'SHA'), toi: +(mins(v(r, 'TOI')) * toiScale).toFixed(2) }); } }
+        else advBoxScoreTemp[side].entries.push({ name: nm, isGoalie: false, g: n(r, 'G'), a: n(r, 'A'), pm: 0, pim: n(r, 'PIM'), s: n(r, 'SOG'), ppg: 0, shg: 0, toi: +(mins(v(r, 'TOI')) * toiScale).toFixed(2), hits: col('CHK') >= 0 ? n(r, 'CHK') : 0 });
     });
     advBoxScoreTemp.ot = lines.slice(1).some(r => v(r, 'ROW').toUpperCase() === 'GOAL' && parseInt(r[11]) >= 4) ? 1 : 0; // v494: overtime winner
     lines.slice(1).filter(r => v(r, 'ROW').toUpperCase() === 'GOAL').forEach(r => {
@@ -9797,6 +9801,7 @@ function submitAdvGame() {
             if (sa < ga) sa = ga;
             s.sa += sa; s.sv += (sa - ga); if(ga === 0) s.so++;
             s.svPct = s.sa > 0 ? (s.sv / s.sa) : 0; // v179: store running svPct directly
+            if (gEntry && gEntry.toi) s.toi = (s.toi || 0) + gEntry.toi; // v495
             if(status === 'win') s.w++; else if(status === 'loss') s.l++; else s.t++;
             checkMilestones(gName);
         }
@@ -9818,6 +9823,7 @@ function submitAdvGame() {
             if(playerStats[e.name] && !isASG) {
                 let s = playerStats[e.name][k];
                 s.g += e.g; s.a += e.a; s.pm += e.pm; s.pim += e.pim; s.ppg += e.ppg; s.shg += e.shg; s.s = (s.s||0) + (e.s||0);
+                if (e.toi) s.toi = (s.toi || 0) + e.toi; if (e.hits) s.hits = (s.hits || 0) + e.hits; // v495: imported ice time / checks
                 checkMilestones(e.name);
             }
         });

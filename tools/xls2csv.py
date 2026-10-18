@@ -34,9 +34,9 @@ def convert(src, dst):
                 k = r + 2
                 while k < len(G) and at(k, c) and not at(k, c).endswith(' Stats') and at(k, c) != 'Name':
                     if kind == 'Player':   # Name JNo Pos G A Pts SOG ChksF PIM TOI
-                        out.append(['P', team, at(k, c), at(k, c + 2), num(at(k, c + 3)), num(at(k, c + 4)), num(at(k, c + 6)), num(at(k, c + 8)), '', '', '', ''])
+                        out.append(['P', team, at(k, c), at(k, c + 2), num(at(k, c + 3)), num(at(k, c + 4)), num(at(k, c + 6)), num(at(k, c + 8)), '', '', '', '', at(k, c + 9), num(at(k, c + 7))])
                     else:                  # Name JNo Pos GA SV SHA GAA SV% A TOI
-                        out.append(['P', team, at(k, c), 'G', '', num(at(k, c + 8)), '', '', num(at(k, c + 5)), num(at(k, c + 3)), '', ''])
+                        out.append(['P', team, at(k, c), 'G', '', num(at(k, c + 8)), '', '', num(at(k, c + 5)), num(at(k, c + 3)), '', '', at(k, c + 9), ''])
                     k += 1
             if cell == 'Scoring Summary':   # Period Time Team G A1 A2 Type
                 k = r + 2
@@ -45,7 +45,7 @@ def convert(src, dst):
                     k += 1
     with open(dst, 'w', newline='', encoding='utf-8') as f:
         w = csv.writer(f)
-        w.writerow(['ROW', 'TEAM', 'NAME', 'POS', 'G', 'A', 'SOG', 'PIM', 'SHA', 'GA', 'TYPE', 'PERIOD'])
+        w.writerow(['ROW', 'TEAM', 'NAME', 'POS', 'G', 'A', 'SOG', 'PIM', 'SHA', 'GA', 'TYPE', 'PERIOD', 'TOI', 'CHK'])
         w.writerows(out)
     return len(out)
 
