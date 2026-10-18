@@ -9764,6 +9764,13 @@ function applyBoxScoreCSV(text) {
         const e = advBoxScoreTemp[side].entries.find(x => x.name === nm && !x.isGoalie); if (!e) return; const t = v(r, 'TYPE').toUpperCase();
         if (/PP/.test(t) && e.ppg < e.g) e.ppg++; else if (/SH/.test(t) && e.shg < e.g) e.shg++; });
     if (![...teams].some(t => sideOf(t.toUpperCase()))) return alert(`This file is for ${[...teams].join(' vs ')}, but the selected game is ${g.a.code} at ${g.h.code}.`);
+    // v500: NHL '94 plays its top two units ~80% of the game - spread imported ice time toward the group average
+    // (half way, F and D separately, group total kept) so the 3rd/4th lines and 3rd pair get realistic minutes
+    ['away', 'home'].forEach(sd => [true, false].forEach(isD => {
+        const g = advBoxScoreTemp[sd].entries.filter(e => !e.isGoalie && e.toi > 0 && (playerStats[e.name]?.pos === 'D') === isD);
+        if (g.length < 2) return; const avg = g.reduce((q, e) => q + e.toi, 0) / g.length;
+        g.forEach(e => { e.toi = +(avg + (e.toi - avg) * 0.5).toFixed(2); });
+    }));
     ['away', 'home'].forEach(s => { if (dressed[s].length) advBoxScoreTemp[s].dressed = [...new Set([...dressed[s], ...advBoxScoreTemp[s].dressed])]; renderAdvStatList(s); });
     const goals = s => advBoxScoreTemp[s].entries.reduce((q, e) => q + (e.g || 0), 0);
     document.getElementById('advAwayScore').value = goals('away'); document.getElementById('advHomeScore').value = goals('home');
