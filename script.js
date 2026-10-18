@@ -2696,8 +2696,8 @@ const dynamicDuos = [
     // WPG
     ['Alexei Zhamnov', 'Teemu Selanne', 'Dallas Drake'],
     ['Peter Stastny', 'Nelson Emerson', 'Thomas Steen'],
-    ['Randy Gilhen', 'Darrin Shannon', 'Tie Domi'],
-    ['Mike Eagles',],
+    ['Bob Corkum', 'Darrin Shannon','Randy Gilhen' ],
+    ['Mike Eagles', 'Tie Domi', 'Kris King'],
     ['Igor Ulanov', 'Phil Housley']
 ];
 
@@ -2706,7 +2706,8 @@ function getAllDuos() { return [...dynamicDuos, ...customDuos, ...autoDuos]; }
 // team together) - otherwise a 76 winger dragged an 88 star off the top line, or a star sat on a 4th-liner's line
 function getLineDuos() {
     const o = n => getPlayerWeightedStats(n)?.ovr || 0;
-    return getAllDuos().filter(d => { const v = d.filter(n => playerStats[n]).map(o); return v.length >= 2 && Math.max(...v) - Math.min(...v) < 8; });
+    // v499: script-defined (dynamicDuos) and user duos always hold; only the auto-formed duos need to be within 7 OVR
+    return [...dynamicDuos, ...customDuos, ...autoDuos.filter(d => { const v = d.filter(n => playerStats[n]).map(o); return v.length >= 2 && Math.max(...v) - Math.min(...v) < 8; })];
 }
 // v302: new duos form over time. At season's end, linemates on the same opening-day line (top 3 F lines
 // and all D pairs) who each played 40+ games and aren't already in a duo become a duo for next season.
@@ -11514,6 +11515,31 @@ const REAL_DRAFT = {
         ['Ryan Kesler', 'C', 'T'], ['Mike Richards', 'C', 'T'], ['Corey Perry', 'RW', 'F'], ['Jimmy Howard', 'G', 'T'],
         ['Patrice Bergeron', 'C', 'F'], ['Shea Weber', 'D', 'F'], ['Joe Pavelski', 'C', 'T'], ['Dustin Byfuglien', 'D', 'T'],
     ],
+    '04': [
+        ['Alexander Ovechkin', 'LW', 'F'], ['Evgeni Malkin', 'C', 'F'], ['Cam Barker', 'D', 'D'], ['Andrew Ladd', 'LW', 'T'],
+        ['Blake Wheeler', 'RW', 'T'], ['Al Montoya', 'G', 'D'], ['Ladislav Smid', 'D', 'D'], ['Boris Valabik', 'D', 'B'],
+        ['Rostislav Olesz', 'LW', 'D'], ['Wojtek Wolski', 'LW', 'T'], ['Alexandre Picard', 'LW', 'B'], ['Kyle Chipchura', 'C', 'D'],
+        ['Travis Zajac', 'C', 'T'], ['Drew Stafford', 'RW', 'T'], ['A.J. Thelen', 'D', 'B'], ['Devan Dubnyk', 'G', 'T'],
+        ['Mike Green', 'D', 'T'], ['Alexander Radulov', 'RW', 'T'], ['David Krejci', 'C', 'T'], ['Johan Franzen', 'C', 'T'],
+        ['Andrej Sekera', 'D', 'T'], ['Alexander Edler', 'D', 'T'], ['Kris Versteeg', 'RW', 'T'], ['Brandon Dubinsky', 'C', 'T'],
+        ['Jannik Hansen', 'RW', 'D'], ['Pekka Rinne', 'G', 'F'],
+    ],
+    '05': [
+        ['Sidney Crosby', 'C', 'F'], ['Bobby Ryan', 'RW', 'T'], ['Jack Johnson', 'D', 'T'], ['Benoit Pouliot', 'LW', 'D'],
+        ['Carey Price', 'G', 'F'], ['Gilbert Brule', 'C', 'B'], ['Jack Skille', 'RW', 'B'], ['Devin Setoguchi', 'RW', 'T'],
+        ['Brian Lee', 'D', 'B'], ['Luc Bourdon', 'D', 'B'], ['Anze Kopitar', 'C', 'F'], ['Marc Staal', 'D', 'T'],
+        ['Sasha Pokulok', 'D', 'B'], ['Ty Wishart', 'D', 'B'], ['Martin Hanzal', 'C', 'T'], ['Tuukka Rask', 'G', 'F'],
+        ['Kris Letang', 'D', 'F'], ['Paul Stastny', 'C', 'T'], ['James Neal', 'LW', 'T'], ['Niklas Hjalmarsson', 'D', 'T'],
+        ['Jonathan Quick', 'G', 'F'], ['Keith Yandle', 'D', 'T'],
+    ],
+    '06': [
+        ['Erik Johnson', 'D', 'T'], ['Jordan Staal', 'C', 'T'], ['Jonathan Toews', 'C', 'F'], ['Nicklas Backstrom', 'C', 'F'],
+        ['Phil Kessel', 'RW', 'F'], ['Derick Brassard', 'C', 'T'], ['Kyle Okposo', 'RW', 'T'], ['Peter Mueller', 'C', 'D'],
+        ['Michael Frolik', 'RW', 'T'], ['Jonathan Bernier', 'G', 'T'], ['Bryan Little', 'C', 'T'], ['Claude Giroux', 'RW', 'F'],
+        ['Semyon Varlamov', 'G', 'T'], ['Patrik Berglund', 'C', 'D'], ['Nick Foligno', 'LW', 'T'], ['Leland Irving', 'G', 'B'],
+        ['Trevor Lewis', 'C', 'D'], ['Steve Mason', 'G', 'T'], ['Milan Lucic', 'LW', 'T'], ['Brad Marchand', 'LW', 'F'],
+        ['James Reimer', 'G', 'D'],
+    ],
 };
 // v477: 1990-93 draftees not in the game - fallback pool once a year's real list runs out at a position (and for drafts
 // after 1995). [name, pos, tier, draft year]; anyone already in playerStats is skipped.
@@ -11557,7 +11583,7 @@ function realDraftPool() {
     // v480: future stars first in every list (franchise, then top 6, then depth, then busts; real order within a tier)
     const byTier = l => l.map((e, i) => [e, i]).sort((x, y) => 'FTDB'.indexOf(x[0][2]) - 'FTDB'.indexOf(y[0][2]) || x[1] - y[1]).map(x => x[0]);
     const early = [...DRAFT_TOP_STARS.map(n => REAL_DRAFT_EARLY.find(e => e[0] === n)).filter(Boolean), ...byTier(REAL_DRAFT_EARLY.filter(e => !DRAFT_TOP_STARS.includes(e[0])))];
-    return [...early, ...['94', '95', '96', '97', '98', '99', '00', '01', '02', '03'].flatMap(y => byTier(REAL_DRAFT[y] || []).map(e => [...e, +y < 50 ? 100 + +y : +y]))]; // v483: + 1996-99 classes; v490 + 2000-03 (year 100+ = 2000s)
+    return [...early, ...['94', '95', '96', '97', '98', '99', '00', '01', '02', '03', '04', '05', '06'].flatMap(y => byTier(REAL_DRAFT[y] || []).map(e => [...e, +y < 50 ? 100 + +y : +y]))]; // v483: + 1996-99 classes; v490 + 2000-03 (year 100+ = 2000s)
 }
 function takeRealDraftName(pos) {
     const grp = q => q === 'G' ? 'G' : q === 'D' ? 'D' : 'F';
