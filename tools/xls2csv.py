@@ -41,11 +41,11 @@ def convert(src, dst):
             if cell == 'Scoring Summary':   # Period Time Team G A1 A2 Type
                 k = r + 2
                 while k < len(G) and at(k, c):
-                    out.append(['GOAL', at(k, c + 2), at(k, c + 3), '', '', '', '', '', '', '', at(k, c + 6), at(k, c)])
+                    out.append(['GOAL', at(k, c + 2), at(k, c + 3), '', '', '', '', '', '', '', at(k, c + 6), at(k, c), '', '', at(k, c + 4), at(k, c + 5)])
                     k += 1
     with open(dst, 'w', newline='', encoding='utf-8') as f:
         w = csv.writer(f)
-        w.writerow(['ROW', 'TEAM', 'NAME', 'POS', 'G', 'A', 'SOG', 'PIM', 'SHA', 'GA', 'TYPE', 'PERIOD', 'TOI', 'CHK'])
+        w.writerow(['ROW', 'TEAM', 'NAME', 'POS', 'G', 'A', 'SOG', 'PIM', 'SHA', 'GA', 'TYPE', 'PERIOD', 'TOI', 'CHK', 'A1', 'A2'])
         w.writerows(out)
     return len(out)
 

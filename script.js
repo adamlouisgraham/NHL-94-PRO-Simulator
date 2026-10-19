@@ -607,14 +607,27 @@ function readSaveRaw(key) {
     if (!jsonStr) jsonStr = raw;
     try { return JSON.parse(jsonStr); } catch(e) { return null; }
 }
+// v503: multi-tab safeguard - every save stamps localStorage; a tab whose loaded copy is older than the last save
+// (another tab saved since) asks before overwriting and offers to reload the newer save instead
+const SAVE_STAMP_KEY = 'nhl94_saveStamp';
+let _mySaveStamp = null, _staleSaveOK = false;
+function markSaveLoaded() { try { _mySaveStamp = localStorage.getItem(SAVE_STAMP_KEY) || ''; } catch (e) { _mySaveStamp = ''; } _staleSaveOK = false; }
 function writeSavePayload(data, slot = 'AUTO') {
     const key = getSaveSlotKey(slot);
+    try {
+        const cur = localStorage.getItem(SAVE_STAMP_KEY) || '';
+        if (_mySaveStamp !== null && cur !== _mySaveStamp && !_staleSaveOK) {
+            if (confirm('Another tab has saved this dynasty since this page loaded it.\nSaving here would overwrite those changes (games, injuries, trades).\n\nOK = reload this page with the newer save (recommended)\nCancel = overwrite it with this page anyway')) { location.reload(); return; }
+            _staleSaveOK = true;
+        }
+    } catch (e) {}
     try {
         const json = JSON.stringify(data);
         // Yield between stringify and compress so the browser can breathe
         setTimeout(() => {
             try {
                 localStorage.setItem(key, LZString.compressToUTF16(json));
+                _mySaveStamp = Date.now() + '-' + Math.random().toString(36).slice(2, 8); localStorage.setItem(SAVE_STAMP_KEY, _mySaveStamp); // v503
             } catch (e) {
                 console.error("[SAVE ERROR] Storage full or inaccessible:", e);
             }
@@ -817,7 +830,7 @@ function loadGame() {
         const parsed = readSaveRaw(SAVE_STORAGE_KEY); const normalized = parsed ? normalizeSavePackage(parsed) : null;
         if (!normalized || !isSupportedSaveVersion(normalized.meta.version)) throw new Error('Unsupported schema version.');
         if (!isValidSaveData(normalized.payload)) throw new Error('Missing league data.');
-        applyLoadedSave(normalized.payload);
+        applyLoadedSave(normalized.payload); markSaveLoaded(); // v503
         Object.assign(awardConfig, _preloadSnapshot);
         _preloadToggledSettings.clear();
         // Sync toggle buttons to reflect the final merged config.
@@ -1551,7 +1564,7 @@ async function startNewGame(useCustomRoster = false) {
     // guard silently no-op'd every "fresh" run afterward. Reset everything here since this
     // function is only ever reachable from the start screen - there's no in-progress game
     // to preserve.
-    currentDay = 0; currentSeason = 1; isPlayoffs = false; isASG = false; asgDoneThisSeason = false;
+    currentDay = 0; currentSeason = 1; isPlayoffs = false; isASG = false; asgDoneThisSeason = false; markSaveLoaded(); // v503: a new league may replace the save
     isSimulating = false; isSimSeason = false; isTurboMode = false; currentCupChamp = "";
     playoffBracket = { round: 1, series: [] }; tradeLog = []; hallOfFame = []; autoDuos = []; seasonLines = {}; leagueHistory = [];
     retiredPlayers = []; awardHistory = []; simRecords = null; fightGov = 1; finishAdj = 1; draftedReal = []; freeAgents = []; draftPicks = {}; leagueChronicle = []; pendingTrades = []; calendar = []; realDatesMap = []; gameMilestones = [];
@@ -9663,7 +9676,7 @@ function renderAdvStatList(side) {
     advBoxScoreTemp[side].entries.forEach(e => {
         h += `<div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span style="color:var(--ea-yellow);">${e.name}</span>`;
         if (e.isGoalie) { h += `<span style="color:#aaa;">SA: ${e.sa}${e.toi ? ` TOI:${Math.round(e.toi)}` : ''}</span>`; }
-        else { let sStr = `G:${e.g} A:${e.a} +/-:${e.pm > 0 ? '+'+e.pm : e.pm} PIM:${e.pim} S:${e.s}` + (e.toi ? ` TOI:${Math.round(e.toi)}` : '') + (e.hits ? ` CHK:${e.hits}` : ''); if(e.ppg) sStr += ` PPG`; if(e.shg) sStr += ` SHG`; h += `<span style="color:#aaa;">${sStr}</span>`; }
+        else { let sStr = `G:${e.g} A:${e.a} +/-:${e.pm > 0 ? '+'+e.pm : e.pm} PIM:${e.pim} S:${e.s}` + (e.toi ? ` TOI:${Math.round(e.toi)}` : '') + (e.hits ? ` CHK:${e.hits}` : ''); if(e.ppg) sStr += ` PPG`; if(e.ppa) sStr += ` PPA:${e.ppa}`; if(e.shg) sStr += ` SHG`; h += `<span style="color:#aaa;">${sStr}</span>`; }
         h += `<button onclick="toggleAdvInjury('${side}', '${e.name}')" style="color:${e.injured ? '#FF5555' : '#666'}; border:none; background:transparent; cursor:pointer;" title="Injured in this game - roll how long he is out">[${e.injured ? 'INJURED' : 'INJ?'}]</button>`; // v501
         h += `<button onclick="removeAdvStatLine('${side}', '${e.name}')" style="color:var(--line-red); border:none; background:transparent; cursor:pointer;">[X]</button></div>`;
     });
@@ -9730,7 +9743,7 @@ function importBoxScoreFile() {
 function extractorGridToCSV(grid) {
     const G = grid.map(r => (r || []).map(c => String(c ?? '').trim()));
     const at = (r, c) => (G[r] && G[r][c]) || '';
-    const out = [['ROW', 'TEAM', 'NAME', 'POS', 'G', 'A', 'SOG', 'PIM', 'SHA', 'GA', 'TYPE', 'PERIOD', 'TOI', 'CHK']];
+    const out = [['ROW', 'TEAM', 'NAME', 'POS', 'G', 'A', 'SOG', 'PIM', 'SHA', 'GA', 'TYPE', 'PERIOD', 'TOI', 'CHK', 'A1', 'A2']];
     const num = v => parseInt(v) || 0;
     G.forEach((row, r) => row.forEach((cell, c) => {
         const m = cell.match(/^(\S+) (Player|Goalie) Stats$/); if (!m) return;
@@ -9742,7 +9755,7 @@ function extractorGridToCSV(grid) {
     }));
     G.forEach((row, r) => row.forEach((cell, c) => {
         if (cell !== 'Scoring Summary') return;
-        for (let k = r + 2; k < G.length && at(k, c); k++) out.push(['GOAL', at(k, c + 2), at(k, c + 3), '', '', '', '', '', '', '', at(k, c + 6), at(k, c)]);
+        for (let k = r + 2; k < G.length && at(k, c); k++) out.push(['GOAL', at(k, c + 2), at(k, c + 3), '', '', '', '', '', '', '', at(k, c + 6), at(k, c), '', '', at(k, c + 4), at(k, c + 5)]); // v503: + assists
     }));
     return out.map(r => r.join(',')).join('\n');
 }
@@ -9778,7 +9791,9 @@ function applyBoxScoreCSV(text) {
     lines.slice(1).filter(r => v(r, 'ROW').toUpperCase() === 'GOAL').forEach(r => {
         const side = sideOf(v(r, 'TEAM').toUpperCase()); if (!side) return; const nm = match(side, v(r, 'NAME'));
         const e = advBoxScoreTemp[side].entries.find(x => x.name === nm && !x.isGoalie); if (!e) return; const t = v(r, 'TYPE').toUpperCase();
-        if (/PP/.test(t) && e.ppg < e.g) e.ppg++; else if (/SH/.test(t) && e.shg < e.g) e.shg++; });
+        if (/PP/.test(t) && e.ppg < e.g) e.ppg++; else if (/SH/.test(t) && e.shg < e.g) e.shg++;
+        if (/PP/.test(t)) ['A1', 'A2'].forEach(k => { const an = col(k) >= 0 ? v(r, k) : ''; if (!an || /^none$/i.test(an)) return; // v503: power-play assists
+            const am = match(side, an); const ae = advBoxScoreTemp[side].entries.find(x => x.name === am && !x.isGoalie); if (ae) ae.ppa = (ae.ppa || 0) + 1; }); });
     if (![...teams].some(t => sideOf(t.toUpperCase()))) return alert(`This file is for ${[...teams].join(' vs ')}, but the selected game is ${g.a.code} at ${g.h.code}.`);
     // v500: NHL '94 plays its top two units ~80% of the game - spread imported ice time toward the group average
     // (half way, F and D separately, group total kept) so the 3rd/4th lines and 3rd pair get realistic minutes
@@ -9849,6 +9864,7 @@ function submitAdvGame() {
                 let s = playerStats[e.name][k];
                 s.g += e.g; s.a += e.a; s.pm += e.pm; s.pim += e.pim; s.ppg += e.ppg; s.shg += e.shg; s.s = (s.s||0) + (e.s||0);
                 if (e.toi) s.toi = (s.toi || 0) + e.toi; if (e.hits) s.hits = (s.hits || 0) + e.hits; // v495: imported ice time / checks
+                if (e.ppa) s.ppa = (s.ppa || 0) + e.ppa; // v503
                 checkMilestones(e.name);
             }
         });
