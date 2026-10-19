@@ -9765,7 +9765,8 @@ function applyBoxScoreCSV(text) {
     const H = lines[0].map(h => h.toUpperCase()), col = k => H.indexOf(k);
     if (col('ROW') < 0 || col('NAME') < 0) return alert('Not a box-score CSV (expected ROW,TEAM,NAME,... from tools/xls2csv.py).');
     const v = (r, k) => r[col(k)] ?? '', n = (r, k) => parseInt(v(r, k)) || 0;
-    const sideOf = code => code === g.a.code ? 'away' : code === g.h.code ? 'home' : null;
+    const same = (x, y) => x === y || (x.length >= 2 && y.length >= 2 && (x.startsWith(y) || y.startsWith(x))); // v504: extractor TB/NJ/SJ/LA = TBL/NJD/SJS/LAK
+    const sideOf = code => same(code, g.a.code) ? 'away' : same(code, g.h.code) ? 'home' : null;
     const norm = s => s.toLowerCase().replace(/[^a-z ]/g, '').trim();
     const match = (side, name) => { const ro = advBoxScoreTemp[side].roster; const nn = norm(name);
         let p = ro.find(x => norm(x.name) === nn); if (p) return p.name;
