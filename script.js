@@ -867,26 +867,7 @@ function getGameAt(day = currentDay, idx = activeIdx) {
     return (g && g.h && g.a) ? g : null;
 }
 
-function getProjectedGoalie(nrm) {
-    const gs = (rosters[nrm] || [])
-        .filter(p => p.pos === 'G' && playerStats[p.name]
-            && (!playerStats[p.name].injury || playerStats[p.name].injury.daysRemaining === 0)
-            && (!playerStats[p.name].suspended || playerStats[p.name].suspended.days === 0))
-        .sort((a, b) => getPlayerWeightedStats(b.name).ovr - getPlayerWeightedStats(a.name).ovr);
-    if (!gs.length) return null;
-    // On a back-to-back with a close backup, likely sit the starter
-    if (playedYesterday(nrm) && gs.length > 1) {
-        const diff = getPlayerWeightedStats(gs[0].name).ovr - getPlayerWeightedStats(gs[1].name).ovr;
-        // Read the ACTIVE bucket, matching pickStarter. Hardcoding .season meant that during
-        // the playoffs this projection read a frozen regular-season value and could name a
-        // different goalie than the one the game actually starts.
-        const _gk = (typeof isPlayoffs !== 'undefined' && isPlayoffs) ? 'playoff' : 'season';
-        const consStarts = (playerStats[gs[0].name]?.[_gk]?.consStarts || 0);
-        // v179: lower threshold 7→5; diff<=8 so a 9+ OVR gap still keeps the starter on B2B
-        if (diff <= 8 || consStarts >= 5) return gs[1];
-    }
-    return gs[0];
-}
+function getProjectedGoalie(nrm) { return chooseGoalie(nrm, false); } // v505: same pick as the game
 
 function syncArenaScoreboardUI() {
     const btn = document.getElementById('btnGameSelect');
@@ -4372,6 +4353,72 @@ function checkStreakHeadline(team) {
     else if (team.winless === 8)  headline(`❄️ ${team.code} winless in 8 straight — the pressure is mounting.`);
 }
 
+// v505: one rest roll per team per day, shared by the projected-goalie displays and the game itself,
+// so the goalie shown before a game is the one who starts it
+let _goalieRolls = {};
+function goalieRoll(tk) {
+    const key = currentDay + '|' + tk;
+    if (!(key in _goalieRolls)) { if (Object.keys(_goalieRolls).length > 200) _goalieRolls = {}; _goalieRolls[key] = Math.random(); }
+    return _goalieRolls[key];
+}
+// v505: the day's pick is locked once made (first projection or the game itself), so streak updates from
+// earlier games that day can't flip it; consecutive-start counts move only when the game is played
+let _goalieChoice = {};
+function chooseGoalie(tk, commit) {
+    const key = currentDay + '|' + tk + '|' + (isPlayoffs ? 'p' : 's');
+    const ok = n => { const ps = playerStats[n]; return ps && (!ps.injury || ps.injury.daysRemaining === 0) && (!ps.suspended || ps.suspended.days === 0) && (rosters[tk] || []).some(p => p.name === n); };
+    if (isASG) return _rankGoalie(tk);
+    let name = _goalieChoice[key];
+    if (!name || !ok(name)) { const g = _rankGoalie(tk); if (!g) return null; name = g.name; if (Object.keys(_goalieChoice).length > 200) _goalieChoice = {}; _goalieChoice[key] = name; }
+    const pick = (rosters[tk] || []).find(p => p.name === name);
+    if (commit && !isPlayoffs) (rosters[tk] || []).filter(p => p.pos === 'G').forEach(p => { const st = playerStats[p.name]?.season; if (st) st.consStarts = p.name === name ? (st.consStarts || 0) + 1 : 0; });
+    return pick;
+}
+function _rankGoalie(tk) {
+    const k = (isPlayoffs || isASG) ? 'playoff' : 'season';
+        // v278: rank by BASE rating (attr.ovr); the streak-adjusted rating only breaks near-ties. Ranking on
+        // the live rating let a hot backup leapfrog a far better starter (TBL: Shtalenkov 56 got 44 starts,
+        // Puppa 72 got 40).
+        const baseG = n => parseInt(playerStats[n]?.attr?.ovr) || getPlayerWeightedStats(n).ovr;
+        const gs = rosters[tk] ? rosters[tk].filter(p => p.pos === 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0 && (!playerStats[p.name].suspended || playerStats[p.name].suspended.days === 0))
+            .sort((a, b) => { const d = baseG(b.name) - baseG(a.name); return Math.abs(d) > 3 ? d : getPlayerWeightedStats(b.name).ovr - getPlayerWeightedStats(a.name).ovr; }) : [];
+        if (!gs.length) { const allG = (rosters[tk] || []).filter(p => p.pos === 'G'); return allG.length ? allG[0] : null; }
+        if (gs.length === 1 || isASG) return gs[0];
+        if (isPlayoffs) {
+            // v373: playoff hook - a starter below .875 after 3+ playoff games loses the net to a backup within
+            // 10 OVR, who keeps it while he is outplaying him (starters used to play every game regardless)
+            const po = n => playerStats[n]?.playoff || {}; const pSv = n => { const st = po(n); return st.sa > 0 ? st.sv / st.sa : null; };
+            const s0 = gs[0], b0 = gs[1], sS = pSv(s0.name), sB = pSv(b0.name);
+            if ((po(s0.name).gp || 0) >= 3 && sS !== null && sS < 0.875 && baseG(s0.name) - baseG(b0.name) <= 10 && (sB === null || sB >= sS)) return b0;
+            return s0;
+        }
+
+        let starter = gs[0]; let backup = gs[1];
+        // v345: the hot hand earns the net - once both have 8+ GP, a backup outplaying the starter by
+        // .012+ save % takes the #1 job (if within 12 OVR); a starter clearly outplaying his backup rests less
+        const svp = n => { const st = playerStats[n]?.[k]; return st && st.gp >= 8 && st.sa > 0 ? st.sv / st.sa : null; };
+        const sSv = svp(starter.name), bSv = svp(backup.name);
+        const formGap = (sSv !== null && bSv !== null) ? bSv - sSv : 0;
+        if (formGap >= 0.012 && baseG(starter.name) - baseG(backup.name) <= 12) { const t = starter; starter = backup; backup = t; }
+        const sStats = playerStats[starter.name][k];
+        let diff = Math.abs(baseG(starter.name) - baseG(backup.name));
+        // v278: 1993-94 starters played ~60-70 GP; the old 45%/30% rest chances capped starters near 55
+        let restChance = diff > 15 ? 0.15 : diff > 10 ? 0.20 : diff > 5 ? 0.30 : 0.50; // v307: +10 pts each (starters averaged 64 GP, 3/4 of teams 60+)
+        if (Math.abs(formGap) >= 0.012) restChance = Math.min(restChance, 0.25); // v345: clear form gap -> ride the hot goalie
+        // B2B rest only applies if THIS goalie (the current OVR-ranked starter) is the one who
+        // actually played yesterday — playedYesterday(tk) is team-wide and would otherwise bench
+        // the true starter (who didn't play) just because the backup had a game the day before,
+        // snowballing into the backup getting most of the season's starts.
+        if (playerStats[starter.name]?.lastPlayedDay === currentDay - 1) restChance += 0.45; // v278: was 0.60
+
+        const bStats = playerStats[backup.name]?.[k];
+        if (sStats.consStarts >= 10 || goalieRoll(tk) < restChance) { // v307: 12 -> 10 // v278: forced rest after 12 straight (was 7)
+            return backup;
+        } else {
+            return starter;
+        }
+    }
+
 function simGame(idx) {
     clearWpCache(); // invalidate per-game OVR/tag cache at start of each game
     const dayGames = Array.isArray(calendar[currentDay]) ? calendar[currentDay] : [];
@@ -4449,53 +4496,7 @@ function simGame(idx) {
     });
 
     //  2. GOALIE SELECTION
-    const selG = (tk) => {
-        // v278: rank by BASE rating (attr.ovr); the streak-adjusted rating only breaks near-ties. Ranking on
-        // the live rating let a hot backup leapfrog a far better starter (TBL: Shtalenkov 56 got 44 starts,
-        // Puppa 72 got 40).
-        const baseG = n => parseInt(playerStats[n]?.attr?.ovr) || getPlayerWeightedStats(n).ovr;
-        const gs = rosters[tk] ? rosters[tk].filter(p => p.pos === 'G' && playerStats[p.name] && playerStats[p.name].injury && playerStats[p.name].injury.daysRemaining === 0 && (!playerStats[p.name].suspended || playerStats[p.name].suspended.days === 0))
-            .sort((a, b) => { const d = baseG(b.name) - baseG(a.name); return Math.abs(d) > 3 ? d : getPlayerWeightedStats(b.name).ovr - getPlayerWeightedStats(a.name).ovr; }) : [];
-        if (!gs.length) { const allG = (rosters[tk] || []).filter(p => p.pos === 'G'); return allG.length ? allG[0] : null; }
-        if (gs.length === 1 || isASG) return gs[0];
-        if (isPlayoffs) {
-            // v373: playoff hook - a starter below .875 after 3+ playoff games loses the net to a backup within
-            // 10 OVR, who keeps it while he is outplaying him (starters used to play every game regardless)
-            const po = n => playerStats[n]?.playoff || {}; const pSv = n => { const st = po(n); return st.sa > 0 ? st.sv / st.sa : null; };
-            const s0 = gs[0], b0 = gs[1], sS = pSv(s0.name), sB = pSv(b0.name);
-            if ((po(s0.name).gp || 0) >= 3 && sS !== null && sS < 0.875 && baseG(s0.name) - baseG(b0.name) <= 10 && (sB === null || sB >= sS)) return b0;
-            return s0;
-        }
-
-        let starter = gs[0]; let backup = gs[1];
-        // v345: the hot hand earns the net - once both have 8+ GP, a backup outplaying the starter by
-        // .012+ save % takes the #1 job (if within 12 OVR); a starter clearly outplaying his backup rests less
-        const svp = n => { const st = playerStats[n]?.[k]; return st && st.gp >= 8 && st.sa > 0 ? st.sv / st.sa : null; };
-        const sSv = svp(starter.name), bSv = svp(backup.name);
-        const formGap = (sSv !== null && bSv !== null) ? bSv - sSv : 0;
-        if (formGap >= 0.012 && baseG(starter.name) - baseG(backup.name) <= 12) { const t = starter; starter = backup; backup = t; }
-        const sStats = playerStats[starter.name][k];
-        let diff = Math.abs(baseG(starter.name) - baseG(backup.name));
-        // v278: 1993-94 starters played ~60-70 GP; the old 45%/30% rest chances capped starters near 55
-        let restChance = diff > 15 ? 0.15 : diff > 10 ? 0.20 : diff > 5 ? 0.30 : 0.50; // v307: +10 pts each (starters averaged 64 GP, 3/4 of teams 60+)
-        if (Math.abs(formGap) >= 0.012) restChance = Math.min(restChance, 0.25); // v345: clear form gap -> ride the hot goalie
-        // B2B rest only applies if THIS goalie (the current OVR-ranked starter) is the one who
-        // actually played yesterday — playedYesterday(tk) is team-wide and would otherwise bench
-        // the true starter (who didn't play) just because the backup had a game the day before,
-        // snowballing into the backup getting most of the season's starts.
-        if (playerStats[starter.name]?.lastPlayedDay === currentDay - 1) restChance += 0.45; // v278: was 0.60
-
-        const bStats = playerStats[backup.name]?.[k];
-        if (sStats.consStarts >= 10 || Math.random() < restChance) { // v307: 12 -> 10 // v278: forced rest after 12 straight (was 7)
-            sStats.consStarts = 0;
-            if (bStats) bStats.consStarts = (bStats.consStarts || 0) + 1;
-            return backup;
-        } else {
-            sStats.consStarts = (sStats.consStarts || 0) + 1;
-            if (bStats) bStats.consStarts = 0;
-            return starter;
-        }
-    };
+    const selG = (tk) => chooseGoalie(tk, true);
 
     let hG_obj = selG(g.h.nrm), aG_obj = selG(g.a.nrm); // v180: let so goalie yank can swap mid-game
     let hG_name = hG_obj ? hG_obj.name : null;
@@ -10223,6 +10224,7 @@ function renderLineEditor(tk) {
     const roster = rosters[tk];
     if (!tObj || !roster) { container.innerHTML = `<div style="color:red">No roster for ${tk}</div>`; return; }
 
+    delete _structCache[tk]; // v506: always show today's lines (injuries since the last game included)
     const struct = getRosterStructure(tk);
     const isCustom = !!(customLines[tk] && customLines[tk].f);
 
@@ -10244,7 +10246,7 @@ function renderLineEditor(tk) {
         <div class="le-slot" id="slot_${slotId}" style="border:${border}; background:#111; border-radius:3px; padding:5px 4px; cursor:pointer; position:relative;"
              onclick="leOpenSwap('${tk}','${slotId}','${posHint}')"${duoTip}>
             <div style="font-size:8px; color:#888; margin-bottom:1px;">${posHint}${isDuo?'<span style="color:var(--ea-yellow);margin-left:3px;">*</span>':''}</div>
-            <div style="font-size:9px; color:#fff; font-weight:bold;">${isInj?'[INJ] ':''}${p.name}</div>
+            <div style="font-size:9px; color:${isInj?'var(--line-red)':'#fff'}; font-weight:bold;">${isInj?'[INJ] ':''}${p.name}</div>
             <div style="font-size:7px; color:${accentColor}; margin-top:1px;">${tag(p.name)} ${ovr(p.name)} OVR</div>
         </div>`;
     };
@@ -10334,7 +10336,22 @@ function renderLineEditor(tk) {
     </div>
     <div style="margin-top:6px; text-align:center;">${modeLabel}</div>`;
 
-    container.innerHTML = fHTML + dHTML + gHTML + stHTML + legendHTML + btnRow;
+    // v506: injured / suspended players - out of the lineup above, with their usual spot and games left
+    const usual = n => { const b = customLines[tk] || seasonLines[tk]; if (!b) return '';
+        const fi = (b.f || []).findIndex(l => (l || []).some(x => (x && x.name || x) === n)); if (fi >= 0) return `LINE ${fi + 1}`;
+        const di = (b.d || []).findIndex(l => (l || []).some(x => (x && x.name || x) === n)); return di >= 0 ? `PAIR ${di + 1}` : ''; };
+    const outs = roster.filter(p => { const ps = playerStats[p.name]; return ps && ((ps.injury && ps.injury.daysRemaining > 0) || (ps.suspended && ps.suspended.days > 0)); });
+    let outHTML = '';
+    if (outs.length) {
+        outHTML = `<div style="color:var(--line-red); font-size:9px; font-weight:bold; margin:12px 0 6px; letter-spacing:2px;"> OUT OF LINEUP</div>`;
+        outs.forEach(p => { const ps = playerStats[p.name]; const inj = ps.injury && ps.injury.daysRemaining > 0;
+            const why = inj ? `[INJ] ${ps.injury.daysRemaining} GAME${ps.injury.daysRemaining === 1 ? '' : 'S'}${ps.onIR ? ' (IR)' : ''}` : `[SUSP] ${ps.suspended.days} GAME${ps.suspended.days === 1 ? '' : 'S'}`;
+            const u = usual(p.name);
+            outHTML += `<div style="background:#1a0808; border-left:3px solid var(--line-red); border-radius:2px; padding:5px 8px; margin-bottom:4px; font-size:8px; cursor:pointer;" onclick="showPlayerCard('${p.name.replace(/'/g, "\'")}')">
+                <span style="color:#fff; font-weight:bold;">${p.name}</span> <span style="color:#888;">${p.pos} ${ovr(p.name)}</span>
+                <span style="color:var(--line-red); float:right;">${why}${u ? ` <span style="color:#888;">- returns to ${u}</span>` : ''}</span></div>`; });
+    }
+    container.innerHTML = fHTML + dHTML + outHTML + gHTML + stHTML + legendHTML + btnRow;
 }
 
 // -- Swap dropdown -------------------------------------------------------------
