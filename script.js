@@ -3661,7 +3661,7 @@ let fightGov = 1; // v473: fight-rate governor - eases fights back when a season
 // v335: elite offensive defencemen get a slight boost to goals and assists (ES + PP)
 const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D') return false; const tg = PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || ''; return (parseInt(ps.attr?.off) || 0) >= 78 || ['FRANCHISE D','PRO OFFENSIVE D','BOOMER','QUARTERBACK','OFFENSIVE D'].includes(tg); };
 let finishAdj = 1; // v492: scoring safety net - eases finishing when league sv% falls below .887 (saved)
-let SHOT_BASE = 24, FINISH_BASE = 1.058; // v488: 1.065 -> 1.058 (4 of 5 seasons 7.55-7.68 with performance-driven goalies); v449: 1.08 -> 1.065 (6 of 15 seasons over 7.5558 with more parity); v445: 1.085 -> 1.08 (3 of 10 seasons over 7.5558); v444: 1.07 -> 1.085; v443: 1.04 -> 1.07; v442: 1.02 -> 1.04 (GPG sat 7.1-7.2 with v2 goalies) // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
+let SHOT_BASE = 24, FINISH_BASE = 0.93; // v510: 0.92 -> 0.93 with elite boost (avg 6.90); v508: 1.058 -> 0.92 (target 6.88-7.09 GPG; 0.90 gave 7.11/6.89/6.91/6.63/6.87, avg 6.88); v488: 1.065 -> 1.058 (4 of 5 seasons 7.55-7.68 with performance-driven goalies); v449: 1.08 -> 1.065 (6 of 15 seasons over 7.5558 with more parity); v445: 1.085 -> 1.08 (3 of 10 seasons over 7.5558); v444: 1.07 -> 1.085; v443: 1.04 -> 1.07; v442: 1.02 -> 1.04 (GPG sat 7.1-7.2 with v2 goalies) // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.5; // v452: 1.75 -> 1.5 (series ran short)
 // v347: playoff hockey is tighter - real 1993-94 playoffs scored ~9% under the regular season; the sim was scoring ~4% MORE
@@ -5303,6 +5303,9 @@ function simGame(idx) {
 
             const tag       = PLAYER_TAG_OVERRIDES[shooter.name] || getPlayerWeightedStats(shooter.name)?.tag;
             const sniperMod = tagNudge(getEliteShooterMod(tag)); // v409 v2: tag = small nudge
+            // v509: elite scorers finish a bit more often - +1% per OVR point above 82 (max +10% at 92+); skaters only
+            const _eOvr = getPlayerWeightedStats(shooter.name)?.baseOvr || 0;
+            const eliteMod = (playerStats[shooter.name]?.pos !== 'G' && _eOvr > 82) ? 1 + Math.min(10, _eOvr - 82) * 0.01 : 1;
             // v151: accMod wires shooter's shotAcc attribute into conversion probability.
             // Centered at 70; elite sniper (90 acc) → ×1.06; poor finisher (50 acc) → ×0.94.
             // chaosMod noise halved (0.04) since accMod now provides structured per-shot variance.
@@ -5481,7 +5484,7 @@ function simGame(idx) {
             })();
             // v287: D were converting ~9% (real ~5%): point shots finish less; forwards up slightly to hold league scoring
             const posFinMod = isDefPos ? 0.55 * (isEliteOffD(shooter.name) ? 1.05 : 1) : FWD_FINISH; // v434: D 0.66 -> 0.55 (D shot 7.6%, real ~5.5%)
-            const prob      = FINISH_BASE*finishAdj*((isPlayoffs&&!isASG)?PLAYOFF_FINISH:1)*posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002*poEdge)*wallMod*saFatigue*sniperMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod
+            const prob      = FINISH_BASE*finishAdj*((isPlayoffs&&!isASG)?PLAYOFF_FINISH:1)*posFinMod*depthLineMod*(0.0906 + dSign*diff*0.0002*poEdge)*wallMod*saFatigue*sniperMod*eliteMod*accMod*chaosMod*coverageMod*distMod*defPressureMod*defFwdMod*(isASG?1.6:1.0)*lineMatchDefMod*scoreStateMod*fatigueMod
                 * Math.max(0.85, Math.min(1.15, chemDuoMod // v407: chemistry + season form + clutch = one situational term, capped ±15%
                 * (isASG ? 1 : 1 + seasonForm(shooter.name)) // v403 season form
                 * (isClutch && !isASG ? Math.max(0.85, Math.min(1.15, 1 + ((parseInt(playerStats[shooter.name]?.attr?.clutch) || 65) - 65) * 0.004 - ((parseInt(playerStats[defGNm]?.attr?.clutch) || 65) - 65) * 0.003)) : 1))); // v381 clutch; v143: 0.094→0.086→0.079; v174: 0.0888; v181: 0.0930; v182: 0.0918→0.0906 target 7.0 GPG
