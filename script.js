@@ -419,7 +419,21 @@ function assignTeamCaptains() {
 // minimum-stay IR rule; teams don't leave a multi-week injury off IR). Being on IR now genuinely
 // opens a roster spot for the depth check below (hasSpareForward/hasSpareDefenseman), instead of
 // IR being a purely cosmetic badge with no gameplay effect.
+// v511: no healthy replacement in his group (12 F / 6 D / 2 G) -> the injury is capped at 1 game.
+// Counts HEALTHY teammates (the old spare checks counted the whole roster, injured players included).
+function healthyInGroup(tk, pos, except) {
+    const grp = p => p.pos === 'G' ? 'G' : p.pos === 'D' ? 'D' : 'F'; const want = grp({ pos });
+    return (rosters[tk] || []).filter(p => p.name !== except && grp(p) === want && (() => { const ps = playerStats[p.name];
+        return ps && !(ps.injury && ps.injury.daysRemaining > 0) && !(ps.suspended && ps.suspended.days > 0); })()).length;
+}
+function capInjuryNoSpare(pName, tk) {
+    const ps = playerStats[pName]; if (!ps || !ps.injury || !(ps.injury.daysRemaining > 1)) return ps?.injury?.daysRemaining || 0;
+    const need = ps.pos === 'G' ? 2 : ps.pos === 'D' ? 6 : 12;
+    if (healthyInGroup(tk, ps.pos, pName) < need) { ps.injury.severity = ps.injury.daysRemaining = 1; if (ps.injury.initialDays) ps.injury.initialDays = 1; }
+    return ps.injury.daysRemaining;
+}
 function autoPlaceOnIR(pName, tk, days) {
+    days = capInjuryNoSpare(pName, tk) || days; // v511
     // v377: games lost to injury this season (offseason progression: a long injury year costs agility)
     if (playerStats[pName] && days > 0 && !isPlayoffs) playerStats[pName].injGamesSeason = (playerStats[pName].injGamesSeason || 0) + days;
     if (days < 4) return;
@@ -3812,6 +3826,11 @@ function applySeasonLines(tk) {
                 lines[i][j] = pick;
             }
         }
+        // v511: still a hole up front (no healthy forward left) - dress the best healthy extra defenceman there
+        if (!isD) {
+            const xD = r.filter(p => pos(p.name) === 'D' && avail(p.name)).map(p => p.name).sort((a, b) => ovr(b) - ovr(a)).slice(6);
+            lines.forEach(l => l.forEach((n, j) => { if (!n && xD.length) l[j] = xD.shift(); }));
+        }
         // v369: dress ONE forward enforcer by default. A second (or third) only dresses if he has earned it -
         // a Dynamic Duo member (e.g. STL Chase-Twist) or good enough to play on merit (OVR 55+, e.g. Probert).
         // Extra unprotected enforcers sit for the best non-enforcer extra; simGame adds one back to match an
@@ -6001,7 +6020,7 @@ function simGame(idx) {
             if (!isPlayoffs && awardConfig.injuries && bps && !(bps.injury?.daysRemaining > 0) && Math.random() < 0.005 * injAgeMult(bPicked.name)) { // v370: 0.004 -> 0.006; v469 0.005 (D share), age
                 const bTk = ev.side === 'h' ? g.h.nrm : g.a.nrm;
                 const bDays = injAgeDays(bPicked.name, 1 + Math.floor(Math.random() * 8)); // v370: 1-5 -> 1-8 games; v469 age
-                bps.injury = { severity: bDays, daysRemaining: bDays, source: 'blocked-shot' };
+                bps.injury = { severity: bDays, daysRemaining: bDays, source: 'blocked-shot' }; capInjuryNoSpare(bPicked.name, bTk); // v511
                 autoPlaceOnIR(bPicked.name, bTk, bDays);
                 tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `[INJ] BLOCKED SHOT: ${bPicked.name} (${bTk.toUpperCase()}) - out ${bDays} game${bDays > 1 ? 's' : ''}.` });
             }
@@ -9696,7 +9715,7 @@ function rollPlayedInjury(name, tk) {
     if (ps.pos === 'G') days = Math.min(25, days);
     else { days = withLongTermChance(days); if (ps.pos === 'D' && days >= 5 && days < 15 && Math.random() < 0.12) days = 15 + Math.floor(Math.random() * 31); }
     days = injAgeDays(name, days);
-    ps.injury = { severity: days, daysRemaining: days, source: 'played-game' }; autoPlaceOnIR(name, tk, days);
+    ps.injury = { severity: days, daysRemaining: days, source: 'played-game' }; autoPlaceOnIR(name, tk, days); days = ps.injury.daysRemaining; // v511: no-spare cap
     tradeLog.unshift({ day: `DAY ${currentDay + 1}`, details: `[INJ] IN-GAME: ${name} (${String(tk).toUpperCase()}) - out ${days} game${days > 1 ? 's' : ''}.` });
     return days;
 }
