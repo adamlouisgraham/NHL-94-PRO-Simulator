@@ -3676,7 +3676,7 @@ let fightGov = 1; // v473: fight-rate governor - eases fights back when a season
 // v335: elite offensive defencemen get a slight boost to goals and assists (ES + PP)
 const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D') return false; const tg = PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || ''; return (parseInt(ps.attr?.off) || 0) >= 78 || ['FRANCHISE D','PRO OFFENSIVE D','BOOMER','QUARTERBACK','OFFENSIVE D'].includes(tg); };
 let finishAdj = 1; // v492: scoring safety net - eases finishing when league sv% falls below .887 (saved)
-let SHOT_BASE = 24, FINISH_BASE = 0.93; // v510: 0.92 -> 0.93 with elite boost (avg 6.90); v508: 1.058 -> 0.92 (target 6.88-7.09 GPG; 0.90 gave 7.11/6.89/6.91/6.63/6.87, avg 6.88); v488: 1.065 -> 1.058 (4 of 5 seasons 7.55-7.68 with performance-driven goalies); v449: 1.08 -> 1.065 (6 of 15 seasons over 7.5558 with more parity); v445: 1.085 -> 1.08 (3 of 10 seasons over 7.5558); v444: 1.07 -> 1.085; v443: 1.04 -> 1.07; v442: 1.02 -> 1.04 (GPG sat 7.1-7.2 with v2 goalies) // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
+let SHOT_BASE = 24, FINISH_BASE = 0.95; // v517: 0.96 -> 0.95 (user; 0.96 gave 7.05-7.22, avg 7.13); v514: 0.98 gave 7.12-7.30; v510: 0.92 -> 0.93 with elite boost (avg 6.90); v508: 1.058 -> 0.92 (target 6.88-7.09 GPG; 0.90 gave 7.11/6.89/6.91/6.63/6.87, avg 6.88); v488: 1.065 -> 1.058 (4 of 5 seasons 7.55-7.68 with performance-driven goalies); v449: 1.08 -> 1.065 (6 of 15 seasons over 7.5558 with more parity); v445: 1.085 -> 1.08 (3 of 10 seasons over 7.5558); v444: 1.07 -> 1.085; v443: 1.04 -> 1.07; v442: 1.02 -> 1.04 (GPG sat 7.1-7.2 with v2 goalies) // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.5; // v452: 1.75 -> 1.5 (series ran short)
 // v347: playoff hockey is tighter - real 1993-94 playoffs scored ~9% under the regular season; the sim was scoring ~4% MORE
@@ -13790,7 +13790,7 @@ function rollInGameInjuries(homeCode, awayCode) {
             const avgToi = (sst.gp || 0) >= 3 ? (sst.toi || 0) / sst.gp : (p.pos === 'D' ? 19 : 14);
             const toiMult = Math.max(0.65, Math.min(1.35, avgToi / 16));
             // v370: defencemen get hurt more (blocking shots, taking the hits behind the net) - x1.25
-            const injChance = (SKATER_CHANCE + fatigueCont + endurProt + agilProt + checkBonus) * toiMult * (p.pos === 'D' ? 1.15 : 1) * injAgeMult(p.name); // v469: D 1.25 -> 1.15 (D were ~40% more than F, target 30-35%), age
+            const injChance = (SKATER_CHANCE + fatigueCont + endurProt + agilProt + checkBonus) * toiMult * (p.pos === 'D' ? 1.15 : 1) * injAgeMult(p.name); // v516: D stays 1.15, D long-term 12% -> 6% (1.23/1.35 gave ~37-40% D over F, target 25-30%); v469: D 1.25 -> 1.15 (D were ~40% more than F, target 30-35%), age
             if (Math.random() < Math.max(0.0005, injChance)) {
                 const rawRoll = Math.random();
                 // v158: endur shifts toward less severe; high fatigue shifts toward more severe
@@ -13821,7 +13821,7 @@ function rollInGameInjuries(homeCode, awayCode) {
                 }
                 days = withLongTermChance(days);
                 // v370: a defenceman's 5+ game injury has an extra 12% chance to become long-term (15-45 games)
-                if (p.pos === 'D' && days >= 5 && days < 15 && Math.random() < 0.12) days = 15 + Math.floor(Math.random() * 31);
+                if (p.pos === 'D' && days >= 5 && days < 15 && Math.random() < 0.06) days = 15 + Math.floor(Math.random() * 31);
                 days = injAgeDays(p.name, days); // v469
                 if (days > 0) { ps.injury = { severity: days, daysRemaining: days, source: 'in-game-skater' }; autoPlaceOnIR(p.name, tk, days); }
                 else ps.shakenUpToday = true; // exempt from a second independent injury roll later this game
