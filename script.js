@@ -2579,7 +2579,8 @@ const dynamicDuos = [
     // BUF
     ['Derek Plante', 'Donald Audette'],
     ['Alexander Mogilny', 'Dale Hawerchuk', 'Yuri Khmylev'],
-    ['Bob Sweeney', 'Dave Hannan', 'Rob Ray'],
+    ['Bob Sweeney', 'Dave Hannan'],
+    ['Bill Lindsay', 'Brad May', 'Rob Ray'],
     ['Petr Svoboda', 'Philippe Boucher'],
     // CGY
     ['Gary Roberts', 'Joe Nieuwendyk', 'Johan Garpenlov'],
@@ -5094,10 +5095,10 @@ function simGame(idx) {
 
     // Option A: 90-second rolling shift pool for expanded assist attribution
     const hShiftLog = [], aShiftLog = []; // [{tick, players:[name,...]}]
-    const SHIFT_WIN  = 4; // ticks = 60 seconds
+    const SHIFT_WIN  = 6; // ticks = 90 seconds (v513: was 4 = 60 s)
     const pushShift  = (log, onIce, t) => {
         log.push({tick:t, players:onIce.filter(p=>p.pos!=='G').map(p=>p.name)});
-        if (log.length > 4) log.splice(0, log.length-4);
+        if (log.length > 6) log.splice(0, log.length-6);
     };
     const expandPool = (log, onIce, t) => {
         const s = new Set(onIce.filter(p=>p.pos!=='G').map(p=>p.name));
