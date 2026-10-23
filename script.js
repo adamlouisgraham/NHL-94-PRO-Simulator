@@ -4948,7 +4948,10 @@ function simGame(idx) {
 
     // v348: home ice carries real weight - the rating bonus alone moved finishing ~1%, so home and road teams
     // won equally (45% / 44%); 1993-94 home teams outshot visitors and took ~54% of decisions
-    const homeShotEdge = isASG ? 0 : 1.2;
+    // v519: arena dB (ARENA settings slider, 80-132) adds a crowd edge for the home team - 80 dB = none,
+    // 132 dB = +0.8 home / -0.8 road shots a game on top of the normal home-ice edge
+    const crowdEdge = isASG ? 0 : Math.max(0, Math.min(1, ((league.find(t => t.nrm === g.h.nrm)?.db || 80) - 80) / 52)) * 0.8;
+    const homeShotEdge = isASG ? 0 : 1.2 + crowdEdge;
     const hBaseLambda  = SHOT_BASE + homeShotEdge + Math.max(0, Math.min(5, (hTeamStyle - 60) * 0.2)) + hFowLambda;
     const aBaseLambda  = SHOT_BASE - homeShotEdge + Math.max(0, Math.min(5, (aTeamStyle - 60) * 0.2)) + aFowLambda;
     const poEdge = (isPlayoffs && !isASG) ? PLAYOFF_EDGE : 1;
