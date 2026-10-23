@@ -14160,6 +14160,28 @@ function triggerLoadBackup() {
     }
 }
 
+// v518: today's lines for the ROM line tables (tools/rom_sync_lines.py previews / writes them)
+function exportRomLines() {
+    clearWpCache();
+    const num = v => parseInt(v) || gradeToNum(v) || 50;
+    const teams = {};
+    league.forEach(t => {
+        const st = getRosterStructure(t.nrm); const a = n => playerStats[n]?.attr || {};
+        const ovr = n => getPlayerWeightedStats(n).baseOvr;
+        teams[t.code] = {
+            lines: st.f.slice(0, 3).map(l => l.filter(Boolean).map(p => [p.name, playerStats[p.name].pos])),
+            pairs: st.d.slice(0, 3).map(pr => pr.filter(Boolean).map(p => p.name)),
+            F: st.f.slice(0, 4).flat().filter(Boolean).map(p => ({ n: p.name, pos: playerStats[p.name].pos, ovr: ovr(p.name), off: num(a(p.name).off), def: num(a(p.name).def) })),
+            D: st.d.slice(0, 3).flat().filter(Boolean).map(p => ({ n: p.name, ovr: ovr(p.name), off: num(a(p.name).off) * 0.5 + num(a(p.name).pass) * 0.3 + num(a(p.name).shotPwr) * 0.2, def: num(a(p.name).def) })),
+            all: (rosters[t.nrm] || []).filter(p => p.pos !== 'G').map(p => ({ n: p.name, pos: playerStats[p.name]?.pos, ovr: ovr(p.name), off: num(a(p.name).off), def: num(a(p.name).def) }))
+        };
+    });
+    const injured = Object.keys(playerStats).filter(n => playerStats[n].teamCode && ((playerStats[n].injury?.daysRemaining > 0) || (playerStats[n].suspended?.days > 0)));
+    const blob = new Blob([JSON.stringify({ day: currentDay + 1, season: currentSeason, teams, injured })], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `rom_lines_day${currentDay + 1}.json`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 function exportSaveData() {
     const payload = buildSavePayload();
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload));

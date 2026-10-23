@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="script.js?v=517"></script>
+    <script src="script.js?v=518"></script>
 </head>
 <body>
 
@@ -179,6 +179,7 @@
 <button id="simPlayoffsBtn" class="sim-btn" onclick="simPlayoffs()" class="btn-amber" style="display:none;">SIM PLAYOFFS</button>
                 <button onclick="exportCSV()" class="btn-cyan">EXPORT CSV</button>
                 <button onclick="exportUpdatedRosterCSV()" class="btn-cyan" title="Full re-importable roster CSV with current teams/age/career totals — re-upload to your Google Sheet to keep it in sync">EXPORT UPDATED ROSTER</button>
+                <button onclick="exportRomLines()" class="btn-cyan" title="Today's lines + injured list for the ROM - then run: python tools/rom_sync_lines.py file.json (preview) / --write">EXPORT ROM LINES</button>
                 <button onclick="resetLeague()" class="btn-red">RESET DB</button>
                 <button onclick="clearArchives()" class="btn-red" style="grid-column:span 3;">CLEAR ARCHIVES</button>
                 </div>
