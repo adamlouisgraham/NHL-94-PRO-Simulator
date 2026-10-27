@@ -9608,19 +9608,7 @@ function openAdvEditor() {
     
     advBoxScoreTemp = { away: { roster: rosters[aTk] || [], entries: [], dressed: [] }, home: { roster: rosters[hTk] || [], entries: [], dressed: [] } };
 
-    const preDressed = (tk) => {
-        let r = rosters[tk]; if (!r || r.length === 0) return [];
-        try {
-            let healthy = r.filter(p => playerStats[p.name] && playerStats[p.name].injury.daysRemaining === 0 && !(playerStats[p.name].suspended?.days > 0));
-            // v145: use attr.ovr (aging-updated) not attr.gDef (sub-attribute that diverges over seasons)
-            let gList = healthy.filter(p => p.pos === 'G').sort((a,b) => (playerStats[b.name].attr.ovr || playerStats[b.name].attr.gDef || 0) - (playerStats[a.name].attr.ovr || playerStats[a.name].attr.gDef || 0));
-            let fList = healthy.filter(p => p.pos !== 'D' && p.pos !== 'G').sort((a,b) => (playerStats[b.name].attr.off || 0) - (playerStats[a.name].attr.off || 0)).slice(0, 12);
-            let dList = healthy.filter(p => p.pos === 'D').sort((a,b) => (playerStats[b.name].attr.off || 0) - (playerStats[a.name].attr.off || 0)).slice(0, 6);
-            let list = [...fList, ...dList];
-            if (gList.length > 0) list.push(gList[0]);
-            return list.map(p => p.name);
-        } catch(e) { return r.slice(0, 18).map(p => p.name); }
-    };
+    const preDressed = (tk) => advLineupNames(tk); // v520: the sim's current lines (12 F + 6 D) + the projected goalie
 
     advBoxScoreTemp.away.dressed = preDressed(aTk);
     advBoxScoreTemp.home.dressed = preDressed(hTk);
@@ -9831,11 +9819,36 @@ function applyBoxScoreCSV(text) {
         if (g.length < 2) return; const avg = g.reduce((q, e) => q + e.toi, 0) / g.length;
         g.forEach(e => { e.toi = +(avg + (e.toi - avg) * 0.5).toFixed(2); });
     }));
-    ['away', 'home'].forEach(s => { if (dressed[s].length) advBoxScoreTemp[s].dressed = [...new Set([...dressed[s], ...advBoxScoreTemp[s].dressed])]; renderAdvStatList(s); });
+    // v520: dressed = the sim's current lines, plus anyone with stats in the file; the file's goalie replaces the projected one
+    [['away', g.a.nrm], ['home', g.h.nrm]].forEach(([sd, tk]) => {
+        const ents = advBoxScoreTemp[sd].entries, fileG = ents.filter(e => e.isGoalie).map(e => e.name);
+        const lineup = advLineupNames(tk).filter(n => !(fileG.length && rosters[tk]?.find(p => p.name === n)?.pos === 'G'));
+        advBoxScoreTemp[sd].dressed = [...new Set([...lineup, ...ents.filter(e => !e.isGoalie).map(e => e.name), ...fileG])];
+        renderAdvStatList(sd); });
     const goals = s => advBoxScoreTemp[s].entries.reduce((q, e) => q + (e.g || 0), 0);
     document.getElementById('advAwayScore').value = goals('away'); document.getElementById('advHomeScore').value = goals('home');
     document.getElementById('advAwayEN').value = 0; document.getElementById('advHomeEN').value = 0;
     alert(`Imported ${g.a.code} ${goals('away')} - ${g.h.code} ${goals('home')}${advBoxScoreTemp.ot ? ' (OT)' : ''}.` + (miss.length ? `\nNot matched to the roster (enter by hand): ${miss.join(', ')}` : '') + '\nCheck the lines, then FINALIZE GAME.');
+}
+// v520: the box-score editor's dressed list is the sim's current lines (12 F + 6 D) + projected goalie
+function advLineupNames(tk) {
+    delete _structCache[tk];
+    const st = getRosterStructure(tk); const gl = getProjectedGoalie(tk);
+    return [...(st?.f || []).flat(), ...(st?.d || []).flat()].filter(Boolean).map(p => p.name).concat(gl ? [gl.name] : []);
+}
+// v520: imported games - a dressed skater who isn't in the file (the ROM dressed someone else) gets 3/4 of an even
+// share of his group's ice time (F / D), taken from the teammates in the file in proportion to their minutes
+function fillMissingToi(side) {
+    const t = advBoxScoreTemp[side]; if (!t.entries.some(e => !e.isGoalie && e.toi > 0)) return;
+    const isD = n => playerStats[n]?.pos === 'D';
+    [false, true].forEach(D => {
+        const grp = t.entries.filter(e => !e.isGoalie && e.toi > 0 && isD(e.name) === D);
+        const miss = t.dressed.filter(n => playerStats[n] && playerStats[n].pos !== 'G' && isD(n) === D && !t.entries.some(e => e.name === n));
+        if (!grp.length || !miss.length) return;
+        const total = grp.reduce((q, e) => q + e.toi, 0), give = total / (grp.length + miss.length) * 0.75, take = give * miss.length;
+        grp.forEach(e => { e.toi = +(e.toi - take * e.toi / total).toFixed(2); });
+        miss.forEach(n => t.entries.push({ name: n, isGoalie: false, g: 0, a: 0, pm: 0, pim: 0, s: 0, ppg: 0, shg: 0, toi: +give.toFixed(2), hits: 0 }));
+    });
 }
 function submitAdvGame() {
     const g = getGameAt(currentDay, activeIdx);
@@ -9898,6 +9911,7 @@ function submitAdvGame() {
             }
         });
     };
+    fillMissingToi('away'); fillMissingToi('home'); // v520
     applySkaters('away'); applySkaters('home');
 
     // Surface milestone banners for this manually-entered game before they can be overwritten by a later simGame() call
