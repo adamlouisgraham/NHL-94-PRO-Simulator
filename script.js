@@ -3676,7 +3676,7 @@ let fightGov = 1; // v473: fight-rate governor - eases fights back when a season
 // v335: elite offensive defencemen get a slight boost to goals and assists (ES + PP)
 const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D') return false; const tg = PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || ''; return (parseInt(ps.attr?.off) || 0) >= 78 || ['FRANCHISE D','PRO OFFENSIVE D','BOOMER','QUARTERBACK','OFFENSIVE D'].includes(tg); };
 let finishAdj = 1; // v492: scoring safety net - eases finishing when league sv% falls below .887 (saved)
-const D_TOP_TOI = 27; // v522: target minutes for each team's two best-rated defencemen (special-teams shifts)
+const D_TOP_TOI = 27, F_TOP_TOI = 22; // v522/v523: target minutes for each team's 2 best-rated D and 3 best-rated F (special-teams shifts)
 let SHOT_BASE = 24, FINISH_BASE = 0.95; // v517: 0.96 -> 0.95 (user; 0.96 gave 7.05-7.22, avg 7.13); v514: 0.98 gave 7.12-7.30; v510: 0.92 -> 0.93 with elite boost (avg 6.90); v508: 1.058 -> 0.92 (target 6.88-7.09 GPG; 0.90 gave 7.11/6.89/6.91/6.63/6.87, avg 6.88); v488: 1.065 -> 1.058 (4 of 5 seasons 7.55-7.68 with performance-driven goalies); v449: 1.08 -> 1.065 (6 of 15 seasons over 7.5558 with more parity); v445: 1.085 -> 1.08 (3 of 10 seasons over 7.5558); v444: 1.07 -> 1.085; v443: 1.04 -> 1.07; v442: 1.02 -> 1.04 (GPG sat 7.1-7.2 with v2 goalies) // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.5; // v452: 1.75 -> 1.5 (series ran short)
@@ -5155,7 +5155,17 @@ function simGame(idx) {
     const grantTOI = (struct, iceData) => {
         const fTot = iceData.forwardLineAverages.reduce((s,v)=>s+Math.max(0,v),0) || 1;
         const dTot = iceData.defensePairAverages.reduce((s,v)=>s+Math.max(0,v),0) || 1;
-        struct.f.forEach((line,i) => { const toi=(Math.max(0,iceData.forwardLineAverages[i]||0)/fTot)*60; line.forEach(p=>trk(p.name,'toi',toi)); });
+        // v523: same for the three best-rated forwards - topped up toward F_TOP_TOI from the other F (none below 5)
+        const fm = [];
+        struct.f.forEach((line,i) => { const toi=(Math.max(0,iceData.forwardLineAverages[i]||0)/fTot)*60; line.forEach(p=>{ if (p) fm.push({ n: p.name, t: toi, o: getPlayerWeightedStats(p.name)?.ovr || 0 }); }); });
+        const boost = (arr, k, target, floor) => {
+            const top = arr.slice().sort((a, b) => b.o - a.o).slice(0, k), rest = arr.filter(x => !top.includes(x));
+            const need = top.reduce((q, x) => q + Math.max(0, target - x.t), 0), spare = rest.reduce((q, x) => q + Math.max(0, x.t - floor), 0);
+            if (need > 0 && spare > 0) { const give = Math.min(need, spare), sc = give / need;
+                top.forEach(x => { x.t += Math.max(0, target - x.t) * sc; }); rest.forEach(x => { x.t -= give * Math.max(0, x.t - floor) / spare; }); }
+        };
+        boost(fm, 3, F_TOP_TOI, 5);
+        fm.forEach(x => trk(x.n, 'toi', x.t));
         // v522: the two best-rated defencemen get the extra special-teams shifts - topped up toward 27 min,
         // taken from the other D in proportion to their minutes (none below 7), so the 120 D minutes are kept
         const dm = [];
