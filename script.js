@@ -3676,6 +3676,7 @@ let fightGov = 1; // v473: fight-rate governor - eases fights back when a season
 // v335: elite offensive defencemen get a slight boost to goals and assists (ES + PP)
 const isEliteOffD = n => { const ps = playerStats[n]; if (!ps || ps.pos !== 'D') return false; const tg = PLAYER_TAG_OVERRIDES[n] || getPlayerWeightedStats(n)?.tag || ''; return (parseInt(ps.attr?.off) || 0) >= 78 || ['FRANCHISE D','PRO OFFENSIVE D','BOOMER','QUARTERBACK','OFFENSIVE D'].includes(tg); };
 let finishAdj = 1; // v492: scoring safety net - eases finishing when league sv% falls below .887 (saved)
+const D_TOP_TOI = 27; // v522: target minutes for each team's two best-rated defencemen (special-teams shifts)
 let SHOT_BASE = 24, FINISH_BASE = 0.95; // v517: 0.96 -> 0.95 (user; 0.96 gave 7.05-7.22, avg 7.13); v514: 0.98 gave 7.12-7.30; v510: 0.92 -> 0.93 with elite boost (avg 6.90); v508: 1.058 -> 0.92 (target 6.88-7.09 GPG; 0.90 gave 7.11/6.89/6.91/6.63/6.87, avg 6.88); v488: 1.065 -> 1.058 (4 of 5 seasons 7.55-7.68 with performance-driven goalies); v449: 1.08 -> 1.065 (6 of 15 seasons over 7.5558 with more parity); v445: 1.085 -> 1.08 (3 of 10 seasons over 7.5558); v444: 1.07 -> 1.085; v443: 1.04 -> 1.07; v442: 1.02 -> 1.04 (GPG sat 7.1-7.2 with v2 goalies) // v346: 1.23 -> 1.22 (target ~7.1 GPG); defensive tags' assistRate x0.94
 // v307: PLAYOFF_EDGE scales how much the team-strength gap matters in playoff games (lower seeds won 44% of series)
 let PLAYOFF_EDGE = 1.5; // v452: 1.75 -> 1.5 (series ran short)
@@ -5155,7 +5156,19 @@ function simGame(idx) {
         const fTot = iceData.forwardLineAverages.reduce((s,v)=>s+Math.max(0,v),0) || 1;
         const dTot = iceData.defensePairAverages.reduce((s,v)=>s+Math.max(0,v),0) || 1;
         struct.f.forEach((line,i) => { const toi=(Math.max(0,iceData.forwardLineAverages[i]||0)/fTot)*60; line.forEach(p=>trk(p.name,'toi',toi)); });
-        struct.d.forEach((pair,i) => { const toi=(Math.max(0,iceData.defensePairAverages[i]||0)/dTot)*60; pair.forEach(p=>trk(p.name,'toi',toi)); });
+        // v522: the two best-rated defencemen get the extra special-teams shifts - topped up toward 27 min,
+        // taken from the other D in proportion to their minutes (none below 7), so the 120 D minutes are kept
+        const dm = [];
+        struct.d.forEach((pair,i) => { const toi=(Math.max(0,iceData.defensePairAverages[i]||0)/dTot)*60; pair.forEach(p=>{ if (p) dm.push({ n: p.name, t: toi, o: getPlayerWeightedStats(p.name)?.ovr || 0 }); }); });
+        const top = dm.slice().sort((a, b) => b.o - a.o).slice(0, 2), rest = dm.filter(x => !top.includes(x));
+        let need = top.reduce((q, x) => q + Math.max(0, D_TOP_TOI - x.t), 0);
+        const spare = rest.reduce((q, x) => q + Math.max(0, x.t - 7), 0);
+        if (need > 0 && spare > 0) {
+            const give = Math.min(need, spare), sc = give / need;
+            top.forEach(x => { x.t += Math.max(0, D_TOP_TOI - x.t) * sc; });
+            rest.forEach(x => { x.t -= give * Math.max(0, x.t - 7) / spare; });
+        }
+        dm.forEach(x => trk(x.n, 'toi', x.t));
     };
     grantTOI(hStruct, homeIceData);
     grantTOI(aStruct, awayIceData);
@@ -9822,8 +9835,12 @@ function applyBoxScoreCSV(text) {
     // v520: dressed = the sim's current lines, plus anyone with stats in the file; the file's goalie replaces the projected one
     [['away', g.a.nrm], ['home', g.h.nrm]].forEach(([sd, tk]) => {
         const ents = advBoxScoreTemp[sd].entries, fileG = ents.filter(e => e.isGoalie).map(e => e.name);
-        const lineup = advLineupNames(tk).filter(n => !(fileG.length && rosters[tk]?.find(p => p.name === n)?.pos === 'G'));
-        advBoxScoreTemp[sd].dressed = [...new Set([...lineup, ...ents.filter(e => !e.isGoalie).map(e => e.name), ...fileG])];
+        // v521: players in the file come first; the sim lines only top the group up to 12 F / 6 D
+        const pos = n => playerStats[n]?.pos, isD = n => pos(n) === 'D';
+        const fileSk = ents.filter(e => !e.isGoalie).map(e => e.name), lineup = advLineupNames(tk);
+        const fill = (D, cap) => lineup.filter(n => pos(n) !== 'G' && isD(n) === D && !fileSk.includes(n)).slice(0, Math.max(0, cap - fileSk.filter(n => isD(n) === D).length));
+        const goalie = fileG.length ? fileG : lineup.filter(n => pos(n) === 'G');
+        advBoxScoreTemp[sd].dressed = [...new Set([...fileSk, ...fill(false, 12), ...fill(true, 6), ...goalie])];
         renderAdvStatList(sd); });
     const goals = s => advBoxScoreTemp[s].entries.reduce((q, e) => q + (e.g || 0), 0);
     document.getElementById('advAwayScore').value = goals('away'); document.getElementById('advHomeScore').value = goals('home');
