@@ -3845,7 +3845,7 @@ function applySeasonLines(tk) {
             // v372: in the playoffs unprotected goons sit entirely (keep = 0); regular season keeps one.
             // v375: ...and in ~35% of regular-season games the coach dresses his second tough guy (opponent then
             // matches) - the duo goons who used to dress in pairs retire and fights faded 0.80 -> 0.62/game
-            const keep = isPlayoffs ? 0 : (Math.random() < 0.42 ? 2 : 1); // v396: 0.35 -> 0.42 (fights dipped 0.84 -> 0.76 late)
+            const keep = isPlayoffs ? 0 : _romExportLines ? 1 : (Math.random() < 0.42 ? 2 : 1); // v524: ROM export always dresses one; v396: 0.35 -> 0.42 (fights dipped 0.84 -> 0.76 late)
             if (keep === 2 && dressedEnf().length === 1) {
                 const benchEnf = bench.filter(isEnfF)[0];
                 const l4 = lines[lines.length - 1] || [];
@@ -14205,8 +14205,10 @@ function triggerLoadBackup() {
 }
 
 // v518: today's lines for the ROM line tables (tools/rom_sync_lines.py previews / writes them)
+let _romExportLines = false; // v524: true while exportRomLines builds lines (no random second enforcer)
 function exportRomLines() {
-    clearWpCache();
+    clearWpCache(); _romExportLines = true;
+    try {
     const num = v => parseInt(v) || gradeToNum(v) || 50;
     const teams = {};
     league.forEach(t => {
@@ -14221,7 +14223,9 @@ function exportRomLines() {
         };
     });
     const injured = Object.keys(playerStats).filter(n => playerStats[n].teamCode && ((playerStats[n].injury?.daysRemaining > 0) || (playerStats[n].suspended?.days > 0)));
-    const blob = new Blob([JSON.stringify({ day: currentDay + 1, season: currentSeason, teams, injured })], { type: 'application/json' });
+    var payload = { day: currentDay + 1, season: currentSeason, teams, injured };
+    } finally { _romExportLines = false; clearWpCache(); }
+    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `rom_lines_day${currentDay + 1}.json`;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
