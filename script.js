@@ -9822,9 +9822,15 @@ function applyBoxScoreCSV(text) {
         if (!side) return;
         const nm = match(side, v(r, 'NAME')); if (!nm) { miss.push(`${v(r, 'TEAM')} ${v(r, 'NAME')}`); return; }
         dressed[side].push(nm);
-        if (v(r, 'POS').toUpperCase() === 'G') { if (n(r, 'SHA') > 0 || !advBoxScoreTemp[side].entries.some(e => e.isGoalie)) {
-            advBoxScoreTemp[side].entries = advBoxScoreTemp[side].entries.filter(e => !e.isGoalie || e.sa > n(r, 'SHA'));
-            if (!advBoxScoreTemp[side].entries.some(e => e.isGoalie)) advBoxScoreTemp[side].entries.push({ name: nm, isGoalie: true, sa: n(r, 'SHA'), toi: +(mins(v(r, 'TOI')) * toiScale).toFixed(2) }); } }
+        if (v(r, 'POS').toUpperCase() === 'G') { // v525: up to 2 goalies (one pulled) - each keeps his own shots, goals and minutes
+            const ge = { name: nm, isGoalie: true, sa: n(r, 'SHA'), ga: n(r, 'GA'), toi: +(mins(v(r, 'TOI')) * toiScale).toFixed(2) };
+            const gs = advBoxScoreTemp[side].entries.filter(e => e.isGoalie);
+            if (ge.sa > 0 || ge.toi > 0 || !gs.length) {
+                advBoxScoreTemp[side].entries = advBoxScoreTemp[side].entries.filter(e => !e.isGoalie || e.sa > 0 || e.toi > 0);
+                advBoxScoreTemp[side].entries.push(ge);
+                const all = advBoxScoreTemp[side].entries.filter(e => e.isGoalie).sort((a, b) => (b.toi - a.toi) || (b.sa - a.sa));
+                if (all.length > 2) advBoxScoreTemp[side].entries = advBoxScoreTemp[side].entries.filter(e => !e.isGoalie || all.slice(0, 2).includes(e));
+            } }
         else advBoxScoreTemp[side].entries.push({ name: nm, isGoalie: false, g: n(r, 'G'), a: n(r, 'A'), pm: 0, pim: n(r, 'PIM'), s: n(r, 'SOG'), ppg: 0, shg: 0, toi: +(mins(v(r, 'TOI')) * toiScale).toFixed(2), hits: col('CHK') >= 0 ? n(r, 'CHK') : 0 });
     });
     advBoxScoreTemp.ot = lines.slice(1).some(r => v(r, 'ROW').toUpperCase() === 'GOAL' && parseInt(r[11]) >= 4) ? 1 : 0; // v494: overtime winner
@@ -9898,22 +9904,25 @@ function submitAdvGame() {
     gameMilestones = [];
 
     const applyGoalie = (tk, side, oppGoals, oppEN, status) => {
-        let gEntry = advBoxScoreTemp[side].entries.find(e => e.isGoalie);
-        let gName = gEntry ? gEntry.name : null;
-        if (!gName && advBoxScoreTemp[side].dressed.length > 0) {
-            let defG = rosters[tk].find(p => p.pos === 'G' && advBoxScoreTemp[side].dressed.includes(p.name));
-            if (defG) gName = defG.name;
+        // v525: a pulled goalie and his replacement each get their own shots, goals against and minutes;
+        // the decision goes to the one who played the most
+        let gEnts = advBoxScoreTemp[side].entries.filter(e => e.isGoalie).sort((a, b) => (b.toi || 0) - (a.toi || 0));
+        if (!gEnts.length && advBoxScoreTemp[side].dressed.length > 0) {
+            const defG = rosters[tk].find(p => p.pos === 'G' && advBoxScoreTemp[side].dressed.includes(p.name));
+            if (defG) gEnts = [{ name: defG.name, sa: null }];
         }
-        if (gName && playerStats[gName] && !isASG) {
-            let s = playerStats[gName][k]; let ga = Math.max(0, oppGoals - oppEN);
-            let sa = gEntry ? gEntry.sa : (ga + Math.floor(Math.random()*15)+20); 
-            if (sa < ga) sa = ga;
-            s.sa += sa; s.sv += (sa - ga); if(ga === 0) s.so++;
-            s.svPct = s.sa > 0 ? (s.sv / s.sa) : 0; // v179: store running svPct directly
-            if (gEntry && gEntry.toi) s.toi = (s.toi || 0) + gEntry.toi; // v495
-            if(status === 'win') s.w++; else if(status === 'loss') s.l++; else s.t++;
-            checkMilestones(gName);
-        }
+        const ga = Math.max(0, oppGoals - oppEN), split = gEnts.length > 1;
+        gEnts.forEach((e, i) => {
+            if (!playerStats[e.name] || isASG) return;
+            const s = playerStats[e.name][k];
+            const myGa = split ? Math.min(ga, e.ga || 0) : ga;
+            let sa = e.sa != null ? e.sa : (myGa + Math.floor(Math.random() * 15) + 20); if (sa < myGa) sa = myGa;
+            s.sa += sa; s.sv += (sa - myGa); if (!split && myGa === 0) s.so++;
+            s.svPct = s.sa > 0 ? (s.sv / s.sa) : 0;
+            if (e.toi) s.toi = (s.toi || 0) + e.toi;
+            if (i === 0) { if (status === 'win') s.w++; else if (status === 'loss') s.l++; else s.t++; }
+            checkMilestones(e.name);
+        });
     };
     
     applyGoalie(g.a.nrm, 'away', hG, hEN, aStatus);
