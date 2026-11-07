@@ -14224,6 +14224,7 @@ function exportRomLines() {
         const st = getRosterStructure(t.nrm); const a = n => playerStats[n]?.attr || {};
         const ovr = n => getPlayerWeightedStats(n).baseOvr;
         teams[t.code] = {
+            G: getProjectedGoalie(t.nrm)?.name || getProjectedGoalie(t.nrm) || null,
             lines: st.f.slice(0, 3).map(l => l.filter(Boolean).map(p => [p.name, playerStats[p.name].pos])),
             pairs: st.d.slice(0, 3).map(pr => pr.filter(Boolean).map(p => p.name)),
             F: st.f.slice(0, 4).flat().filter(Boolean).map(p => ({ n: p.name, pos: playerStats[p.name].pos, ovr: ovr(p.name), off: num(a(p.name).off), def: num(a(p.name).def) })),

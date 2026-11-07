@@ -45,7 +45,7 @@ def build(d, sim, INJ):
     plan, notes = {}, []
     for k, t in enumerate(TEAMS):
         b, run = team_run(d, k); tb = line_table(d, b)
-        assert d[tb] == 1, f'{t}: line table not found'
+        assert 1 <= d[tb] <= 3 and d[tb + 7] == 0, f'{t}: line table not found'
         slots = {r['name']: i + 1 for i, r in enumerate(run)}; nm = {i + 1: r['name'] for i, r in enumerate(run)}
         def slot(n):
             if n in slots: return slots[n]
@@ -105,6 +105,11 @@ def build(d, sim, INJ):
             for j, n in enumerate(names):
                 sl = slot(n) if n else None
                 if sl: out[r][1 + j] = sl
+        g = slot(s['G']) if s.get('G') else None       # byte 0 of every row = starting goalie slot
+        if g and g <= 3:
+            if rows['NLC'][0] != g: notes.append(f"{t}: starting goalie {nm.get(rows['NLC'][0], '?')} -> {nm[g]}")
+            for r in ROWS: out[r][0] = g
+        elif s.get('G'): notes.append(f"{t}: goalie {s['G']} not found in the ROM's goalie slots")
         nlc = out['NLC']                               # NLC: swap injured players only
         for j in range(1, 7):
             x = nlc[j]
