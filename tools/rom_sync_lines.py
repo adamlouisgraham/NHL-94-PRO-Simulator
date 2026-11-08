@@ -85,7 +85,13 @@ def build(d, sim, INJ):
         fx = lambda i, fb: fourth[i % len(fourth)] if fourth else fb
         new = {}
         for i, r in enumerate(['SC1', 'SC2', 'CHK']):
-            lw, c, rw = place3([n for n, p in s['lines'][i]]); ld, rd = s['pairs'][i]
+            lw, c, rw = place3([n for n, p in s['lines'][i]])
+            pr = list(s['pairs'][i]) + [None, None]       # short of healthy D: an open spot takes the best healthy D not on that line
+            for j in (0, 1):
+                if pr[j] is None:
+                    pr[j] = next((x['n'] for x in dDef if x['n'] not in pr), None)
+                    if pr[j]: notes.append(f'{t}: only {len(D)} healthy D - {pr[j]} doubles up on {r}')
+            ld, rd = pr[0], pr[1]
             new[r] = [ld, rd, lw, c, rw, fx(i, ea({lw, c, rw}))]
         pp1f = [f['n'] for f in byOvr[:4]]; pp1d = dOff[0]['n']
         pp2f = [f['n'] for f in byOff if f['n'] not in pp1f][:4]; pp2d = next(x['n'] for x in dOff if x['n'] != pp1d)
