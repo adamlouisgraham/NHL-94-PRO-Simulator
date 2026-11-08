@@ -9813,7 +9813,11 @@ function applyBoxScoreCSV(text) {
     const norm = s => s.toLowerCase().replace(/[^a-z ]/g, '').trim();
     const match = (side, name) => { const ro = advBoxScoreTemp[side].roster; const nn = norm(name);
         let p = ro.find(x => norm(x.name) === nn); if (p) return p.name;
-        const last = nn.split(' ').pop(); const c = ro.filter(x => norm(x.name).split(' ').pop() === last); return c.length === 1 ? c[0].name : null; };
+        const last = nn.split(' ').pop(); const c = ro.filter(x => norm(x.name).split(' ').pop() === last); if (c.length === 1) return c[0].name;
+        // v531: a game played on a ROM from before a trade - the player keeps his stats from the file (exact full name, any team)
+        const t = Object.keys(playerStats).filter(k => playerStats[k].teamCode && norm(k) === nn); if (t.length === 1) { traded.add(t[0]); return t[0]; }
+        return null; };
+    const traded = new Set();
     const mins = t => { const m = String(t || '').match(/^(\d+):(\d+)$/); return m ? +m[1] + +m[2] / 60 : 0; }; // v495: TOI mm:ss -> minutes
     const pRows = lines.slice(1).filter(r => v(r, 'ROW').toUpperCase() === 'P');
     const gMax = Math.max(0, ...pRows.filter(r => v(r, 'POS').toUpperCase() === 'G').map(r => mins(v(r, 'TOI'))));
@@ -9858,14 +9862,15 @@ function applyBoxScoreCSV(text) {
         // v521: players in the file come first; the sim lines only top the group up to 12 F / 6 D
         const pos = n => playerStats[n]?.pos, isD = n => pos(n) === 'D';
         const fileSk = ents.filter(e => !e.isGoalie).map(e => e.name), lineup = advLineupNames(tk);
-        const fill = (D, cap) => lineup.filter(n => pos(n) !== 'G' && isD(n) === D && !fileSk.includes(n)).slice(0, Math.max(0, cap - fileSk.filter(n => isD(n) === D).length));
+        const inFile = new Set(['away', 'home'].flatMap(s2 => advBoxScoreTemp[s2].entries.map(e => e.name))); // v531: either side's file
+        const fill = (D, cap) => lineup.filter(n => pos(n) !== 'G' && isD(n) === D && !inFile.has(n)).slice(0, Math.max(0, cap - fileSk.filter(n => isD(n) === D).length));
         const goalie = fileG.length ? fileG : lineup.filter(n => pos(n) === 'G');
         advBoxScoreTemp[sd].dressed = [...new Set([...fileSk, ...fill(false, 12), ...fill(true, 6), ...goalie])];
         renderAdvStatList(sd); });
     const goals = s => advBoxScoreTemp[s].entries.reduce((q, e) => q + (e.g || 0), 0);
     document.getElementById('advAwayScore').value = goals('away'); document.getElementById('advHomeScore').value = goals('home');
     document.getElementById('advAwayEN').value = 0; document.getElementById('advHomeEN').value = 0;
-    alert(`Imported ${g.a.code} ${goals('away')} - ${g.h.code} ${goals('home')}${advBoxScoreTemp.ot ? ' (OT)' : ''}.` + (miss.length ? `\nNot matched to the roster (enter by hand): ${miss.join(', ')}` : '') + '\nCheck the lines, then FINALIZE GAME.');
+    alert(`Imported ${g.a.code} ${goals('away')} - ${g.h.code} ${goals('home')}${advBoxScoreTemp.ot ? ' (OT)' : ''}.` + (miss.length ? `\nNot matched to the roster (enter by hand): ${miss.join(', ')}` : '') + (traded.size ? `\nPlayed for this team before a trade (stats kept): ${[...traded].join(', ')}` : '') + '\nCheck the lines, then FINALIZE GAME.');
 }
 // v520: the box-score editor's dressed list is the sim's current lines (12 F + 6 D) + projected goalie
 function advLineupNames(tk) {
