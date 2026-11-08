@@ -4376,21 +4376,24 @@ function checkStreakHeadline(team) {
 
 // v505: one rest roll per team per day, shared by the projected-goalie displays and the game itself,
 // so the goalie shown before a game is the one who starts it
-let _goalieRolls = {};
+// v528: rolls and picks persist across page reloads (keyed by season), so the day's starter can't re-roll
+const _gLoad = k => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
+const _gSave = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+let _goalieRolls = _gLoad('nhl94_goalieRolls');
 function goalieRoll(tk) {
-    const key = currentDay + '|' + tk;
-    if (!(key in _goalieRolls)) { if (Object.keys(_goalieRolls).length > 200) _goalieRolls = {}; _goalieRolls[key] = Math.random(); }
+    const key = currentSeason + '|' + currentDay + '|' + tk;
+    if (!(key in _goalieRolls)) { if (Object.keys(_goalieRolls).length > 200) _goalieRolls = {}; _goalieRolls[key] = Math.random(); _gSave('nhl94_goalieRolls', _goalieRolls); }
     return _goalieRolls[key];
 }
 // v505: the day's pick is locked once made (first projection or the game itself), so streak updates from
 // earlier games that day can't flip it; consecutive-start counts move only when the game is played
-let _goalieChoice = {};
+let _goalieChoice = _gLoad('nhl94_goalieChoice');
 function chooseGoalie(tk, commit) {
-    const key = currentDay + '|' + tk + '|' + (isPlayoffs ? 'p' : 's');
+    const key = currentSeason + '|' + currentDay + '|' + tk + '|' + (isPlayoffs ? 'p' : 's');
     const ok = n => { const ps = playerStats[n]; return ps && (!ps.injury || ps.injury.daysRemaining === 0) && (!ps.suspended || ps.suspended.days === 0) && (rosters[tk] || []).some(p => p.name === n); };
     if (isASG) return _rankGoalie(tk);
     let name = _goalieChoice[key];
-    if (!name || !ok(name)) { const g = _rankGoalie(tk); if (!g) return null; name = g.name; if (Object.keys(_goalieChoice).length > 200) _goalieChoice = {}; _goalieChoice[key] = name; }
+    if (!name || !ok(name)) { const g = _rankGoalie(tk); if (!g) return null; name = g.name; if (Object.keys(_goalieChoice).length > 200) _goalieChoice = {}; _goalieChoice[key] = name; _gSave('nhl94_goalieChoice', _goalieChoice); }
     const pick = (rosters[tk] || []).find(p => p.name === name);
     if (commit && !isPlayoffs) (rosters[tk] || []).filter(p => p.pos === 'G').forEach(p => { const st = playerStats[p.name]?.season; if (st) st.consStarts = p.name === name ? (st.consStarts || 0) + 1 : 0; });
     return pick;
