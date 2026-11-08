@@ -2677,8 +2677,8 @@ const dynamicDuos = [
     ['Chris Pronger', 'Teppo Numminen'],
     ['Steve Duchesne', 'Doug Crossman'],
     // TBL
-    ['Chris Gratton', 'Petr Klima', 'John Tucker'],
-    ['Jesse Belanger', 'Patrick Poulin', 'Bob Kudelski'],
+    ['Chris Gratton', 'Brian Bradley',, 'Petr Klima' ],
+    [ 'Jesse Belanger', 'Patrick Poulin', 'Bob Kudelski'],
     ['Marc Bureau', 'Jim Cummins'],
     ['Alexander Semak', 'Brent Gilchrist', 'Mikael Andersson'],
     ['Roman Hamrlik', 'Alexei Kasatonov'],
@@ -3845,7 +3845,7 @@ function applySeasonLines(tk) {
             // v372: in the playoffs unprotected goons sit entirely (keep = 0); regular season keeps one.
             // v375: ...and in ~35% of regular-season games the coach dresses his second tough guy (opponent then
             // matches) - the duo goons who used to dress in pairs retire and fights faded 0.80 -> 0.62/game
-            const keep = isPlayoffs ? 0 : _romExportLines ? 1 : (Math.random() < 0.42 ? 2 : 1); // v524: ROM export always dresses one; v396: 0.35 -> 0.42 (fights dipped 0.84 -> 0.76 late)
+            const keep = isPlayoffs ? 0 : _romExportLines ? 1 : (goalieRoll(tk + '|enf') < 0.42 ? 2 : 1); // v529: per-day saved roll // v524: ROM export always dresses one; v396: 0.35 -> 0.42 (fights dipped 0.84 -> 0.76 late)
             if (keep === 2 && dressedEnf().length === 1) {
                 const benchEnf = bench.filter(isEnfF)[0];
                 const l4 = lines[lines.length - 1] || [];
@@ -3902,7 +3902,8 @@ function applySeasonLines(tk) {
                 // same position first so lines keep a center; otherwise the weakest rotatable regular
                 const sp = slots.find(sl => pos(sl[2]) === pos(ex)) || slots[0];
                 const gap = ovr(ex) - ovr(sp[2]);
-                if (gap > 0 && Math.random() < Math.min(0.70, 0.15 + 0.07 * gap)) lines[sp[0]][sp[1]] = ex;
+                // v529: one saved roll per team per day (like the goalie pick), so the day's lines don't change on every rebuild
+                if (gap > 0 && goalieRoll(tk + (isD ? '|rotD' : '|rotF')) < Math.min(0.70, 0.15 + 0.07 * gap)) lines[sp[0]][sp[1]] = ex;
             }
         }
         return lines.map(l => l.filter(Boolean).map(n => byName.get(n)));
@@ -4382,7 +4383,7 @@ const _gSave = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } c
 let _goalieRolls = _gLoad('nhl94_goalieRolls');
 function goalieRoll(tk) {
     const key = currentSeason + '|' + currentDay + '|' + tk;
-    if (!(key in _goalieRolls)) { if (Object.keys(_goalieRolls).length > 200) _goalieRolls = {}; _goalieRolls[key] = Math.random(); _gSave('nhl94_goalieRolls', _goalieRolls); }
+    if (!(key in _goalieRolls)) { if (Object.keys(_goalieRolls).length > 400) { const d = currentSeason + '|' + currentDay + '|'; for (const k in _goalieRolls) if (!k.startsWith(d)) delete _goalieRolls[k]; } _goalieRolls[key] = Math.random(); _gSave('nhl94_goalieRolls', _goalieRolls); }
     return _goalieRolls[key];
 }
 // v505: the day's pick is locked once made (first projection or the game itself), so streak updates from
