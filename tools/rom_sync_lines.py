@@ -4,6 +4,7 @@
 2. python tools/rom_sync_lines.py path/to/rom_lines_dayN.json            -> preview only
 3. python tools/rom_sync_lines.py path/to/rom_lines_dayN.json --write    -> backup + write
 
+The sim's starting goalie is moved to the top of the team's goalie list (the game starts slot 1).
 Rows SC1/SC2/CHK/PP1/PP2/PK1/PK2 are rebuilt from the sim. NLC is kept as is, except injured /
 suspended players there are swapped for the healthy player in the same spot on the next line down.
 Only line-table bytes are written; the script refuses to write if anything else would change.
@@ -41,8 +42,12 @@ def line_table(d, b):
 def norm(s): return ''.join(c for c in s.lower() if c.isalpha())
 
 
+goalie_moves = {}
+
+
 def build(d, sim, INJ):
     plan, notes = {}, []
+    goalie_moves.clear()
     for k, t in enumerate(TEAMS):
         b, run = team_run(d, k); tb = line_table(d, b)
         assert 1 <= d[tb] <= 3 and d[tb + 7] == 0, f'{t}: line table not found'
@@ -111,10 +116,15 @@ def build(d, sim, INJ):
             for j, n in enumerate(names):
                 sl = slot(n) if n else None
                 if sl: out[r][1 + j] = sl
-        g = slot(s['G']) if s.get('G') else None       # byte 0 of every row = starting goalie slot
-        if g and g <= 3:
-            if rows['NLC'][0] != g: notes.append(f"{t}: starting goalie {nm.get(rows['NLC'][0], '?')} -> {nm[g]}")
-            for r in ROWS: out[r][0] = g
+        g = slot(s['G']) if s.get('G') else None       # the game starts the goalie at the top of the list,
+        if g and g <= 3:                               # so the starter's record is moved to slot 1 (byte 0 = 1)
+            if g != 1:
+                notes.append(f"{t}: starting goalie {nm[1]} -> {nm[g]} (moved to top of goalie list)")
+                order = [g] + [i for i in (1, 2, 3) if i != g]
+                gstart, gend = run[0]['off'], run[2]['end']
+                goalie_moves[t] = (gstart, b''.join(bytes(d[run[i - 1]['off']:run[i - 1]['end']]) for i in order))
+                assert len(goalie_moves[t][1]) == gend - gstart
+            for r in ROWS: out[r][0] = 1
         elif s.get('G'): notes.append(f"{t}: goalie {s['G']} not found in the ROM's goalie slots")
         nlc = out['NLC']                               # NLC: swap injured players only
         for j in range(1, 7):
@@ -139,17 +149,19 @@ def main():
     plan, notes = build(d, exp['teams'], set(exp.get('injured', [])))
     last = lambda n: n.split()[-1]
     rows = sum(len(v) for v in plan.values())
-    print(f"Sim day {exp.get('day', '?')}: {rows} of {26 * 8} line rows change")
+    print(f"Sim day {exp.get('day', '?')}: {rows} of {26 * 8} line rows change, {len(goalie_moves)} goalie lists reordered")
     for t, rs in plan.items():
         if rs: print(f'  {t}: ' + ' | '.join(f"{r['row']}: " + ', '.join(f'{last(a)}->{last(b)}' for a, b in zip(r['curN'], r['newN']) if a != b) for r in rs))
     for n in notes: print('  note:', n)
     if '--write' not in sys.argv:
         print('\nPreview only. Re-run with --write to apply.'); return
-    if not rows: print('Nothing to write.'); return
+    if not rows and not goalie_moves: print('Nothing to write.'); return
     new = bytearray(d)
     for rs in plan.values():
         for r in rs: new[r['off']:r['off'] + 8] = bytes(r['new'])
+    for o, blob in goalie_moves.values(): new[o:o + len(blob)] = blob
     allowed = {r['off'] + i for rs in plan.values() for r in rs for i in range(8)}
+    allowed |= {o + i for o, blob in goalie_moves.values() for i in range(len(blob))}
     assert all(i in allowed for i in range(len(d)) if d[i] != new[i]), 'refusing: change outside line tables'
     bak = ROM.replace('.bin', f"_BACKUP_BEFORE_LINES_DAY{exp.get('day', 'X')}.bin")
     shutil.copy(ROM, bak); open(ROM, 'wb').write(new)
