@@ -13801,8 +13801,14 @@ function hasSpareGoalie(tk) {
 // takes ~25% longer to heal
 function injAgeMult(name) { const a = playerStats[name]?.age || 25; return a > 28 ? 1 + 0.04 * (a - 28) : 1; }
 function injAgeDays(name, days) { const a = playerStats[name]?.age || 25; return days > 0 && a >= 32 ? Math.max(days + 1, Math.round(days * 1.25)) : days; }
+// v532: long-term injuries (15-45 games) capped league-wide at 2-3 a season (the 3rd is a coin flip)
 function withLongTermChance(days) {
-    return (days >= 5 && Math.random() < 0.10) ? 15 + Math.floor(Math.random() * 31) : days;
+    if (!(days >= 5 && Math.random() < 0.10)) return days;
+    let lt = {}; try { lt = JSON.parse(localStorage.getItem('nhl94_longTermInj')) || {}; } catch (e) {}
+    if (lt.season !== currentSeason) lt = { season: currentSeason, n: 0, lim: Math.random() < 0.5 ? 2 : 3 };
+    if (lt.n >= lt.lim) return days;
+    lt.n++; try { localStorage.setItem('nhl94_longTermInj', JSON.stringify(lt)); } catch (e) {}
+    return 15 + Math.floor(Math.random() * 31);
 }
 
 function rollInGameInjuries(homeCode, awayCode) {
