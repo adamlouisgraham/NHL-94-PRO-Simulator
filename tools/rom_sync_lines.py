@@ -77,20 +77,23 @@ def build(d, sim, INJ):
         pos = {f['n']: f['pos'] for f in F}
         byOvr = sorted(F, key=lambda f: -f['ovr']); byOff = sorted(F, key=lambda f: -f['off']); byDef = sorted(F, key=lambda f: -f['def'])
         dOff = sorted(D, key=lambda x: -x['off']); dDef = sorted(D, key=lambda x: -x['def'])
-        def place3(names):
+        def place3(names, keep=False):
             want = {'LW': None, 'C': None, 'RW': None}; rest = []
             for n in names:
                 if pos.get(n) in want and want[pos.get(n)] is None: want[pos.get(n)] = n
                 else: rest.append(n)
             for key in ('C', 'LW', 'RW'):
                 if want[key] is None and rest: want[key] = rest.pop(0)
+            fit = lambda c, lw, rw: (pos.get(c) == 'C') + (pos.get(lw) == 'LW') + (pos.get(rw) == 'RW')
+            if keep and len(names) == 3 and fit(*names) >= fit(want['C'], want['LW'], want['RW']):
+                return [names[1], names[0], names[2]]  # the sim's own C, LW, RW order fits as well: keep it
             return [want['LW'], want['C'], want['RW']]
         def ea(excl, order=byOvr): return next((f['n'] for f in order if f['n'] not in excl), None)
         fourth = [f['n'] for f in s['F'][9:12] if onrom(f['n'])]   # 4th-line forwards fill the extra-attacker slots
         fx = lambda i, fb: fourth[i % len(fourth)] if fourth else fb
         new = {}
         for i, r in enumerate(['SC1', 'SC2', 'CHK']):
-            lw, c, rw = place3([n for n, p in s['lines'][i]])
+            lw, c, rw = place3([n for n, p in s['lines'][i]], keep=True)
             pr = list(s['pairs'][i]) + [None, None]       # short of healthy D: an open spot takes the best healthy D not on that line
             for j in (0, 1):
                 if pr[j] is None:
